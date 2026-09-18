@@ -92,6 +92,7 @@ export interface UploadDocumentVersionDependencies extends DocumentDependencies 
 
 export interface FinalizeDocumentVersionDependencies {
   readonly documentRepository: DocumentRepository;
+  readonly fileStorage: FileStoragePort;
   readonly clock: ClockPort;
 }
 
@@ -335,6 +336,7 @@ export async function finalizeDocumentVersionCommand(
   requireCapability(actor, 'documents:write');
 
   const current = await requireVersion(deps.documentRepository, versionId);
+  await assertDocumentVersionStorageIntegrity(deps, current);
   const finalized = finalizeDocumentVersion(current, deps.clock.now());
   await deps.documentRepository.finalizeVersion(finalized);
   return finalized;

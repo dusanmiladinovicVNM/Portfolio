@@ -108,6 +108,7 @@ export async function generateInspectionFinalReportCommand(
   const finalVersion = await finalizeDocumentVersionCommand(
     {
       documentRepository: deps.documentRepository,
+      fileStorage: deps.fileStorage,
       clock: deps.clock,
     },
     actor,

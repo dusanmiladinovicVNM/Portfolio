@@ -2102,9 +2102,27 @@ describe('PostgreSQL infrastructure', () => {
       constraint_name: 'document_links_signed_original_version_final',
     });
 
+    await expect(
+      finalizeDocumentVersionCommand(
+        {
+          documentRepository,
+          fileStorage: {
+            ...fileStorage,
+            async stat() { return null; },
+          },
+          clock: {
+            now: () => '2026-09-20T11:59:00.000Z',
+          },
+        },
+        actor,
+        version.id,
+      ),
+    ).rejects.toMatchObject({ code: 'DOCUMENT_BINARY_MISSING' });
+
     const final = await finalizeDocumentVersionCommand(
       {
         documentRepository,
+        fileStorage,
         clock: {
           now: () => '2026-09-20T12:00:00.000Z',
         },
