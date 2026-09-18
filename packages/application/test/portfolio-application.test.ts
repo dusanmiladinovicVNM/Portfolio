@@ -6,17 +6,29 @@ import {
   listPropertiesQuery,
   listSpacesByUnitQuery,
   listUnitsByPropertyQuery,
+  type Actor,
   type IdGenerator,
   type PortfolioRepository,
 } from '../src/index.js';
-import type {
-  Property,
-  PropertyId,
-  Space,
-  SpaceId,
-  Unit,
-  UnitId,
+import {
+  asUserId,
+  type Property,
+  type PropertyId,
+  type Space,
+  type SpaceId,
+  type Unit,
+  type UnitId,
 } from '@portfolio/domain';
+
+const admin: Actor = {
+  userId: asUserId('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
+  role: 'admin',
+};
+
+const inspector: Actor = {
+  userId: asUserId('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'),
+  role: 'inspector',
+};
 
 class SequenceIds implements IdGenerator {
   private index = 0;
@@ -110,6 +122,7 @@ describe('Portfolio application vertical slice', () => {
 
     const property = await createPropertyCommand(
       { portfolioRepository: repository, idGenerator: ids },
+      admin,
       {
         code: 'PROP-0001',
         name: 'Main Building',
@@ -124,6 +137,7 @@ describe('Portfolio application vertical slice', () => {
 
     const unit = await createUnitCommand(
       { portfolioRepository: repository, idGenerator: ids },
+      admin,
       {
         propertyId: property.id,
         code: 'UNIT-0001',
@@ -136,6 +150,7 @@ describe('Portfolio application vertical slice', () => {
 
     await createSpaceCommand(
       { portfolioRepository: repository, idGenerator: ids },
+      admin,
       {
         unitId: unit.id,
         code: 'KITCHEN',
@@ -144,25 +159,35 @@ describe('Portfolio application vertical slice', () => {
       },
     );
 
-    expect(await listPropertiesQuery(repository)).toHaveLength(1);
-    expect(await listUnitsByPropertyQuery(repository, property.id)).toHaveLength(1);
-    expect(await listSpacesByUnitQuery(repository, unit.id)).toHaveLength(1);
+    expect(await listPropertiesQuery(repository, admin)).toHaveLength(1);
+    expect(await listUnitsByPropertyQuery(repository, admin, property.id)).toHaveLength(1);
+    expect(await listSpacesByUnitQuery(repository, admin, unit.id)).toHaveLength(1);
   });
 
-  it('refuses a unit for a missing property before persistence', async () => {
+  it('allows an inspector to read portfolio master data', async () => {
     const repository = new InMemoryPortfolioRepository();
-    const ids = new SequenceIds(['f05296da-8e3c-45e5-8357-957745830c86']);
+    expect(await listPropertiesQuery(repository, inspector)).toEqual([]);
+  });
+
+  it('prevents an inspector from writing portfolio master data', async () => {
+    const repository = new InMemoryPortfolioRepository();
+    const ids = new SequenceIds(['6a644eaa-dae0-4c4a-9ae4-6e5a93ceef3f']);
 
     await expect(
-      createUnitCommand(
+      createPropertyCommand(
         { portfolioRepository: repository, idGenerator: ids },
+        inspector,
         {
-          propertyId: '6a644eaa-dae0-4c4a-9ae4-6e5a93ceef3f' as PropertyId,
-          code: 'UNIT-0001',
-          unitNumber: '4B',
-          unitType: 'apartment',
+          code: 'PROP-0001',
+          name: 'Main Building',
+          propertyType: 'apartment_building',
+          street: 'Example Street',
+          houseNumber: '10',
+          postalCode: '18000',
+          city: 'Niš',
+          countryCode: 'RS',
         },
       ),
-    ).rejects.toMatchObject({ code: 'PROPERTY_NOT_FOUND' });
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 });

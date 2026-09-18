@@ -1,21 +1,38 @@
 import type { Property, PropertyId, Space, Unit, UnitId } from '@portfolio/domain';
+import { requireCapability, type Actor } from '../security/access.js';
 import type { PortfolioRepository } from './portfolio-repository.js';
 
-export const getPropertyQuery = (
+export function getPropertyQuery(
   repository: PortfolioRepository,
+  actor: Actor,
   id: PropertyId,
-): Promise<Property | null> => repository.getPropertyById(id);
+): Promise<Property | null> {
+  requireCapability(actor, 'portfolio:read');
+  return repository.getPropertyById(id);
+}
 
-export const listPropertiesQuery = (
+export function listPropertiesQuery(
   repository: PortfolioRepository,
-): Promise<readonly Property[]> => repository.listProperties();
+  actor: Actor,
+): Promise<readonly Property[]> {
+  requireCapability(actor, 'portfolio:read');
+  return repository.listProperties();
+}
 
-export const listUnitsByPropertyQuery = (
+export function listUnitsByPropertyQuery(
   repository: PortfolioRepository,
+  actor: Actor,
   propertyId: PropertyId,
-): Promise<readonly Unit[]> => repository.listUnitsByProperty(propertyId);
+): Promise<readonly Unit[]> {
+  requireCapability(actor, 'portfolio:read');
+  return repository.listUnitsByProperty(propertyId);
+}
 
-export const listSpacesByUnitQuery = (
+export function listSpacesByUnitQuery(
   repository: PortfolioRepository,
+  actor: Actor,
   unitId: UnitId,
-): Promise<readonly Space[]> => repository.listSpacesByUnit(unitId);
+): Promise<readonly Space[]> {
+  requireCapability(actor, 'portfolio:read');
+  return repository.listSpacesByUnit(unitId);
+}
