@@ -32,6 +32,8 @@ import {
   type VerifiedIdentity,
 } from '@portfolio/application';
 import {
+  addStoredDocumentVersion,
+  asDocumentVersionId,
   asOwnershipPeriodId,
   asPartyAddressId,
   asPartyId,
@@ -1480,6 +1482,86 @@ describe('PostgreSQL infrastructure', () => {
     ).rejects.toMatchObject({
       code: '23503',
     });
+
+    await sql`
+      insert into public.lease_amendments (
+        id, agreement_id, code, title, effective_from, status, version
+      ) values (
+        '62000000-0000-4000-8000-000000000004',
+        ${agreement.id},
+        'AMD-DOC-DRAFT',
+        'Unsigned amendment',
+        '2026-11-01',
+        'draft',
+        1
+      )
+    `;
+
+    await expect(
+      sql`
+        insert into public.document_links (
+          id, document_id, document_version_id, relation, target_type,
+          lease_amendment_id
+        ) values (
+          '62000000-0000-4000-8000-000000000005',
+          ${document.id},
+          ${version.id},
+          'signed_original',
+          'lease_amendment',
+          '62000000-0000-4000-8000-000000000004'
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'document_links_signed_original_amendment_signed',
+    });
+
+    const currentDocument = await documentRepository.getDocumentById(document.id);
+    expect(currentDocument).not.toBeNull();
+
+    const candidateA = addStoredDocumentVersion(currentDocument!, {
+      id: asDocumentVersionId('62000000-0000-4000-8000-000000000006'),
+      fileName: 'revision-a.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 5,
+      sha256: 'c'.repeat(64),
+    });
+    const candidateB = addStoredDocumentVersion(currentDocument!, {
+      id: asDocumentVersionId('62000000-0000-4000-8000-000000000007'),
+      fileName: 'revision-b.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 5,
+      sha256: 'd'.repeat(64),
+    });
+
+    await documentRepository.insertVersion(
+      candidateA.document,
+      currentDocument!.revision,
+      candidateA.version,
+      {
+        provider: 'integration-test',
+        objectId: 'object-a',
+        objectKey: 'document-version:concurrency-a',
+      },
+    );
+
+    await expect(
+      documentRepository.insertVersion(
+        candidateB.document,
+        currentDocument!.revision,
+        candidateB.version,
+        {
+          provider: 'integration-test',
+          objectId: 'object-b',
+          objectKey: 'document-version:concurrency-b',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'DOCUMENT_VERSION_CONFLICT',
+    });
+
+    const versions = await documentRepository.listVersionsByDocument(document.id);
+    expect(versions.map((item) => item.versionNumber)).toEqual([1, 2]);
   });
 
 });
