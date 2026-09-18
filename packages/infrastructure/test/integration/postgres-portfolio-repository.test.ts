@@ -94,6 +94,10 @@ class SequenceIds implements IdGenerator {
 async function resetAndMigrate(): Promise<void> {
   await sql.unsafe(
     `drop table if exists
+      public.inspection_finalizations,
+      public.inspection_unlock_events,
+      public.inspection_signatures,
+      public.inspection_evidence,
       public.inspection_findings,
       public.inspection_responses,
       public.inspection_section_states,
@@ -173,6 +177,10 @@ beforeAll(async () => {
 afterAll(async () => {
   await sql.unsafe(
     `drop table if exists
+      public.inspection_finalizations,
+      public.inspection_unlock_events,
+      public.inspection_signatures,
+      public.inspection_evidence,
       public.inspection_findings,
       public.inspection_responses,
       public.inspection_section_states,
