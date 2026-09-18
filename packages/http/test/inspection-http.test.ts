@@ -234,6 +234,10 @@ function buildHandler() {
       '81000000-0000-4000-8000-000000000010',
       '81000000-0000-4000-8000-000000000011',
       '81000000-0000-4000-8000-000000000012',
+      '81000000-0000-4000-8000-000000000013',
+      '81000000-0000-4000-8000-000000000014',
+      '81000000-0000-4000-8000-000000000015',
+      '81000000-0000-4000-8000-000000000016',
     ]),
   });
 
@@ -506,6 +510,50 @@ describe('Inspection HTTP backbone', () => {
       data: { revision: 2, contentRevision: 2 },
     });
 
+    const cleared = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/sections/${sectionId}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            expectedRevision: 4,
+            set: [{ itemId: conditionItemId, value: 'good' }],
+            clear: [damageItemId],
+          }),
+        },
+      ),
+      inspectorIdentity,
+    );
+    expect(cleared.status).toBe(200);
+    expect(await cleared.clone().json()).toMatchObject({
+      data: {
+        revision: 3,
+        contentRevision: 3,
+        clearedItemIds: [damageItemId],
+      },
+    });
+
+    const restored = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/sections/${sectionId}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            expectedRevision: 3,
+            set: [
+              { itemId: conditionItemId, value: 'damaged' },
+              { itemId: damageItemId, value: 'Scratch on wall' },
+            ],
+          }),
+        },
+      ),
+      inspectorIdentity,
+    );
+    expect(restored.status).toBe(200);
+    expect(await restored.clone().json()).toMatchObject({
+      data: { revision: 4, contentRevision: 4 },
+    });
+
     const finding = await handler(
       new Request(
         `https://portfolio.test/inspections/${inspection.id}/findings`,
@@ -564,9 +612,13 @@ describe('Inspection HTTP backbone', () => {
     expect(bundle.status).toBe(200);
     expect(await bundle.json()).toMatchObject({
       data: {
-        inspection: { status: 'locked', version: 3 },
+        inspection: {
+          status: 'locked',
+          version: 3,
+          contentRevision: 5,
+        },
         schema: { id: schema.id, status: 'published' },
-        sectionStates: [{ sectionId, revision: 2 }],
+        sectionStates: [{ sectionId, revision: 4 }],
         responses: [
           { itemId: conditionItemId, value: 'damaged' },
           { itemId: damageItemId, value: 'Scratch on wall' },
