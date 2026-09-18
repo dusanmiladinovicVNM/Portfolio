@@ -610,22 +610,22 @@ export class PostgresLeaseRepository implements LeaseRepository {
   ): Promise<TenancyTermVersion | null> {
     const rows = await this.sql<TermRow[]>`
       select
-        id,
-        tenancy_id,
-        source_type,
-        source_agreement_id,
-        source_amendment_id,
-        effective_from,
-        currency,
-        base_rent,
-        service_charge,
-        utilities_advance,
-        parking_rent,
-        other_recurring_charge,
-        deposit_required,
-        billing_frequency,
-        notice_period_tenant_days,
-        notice_period_landlord_days
+        tv.id,
+        tv.tenancy_id,
+        tv.source_type,
+        tv.source_agreement_id,
+        tv.source_amendment_id,
+        tv.effective_from,
+        tv.currency,
+        tv.base_rent,
+        tv.service_charge,
+        tv.utilities_advance,
+        tv.parking_rent,
+        tv.other_recurring_charge,
+        tv.deposit_required,
+        tv.billing_frequency,
+        tv.notice_period_tenant_days,
+        tv.notice_period_landlord_days
       from public.tenancy_term_versions tv
       left join public.lease_amendments am
         on tv.source_type = 'amendment'
