@@ -31,6 +31,12 @@ import {
   asTenancyId,
   asUnitId,
 } from '@portfolio/domain';
+import {
+  json,
+  requestJson,
+  validationFailure,
+} from './http-utils.js';
+import { toTenancyResponse } from './response-mappers.js';
 
 export interface TenancyHttpDependencies {
   readonly tenancyRepository: TenancyRepository;
@@ -38,13 +44,6 @@ export interface TenancyHttpDependencies {
   readonly partyRepository: PartyRepository;
   readonly idGenerator: IdGenerator;
 }
-
-import {
-  json,
-  requestJson,
-  validationFailure,
-} from './http-utils.js';
-import { toTenancyResponse } from './response-mappers.js';
 
 export async function handleTenancyHttp(
   deps: TenancyHttpDependencies,
@@ -75,7 +74,7 @@ export async function handleTenancyHttp(
 
     if (method === 'POST') {
       const body = await requestJson(request);
-            const parsed = createTenancyRequestSchema.safeParse(body);
+      const parsed = createTenancyRequestSchema.safeParse(body);
       if (!parsed.success) return validationFailure();
 
       const input: CreateTenancyCommandInput = {
@@ -131,7 +130,7 @@ export async function handleTenancyHttp(
     if (!parsedId.success) return validationFailure();
 
     const body = await requestJson(request);
-        const parsed = addTenancyPartyRequestSchema.safeParse(body);
+    const parsed = addTenancyPartyRequestSchema.safeParse(body);
     if (!parsed.success) return validationFailure();
 
     const tenancy = await addTenancyPartyCommand(
@@ -166,7 +165,8 @@ export async function handleTenancyHttp(
   const tenancyId = asTenancyId(parsedId.data);
   const action = tenancyActionMatch[2];
   const body = await requestJson(request);
-    if (action === 'plan') {
+
+  if (action === 'plan') {
     const parsed = planTenancyRequestSchema.safeParse(body);
     if (!parsed.success) return validationFailure();
 
