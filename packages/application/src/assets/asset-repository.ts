@@ -1,7 +1,6 @@
 import type {
   Asset,
   AssetId,
-  AssetIdentifierType,
   AssetReplacement,
   GloballyUniqueAssetIdentifierType,
   PropertyId,
