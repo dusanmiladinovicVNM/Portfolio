@@ -628,6 +628,7 @@ describe('Portfolio HTTP boundary', () => {
   it('supports a configurable host base path without leaking provider details', async () => {
     const handler = createPortfolioHttpHandler(
       {
+        assetRepository: new InMemoryAssetRepository(),
         portfolioRepository: new InMemoryPortfolioRepository(),
         partyRepository: new InMemoryPartyRepository(),
         ownershipRepository: new InMemoryOwnershipRepository(),
