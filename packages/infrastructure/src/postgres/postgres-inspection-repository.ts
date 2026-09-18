@@ -341,6 +341,21 @@ function translate(error: unknown): DomainError | null {
           'INSPECTION_SCHEMA_VERSION_CONFLICT',
           'Inspection schema version number was allocated concurrently.',
         );
+      case 'inspection_active_signature_role_uq':
+        return new DomainError(
+          'INSPECTION_SIGNATURE_ROLE_ALREADY_SIGNED',
+          'This inspection already has an active signature for that role.',
+        );
+      case 'inspection_final_snapshots_inspection_uq':
+        return new DomainError(
+          'INSPECTION_FINAL_SNAPSHOT_ALREADY_EXISTS',
+          'Inspection already has a final snapshot.',
+        );
+      case 'inspection_final_report_uq':
+        return new DomainError(
+          'INSPECTION_FINAL_REPORT_ALREADY_EXISTS',
+          'Inspection already has a final report.',
+        );
       default:
         return null;
     }
@@ -383,6 +398,46 @@ function translate(error: unknown): DomainError | null {
         return new DomainError(
           'INSPECTION_SCHEMA_IMMUTABLE',
           'Published inspection schema content is immutable.',
+        );
+      case 'inspection_evidence_state_invalid':
+        return new DomainError(
+          'INSPECTION_EVIDENCE_LOCKED',
+          'Inspection evidence can only be attached before lock.',
+        );
+      case 'inspection_signature_state_invalid':
+        return new DomainError(
+          'INSPECTION_SIGNATURE_STATE_INVALID',
+          'Signatures may only be collected while the inspection is locked.',
+        );
+      case 'inspection_signature_document_not_final':
+        return new DomainError(
+          'INSPECTION_SIGNATURE_DOCUMENT_NOT_FINAL',
+          'Signature requires a final immutable document version.',
+        );
+      case 'inspection_final_snapshot_signatures_missing':
+        return new DomainError(
+          'INSPECTION_REQUIRED_SIGNATURES_MISSING',
+          'Required inspection signatures are missing.',
+        );
+      case 'inspection_final_snapshot_required':
+        return new DomainError(
+          'INSPECTION_FINAL_SNAPSHOT_REQUIRED',
+          'Finalization requires a matching immutable final snapshot.',
+        );
+      case 'inspection_unlock_record_required':
+        return new DomainError(
+          'INSPECTION_UNLOCK_RECORD_REQUIRED',
+          'Unlock requires a matching append-only unlock record.',
+        );
+      case 'inspection_final_report_requires_finalized':
+        return new DomainError(
+          'INSPECTION_FINAL_REPORT_STATE_INVALID',
+          'Final report evidence requires a finalized inspection.',
+        );
+      case 'inspection_final_snapshot_immutable':
+        return new DomainError(
+          'INSPECTION_FINAL_SNAPSHOT_IMMUTABLE',
+          'Inspection final snapshot is immutable.',
         );
       default:
         return null;
