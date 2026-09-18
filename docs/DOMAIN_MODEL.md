@@ -117,6 +117,23 @@ The final PDF is a derived projection of FinalSnapshot behind `PdfPort`. Renderi
 
 One physical identifiable item with stable identity across location changes, servicing and eventual retirement/replacement.
 
+PR #14 establishes the registry grain:
+
+```text
+Asset
+  ├─ Unit                     exactly one current owning Unit
+  ├─ optional Space           must belong to that same Unit
+  ├─ manufacturer/model
+  ├─ AssetIdentifier[]        structured append-only identity data
+  └─ AssetReplacement         predecessor → successor physical identity
+```
+
+An Asset starts active and has its own optimistic lifecycle version. Normal lifecycle transitions may temporarily inactivate or permanently retire it. The `replaced` status is not a generic status write: it is established only together with an append-only successor relationship, leaving the old physical identity intact.
+
+PR #14 deliberately does not expose a move command. Current Unit/Space placement is protected from mutation until PR #15 introduces `AssetLocationHistory`; this avoids creating a temporary interval in which moves would destroy history. Replacement stays inside the same Unit so it cannot be abused as a hidden cross-Unit move.
+
+Serial, product, inventory and similar identifiers are first-class structured child records rather than notes. Service, warranty, condition history and tenancy inventory remain later bounded-context work.
+
 ### ImprovementProject
 
 A body of work performed on a Property/Unit. It is not an Asset. A project may install, remove or replace assets.
