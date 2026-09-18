@@ -67,8 +67,8 @@ These rules are architecture gates, not optional implementation notes.
 52. A Finding is an observed inspection condition; it is not an Issue or WorkOrder and cannot silently mutate those domains.
 53. Inspection historical identity (code/type/Unit/Tenancy/schema/creator) is immutable after creation. A finalized/signed Inspection will have an immutable evidence snapshot; PR #13 owns signatures, final snapshot and final document generation.
 54. Published schema children cannot move between schema versions/sections, and Inspection content rows cannot be retargeted between Inspections after insert.
-57. Section writes use PATCH semantics: omitted answers remain unchanged and explicit clear removes an answer.
-58. Form answers are not automatically canonical domain facts. Meter readings, assets, keys and similar facts require their own domain records where applicable.
+55. Section writes use PATCH semantics: omitted answers remain unchanged and explicit clear removes an answer.
+56. Form answers are not automatically canonical domain facts. Meter readings, assets, keys and similar facts require their own domain records where applicable.
 
 ## Assets
 

@@ -55,7 +55,7 @@ Useful production lessons carried forward:
 - unknown item IDs should be rejected in Portfolio rather than silently ignored;
 - Drive folder IDs, copied property/tenant strings, custom tenant tokens and Sheets rows are legacy implementation details, not new domain identity.
 
-Deferred deliberately to PR #12:
+Deferred deliberately to PR #13:
 
 - photo/document evidence per item/section;
 - signatures and signer roles;
