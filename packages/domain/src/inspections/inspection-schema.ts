@@ -59,7 +59,10 @@ export interface InspectionOption {
 export interface InspectionConditionLeaf {
   readonly fieldKey: string;
   readonly operator: InspectionConditionOperator;
-  readonly value?: InspectionScalarValue | readonly InspectionScalarValue[];
+  readonly value?:
+    | InspectionScalarValue
+    | readonly InspectionScalarValue[]
+    | undefined;
 }
 
 export type InspectionCondition =
