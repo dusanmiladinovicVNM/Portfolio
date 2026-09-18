@@ -14,6 +14,10 @@ export type PartyAddressId = EntityId<'PartyAddress'>;
 export type OwnershipPeriodId = EntityId<'OwnershipPeriod'>;
 export type TenancyId = EntityId<'Tenancy'>;
 export type TenancyPartyId = EntityId<'TenancyParty'>;
+export type LeaseAgreementId = EntityId<'LeaseAgreement'>;
+export type LeaseAgreementPartyId = EntityId<'LeaseAgreementParty'>;
+export type LeaseAmendmentId = EntityId<'LeaseAmendment'>;
+export type TenancyTermVersionId = EntityId<'TenancyTermVersion'>;
 
 export const asUserId = (value: string): UserId => value as UserId;
 export const asPropertyId = (value: string): PropertyId => value as PropertyId;
@@ -25,3 +29,7 @@ export const asPartyAddressId = (value: string): PartyAddressId => value as Part
 export const asOwnershipPeriodId = (value: string): OwnershipPeriodId => value as OwnershipPeriodId;
 export const asTenancyId = (value: string): TenancyId => value as TenancyId;
 export const asTenancyPartyId = (value: string): TenancyPartyId => value as TenancyPartyId;
+export const asLeaseAgreementId = (value: string): LeaseAgreementId => value as LeaseAgreementId;
+export const asLeaseAgreementPartyId = (value: string): LeaseAgreementPartyId => value as LeaseAgreementPartyId;
+export const asLeaseAmendmentId = (value: string): LeaseAmendmentId => value as LeaseAmendmentId;
+export const asTenancyTermVersionId = (value: string): TenancyTermVersionId => value as TenancyTermVersionId;
