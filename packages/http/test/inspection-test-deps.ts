@@ -5,6 +5,7 @@ import type {
   StaffDirectoryRepository,
 } from '@portfolio/application';
 import {
+  DomainError,
   asUserId,
   type Inspection,
   type InspectionFinding,
@@ -52,12 +53,26 @@ export class InMemoryInspectionRepository implements InspectionRepository {
     }
   }
 
-  async updateLifecycle(inspection: Inspection, expectedVersion: number) {
+  async updateLifecycle(
+    inspection: Inspection,
+    expectedVersion: number,
+    expectedContentRevision?: number,
+  ) {
     const current = this.inspections.get(inspection.id);
     if (!current || current.version !== expectedVersion) {
-      throw Object.assign(new Error('version conflict'), {
-        code: 'INSPECTION_VERSION_CONFLICT',
-      });
+      throw new DomainError(
+        'INSPECTION_VERSION_CONFLICT',
+        'Inspection was modified concurrently.',
+      );
+    }
+    if (
+      expectedContentRevision !== undefined &&
+      current.contentRevision !== expectedContentRevision
+    ) {
+      throw new DomainError(
+        'INSPECTION_CONTENT_REVISION_CONFLICT',
+        'Inspection content changed while the lock was being validated.',
+      );
     }
     this.inspections.set(inspection.id, inspection);
   }
@@ -80,6 +95,7 @@ export class InMemoryInspectionRepository implements InspectionRepository {
     sectionId: InspectionSchemaSectionId,
     expectedRevision: number,
     responses: readonly InspectionResponse[],
+    clearItemIds: readonly import('@portfolio/domain').InspectionSchemaItemId[],
   ): Promise<SaveInspectionSectionResult> {
     const key = `${inspectionId}:${sectionId}`;
     const current = this.states.get(key);
@@ -89,13 +105,32 @@ export class InMemoryInspectionRepository implements InspectionRepository {
       });
     }
 
+    const inspection = this.inspections.get(inspectionId);
+    if (!inspection || !['draft', 'in_progress'].includes(inspection.status)) {
+      throw new DomainError(
+        'INSPECTION_CONTENT_LOCKED',
+        'Inspection content is no longer editable.',
+      );
+    }
+
     const revision = current.revision + 1;
+    const contentRevision = inspection.contentRevision + 1;
     this.states.set(key, { ...current, revision });
+    this.inspections.set(inspectionId, { ...inspection, contentRevision });
+
+    for (const itemId of clearItemIds) {
+      this.responses.delete(`${inspectionId}:${itemId}`);
+    }
     for (const response of responses) {
       this.responses.set(`${inspectionId}:${response.itemId}`, response);
     }
 
-    return { revision, responses };
+    return {
+      revision,
+      contentRevision,
+      responses,
+      clearedItemIds: [...clearItemIds],
+    };
   }
 
   async listResponses(inspectionId: InspectionId) {
@@ -105,7 +140,20 @@ export class InMemoryInspectionRepository implements InspectionRepository {
   }
 
   async insertFinding(finding: InspectionFinding) {
+    const inspection = this.inspections.get(finding.inspectionId);
+    if (!inspection || !['draft', 'in_progress'].includes(inspection.status)) {
+      throw new DomainError(
+        'INSPECTION_CONTENT_LOCKED',
+        'Inspection content is no longer editable.',
+      );
+    }
+    const contentRevision = inspection.contentRevision + 1;
+    this.inspections.set(finding.inspectionId, {
+      ...inspection,
+      contentRevision,
+    });
     this.findings.push(finding);
+    return contentRevision;
   }
 
   async listFindings(inspectionId: InspectionId) {
