@@ -295,6 +295,31 @@ describe('Portfolio HTTP boundary', () => {
     });
   });
 
+  it('keeps inspectors read-only for Party master data', async () => {
+    const handler = buildHandler();
+
+    const read = await handler(
+      new Request('https://portfolio.test/parties'),
+      inspectorIdentity,
+    );
+    expect(read.status).toBe(200);
+
+    const write = await handler(
+      new Request('https://portfolio.test/parties', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'PTY-READONLY',
+          partyType: 'person',
+          firstName: 'Read',
+          lastName: 'Only',
+        }),
+      }),
+      inspectorIdentity,
+    );
+
+    expect(write.status).toBe(403);
+  });
+
   it('creates a Party master without encoding owner/tenant role in the identity', async () => {
     const handler = buildHandler();
 
