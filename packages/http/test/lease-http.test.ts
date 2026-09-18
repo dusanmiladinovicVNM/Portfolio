@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   type Actor,
+  type AgreementSupersession,
   type IdGenerator,
   type LeaseRepository,
   type OwnershipRepository,
@@ -209,6 +210,14 @@ class InMemoryLeaseRepository implements LeaseRepository {
     );
   }
 
+  async successorExists(predecessorAgreementId: LeaseAgreementId): Promise<boolean> {
+    return [...this.agreements.values()].some(
+      (agreement) =>
+        agreement.predecessorAgreementId === predecessorAgreementId &&
+        agreement.status !== 'cancelled',
+    );
+  }
+
   async insertAgreement(agreement: LeaseAgreement): Promise<void> {
     this.agreements.set(agreement.id, agreement);
   }
@@ -217,12 +226,47 @@ class InMemoryLeaseRepository implements LeaseRepository {
     agreement: LeaseAgreement,
     expectedVersion: number,
     terms: TenancyTermVersion,
+    predecessorToSupersede?: AgreementSupersession,
   ): Promise<void> {
     const current = this.agreements.get(agreement.id);
     if (!current || current.version !== expectedVersion) {
       throw Object.assign(new Error('version conflict'), {
         code: 'LEASE_AGREEMENT_VERSION_CONFLICT',
       });
+    }
+
+    if (
+      this.terms.some(
+        (existing) =>
+          existing.tenancyId === terms.tenancyId &&
+          existing.effectiveFrom === terms.effectiveFrom,
+      )
+    ) {
+      throw Object.assign(new Error('term date conflict'), {
+        code: 'TENANCY_TERM_EFFECTIVE_DATE_CONFLICT',
+      });
+    }
+
+    if (predecessorToSupersede) {
+      const persistedPredecessor = this.agreements.get(
+        predecessorToSupersede.agreement.id,
+      );
+      if (
+        !persistedPredecessor ||
+        persistedPredecessor.status !== 'signed' ||
+        persistedPredecessor.version !== predecessorToSupersede.expectedVersion
+      ) {
+        throw Object.assign(new Error('predecessor conflict'), {
+          code: 'LEASE_AGREEMENT_PREDECESSOR_VERSION_CONFLICT',
+        });
+      }
+    }
+
+    if (predecessorToSupersede) {
+      this.agreements.set(
+        predecessorToSupersede.agreement.id,
+        predecessorToSupersede.agreement,
+      );
     }
     this.agreements.set(agreement.id, agreement);
     this.terms.push(terms);
@@ -297,11 +341,41 @@ class InMemoryLeaseRepository implements LeaseRepository {
   ): Promise<TenancyTermVersion | null> {
     return (
       this.terms
-        .filter(
-          (terms) =>
-            terms.tenancyId === tenancyId &&
-            terms.effectiveFrom <= effectiveAt,
-        )
+        .filter((terms) => {
+          if (
+            terms.tenancyId !== tenancyId ||
+            terms.effectiveFrom > effectiveAt
+          ) {
+            return false;
+          }
+
+          const agreementId =
+            terms.sourceType === 'agreement'
+              ? terms.sourceAgreementId
+              : this.amendments.get(terms.sourceAmendmentId!)?.agreementId ?? null;
+          if (agreementId === null) return false;
+
+          const governing = this.agreements.get(agreementId);
+          if (!governing) return false;
+          if (governing.effectiveFrom > effectiveAt) return false;
+          if (
+            governing.effectiveTo !== null &&
+            governing.effectiveTo < effectiveAt
+          ) {
+            return false;
+          }
+
+          const signedSuccessor = [...this.agreements.values()].find(
+            (candidate) =>
+              candidate.predecessorAgreementId === governing.id &&
+              ['signed', 'superseded', 'terminated'].includes(candidate.status),
+          );
+
+          return (
+            signedSuccessor === undefined ||
+            effectiveAt < signedSuccessor.effectiveFrom
+          );
+        })
         .sort((left, right) =>
           right.effectiveFrom.localeCompare(left.effectiveFrom),
         )[0] ?? null
@@ -376,6 +450,12 @@ function buildHandler() {
       '20000000-0000-4000-8000-000000000004',
       '20000000-0000-4000-8000-000000000005',
       '20000000-0000-4000-8000-000000000006',
+      '20000000-0000-4000-8000-000000000007',
+      '20000000-0000-4000-8000-000000000008',
+      '20000000-0000-4000-8000-000000000009',
+      '20000000-0000-4000-8000-000000000010',
+      '20000000-0000-4000-8000-000000000011',
+      '20000000-0000-4000-8000-000000000012',
     ]),
   });
 
@@ -515,6 +595,135 @@ describe('Lease HTTP lifecycle', () => {
         baseRent: '900.00',
       },
     });
+  });
+
+  it('does not return expired agreement terms and atomically supersedes through replacement', async () => {
+    const { handler, leaseRepository } = buildHandler();
+
+    const initialResponse = await handler(
+      new Request(`https://portfolio.test/tenancies/${TENANCY_ID}/agreements`, {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'AGR-CHAIN-1',
+          agreementType: 'initial',
+          effectiveFrom: '2026-10-01',
+          effectiveTo: '2027-09-30',
+          parties: [
+            { partyId: LANDLORD_ID, role: 'landlord' },
+            { partyId: TENANT_ID, role: 'tenant' },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+    const initial = (await initialResponse.json()).data as {
+      id: string;
+      version: number;
+    };
+
+    await handler(
+      new Request(`https://portfolio.test/agreements/${initial.id}/sign`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 1,
+          signedAt: '2026-09-20',
+          terms: { currency: 'EUR', baseRent: '850' },
+        }),
+      }),
+      adminIdentity,
+    );
+
+    const expired = await handler(
+      new Request(
+        `https://portfolio.test/tenancies/${TENANCY_ID}/terms?at=2030-01-01`,
+      ),
+      adminIdentity,
+    );
+    expect(expired.status).toBe(404);
+    expect(await expired.json()).toMatchObject({
+      error: { code: 'TENANCY_TERMS_NOT_FOUND' },
+    });
+
+    const replacementResponse = await handler(
+      new Request(`https://portfolio.test/tenancies/${TENANCY_ID}/agreements`, {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'AGR-CHAIN-2',
+          agreementType: 'replacement',
+          predecessorAgreementId: initial.id,
+          effectiveFrom: '2027-04-01',
+          effectiveTo: '2028-03-31',
+          parties: [
+            { partyId: LANDLORD_ID, role: 'landlord' },
+            { partyId: TENANT_ID, role: 'tenant' },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(replacementResponse.status).toBe(201);
+    const replacement = (await replacementResponse.json()).data as {
+      id: string;
+    };
+
+    const signedReplacement = await handler(
+      new Request(`https://portfolio.test/agreements/${replacement.id}/sign`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 1,
+          signedAt: '2027-03-20',
+          terms: { currency: 'EUR', baseRent: '925' },
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(signedReplacement.status).toBe(200);
+
+    expect(
+      leaseRepository.agreements.get(asLeaseAgreementId(initial.id))?.status,
+    ).toBe('superseded');
+
+    const before = await handler(
+      new Request(
+        `https://portfolio.test/tenancies/${TENANCY_ID}/terms?at=2027-03-31`,
+      ),
+      adminIdentity,
+    );
+    expect(await before.json()).toMatchObject({
+      data: { baseRent: '850.00' },
+    });
+
+    const after = await handler(
+      new Request(
+        `https://portfolio.test/tenancies/${TENANCY_ID}/terms?at=2027-04-01`,
+      ),
+      adminIdentity,
+    );
+    expect(await after.json()).toMatchObject({
+      data: { baseRent: '925.00' },
+    });
+  });
+
+  it('rejects replacement transport without an explicit predecessor', async () => {
+    const { handler } = buildHandler();
+
+    const response = await handler(
+      new Request(`https://portfolio.test/tenancies/${TENANCY_ID}/agreements`, {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'AGR-NO-PREDECESSOR',
+          agreementType: 'replacement',
+          effectiveFrom: '2027-04-01',
+          parties: [
+            { partyId: LANDLORD_ID, role: 'landlord' },
+            { partyId: TENANT_ID, role: 'tenant' },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+
+    expect(response.status).toBe(400);
   });
 
   it('rejects a legal tenant role that does not match TenancyParty', async () => {
