@@ -28,3 +28,4 @@ export * from './inspections/inspection-commands.js';
 export * from './inspections/inspection-queries.js';
 export * from './inspections/pdf-port.js';
 export * from './documents/generated-document.js';
+export * from './inspections/inspection-evidence-commands.js';

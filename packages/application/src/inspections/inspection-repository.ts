@@ -97,6 +97,7 @@ export interface InspectionRepository {
 
 export interface StaffDirectoryEntry {
   readonly userId: import('@portfolio/domain').UserId;
+  readonly displayName: string;
   readonly role: 'admin' | 'manager' | 'inspector';
 }
 
