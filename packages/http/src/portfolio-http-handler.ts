@@ -5,10 +5,12 @@ import {
   type DocumentRepository,
   type FileStoragePort,
   type IdGenerator,
+  type InspectionRepository,
   type LeaseRepository,
   type OwnershipRepository,
   type PartyRepository,
   type PortfolioRepository,
+  type StaffDirectoryRepository,
   type TenancyRepository,
   type UserAccessRepository,
   type VerifiedIdentity,
@@ -16,6 +18,7 @@ import {
 import { DomainError } from '@portfolio/domain';
 import { handleDocumentHttp } from './document-http-routes.js';
 import { errorResponse } from './http-utils.js';
+import { handleInspectionHttp } from './inspection-http-routes.js';
 import { handleLeaseHttp } from './lease-http-routes.js';
 import { handleOwnershipHttp } from './ownership-http-routes.js';
 import { handlePartyHttp } from './party-http-routes.js';
@@ -29,6 +32,8 @@ export interface PortfolioHttpDependencies {
   readonly tenancyRepository: TenancyRepository;
   readonly leaseRepository: LeaseRepository;
   readonly documentRepository: DocumentRepository;
+  readonly inspectionRepository: InspectionRepository;
+  readonly staffDirectoryRepository: StaffDirectoryRepository;
   readonly fileStorage: FileStoragePort;
   readonly clock: ClockPort;
   readonly userAccessRepository: UserAccessRepository;
@@ -61,12 +66,17 @@ function routePath(request: Request, basePath: string): string | null {
 
 function errorStatus(code: string): number {
   if (code === 'UNAUTHORIZED') return 401;
-  if (code === 'FORBIDDEN') return 403;
+  if (
+    code === 'FORBIDDEN' ||
+    code === 'INSPECTION_ACCESS_DENIED' ||
+    code === 'INSPECTION_ASSIGNMENT_FORBIDDEN'
+  ) return 403;
   if (code === 'INVALID_REQUEST') return 400;
   if (code.endsWith('_NOT_FOUND')) return 404;
   if (
     code.endsWith('_ALREADY_EXISTS') ||
     code.endsWith('_VERSION_CONFLICT') ||
+    code === 'INSPECTION_SECTION_REVISION_CONFLICT' ||
     code === 'OWNERSHIP_PERIOD_OVERLAP' ||
     code === 'TENANCY_PLANNED_RESERVATION_OVERLAP' ||
     code === 'TENANCY_PLANNED_OCCUPANCY_CONFLICT' ||
@@ -104,6 +114,20 @@ export function createPortfolioHttpHandler(
       const actor = await resolveActor(deps.userAccessRepository, identity);
 
       const handlers = [
+        () =>
+          handleInspectionHttp(
+            {
+              inspectionRepository: deps.inspectionRepository,
+              portfolioRepository: deps.portfolioRepository,
+              tenancyRepository: deps.tenancyRepository,
+              staffDirectoryRepository: deps.staffDirectoryRepository,
+              idGenerator: deps.idGenerator,
+              clock: deps.clock,
+            },
+            actor,
+            request,
+            path,
+          ),
         () =>
           handleDocumentHttp(
             {
