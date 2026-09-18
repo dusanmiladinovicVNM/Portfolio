@@ -4,7 +4,14 @@ import { ApplicationError } from '../shared/application-error.js';
 export const STAFF_ROLES = ['admin', 'manager', 'inspector'] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
 
-export const CAPABILITIES = ['portfolio:read', 'portfolio:write'] as const;
+export const CAPABILITIES = [
+  'portfolio:read',
+  'portfolio:write',
+  'parties:read',
+  'parties:write',
+  'ownership:read',
+  'ownership:write',
+] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
 export interface Actor {
@@ -22,9 +29,13 @@ export interface UserAccessRepository {
 }
 
 const ROLE_CAPABILITIES: Readonly<Record<StaffRole, ReadonlySet<Capability>>> = {
-  admin: new Set<Capability>(['portfolio:read', 'portfolio:write']),
-  manager: new Set<Capability>(['portfolio:read', 'portfolio:write']),
-  inspector: new Set<Capability>(['portfolio:read']),
+  admin: new Set<Capability>(CAPABILITIES),
+  manager: new Set<Capability>(CAPABILITIES),
+  inspector: new Set<Capability>([
+    'portfolio:read',
+    'parties:read',
+    'ownership:read',
+  ]),
 };
 
 export async function resolveActor(
