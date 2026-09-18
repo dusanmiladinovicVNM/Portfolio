@@ -91,10 +91,3 @@ These rules are architecture gates, not optional implementation notes.
 64. UI components cannot coordinate multi-table business transactions.
 65. Multi-record business commands have one explicit transactional boundary.
 66. Database constraints enforce invariants that can be stated relationally.
-
-## Architecture
-
-60. Domain code cannot import Supabase, React, Deno, Google APIs or future Fastify infrastructure.
-61. UI components cannot coordinate multi-table business transactions.
-62. Multi-record business commands have one explicit transactional boundary.
-63. Database constraints enforce invariants that can be stated relationally.
