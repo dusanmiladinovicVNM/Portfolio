@@ -343,6 +343,49 @@ describe('Portfolio HTTP boundary', () => {
     expect(response.status).toBe(400);
   });
 
+  it('normalizes malformed JSON to the same 400 contract across route modules', async () => {
+    const handler = buildHandler();
+    const requests = [
+      new Request('https://portfolio.test/properties', {
+        method: 'POST',
+        body: '{',
+      }),
+      new Request('https://portfolio.test/parties', {
+        method: 'POST',
+        body: '{',
+      }),
+      new Request(
+        'https://portfolio.test/units/11111111-1111-4111-8111-111111111111/ownership-periods',
+        {
+          method: 'POST',
+          body: '{',
+        },
+      ),
+      new Request(
+        'https://portfolio.test/units/11111111-1111-4111-8111-111111111111/tenancies',
+        {
+          method: 'POST',
+          body: '{',
+        },
+      ),
+      new Request(
+        'https://portfolio.test/tenancies/11111111-1111-4111-8111-111111111111/agreements',
+        {
+          method: 'POST',
+          body: '{',
+        },
+      ),
+    ];
+
+    for (const request of requests) {
+      const response = await handler(request, adminIdentity);
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        error: { code: 'INVALID_REQUEST' },
+      });
+    }
+  });
+
   it('returns 404 when a child collection is requested for a missing parent', async () => {
     const handler = buildHandler();
 
