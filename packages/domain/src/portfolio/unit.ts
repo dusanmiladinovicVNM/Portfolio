@@ -1,8 +1,25 @@
 import { DomainError } from '../shared/domain-error.js';
 import type { PropertyId, UnitId } from '../shared/entity-id.js';
 
-export type UnitType = 'apartment' | 'house' | 'studio' | 'office' | 'commercial' | 'other';
-export type UnitStatus = 'vacant' | 'occupied' | 'turnover' | 'inactive' | 'archived';
+export const UNIT_TYPES = [
+  'apartment',
+  'house',
+  'studio',
+  'office',
+  'commercial',
+  'other',
+] as const;
+
+export const UNIT_STATUSES = [
+  'vacant',
+  'occupied',
+  'turnover',
+  'inactive',
+  'archived',
+] as const;
+
+export type UnitType = (typeof UNIT_TYPES)[number];
+export type UnitStatus = (typeof UNIT_STATUSES)[number];
 
 export interface Unit {
   readonly id: UnitId;

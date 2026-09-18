@@ -9,8 +9,10 @@ export const PROPERTY_TYPES = [
   'other',
 ] as const;
 
+export const PROPERTY_STATUSES = ['active', 'inactive', 'archived'] as const;
+
 export type PropertyType = (typeof PROPERTY_TYPES)[number];
-export type PropertyStatus = 'active' | 'inactive' | 'archived';
+export type PropertyStatus = (typeof PROPERTY_STATUSES)[number];
 
 export interface Property {
   readonly id: PropertyId;

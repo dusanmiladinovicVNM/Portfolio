@@ -1,19 +1,22 @@
 import { DomainError } from '../shared/domain-error.js';
 import type { SpaceId, UnitId } from '../shared/entity-id.js';
 
-export type SpaceType =
-  | 'living_room'
-  | 'kitchen'
-  | 'bedroom'
-  | 'bathroom'
-  | 'hall'
-  | 'balcony'
-  | 'terrace'
-  | 'cellar'
-  | 'storage'
-  | 'garage'
-  | 'parking'
-  | 'other';
+export const SPACE_TYPES = [
+  'living_room',
+  'kitchen',
+  'bedroom',
+  'bathroom',
+  'hall',
+  'balcony',
+  'terrace',
+  'cellar',
+  'storage',
+  'garage',
+  'parking',
+  'other',
+] as const;
+
+export type SpaceType = (typeof SPACE_TYPES)[number];
 
 export interface Space {
   readonly id: SpaceId;
