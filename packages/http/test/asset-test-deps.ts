@@ -3,6 +3,8 @@ import type {
   Asset,
   AssetId,
   AssetReplacement,
+  GloballyUniqueAssetIdentifierType,
+  PropertyId,
   UnitId,
 } from '@portfolio/domain';
 
@@ -14,6 +16,12 @@ export class InMemoryAssetRepository implements AssetRepository {
     return this.assets.get(id) ?? null;
   }
 
+  async listByProperty(propertyId: PropertyId): Promise<readonly Asset[]> {
+    return [...this.assets.values()]
+      .filter((asset) => asset.propertyId === propertyId)
+      .sort((left, right) => left.code.localeCompare(right.code));
+  }
+
   async listByUnit(unitId: UnitId): Promise<readonly Asset[]> {
     return [...this.assets.values()]
       .filter((asset) => asset.unitId === unitId)
@@ -21,15 +29,37 @@ export class InMemoryAssetRepository implements AssetRepository {
   }
 
   async codeExists(code: string): Promise<boolean> {
-    const normalized = code.toLocaleLowerCase();
+    const normalized = code.trim().toLowerCase();
     return [...this.assets.values()].some(
-      (asset) => asset.code.toLocaleLowerCase() === normalized,
+      (asset) => asset.code.trim().toLowerCase() === normalized,
+    );
+  }
+
+  async globallyUniqueIdentifierExists(
+    identifierType: GloballyUniqueAssetIdentifierType,
+    value: string,
+  ): Promise<boolean> {
+    const normalized = value.trim().toLowerCase();
+    return [...this.assets.values()].some((asset) =>
+      asset.identifiers.some(
+        (identifier) =>
+          identifier.identifierType === identifierType &&
+          identifier.value.trim().toLowerCase() === normalized,
+      ),
     );
   }
 
   async insert(asset: Asset): Promise<void> {
     if (await this.codeExists(asset.code)) {
       throw new Error('duplicate asset code');
+    }
+    this.assets.set(asset.id, asset);
+  }
+
+  async updateMetadata(asset: Asset, expectedVersion: number): Promise<void> {
+    const current = this.assets.get(asset.id);
+    if (!current || current.version !== expectedVersion) {
+      throw new Error('asset version conflict');
     }
     this.assets.set(asset.id, asset);
   }
