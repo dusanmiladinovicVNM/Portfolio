@@ -3352,6 +3352,40 @@ describe('PostgreSQL infrastructure', () => {
       constraint_name: 'asset_replacement_unit_mismatch',
     });
 
+    await expect(
+      sql.begin(async (tx) => {
+        await tx`
+          insert into public.assets (
+            id, code, name, unit_id, space_id, status, version
+          ) values (
+            'b1f00000-0000-4000-8000-000000000002',
+            'ASSET-DANGLING-SUCCESSOR',
+            'Dangling successor',
+            ${unit.id},
+            ${kitchen.id},
+            'active',
+            1
+          )
+        `;
+
+        await tx`
+          insert into public.asset_replacements (
+            id, replaced_asset_id, replacement_asset_id,
+            replaced_by_user_id, replaced_at
+          ) values (
+            'b1f00000-0000-4000-8000-000000000003',
+            ${asset.id},
+            'b1f00000-0000-4000-8000-000000000002',
+            ${actor.userId},
+            '2026-09-22T09:05:00.000Z'
+          )
+        `;
+      }),
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_replacement_status_required',
+    });
+
     const inactive = await changeAssetStatusCommand(
       assetRepository,
       actor,
