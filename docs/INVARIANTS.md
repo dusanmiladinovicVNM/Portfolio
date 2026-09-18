@@ -80,12 +80,12 @@ These rules are architecture gates, not optional implementation notes.
 
 ## Assets
 
-65. Asset represents one physical identity and belongs to exactly one Unit; an optional Space placement must belong to that same Unit.
-66. Moving an Asset does not create a new Asset. Until AssetLocationHistory exists in PR #15, Unit/Space placement is immutable rather than silently overwriting location truth.
+65. Asset represents one physical identity. Its current placement always identifies one Property; Unit is optional, and Space is optional only when Unit is present. Any Unit must belong to that Property and any Space must belong to that Unit.
+66. Moving an Asset does not create a new Asset. Until AssetLocationHistory exists in canonical PR #15, Property/Unit/Space placement is protected from mutation rather than silently overwriting location truth.
 67. Replacing an Asset does create a new Asset; the old one remains in history and becomes `replaced` only in the same transaction that appends one predecessor→successor relationship.
-68. Replacement cannot be used as a hidden cross-Unit move; predecessor and successor belong to the same Unit, and replacement lineage is acyclic.
-69. Serial/product/inventory identifiers are structured append-only identity data and must not be collapsed into an unstructured notes field.
-70. Asset lifecycle changes are explicit optimistic-concurrency transitions; retired/replaced Assets are terminal. Service events are append-only history and Asset condition assessments preserve history rather than overwriting a single condition field.
+68. Replacement is not a movement workflow: successor and predecessor have the exact same current Property/Unit/Space placement, and replacement lineage is acyclic.
+69. Asset identifiers are structured append-only records with canonical trimmed values. `inventory_tag`, `imei` and `mac_address` are globally unique; serial/product/barcode have no stronger cross-Asset uniqueness until their business scope is explicitly defined.
+70. `Asset.id` is immutable physical identity and `code` is stable business identity. Name/manufacturer/model are correctable metadata. Supported metadata corrections and lifecycle changes use optimistic concurrency; retired/replaced lifecycle states are terminal. Service events are append-only history and Asset condition assessments preserve history rather than overwriting a single condition field.
 
 ## Improvements and maintenance
 
