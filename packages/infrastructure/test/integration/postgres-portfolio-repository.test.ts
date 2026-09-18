@@ -1488,6 +1488,21 @@ describe('PostgreSQL infrastructure', () => {
     });
 
     const beforeUnlock = (await inspectionRepository.getById(inspection.id))!;
+
+    await expect(
+      sql`
+        update public.inspections
+        set status = 'in_progress',
+            locked_at = null,
+            version = version + 1,
+            content_revision = content_revision + 1
+        where id = ${inspection.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_unlock_record_required',
+    });
+
     const unlocked = await unlockInspectionCommand(
       {
         inspectionRepository,
@@ -1508,19 +1523,6 @@ describe('PostgreSQL infrastructure', () => {
       signerRole: 'landlord',
       invalidatedAt: '2026-09-21T08:35:00.000Z',
       invalidationReason: 'Correct handover details',
-    });
-
-    await expect(
-      sql`
-        update public.inspections
-        set status = 'locked',
-            locked_at = '2026-09-21T08:36:00.000Z',
-            version = version + 1
-        where id = ${inspection.id}
-      `,
-    ).rejects.toMatchObject({
-      code: '23514',
-      constraint_name: 'inspection_lifecycle_transition_invalid',
     });
 
     const relocked = await lockInspectionCommand(
