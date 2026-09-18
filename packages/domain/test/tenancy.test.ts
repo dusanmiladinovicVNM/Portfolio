@@ -148,7 +148,7 @@ describe('Tenancy lifecycle', () => {
         partyId: asPartyId('66666666-6666-4666-8666-666666666666'),
         role: 'co_tenant',
       }),
-    ).toThrowError(/cannot be added/);
+    ).toThrowError(/draft or planned/);
 
     const ended = endTenancy(
       activateTenancy(planTenancy(draftWithTenant(), '2026-10-01'), '2026-10-01'),
