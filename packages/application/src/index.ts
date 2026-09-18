@@ -12,3 +12,6 @@ export * from './parties/party-queries.js';
 export * from './ownership/ownership-repository.js';
 export * from './ownership/create-ownership-period.js';
 export * from './ownership/ownership-queries.js';
+export * from './tenancy/tenancy-repository.js';
+export * from './tenancy/tenancy-commands.js';
+export * from './tenancy/tenancy-queries.js';
