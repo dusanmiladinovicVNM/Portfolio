@@ -83,7 +83,42 @@ export async function handleInspectionHttp(
           idGenerator: deps.idGenerator,
         },
         actor,
-        parsed.data,
+        {
+          schemaCode: parsed.data.schemaCode,
+          inspectionType: parsed.data.inspectionType,
+          title: parsed.data.title,
+          sections: parsed.data.sections.map((section) => ({
+            key: section.key,
+            title: section.title,
+            ...(section.description !== undefined
+              ? { description: section.description }
+              : {}),
+            sortOrder: section.sortOrder,
+            items: section.items.map((item) => ({
+              key: item.key,
+              type: item.type,
+              label: item.label,
+              ...(item.required !== undefined
+                ? { required: item.required }
+                : {}),
+              sortOrder: item.sortOrder,
+              ...(item.options !== undefined
+                ? {
+                    options: item.options.map((option) => ({
+                      value: option.value,
+                      label: option.label,
+                    })),
+                  }
+                : {}),
+              ...(item.visibleWhen !== undefined
+                ? { visibleWhen: item.visibleWhen }
+                : {}),
+              ...(item.requiredWhen !== undefined
+                ? { requiredWhen: item.requiredWhen }
+                : {}),
+            })),
+          })),
+        },
       );
       return json({ data: toInspectionSchemaVersionResponse(schema) }, 201);
     }
@@ -248,7 +283,11 @@ export async function handleInspectionHttp(
       asInspectionId(inspectionId.data),
       asInspectionSchemaSectionId(sectionId.data),
       parsed.data.expectedRevision,
-      parsed.data.items,
+      parsed.data.items.map((item) => ({
+        itemId: item.itemId,
+        value: Array.isArray(item.value) ? [...item.value] : item.value,
+        ...(item.comment !== undefined ? { comment: item.comment } : {}),
+      })),
     );
 
     return json({
