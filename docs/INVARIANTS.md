@@ -69,35 +69,44 @@ These rules are architecture gates, not optional implementation notes.
 54. Published schema children cannot move between schema versions/sections, and Inspection content rows cannot be retargeted between Inspections after insert.
 55. Section writes use PATCH semantics: omitted answers remain unchanged and explicit clear removes an answer.
 56. Form answers are not automatically canonical domain facts. Meter readings, assets, keys and similar facts require their own domain records where applicable.
+65. Inspection evidence links reference one exact final DocumentVersion and are append-only once linked.
+66. Signatures can be created only for a locked Inspection and reference one exact final DocumentVersion.
+67. The inspector signature must belong to the currently assigned internal user; tenant/co-tenant signatures must match TenancyParty composition.
+68. Unlock is an explicit admin/manager workflow that records an append-only unlock event and invalidates, never deletes, all currently valid signatures.
+69. Finalization requires a locked Inspection and a valid assigned-inspector signature.
+70. Finalization snapshots one exact schema/content/evidence/signature/unlock history and links one exact final PDF DocumentVersion.
+71. Finalization CASes the lifecycle version and contentRevision represented by the snapshot; a concurrent signature/evidence change must prevent commit.
+72. InspectionFinalization and its snapshot are immutable and one-to-one with Inspection.
+
 
 ## Assets
 
-57. Asset represents one physical identity.
-58. Moving an Asset does not create a new Asset.
-59. Replacing an Asset does create a new Asset; the old one remains in history.
-60. Serial/product identifiers are historical identity data and must not be collapsed into an unstructured notes field.
-61. Service events are append-only history.
-62. Asset condition assessments preserve history rather than overwriting a single condition field.
+65. Asset represents one physical identity.
+66. Moving an Asset does not create a new Asset.
+67. Replacing an Asset does create a new Asset; the old one remains in history.
+68. Serial/product identifiers are historical identity data and must not be collapsed into an unstructured notes field.
+69. Service events are append-only history.
+70. Asset condition assessments preserve history rather than overwriting a single condition field.
 
 ## Improvements and maintenance
 
-63. ImprovementProject is work; Asset is a physical item; Material is consumed input. They are not interchangeable.
-64. Issue and WorkOrder are different grains: a problem can exist before a work order and may require more than one work order.
-65. Cross-context workflows cannot bypass the owning domain to mutate its state.
+71. ImprovementProject is work; Asset is a physical item; Material is consumed input. They are not interchangeable.
+72. Issue and WorkOrder are different grains: a problem can exist before a work order and may require more than one work order.
+73. Cross-context workflows cannot bypass the owning domain to mutate its state.
 
 ## Money and documents
 
-66. Monetary values use decimal/numeric semantics, never binary floating point.
-67. Each DocumentVersion represents one binary content identity; its file metadata, SHA-256 and storage locator are immutable after registration.
-68. A final DocumentVersion is append-only evidence and cannot return to a mutable/stored state.
-69. A `signed_original` link identifies one exact final DocumentVersion, may only target a signed LeaseAgreement/LeaseAmendment, and is immutable once created.
-70. Binary storage location is infrastructure data, not business identity; Google Drive file IDs must never become Document or DocumentVersion IDs.
-71. External binary storage and PostgreSQL cannot share one ACID transaction. Upload registration therefore uses an idempotent storage object key and compensating delete when DB registration fails.
-72. Financial corrections preserve prior history through correction/reversal records where material.
+74. Monetary values use decimal/numeric semantics, never binary floating point.
+75. Each DocumentVersion represents one binary content identity; its file metadata, SHA-256 and storage locator are immutable after registration.
+76. A final DocumentVersion is append-only evidence and cannot return to a mutable/stored state.
+77. A `signed_original` link identifies one exact final DocumentVersion, may only target a signed LeaseAgreement/LeaseAmendment, and is immutable once created.
+78. Binary storage location is infrastructure data, not business identity; Google Drive file IDs must never become Document or DocumentVersion IDs.
+79. External binary storage and PostgreSQL cannot share one ACID transaction. Upload registration therefore uses an idempotent storage object key and compensating delete when DB registration fails.
+80. Financial corrections preserve prior history through correction/reversal records where material.
 
 ## Architecture
 
-73. Domain code cannot import Supabase, React, Deno, Google APIs or future Fastify infrastructure.
-74. UI components cannot coordinate multi-table business transactions.
-75. Multi-record business commands have one explicit transactional boundary.
-76. Database constraints enforce invariants that can be stated relationally.
+81. Domain code cannot import Supabase, React, Deno, Google APIs or future Fastify infrastructure.
+82. UI components cannot coordinate multi-table business transactions.
+83. Multi-record business commands have one explicit transactional boundary.
+84. Database constraints enforce invariants that can be stated relationally.

@@ -93,7 +93,19 @@ A Finding is an observed condition/problem. It is not yet an Issue or WorkOrder;
 
 The inspector assignment is explicit and separate from `createdByUserId`. An inspector may work only on inspections assigned to them; admin/manager roles have broader operational access.
 
-Photos, signatures, immutable final snapshot and generated PDF remain PR #13 scope.
+PR #13 adds evidence/finalization around the backbone:
+
+```text
+Inspection
+  ├─ Evidence[] ──→ exact final DocumentVersion
+  ├─ Signature[] ─→ exact final DocumentVersion
+  ├─ UnlockEvent[]
+  └─ Finalization
+       ├─ immutable JSON snapshot
+       └─ exact final PDF DocumentVersion
+```
+
+Signatures attest only locked content. Controlled unlock invalidates signatures and preserves them historically. Finalized Inspection is terminal.
 
 ### Asset
 
