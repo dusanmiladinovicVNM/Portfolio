@@ -28,9 +28,6 @@ set required_signature_roles =
 where status in ('published', 'retired')
   and cardinality(required_signature_roles) = 0;
 
-create unique index inspections_id_schema_uq
-  on public.inspections (id, schema_version_id);
-
 create table public.inspection_evidence (
   id uuid primary key,
   inspection_id uuid not null,
