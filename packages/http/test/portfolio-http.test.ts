@@ -325,6 +325,194 @@ describe('Portfolio HTTP boundary', () => {
     });
   });
 
+  it('runs Asset Registry create, lifecycle and replacement through HTTP', async () => {
+    const handler = buildHandler([
+      'd1000000-0000-4000-8000-000000000001',
+      'd1000000-0000-4000-8000-000000000002',
+      'd1000000-0000-4000-8000-000000000003',
+      'd1000000-0000-4000-8000-000000000004',
+      'd1000000-0000-4000-8000-000000000005',
+      'd1000000-0000-4000-8000-000000000006',
+      'd1000000-0000-4000-8000-000000000007',
+      'd1000000-0000-4000-8000-000000000008',
+    ]);
+
+    const propertyResponse = await handler(
+      new Request('https://portfolio.test/properties', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ...propertyBody,
+          code: 'PROP-ASSET-HTTP',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(propertyResponse.status).toBe(201);
+    const property = (await propertyResponse.json()).data;
+
+    const unitResponse = await handler(
+      new Request('https://portfolio.test/units', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          propertyId: property.id,
+          code: 'UNIT-ASSET-HTTP',
+          unitNumber: 'A-HTTP',
+          unitType: 'apartment',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(unitResponse.status).toBe(201);
+    const unit = (await unitResponse.json()).data;
+
+    const spaceResponse = await handler(
+      new Request('https://portfolio.test/spaces', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          unitId: unit.id,
+          code: 'KITCHEN',
+          name: 'Kitchen',
+          spaceType: 'kitchen',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(spaceResponse.status).toBe(201);
+    const space = (await spaceResponse.json()).data;
+
+    const assetResponse = await handler(
+      new Request('https://portfolio.test/assets', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          code: 'ASSET-HTTP-001',
+          name: 'Refrigerator',
+          unitId: unit.id,
+          spaceId: space.id,
+          manufacturer: 'Bosch',
+          model: 'KGN39',
+          identifiers: [
+            {
+              identifierType: 'serial_number',
+              value: 'HTTP-SN-001',
+            },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(assetResponse.status).toBe(201);
+    const asset = (await assetResponse.json()).data;
+    expect(asset).toMatchObject({
+      status: 'active',
+      version: 1,
+      unitId: unit.id,
+      spaceId: space.id,
+      manufacturer: 'Bosch',
+      model: 'KGN39',
+    });
+    expect(asset.identifiers).toHaveLength(1);
+
+    const inspectorList = await handler(
+      new Request(`https://portfolio.test/units/${unit.id}/assets`),
+      inspectorIdentity,
+    );
+    expect(inspectorList.status).toBe(200);
+    expect(await inspectorList.json()).toMatchObject({
+      data: { items: [{ id: asset.id, code: 'ASSET-HTTP-001' }] },
+    });
+
+    const inspectorWrite = await handler(
+      new Request(`https://portfolio.test/assets/${asset.id}/status`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          expectedVersion: 1,
+          status: 'inactive',
+        }),
+      }),
+      inspectorIdentity,
+    );
+    expect(inspectorWrite.status).toBe(403);
+
+    const inactiveResponse = await handler(
+      new Request(`https://portfolio.test/assets/${asset.id}/status`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          expectedVersion: 1,
+          status: 'inactive',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(inactiveResponse.status).toBe(200);
+    expect(await inactiveResponse.json()).toMatchObject({
+      data: { id: asset.id, status: 'inactive', version: 2 },
+    });
+
+    const replacementResponse = await handler(
+      new Request(`https://portfolio.test/assets/${asset.id}/replacement`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          expectedVersion: 2,
+          code: 'ASSET-HTTP-002',
+          name: 'Replacement refrigerator',
+          spaceId: space.id,
+          manufacturer: 'Bosch',
+          model: 'KGN49',
+          identifiers: [
+            {
+              identifierType: 'serial_number',
+              value: 'HTTP-SN-002',
+            },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(replacementResponse.status).toBe(201);
+    const replacementBody = await replacementResponse.json();
+    expect(replacementBody).toMatchObject({
+      data: {
+        replacedAsset: {
+          id: asset.id,
+          status: 'replaced',
+          version: 3,
+        },
+        replacementAsset: {
+          code: 'ASSET-HTTP-002',
+          status: 'active',
+          version: 1,
+          unitId: unit.id,
+          spaceId: space.id,
+        },
+        replacement: {
+          replacedAssetId: asset.id,
+        },
+      },
+    });
+
+    const lineageResponse = await handler(
+      new Request(`https://portfolio.test/assets/${asset.id}/replacements`),
+      adminIdentity,
+    );
+    expect(lineageResponse.status).toBe(200);
+    expect(await lineageResponse.json()).toMatchObject({
+      data: {
+        predecessor: null,
+        successor: {
+          replacedAssetId: asset.id,
+          replacementAssetId: replacementBody.data.replacementAsset.id,
+        },
+      },
+    });
+  });
+
   it('allows inspector reads but rejects master-data writes', async () => {
     const handler = buildHandler();
 
