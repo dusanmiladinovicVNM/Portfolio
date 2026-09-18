@@ -1,0 +1,12 @@
+{
+  "name": "@portfolio/domain",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "pnpm --workspace-root exec tsc --noEmit -p packages/domain/tsconfig.json",
+    "test": "pnpm --workspace-root exec vitest run packages/domain/test"
+  }
+}
