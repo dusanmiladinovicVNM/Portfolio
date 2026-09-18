@@ -4,42 +4,62 @@
 
 ## Context
 
-Portfolio now has stable Unit/Space identity and completed Inspection evidence. The next canonical domain is the physical Asset registry.
+Portfolio now has stable Property/Unit/Space identity and completed Inspection evidence. The next canonical domain is the physical Asset registry.
 
-The main modeling risk is treating an Asset as a mutable row describing "whatever appliance is currently here". That would collapse three different facts:
+The main modeling risk is treating an Asset as a mutable row describing "whatever equipment is currently here". That would collapse physical identity, placement, correctable metadata and replacement lineage. It would also make later service/warranty history unsafe because a replacement could silently inherit the predecessor's history.
 
-- physical identity;
-- current placement;
-- replacement lineage.
-
-It would also make later service/warranty history unsafe because a replacement could silently inherit the predecessor's history.
+A second risk is forcing every Asset into a rentable Unit. Building-level equipment such as lifts, central boilers, pumps, solar inverters or fire-control panels belongs naturally to a Property without requiring a synthetic `COMMON` Unit.
 
 ## Decision
 
-### Physical identity
+### Physical identity and metadata
 
 `Asset` represents exactly one physical item.
 
 Each Asset has:
 
-- stable UUID identity;
-- human business code;
-- name;
-- exactly one Unit;
-- optional Space from that same Unit;
-- optional manufacturer/model;
-- explicit lifecycle status + optimistic version;
-- structured `AssetIdentifier[]`.
+- stable UUID physical identity;
+- stable human business code;
+- correctable name/manufacturer/model metadata;
+- required Property current-placement context;
+- optional Unit from that Property;
+- optional Space from that Unit;
+- explicit lifecycle status + optimistic aggregate version;
+- structured append-only `AssetIdentifier[]`.
 
-Identifiers are append-only child records. Serial, product, inventory, barcode, IMEI/MAC and other identifiers are not stored in notes.
+Changing name/manufacturer/model corrects master metadata; it does not create a new physical Asset. Corrections use optimistic concurrency and advance `Asset.version`.
 
 ### Placement boundary
 
-PR #14 stores current Unit/Space placement but does not expose movement.
+Valid current-placement shapes are:
 
-Direct mutation of Asset Unit/Space is blocked at PostgreSQL.
+```text
+Property
+Property + Unit
+Property + Unit + Space
+```
 
-PR #15 will introduce `AssetLocationHistory` and the first supported move command. Deferring movement rather than temporarily overwriting placement preserves the future historical model.
+PR #14 stores current placement but exposes no move command. Direct mutation of Property/Unit/Space placement is blocked at PostgreSQL.
+
+Canonical PR #15 will introduce `AssetLocationHistory` and the first supported move command. Deferring movement rather than temporarily overwriting placement preserves future historical truth without making placement part of physical identity.
+
+### Structured identifiers
+
+Identifiers are append-only child records. Values and labels are stored without surrounding whitespace.
+
+Uniqueness semantics are intentionally type-specific:
+
+- `inventory_tag` — globally unique;
+- `imei` — globally unique;
+- `mac_address` — globally unique;
+- `serial_number` — no cross-Asset uniqueness yet;
+- `product_number` — no cross-Asset uniqueness;
+- `barcode` — no cross-Asset uniqueness yet;
+- `other` — no cross-Asset uniqueness.
+
+Every Asset still rejects the same `(identifierType, normalized value)` twice within itself.
+
+This keeps the grain strong without pretending that all identifier types have the same business meaning.
 
 ### Lifecycle
 
@@ -52,9 +72,9 @@ active ↔ inactive
 active/inactive ──replacement transaction──→ replaced
 ```
 
-`retired` and `replaced` are terminal.
+`retired` and `replaced` are terminal lifecycle states.
 
-Every lifecycle transition increments Asset.version exactly once.
+Every supported lifecycle transition advances `Asset.version` exactly once. Metadata correction is a separate CAS mutation and cannot be mixed with a lifecycle transition in one DB update.
 
 ### Replacement
 
@@ -66,9 +86,9 @@ One transaction:
 2. append one `AssetReplacement` predecessor→successor relation;
 3. mark the predecessor `replaced` and increment its version.
 
-A predecessor has at most one direct successor and a successor at most one direct predecessor. Replacement must stay inside the same Unit; it is not a movement workflow.
+The successor inherits the predecessor's exact current Property/Unit/Space placement. Replacement therefore cannot masquerade as a move.
 
-PostgreSQL independently blocks `status = replaced` when no matching replacement relation exists.
+A predecessor has at most one direct successor and a successor at most one direct predecessor. Replacement lineage is acyclic. PostgreSQL independently blocks `status = replaced` when no matching replacement relation exists and uses a deferred commit guard so the relation and predecessor state must commit together.
 
 ### Deferred scope
 
@@ -79,15 +99,19 @@ Not part of PR #14:
 - TenancyAssetAssignment / move-in inventory;
 - Warranty / WarrantyClaim;
 - ServicePlan / ServiceEvent / ServicePart;
-- maintenance/work-order ownership.
+- maintenance/work-order ownership;
+- post-creation AssetIdentifier append API.
 
 Those contexts may reference Asset identity later but do not redefine it.
 
 ## Consequences
 
+- building-level equipment is modeled without fake Units;
+- future moves change placement history, not Asset identity;
 - service/warranty history can safely attach to one physical identity;
+- metadata typos can be corrected without inventing a replacement Asset;
 - old replaced items remain queryable;
-- serial/product identifiers remain structured historical evidence;
-- no location history is lost before PR #15 exists;
-- replacement cannot masquerade as a cross-Unit transfer;
-- application and PostgreSQL enforce the same lifecycle/replacement rules.
+- strong identifier types have DB-enforced global uniqueness;
+- serial/product/barcode semantics remain deliberately unclaimed;
+- replacement cannot masquerade as transfer;
+- application and PostgreSQL enforce the same placement, mutation and replacement rules.
