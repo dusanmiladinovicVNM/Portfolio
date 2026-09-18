@@ -10,6 +10,7 @@
     "test": "pnpm --workspace-root exec vitest run --passWithNoTests apps/api/test"
   },
   "dependencies": {
+    "@portfolio/application": "workspace:*",
     "@portfolio/http": "workspace:*",
     "@portfolio/infrastructure": "workspace:*",
     "@supabase/server": "1.7.0",

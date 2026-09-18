@@ -82,7 +82,24 @@ A normalized financial fact linked to a source business event. Cost is not a sub
 
 ### Document
 
-Metadata/version model for files. Binary storage is external and accessed through a storage port.
+Document is the stable business dossier for one logical file/evidence stream.
+
+```text
+Document
+  ├─ DocumentVersion v1
+  ├─ DocumentVersion v2
+  └─ DocumentLink → domain target
+```
+
+A DocumentVersion is one immutable binary content identity. It stores file name, MIME type, byte size and SHA-256. Version content is never overwritten; a newer binary creates a newer version.
+
+A stored version may be finalized once. Final versions are immutable evidence.
+
+DocumentLink connects a Document to a concrete domain target such as Property, Unit, Party, Tenancy, LeaseAgreement or LeaseAmendment. Links may identify an exact DocumentVersion.
+
+For legal evidence, `signed_original` always points to one exact **final** version and only to a signed agreement/amendment. AgreementParty therefore preserves membership/role, while the signed DocumentVersion preserves the rendered legal identity/address text that existed in the signed instrument.
+
+Binary storage remains external behind FileStoragePort. Provider/file IDs are infrastructure locators only.
 
 ## Feature-bank rule
 
