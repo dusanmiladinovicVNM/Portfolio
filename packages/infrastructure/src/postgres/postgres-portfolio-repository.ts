@@ -1,6 +1,7 @@
 import type postgres from 'postgres';
 import type { PortfolioRepository } from '@portfolio/application';
 import {
+  DomainError,
   asPropertyId,
   asSpaceId,
   asUnitId,
@@ -18,6 +19,11 @@ import {
 } from '@portfolio/domain';
 
 type Sql = ReturnType<typeof postgres>;
+
+interface PostgresErrorLike {
+  code?: string;
+  constraint_name?: string;
+}
 
 interface PropertyRow {
   id: string;
@@ -97,6 +103,34 @@ const mapSpace = (row: SpaceRow): Space => ({
   sortOrder: row.sort_order,
   active: row.active,
 });
+
+function duplicateError(error: unknown): DomainError | null {
+  const pg = error as PostgresErrorLike;
+  if (pg.code !== '23505') return null;
+
+  switch (pg.constraint_name) {
+    case 'properties_code_uq':
+      return new DomainError('PROPERTY_CODE_ALREADY_EXISTS', 'Property code already exists.');
+    case 'units_code_uq':
+      return new DomainError('UNIT_CODE_ALREADY_EXISTS', 'Unit code already exists.');
+    case 'units_property_number_uq':
+      return new DomainError('UNIT_NUMBER_ALREADY_EXISTS', 'Unit number already exists in this property.');
+    case 'spaces_unit_code_uq':
+      return new DomainError('SPACE_CODE_ALREADY_EXISTS', 'Space code already exists in this unit.');
+    default:
+      return null;
+  }
+}
+
+async function translateDuplicate<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    const translated = duplicateError(error);
+    if (translated) throw translated;
+    throw error;
+  }
+}
 
 export class PostgresPortfolioRepository implements PortfolioRepository {
   constructor(private readonly sql: Sql) {}
@@ -211,39 +245,45 @@ export class PostgresPortfolioRepository implements PortfolioRepository {
   }
 
   async insertProperty(property: Property): Promise<void> {
-    await this.sql`
-      insert into public.properties (
-        id, code, name, property_type, street, house_number,
-        postal_code, city, country_code, year_built, status
-      ) values (
-        ${property.id}, ${property.code}, ${property.name}, ${property.propertyType},
-        ${property.street}, ${property.houseNumber}, ${property.postalCode},
-        ${property.city}, ${property.countryCode}, ${property.yearBuilt}, ${property.status}
-      )
-    `;
+    await translateDuplicate(async () => {
+      await this.sql`
+        insert into public.properties (
+          id, code, name, property_type, street, house_number,
+          postal_code, city, country_code, year_built, status
+        ) values (
+          ${property.id}, ${property.code}, ${property.name}, ${property.propertyType},
+          ${property.street}, ${property.houseNumber}, ${property.postalCode},
+          ${property.city}, ${property.countryCode}, ${property.yearBuilt}, ${property.status}
+        )
+      `;
+    });
   }
 
   async insertUnit(unit: Unit): Promise<void> {
-    await this.sql`
-      insert into public.units (
-        id, property_id, code, unit_number, unit_type, floor,
-        area_m2, rooms, status, notes
-      ) values (
-        ${unit.id}, ${unit.propertyId}, ${unit.code}, ${unit.unitNumber},
-        ${unit.unitType}, ${unit.floor}, ${unit.areaM2}, ${unit.rooms},
-        ${unit.status}, ${unit.notes}
-      )
-    `;
+    await translateDuplicate(async () => {
+      await this.sql`
+        insert into public.units (
+          id, property_id, code, unit_number, unit_type, floor,
+          area_m2, rooms, status, notes
+        ) values (
+          ${unit.id}, ${unit.propertyId}, ${unit.code}, ${unit.unitNumber},
+          ${unit.unitType}, ${unit.floor}, ${unit.areaM2}, ${unit.rooms},
+          ${unit.status}, ${unit.notes}
+        )
+      `;
+    });
   }
 
   async insertSpace(space: Space): Promise<void> {
-    await this.sql`
-      insert into public.spaces (
-        id, unit_id, code, name, space_type, area_m2, sort_order, active
-      ) values (
-        ${space.id}, ${space.unitId}, ${space.code}, ${space.name},
-        ${space.spaceType}, ${space.areaM2}, ${space.sortOrder}, ${space.active}
-      )
-    `;
+    await translateDuplicate(async () => {
+      await this.sql`
+        insert into public.spaces (
+          id, unit_id, code, name, space_type, area_m2, sort_order, active
+        ) values (
+          ${space.id}, ${space.unitId}, ${space.code}, ${space.name},
+          ${space.spaceType}, ${space.areaM2}, ${space.sortOrder}, ${space.active}
+        )
+      `;
+    });
   }
 }
