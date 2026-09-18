@@ -18,6 +18,9 @@ export type LeaseAgreementId = EntityId<'LeaseAgreement'>;
 export type LeaseAgreementPartyId = EntityId<'LeaseAgreementParty'>;
 export type LeaseAmendmentId = EntityId<'LeaseAmendment'>;
 export type TenancyTermVersionId = EntityId<'TenancyTermVersion'>;
+export type DocumentId = EntityId<'Document'>;
+export type DocumentVersionId = EntityId<'DocumentVersion'>;
+export type DocumentLinkId = EntityId<'DocumentLink'>;
 
 export const asUserId = (value: string): UserId => value as UserId;
 export const asPropertyId = (value: string): PropertyId => value as PropertyId;
@@ -33,3 +36,6 @@ export const asLeaseAgreementId = (value: string): LeaseAgreementId => value as 
 export const asLeaseAgreementPartyId = (value: string): LeaseAgreementPartyId => value as LeaseAgreementPartyId;
 export const asLeaseAmendmentId = (value: string): LeaseAmendmentId => value as LeaseAmendmentId;
 export const asTenancyTermVersionId = (value: string): TenancyTermVersionId => value as TenancyTermVersionId;
+export const asDocumentId = (value: string): DocumentId => value as DocumentId;
+export const asDocumentVersionId = (value: string): DocumentVersionId => value as DocumentVersionId;
+export const asDocumentLinkId = (value: string): DocumentLinkId => value as DocumentLinkId;
