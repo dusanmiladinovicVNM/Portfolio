@@ -16,12 +16,26 @@ export const assetIdentifierRequestSchema = z.object({
 export const createAssetRequestSchema = z.object({
   code: z.string().trim().min(1),
   name: z.string().trim().min(1),
-  unitId: entityIdSchema,
+  propertyId: entityIdSchema,
+  unitId: entityIdSchema.nullable().optional(),
   spaceId: entityIdSchema.nullable().optional(),
   manufacturer: z.string().trim().min(1).nullable().optional(),
   model: z.string().trim().min(1).nullable().optional(),
   identifiers: z.array(assetIdentifierRequestSchema).optional(),
 });
+
+export const updateAssetMetadataRequestSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+  name: z.string().trim().min(1).optional(),
+  manufacturer: z.string().trim().min(1).nullable().optional(),
+  model: z.string().trim().min(1).nullable().optional(),
+}).refine(
+  (value) =>
+    value.name !== undefined ||
+    value.manufacturer !== undefined ||
+    value.model !== undefined,
+  { message: 'At least one metadata field is required.' },
+);
 
 export const changeAssetStatusRequestSchema = z.object({
   expectedVersion: z.number().int().positive(),
@@ -32,7 +46,6 @@ export const replaceAssetRequestSchema = z.object({
   expectedVersion: z.number().int().positive(),
   code: z.string().trim().min(1),
   name: z.string().trim().min(1),
-  spaceId: entityIdSchema.nullable().optional(),
   manufacturer: z.string().trim().min(1).nullable().optional(),
   model: z.string().trim().min(1).nullable().optional(),
   identifiers: z.array(assetIdentifierRequestSchema).optional(),
@@ -50,7 +63,8 @@ export const assetResponseSchema = z.object({
   id: entityIdSchema,
   code: z.string(),
   name: z.string(),
-  unitId: entityIdSchema,
+  propertyId: entityIdSchema,
+  unitId: entityIdSchema.nullable(),
   spaceId: entityIdSchema.nullable(),
   manufacturer: z.string().nullable(),
   model: z.string().nullable(),
@@ -68,6 +82,7 @@ export const assetReplacementResponseSchema = z.object({
 });
 
 export type CreateAssetRequest = z.infer<typeof createAssetRequestSchema>;
+export type UpdateAssetMetadataRequest = z.infer<typeof updateAssetMetadataRequestSchema>;
 export type ChangeAssetStatusRequest = z.infer<typeof changeAssetStatusRequestSchema>;
 export type ReplaceAssetRequest = z.infer<typeof replaceAssetRequestSchema>;
 export type AssetResponse = z.infer<typeof assetResponseSchema>;
