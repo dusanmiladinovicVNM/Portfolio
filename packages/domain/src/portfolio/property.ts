@@ -56,13 +56,10 @@ export function createProperty(input: CreatePropertyInput): Property {
     );
   }
 
-  const currentYear = new Date().getUTCFullYear();
   if (
     input.yearBuilt !== undefined &&
     input.yearBuilt !== null &&
-    (!Number.isInteger(input.yearBuilt) ||
-      input.yearBuilt < 1000 ||
-      input.yearBuilt > currentYear + 5)
+    (!Number.isInteger(input.yearBuilt) || input.yearBuilt < 1000 || input.yearBuilt > 3000)
   ) {
     throw new DomainError('PROPERTY_INVALID_YEAR_BUILT', 'yearBuilt is outside the accepted range.');
   }
