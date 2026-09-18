@@ -44,6 +44,7 @@ import {
   FixedClock,
   InMemoryDocumentRepository,
   MemoryFileStorage,
+  MemoryPdfPort,
 } from './document-test-deps.js';
 import {
   InMemoryInspectionRepository,
@@ -455,6 +456,7 @@ function buildHandler() {
     inspectionRepository: new InMemoryInspectionRepository(),
     staffDirectoryRepository: new InMemoryStaffDirectoryRepository(),
     fileStorage: new MemoryFileStorage(),
+    pdfPort: new MemoryPdfPort(),
     clock: new FixedClock(),
     userAccessRepository: new InMemoryAccessRepository(),
     idGenerator: new FixedIds([
