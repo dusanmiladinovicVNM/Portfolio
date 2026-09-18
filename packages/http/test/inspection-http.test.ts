@@ -12,7 +12,12 @@ import {
   type VerifiedIdentity,
 } from '@portfolio/application';
 import {
+  addStoredDocumentVersion,
+  asDocumentId,
+  asDocumentVersionId,
   asUserId,
+  createDocument,
+  finalizeDocumentVersion,
   type DateOnly,
   type LeaseAgreement,
   type LeaseAgreementId,
@@ -198,6 +203,41 @@ class EmptyLeaseRepository implements LeaseRepository {
   async getEffectiveTermsAt(_tenancyId: TenancyId, _at: DateOnly): Promise<TenancyTermVersion | null> { return null; }
 }
 
+async function seedFinalDocumentVersion(
+  repository: InMemoryDocumentRepository,
+  documentIdValue: string,
+  versionIdValue: string,
+  mimeType: string,
+) {
+  const document = createDocument({
+    id: asDocumentId(documentIdValue),
+    code: `TEST-${documentIdValue}`,
+    title: 'Inspection evidence',
+    category: mimeType === 'application/pdf' ? 'inspection' : 'photo',
+  });
+  const added = addStoredDocumentVersion(document, {
+    id: asDocumentVersionId(versionIdValue),
+    fileName: mimeType === 'application/pdf' ? 'evidence.pdf' : 'evidence.png',
+    mimeType,
+    byteSize: 4,
+    sha256: 'd'.repeat(64),
+  });
+  const final = finalizeDocumentVersion(
+    added.version,
+    '2026-09-18T19:00:00.000Z',
+  );
+  await repository.insertGeneratedFinal(
+    added.document,
+    final,
+    {
+      provider: 'memory',
+      objectId: `object:${versionIdValue}`,
+      objectKey: `document-version:${versionIdValue}`,
+    },
+  );
+  return final;
+}
+
 function buildHandler() {
   const portfolioRepository = new PortfolioMemory();
   const inspectionRepository = new InMemoryInspectionRepository();
@@ -211,17 +251,21 @@ function buildHandler() {
     },
   );
 
+  const documentRepository = new InMemoryDocumentRepository();
+  const fileStorage = new MemoryFileStorage();
+  const pdfPort = new MemoryPdfPort();
+
   const handler = createPortfolioHttpHandler({
     portfolioRepository,
     partyRepository: new EmptyPartyRepository(),
     ownershipRepository: new EmptyOwnershipRepository(),
     tenancyRepository: new EmptyTenancyRepository(),
     leaseRepository: new EmptyLeaseRepository(),
-    documentRepository: new InMemoryDocumentRepository(),
+    documentRepository,
     inspectionRepository,
     staffDirectoryRepository,
-    fileStorage: new MemoryFileStorage(),
-    pdfPort: new MemoryPdfPort(),
+    fileStorage,
+    pdfPort,
     clock: new FixedClock('2026-09-18T20:00:00.000Z'),
     userAccessRepository: new AccessRepository(),
     idGenerator: new FixedIds([
@@ -241,15 +285,34 @@ function buildHandler() {
       '81000000-0000-4000-8000-000000000014',
       '81000000-0000-4000-8000-000000000015',
       '81000000-0000-4000-8000-000000000016',
+      '81000000-0000-4000-8000-000000000017',
+      '81000000-0000-4000-8000-000000000018',
+      '81000000-0000-4000-8000-000000000019',
+      '81000000-0000-4000-8000-000000000020',
+      '81000000-0000-4000-8000-000000000021',
+      '81000000-0000-4000-8000-000000000022',
+      '81000000-0000-4000-8000-000000000023',
+      '81000000-0000-4000-8000-000000000024',
+      '81000000-0000-4000-8000-000000000025',
+      '81000000-0000-4000-8000-000000000026',
+      '81000000-0000-4000-8000-000000000027',
+      '81000000-0000-4000-8000-000000000028',
+      '81000000-0000-4000-8000-000000000029',
+      '81000000-0000-4000-8000-000000000030',
     ]),
   });
 
-  return { handler, inspectionRepository };
+  return {
+    handler,
+    inspectionRepository,
+    documentRepository,
+    pdfPort,
+  };
 }
 
 describe('Inspection HTTP backbone', () => {
   it('runs schema → inspection → section autosave → finding → lock with ownership guards', async () => {
-    const { handler } = buildHandler();
+    const { handler, documentRepository, pdfPort } = buildHandler();
 
     const schemaCreated = await handler(
       new Request('https://portfolio.test/inspection-schemas', {
@@ -575,6 +638,50 @@ describe('Inspection HTTP backbone', () => {
     );
     expect(finding.status).toBe(201);
 
+    const photoVersion = await seedFinalDocumentVersion(
+      documentRepository,
+      '83000000-0000-4000-8000-000000000001',
+      '83000000-0000-4000-8000-000000000002',
+      'image/png',
+    );
+    const signatureV1 = await seedFinalDocumentVersion(
+      documentRepository,
+      '83000000-0000-4000-8000-000000000003',
+      '83000000-0000-4000-8000-000000000004',
+      'image/png',
+    );
+    const signatureV2 = await seedFinalDocumentVersion(
+      documentRepository,
+      '83000000-0000-4000-8000-000000000005',
+      '83000000-0000-4000-8000-000000000006',
+      'image/png',
+    );
+
+    const evidence = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/evidence`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            documentVersionId: photoVersion.id,
+            evidenceType: 'photo',
+            sectionId,
+            itemId: damageItemId,
+            caption: 'Wall scratch photo',
+          }),
+        },
+      ),
+      inspectorIdentity,
+    );
+    expect(evidence.status).toBe(201);
+    expect(await evidence.clone().json()).toMatchObject({
+      data: {
+        documentVersionId: photoVersion.id,
+        sectionId,
+        itemId: damageItemId,
+      },
+    });
+
     const locked = await handler(
       new Request(
         `https://portfolio.test/inspections/${inspection.id}/lock`,
@@ -618,7 +725,7 @@ describe('Inspection HTTP backbone', () => {
         inspection: {
           status: 'locked',
           version: 3,
-          contentRevision: 5,
+          contentRevision: 6,
         },
         schema: { id: schema.id, status: 'published' },
         sectionStates: [{ sectionId, revision: 4 }],
@@ -627,6 +734,227 @@ describe('Inspection HTTP backbone', () => {
           { itemId: damageItemId, value: 'Scratch on wall' },
         ],
         findings: [{ title: 'Wall scratch', severity: 'minor' }],
+        evidence: [{ documentVersionId: photoVersion.id }],
+        signatures: [],
+        unlockEvents: [],
+        finalization: null,
+      },
+    });
+
+    const firstSignature = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/signatures`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            role: 'inspector',
+            signerType: 'staff',
+            signerUserId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            signatureDocumentVersionId: signatureV1.id,
+          }),
+        },
+      ),
+      inspectorIdentity,
+    );
+    expect(firstSignature.status).toBe(201);
+    const firstSignatureData = (await firstSignature.json()).data as {
+      id: string;
+      status: string;
+    };
+    expect(firstSignatureData.status).toBe('valid');
+
+    const inspectorUnlock = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/unlock`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            expectedVersion: 3,
+            reason: 'Need correction',
+          }),
+        },
+      ),
+      inspectorIdentity,
+    );
+    expect(inspectorUnlock.status).toBe(403);
+    expect(await inspectorUnlock.json()).toMatchObject({
+      error: { code: 'INSPECTION_UNLOCK_FORBIDDEN' },
+    });
+
+    const unlocked = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/unlock`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            expectedVersion: 3,
+            reason: 'Tenant requested a documented correction',
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(unlocked.status).toBe(200);
+    expect(await unlocked.json()).toMatchObject({
+      data: {
+        status: 'in_progress',
+        version: 4,
+        contentRevision: 8,
+      },
+    });
+
+    const afterUnlock = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      adminIdentity,
+    );
+    expect(afterUnlock.status).toBe(200);
+    expect(await afterUnlock.json()).toMatchObject({
+      data: {
+        signatures: [
+          {
+            id: firstSignatureData.id,
+            status: 'invalidated',
+            invalidationReason: 'Tenant requested a documented correction',
+          },
+        ],
+        unlockEvents: [
+          {
+            previousVersion: 3,
+            invalidatedSignatureCount: 1,
+          },
+        ],
+      },
+    });
+
+    const relocked = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/lock`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ expectedVersion: 4 }),
+        },
+      ),
+      inspectorIdentity,
+    );
+    expect(relocked.status).toBe(200);
+    expect(await relocked.json()).toMatchObject({
+      data: { status: 'locked', version: 5, contentRevision: 8 },
+    });
+
+    const finalizeWithoutNewSignature = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/finalize`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ expectedVersion: 5 }),
+        },
+      ),
+      inspectorIdentity,
+    );
+    expect(finalizeWithoutNewSignature.status).toBe(422);
+    expect(await finalizeWithoutNewSignature.json()).toMatchObject({
+      error: {
+        code: 'INSPECTION_FINALIZATION_INSPECTOR_SIGNATURE_REQUIRED',
+      },
+    });
+
+    const secondSignature = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/signatures`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            role: 'inspector',
+            signerType: 'staff',
+            signerUserId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            signatureDocumentVersionId: signatureV2.id,
+          }),
+        },
+      ),
+      inspectorIdentity,
+    );
+    expect(secondSignature.status).toBe(201);
+
+    const finalized = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/finalize`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ expectedVersion: 5 }),
+        },
+      ),
+      inspectorIdentity,
+    );
+    expect(finalized.status).toBe(200);
+    const finalizedBody = await finalized.json();
+    expect(finalizedBody).toMatchObject({
+      data: {
+        inspection: {
+          status: 'finalized',
+          version: 6,
+          contentRevision: 9,
+        },
+        finalization: {
+          sourceVersion: 5,
+          sourceContentRevision: 9,
+        },
+        finalReport: {
+          mimeType: 'application/pdf',
+          status: 'final',
+        },
+      },
+    });
+    expect(pdfPort.snapshots).toHaveLength(1);
+    expect(pdfPort.snapshots[0]).toMatchObject({
+      snapshotVersion: 1,
+      inspection: {
+        id: inspection.id,
+        status: 'finalized',
+        contentRevision: 9,
+      },
+      evidence: [
+        {
+          evidence: {
+            documentVersionId: photoVersion.id,
+          },
+        },
+      ],
+      signatures: [
+        {
+          signature: {
+            id: firstSignatureData.id,
+            status: 'invalidated',
+          },
+        },
+        {
+          signature: {
+            status: 'valid',
+            signatureDocumentVersionId: signatureV2.id,
+          },
+        },
+      ],
+      unlockEvents: [
+        {
+          previousVersion: 3,
+          invalidatedSignatureCount: 1,
+        },
+      ],
+    });
+
+    const finalBundle = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      inspectorIdentity,
+    );
+    expect(finalBundle.status).toBe(200);
+    expect(await finalBundle.json()).toMatchObject({
+      data: {
+        inspection: { status: 'finalized', version: 6 },
+        finalization: {
+          sourceVersion: 5,
+          sourceContentRevision: 9,
+          finalReportDocumentVersionId:
+            finalizedBody.data.finalReport.id,
+        },
       },
     });
 
