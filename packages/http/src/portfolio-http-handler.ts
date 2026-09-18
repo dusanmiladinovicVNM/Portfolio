@@ -114,7 +114,9 @@ function errorStatus(code: string): number {
   if (
     code.endsWith('_ALREADY_EXISTS') ||
     code === 'OWNERSHIP_PERIOD_OVERLAP' ||
-    code === 'TENANCY_PERIOD_OVERLAP' ||
+    code === 'TENANCY_PLANNED_RESERVATION_OVERLAP' ||
+    code === 'TENANCY_PLANNED_OCCUPANCY_CONFLICT' ||
+    code === 'TENANCY_ACTUAL_OCCUPANCY_OVERLAP' ||
     code === 'TENANCY_VERSION_CONFLICT' ||
     code === 'LEASE_AGREEMENT_VERSION_CONFLICT' ||
     code === 'LEASE_AMENDMENT_VERSION_CONFLICT' ||

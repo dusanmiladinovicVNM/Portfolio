@@ -135,25 +135,6 @@ class InMemoryOwnershipRepository implements OwnershipRepository {
   async insert(_period: OwnershipPeriod) {}
 }
 
-function effectivePeriod(tenancy: Tenancy): [DateOnly, DateOnly | null] | null {
-  if (tenancy.status === 'planned' && tenancy.plannedStart) {
-    return [tenancy.plannedStart, tenancy.plannedEnd];
-  }
-  if (tenancy.status === 'active' && tenancy.actualStart) {
-    return [tenancy.actualStart, null];
-  }
-  if (
-    (tenancy.status === 'notice_given' || tenancy.status === 'move_out_pending') &&
-    tenancy.actualStart
-  ) {
-    return [tenancy.actualStart, tenancy.terminationEffectiveAt];
-  }
-  if (tenancy.status === 'ended' && tenancy.actualStart) {
-    return [tenancy.actualStart, tenancy.actualEnd];
-  }
-  return null;
-}
-
 class InMemoryTenancyRepository implements TenancyRepository {
   readonly tenancies = new Map<TenancyId, Tenancy>();
 
@@ -167,7 +148,7 @@ class InMemoryTenancyRepository implements TenancyRepository {
     return [...this.tenancies.values()].some((item) => item.code.toLowerCase() === code.toLowerCase());
   }
 
-  async hasEffectivePeriodOverlap(
+  async hasPlannedReservationOverlap(
     unitId: UnitId,
     validFrom: DateOnly,
     validTo: DateOnly | null,
@@ -175,12 +156,45 @@ class InMemoryTenancyRepository implements TenancyRepository {
   ) {
     const rightEnd = validTo ?? asDateOnly('9999-12-31');
     return [...this.tenancies.values()].some((tenancy) => {
-      if (tenancy.unitId !== unitId || tenancy.id === excludeTenancyId) return false;
-      const period = effectivePeriod(tenancy);
-      if (!period) return false;
-      const [leftStart, leftEndValue] = period;
-      const leftEnd = leftEndValue ?? asDateOnly('9999-12-31');
-      return leftStart <= rightEnd && validFrom <= leftEnd;
+      if (
+        tenancy.unitId !== unitId ||
+        tenancy.id === excludeTenancyId ||
+        tenancy.status !== 'planned' ||
+        tenancy.plannedStart === null
+      ) {
+        return false;
+      }
+
+      const leftEnd = tenancy.plannedEnd ?? asDateOnly('9999-12-31');
+      return tenancy.plannedStart <= rightEnd && validFrom <= leftEnd;
+    });
+  }
+
+  async hasActualOccupancyOverlap(
+    unitId: UnitId,
+    validFrom: DateOnly,
+    validTo: DateOnly | null,
+    excludeTenancyId?: TenancyId,
+  ) {
+    const rightEnd = validTo ?? asDateOnly('9999-12-31');
+    return [...this.tenancies.values()].some((tenancy) => {
+      if (
+        tenancy.unitId !== unitId ||
+        tenancy.id === excludeTenancyId ||
+        tenancy.actualStart === null ||
+        !['active', 'notice_given', 'move_out_pending', 'ended'].includes(tenancy.status)
+      ) {
+        return false;
+      }
+
+      const leftEnd =
+        tenancy.status === 'ended'
+          ? tenancy.actualEnd
+          : tenancy.status === 'notice_given' || tenancy.status === 'move_out_pending'
+            ? tenancy.terminationEffectiveAt
+            : null;
+      const normalizedLeftEnd = leftEnd ?? asDateOnly('9999-12-31');
+      return tenancy.actualStart <= rightEnd && validFrom <= normalizedLeftEnd;
     });
   }
 
@@ -457,6 +471,149 @@ describe('Tenancy HTTP lifecycle', () => {
     expect(stale.status).toBe(409);
     expect(await stale.json()).toMatchObject({
       error: { code: 'TENANCY_VERSION_CONFLICT' },
+    });
+  });
+
+  it('returns 409 when a new planned reservation crosses open actual occupancy', async () => {
+    const { handler } = buildHandler();
+    await seedUnitAndTenant(handler);
+
+    const current = await handler(
+      new Request(
+        'https://portfolio.test/units/10000000-0000-4000-8000-000000000002/tenancies',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            code: 'TEN-CURRENT',
+            parties: [
+              {
+                partyId: '10000000-0000-4000-8000-000000000003',
+                role: 'tenant',
+                isPrimary: true,
+              },
+            ],
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    const currentId = (await current.json()).data.id as string;
+
+    await handler(
+      new Request(`https://portfolio.test/tenancies/${currentId}/plan`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 1,
+          plannedStart: '2026-10-01',
+          plannedEnd: '2027-09-30',
+        }),
+      }),
+      adminIdentity,
+    );
+
+    await handler(
+      new Request(`https://portfolio.test/tenancies/${currentId}/activate`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 2,
+          actualStart: '2026-10-01',
+        }),
+      }),
+      adminIdentity,
+    );
+
+    const successor = await handler(
+      new Request(
+        'https://portfolio.test/units/10000000-0000-4000-8000-000000000002/tenancies',
+        {
+          method: 'POST',
+          body: JSON.stringify({ code: 'TEN-SUCCESSOR' }),
+        },
+      ),
+      adminIdentity,
+    );
+    const successorId = (await successor.json()).data.id as string;
+
+    const conflict = await handler(
+      new Request(`https://portfolio.test/tenancies/${successorId}/plan`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 1,
+          plannedStart: '2028-01-01',
+          plannedEnd: '2028-12-31',
+        }),
+      }),
+      adminIdentity,
+    );
+
+    expect(conflict.status).toBe(409);
+    expect(await conflict.json()).toMatchObject({
+      error: { code: 'TENANCY_PLANNED_OCCUPANCY_CONFLICT' },
+    });
+  });
+
+  it('rejects party mutation after activation through the HTTP contract', async () => {
+    const { handler } = buildHandler();
+    await seedUnitAndTenant(handler);
+
+    const created = await handler(
+      new Request(
+        'https://portfolio.test/units/10000000-0000-4000-8000-000000000002/tenancies',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            code: 'TEN-PARTY-FROZEN',
+            parties: [
+              {
+                partyId: '10000000-0000-4000-8000-000000000003',
+                role: 'tenant',
+                isPrimary: true,
+              },
+            ],
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    const tenancyId = (await created.json()).data.id as string;
+
+    await handler(
+      new Request(`https://portfolio.test/tenancies/${tenancyId}/plan`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 1,
+          plannedStart: '2026-10-01',
+        }),
+      }),
+      adminIdentity,
+    );
+
+    await handler(
+      new Request(`https://portfolio.test/tenancies/${tenancyId}/activate`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 2,
+          actualStart: '2026-10-01',
+        }),
+      }),
+      adminIdentity,
+    );
+
+    const response = await handler(
+      new Request(`https://portfolio.test/tenancies/${tenancyId}/parties`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 3,
+          partyId: '10000000-0000-4000-8000-000000000003',
+          role: 'co_tenant',
+        }),
+      }),
+      adminIdentity,
+    );
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'TENANCY_PARTY_CHANGE_NOT_ALLOWED' },
     });
   });
 

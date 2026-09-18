@@ -188,7 +188,8 @@ class EmptyTenancyRepository implements TenancyRepository {
   async getById(_id: TenancyId): Promise<Tenancy | null> { return null; }
   async listByUnit(_unitId: UnitId): Promise<readonly Tenancy[]> { return []; }
   async codeExists(_code: string): Promise<boolean> { return false; }
-  async hasEffectivePeriodOverlap() { return false; }
+  async hasPlannedReservationOverlap() { return false; }
+  async hasActualOccupancyOverlap() { return false; }
   async insert(_tenancy: Tenancy): Promise<void> {}
   async insertParty(
     _tenancyParty: TenancyParty,

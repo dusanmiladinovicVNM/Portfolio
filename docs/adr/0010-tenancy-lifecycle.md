@@ -1,6 +1,6 @@
 # ADR 0010: Tenancy is an operational lifecycle aggregate
 
-**Status:** Accepted
+**Status:** Accepted — temporal collision model amended by ADR 0012
 
 ## Decision
 
@@ -30,18 +30,18 @@ Terminal states are `ended` and `cancelled`.
 
 Lifecycle changes are explicit application commands. Generic status updates are not exposed.
 
-## Effective occupancy period
+## Temporal occupancy
 
-Temporal collision protection depends on lifecycle state:
+The original version of this ADR modeled planned reservations and actual occupancy as one mixed effective period.
 
-- planned: plannedStart → plannedEnd/open
-- active: actualStart → open
-- notice_given/move_out_pending: actualStart → terminationEffectiveAt
-- ended: actualStart → actualEnd
+That decision is superseded by [ADR 0012](./0012-unit-and-tenancy-temporal-truth.md).
 
-Draft/cancelled records do not reserve occupancy.
+The canonical model now treats:
 
-PostgreSQL protects this with a GiST exclusion constraint so concurrent writers cannot create overlapping effective periods for one Unit.
+- planned reservation;
+- actual occupancy;
+
+as separate temporal concepts with separate collision rules.
 
 ## Concurrency
 

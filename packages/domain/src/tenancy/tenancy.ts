@@ -159,10 +159,10 @@ export function addTenancyParty(
   tenancy: Tenancy,
   input: CreateTenancyPartyInput,
 ): Tenancy {
-  if (tenancy.status === 'ended' || tenancy.status === 'cancelled') {
+  if (tenancy.status !== 'draft' && tenancy.status !== 'planned') {
     throw new DomainError(
       'TENANCY_PARTY_CHANGE_NOT_ALLOWED',
-      'Parties cannot be added to an ended or cancelled tenancy.',
+      'Parties may only be changed while a tenancy is draft or planned.',
     );
   }
 
@@ -249,10 +249,10 @@ export function giveTenancyNotice(
     );
   }
 
-  if (terminationEffectiveAt < tenancy.actualStart) {
+  if (terminationEffectiveAt < noticeGivenAt) {
     throw new DomainError(
       'TENANCY_INVALID_TERMINATION_DATE',
-      'terminationEffectiveAt cannot be earlier than actualStart.',
+      'terminationEffectiveAt cannot be earlier than noticeGivenAt.',
     );
   }
 

@@ -10,13 +10,7 @@ export const UNIT_TYPES = [
   'other',
 ] as const;
 
-export const UNIT_STATUSES = [
-  'vacant',
-  'occupied',
-  'turnover',
-  'inactive',
-  'archived',
-] as const;
+export const UNIT_STATUSES = ['active', 'inactive', 'archived'] as const;
 
 export type UnitType = (typeof UNIT_TYPES)[number];
 export type UnitStatus = (typeof UNIT_STATUSES)[number];
@@ -74,7 +68,7 @@ export function createUnit(input: CreateUnitInput): Unit {
     floor: input.floor?.trim() || null,
     areaM2: input.areaM2 ?? null,
     rooms: input.rooms ?? null,
-    status: 'vacant',
+    status: 'active',
     notes: input.notes?.trim() ?? '',
   };
 }
