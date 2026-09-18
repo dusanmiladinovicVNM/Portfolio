@@ -980,6 +980,47 @@ describe('PostgreSQL infrastructure', () => {
     );
 
     await expect(
+      sql`
+        insert into public.lease_agreements (
+          id, tenancy_id, code, agreement_type, predecessor_agreement_id,
+          effective_from, status, version
+        ) values (
+          '32000000-0000-4000-8000-000000000020',
+          ${tenancy.id},
+          'AGR-SECOND-LIVE-SUCCESSOR',
+          'renewal',
+          ${agreement.id},
+          '2027-06-01',
+          'draft',
+          1
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23505',
+      constraint_name: 'lease_agreements_one_successor_per_predecessor_uq',
+    });
+
+    await expect(
+      sql`
+        insert into public.tenancy_term_versions (
+          id, tenancy_id, source_type, source_agreement_id,
+          effective_from, currency, base_rent
+        ) values (
+          '32000000-0000-4000-8000-000000000021',
+          ${tenancy.id},
+          'agreement',
+          ${conflictingAgreement.id},
+          '2027-04-01',
+          'EUR',
+          999
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'tenancy_term_versions_source_not_signed',
+    });
+
+    await expect(
       signLeaseAgreementCommand(
         {
           leaseRepository,
