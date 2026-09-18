@@ -152,6 +152,31 @@ create trigger asset_replacement_guard_trg
 before insert or update or delete on public.asset_replacements
 for each row execute function public.guard_asset_replacement();
 
+create or replace function public.guard_asset_replacement_commit()
+returns trigger
+language plpgsql
+as $asset_replacement_commit_guard$
+begin
+  if not exists (
+    select 1
+    from public.assets a
+    where a.id = new.replaced_asset_id
+      and a.status = 'replaced'
+  ) then
+    raise exception 'Replacement relationship and predecessor replaced status must commit together.'
+      using errcode = '23514',
+            constraint = 'asset_replacement_status_required';
+  end if;
+
+  return null;
+end;
+$asset_replacement_commit_guard$;
+
+create constraint trigger asset_replacement_commit_guard_trg
+after insert on public.asset_replacements
+deferrable initially deferred
+for each row execute function public.guard_asset_replacement_commit();
+
 create or replace function public.guard_asset_mutation()
 returns trigger
 language plpgsql
