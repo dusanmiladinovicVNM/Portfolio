@@ -50,7 +50,7 @@ Supported initial roles are:
 
 The policy is frozen when the schema is published.
 
-Existing published move-in, move-out and key-handover schemas are migrated to landlord + tenant, preserving the legacy business expectation. Other existing published schemas are migrated to landlord.
+Schema versions that predate signature policy keep an explicit empty policy. The migration does not rewrite historical business meaning. Every newly-created schema version must state its signature policy explicitly, including an explicit empty array when no signatures are required.
 
 A signature records:
 
@@ -62,7 +62,9 @@ A signature records:
 - signed timestamp;
 - optional later invalidation metadata.
 
-The signer role is an evidentiary assertion. An optional Party FK does not, by itself, prove that Party is legally the landlord/tenant. Relationship verification can be strengthened in a later legal workflow without rewriting historical signatures.
+Landlord and tenant signatures require an exact Party identity. Tenant identity must belong to the Inspection tenancy as tenant/co-tenant; landlord identity must own the inspected Unit on the Inspection lock date. These invariants are enforced both in the application command and at the PostgreSQL boundary.
+
+Signature binaries must be final DocumentVersions owned by Documents with category `signature`. FileStorage metadata is verified against the immutable DocumentVersion hash and byte size before the signature is accepted. `signedByUserId` records the internal user who captured the signature event; it is not used as a substitute for signer Party identity.
 
 ### Controlled unlock
 
@@ -99,12 +101,13 @@ It requires:
 
 One immutable FinalSnapshot captures:
 
-- resulting finalized Inspection header;
+- resulting finalized Inspection header and source revisions;
 - exact InspectionSchemaVersion;
 - responses;
 - findings;
-- evidence references;
-- active signatures.
+- evidence plus exact DocumentVersion metadata/hash;
+- all signatures, including invalidated historical signatures, plus exact signature DocumentVersion metadata/hash;
+- controlled-unlock history.
 
 Snapshot row metadata records the locked source `inspectionVersion` and `contentRevision` being finalized.
 
@@ -131,14 +134,17 @@ PDF is not the source of truth.
 Generation happens after finalization:
 
 1. read immutable FinalSnapshot;
-2. render PDF through PdfPort;
-3. store bytes through FileStoragePort/DocumentVersion;
-4. finalize that DocumentVersion;
-5. add one `final_report` InspectionEvidence relation.
+2. reserve/reuse the canonical report Document by deterministic Inspection report code;
+3. render PDF through PdfPort only when that Document has no canonical version;
+4. store bytes through FileStoragePort/DocumentVersion with expected Document revision;
+5. verify the stored binary by provider/object identity, byte size and SHA-256 before finalizing the DocumentVersion;
+6. add one inspection-level `final_report` InspectionEvidence relation.
 
 A renderer/storage failure therefore does not roll back or corrupt an already valid finalization.
 
-The command is idempotent for an already-linked final report. Provider-specific rendering remains an infrastructure choice.
+Concurrent generators converge on the same canonical DocumentVersion. A losing upload is compensated only after PostgreSQL confirms that its candidate version was not committed; ambiguous commit acknowledgement preserves the binary for reconciliation rather than deleting potentially committed evidence. PostgreSQL independently requires `final_report` to reference a final `inspection` DocumentVersion and forbids section/item scope.
+
+Provider-specific rendering remains an infrastructure choice.
 
 ## Consequences
 
@@ -146,5 +152,7 @@ The command is idempotent for an already-linked final report. Provider-specific 
 - evidence always points to exact binary versions;
 - schema evolution cannot change historical signature requirements;
 - unlock cannot silently preserve signatures collected against obsolete content;
-- final PDFs can be regenerated/replaced as projections without redefining the FinalSnapshot;
+- final report generation is retry-safe and concurrent callers converge on one canonical artifact;
+- binary existence/hash is verified before evidence/signatures/final versions are trusted;
+- FinalSnapshot remains canonical truth even if report rendering/storage fails;
 - Inspection remains separate from Assets, Meters, Keys and Maintenance truth.
