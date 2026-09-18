@@ -1625,6 +1625,8 @@ describe('PostgreSQL infrastructure', () => {
       finalizeInspectionCommand(
         {
           inspectionRepository,
+          documentRepository,
+          fileStorage: evidenceFileStorage,
           idGenerator: ids,
           clock: { now: () => '2026-09-21T08:30:00.000Z' },
         },
