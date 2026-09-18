@@ -56,6 +56,7 @@ interface InspectionRow {
   finalized_at: string | Date | null;
   cancelled_at: string | Date | null;
   version: number;
+  content_revision: number;
 }
 
 interface SchemaRow {
@@ -162,7 +163,7 @@ const inspectionSelect = `
   select
     id, code, inspection_type, unit_id, tenancy_id, schema_version_id,
     assigned_to_user_id, created_by_user_id, scheduled_for, status,
-    started_at, locked_at, finalized_at, cancelled_at, version
+    started_at, locked_at, finalized_at, cancelled_at, version, content_revision
   from public.inspections
 `;
 
@@ -193,6 +194,7 @@ function mapInspection(row: InspectionRow): Inspection {
     finalizedAt: instant(row.finalized_at),
     cancelledAt: instant(row.cancelled_at),
     version: row.version,
+    contentRevision: row.content_revision,
   };
 }
 
@@ -339,7 +341,8 @@ export class PostgresInspectionRepository implements InspectionRepository {
           insert into public.inspections (
             id, code, inspection_type, unit_id, tenancy_id, schema_version_id,
             assigned_to_user_id, created_by_user_id, scheduled_for, status,
-            started_at, locked_at, finalized_at, cancelled_at, version
+            started_at, locked_at, finalized_at, cancelled_at, version,
+            content_revision
           ) values (
             ${inspection.id}, ${inspection.code}, ${inspection.inspectionType},
             ${inspection.unitId}, ${inspection.tenancyId}, ${inspection.schemaVersionId},
@@ -347,7 +350,7 @@ export class PostgresInspectionRepository implements InspectionRepository {
             ${inspection.scheduledFor}, ${inspection.status},
             ${inspection.startedAt}, ${inspection.lockedAt},
             ${inspection.finalizedAt}, ${inspection.cancelledAt},
-            ${inspection.version}
+            ${inspection.version}, ${inspection.contentRevision}
           )
         `;
 
@@ -367,26 +370,48 @@ export class PostgresInspectionRepository implements InspectionRepository {
   async updateLifecycle(
     inspection: Inspection,
     expectedVersion: number,
+    expectedContentRevision?: number,
   ): Promise<void> {
-    const rows = await translated(() => this.sql<{ id: string }[]>`
-      update public.inspections
-      set
-        status = ${inspection.status},
-        started_at = ${inspection.startedAt},
-        locked_at = ${inspection.lockedAt},
-        finalized_at = ${inspection.finalizedAt},
-        cancelled_at = ${inspection.cancelledAt},
-        version = ${inspection.version},
-        updated_at = now()
-      where id = ${inspection.id}
-        and version = ${expectedVersion}
-      returning id
-    `);
+    const rows =
+      expectedContentRevision === undefined
+        ? await translated(() => this.sql<{ id: string }[]>`
+            update public.inspections
+            set
+              status = ${inspection.status},
+              started_at = ${inspection.startedAt},
+              locked_at = ${inspection.lockedAt},
+              finalized_at = ${inspection.finalizedAt},
+              cancelled_at = ${inspection.cancelledAt},
+              version = ${inspection.version},
+              updated_at = now()
+            where id = ${inspection.id}
+              and version = ${expectedVersion}
+            returning id
+          `)
+        : await translated(() => this.sql<{ id: string }[]>`
+            update public.inspections
+            set
+              status = ${inspection.status},
+              started_at = ${inspection.startedAt},
+              locked_at = ${inspection.lockedAt},
+              finalized_at = ${inspection.finalizedAt},
+              cancelled_at = ${inspection.cancelledAt},
+              version = ${inspection.version},
+              updated_at = now()
+            where id = ${inspection.id}
+              and version = ${expectedVersion}
+              and content_revision = ${expectedContentRevision}
+            returning id
+          `);
 
     if (rows.length === 0) {
       throw new DomainError(
-        'INSPECTION_VERSION_CONFLICT',
-        'Inspection was modified concurrently.',
+        expectedContentRevision === undefined
+          ? 'INSPECTION_VERSION_CONFLICT'
+          : 'INSPECTION_CONTENT_REVISION_CONFLICT',
+        expectedContentRevision === undefined
+          ? 'Inspection was modified concurrently.'
+          : 'Inspection content changed while the lock was being validated.',
       );
     }
   }
@@ -430,9 +455,28 @@ export class PostgresInspectionRepository implements InspectionRepository {
     sectionId: import('@portfolio/domain').InspectionSchemaSectionId,
     expectedRevision: number,
     responses: readonly InspectionResponse[],
+    clearItemIds: readonly import('@portfolio/domain').InspectionSchemaItemId[],
   ): Promise<SaveInspectionSectionResult> {
     return translated(async () =>
       this.sql.begin(async (tx) => {
+        const contentRows = await tx<{ content_revision: number }[]>`
+          update public.inspections
+          set
+            content_revision = content_revision + 1,
+            updated_at = now()
+          where id = ${inspectionId}
+            and status in ('draft', 'in_progress')
+          returning content_revision
+        `;
+
+        const contentRevision = contentRows[0]?.content_revision;
+        if (contentRevision === undefined) {
+          throw new DomainError(
+            'INSPECTION_CONTENT_LOCKED',
+            'Inspection content is no longer editable.',
+          );
+        }
+
         const revisionRows = await tx<{ revision: number }[]>`
           update public.inspection_section_states
           set revision = revision + 1
@@ -448,6 +492,14 @@ export class PostgresInspectionRepository implements InspectionRepository {
             'INSPECTION_SECTION_REVISION_CONFLICT',
             'Inspection section was modified concurrently.',
           );
+        }
+
+        for (const itemId of clearItemIds) {
+          await tx`
+            delete from public.inspection_responses
+            where inspection_id = ${inspectionId}
+              and item_id = ${itemId}
+          `;
         }
 
         const persisted: InspectionResponse[] = [];
@@ -482,7 +534,12 @@ export class PostgresInspectionRepository implements InspectionRepository {
           persisted.push(mapResponse(rows[0]!));
         }
 
-        return { revision, responses: persisted };
+        return {
+          revision,
+          contentRevision,
+          responses: persisted,
+          clearedItemIds: [...clearItemIds],
+        };
       }),
     );
   }
@@ -501,25 +558,45 @@ export class PostgresInspectionRepository implements InspectionRepository {
     return rows.map(mapResponse);
   }
 
-  async insertFinding(finding: InspectionFinding): Promise<void> {
-    const inspection = await this.getById(finding.inspectionId);
-    if (!inspection) {
-      throw new DomainError('INSPECTION_NOT_FOUND', 'Inspection not found.');
-    }
+  async insertFinding(finding: InspectionFinding): Promise<number> {
+    return translated(async () =>
+      this.sql.begin(async (tx) => {
+        const contentRows = await tx<{
+          content_revision: number;
+          schema_version_id: string;
+        }[]>`
+          update public.inspections
+          set
+            content_revision = content_revision + 1,
+            updated_at = now()
+          where id = ${finding.inspectionId}
+            and status in ('draft', 'in_progress')
+          returning content_revision, schema_version_id
+        `;
 
-    await translated(async () => {
-      await this.sql`
-        insert into public.inspection_findings (
-          id, inspection_id, schema_version_id, section_id, item_id,
-          severity, title, description, created_by_user_id, created_at
-        ) values (
-          ${finding.id}, ${finding.inspectionId}, ${inspection.schemaVersionId},
-          ${finding.sectionId}, ${finding.itemId}, ${finding.severity},
-          ${finding.title}, ${finding.description},
-          ${finding.createdByUserId}, ${finding.createdAt}
-        )
-      `;
-    });
+        const row = contentRows[0];
+        if (!row) {
+          throw new DomainError(
+            'INSPECTION_CONTENT_LOCKED',
+            'Inspection content is no longer editable.',
+          );
+        }
+
+        await tx`
+          insert into public.inspection_findings (
+            id, inspection_id, schema_version_id, section_id, item_id,
+            severity, title, description, created_by_user_id, created_at
+          ) values (
+            ${finding.id}, ${finding.inspectionId}, ${row.schema_version_id},
+            ${finding.sectionId}, ${finding.itemId}, ${finding.severity},
+            ${finding.title}, ${finding.description},
+            ${finding.createdByUserId}, ${finding.createdAt}
+          )
+        `;
+
+        return row.content_revision;
+      }),
+    );
   }
 
   async listFindings(
