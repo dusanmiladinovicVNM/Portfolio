@@ -5,7 +5,6 @@ import {
   PostgresOwnershipRepository,
   PostgresPartyRepository,
   PostgresPortfolioRepository,
-  PostgresTenancyRepository,
   PostgresUserAccessRepository,
   WebCryptoIdGenerator,
 } from '@portfolio/infrastructure';
@@ -30,7 +29,6 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
   const portfolioRepository = new PostgresPortfolioRepository(sql);
   const partyRepository = new PostgresPartyRepository(sql);
   const ownershipRepository = new PostgresOwnershipRepository(sql);
-  const tenancyRepository = new PostgresTenancyRepository(sql);
   const userAccessRepository = new PostgresUserAccessRepository(sql);
 
   const applicationHandler = createPortfolioHttpHandler(
@@ -38,7 +36,6 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
       portfolioRepository,
       partyRepository,
       ownershipRepository,
-      tenancyRepository,
       userAccessRepository,
       idGenerator: new WebCryptoIdGenerator(),
       onUnexpectedError: (error) => {

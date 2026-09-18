@@ -1,31 +1,20 @@
 import {
   ApplicationError,
-  activateTenancyCommand,
-  addTenancyPartyCommand,
-  cancelTenancyCommand,
   createOwnershipPeriodCommand,
   createPartyCommand,
-  createTenancyCommand,
   createPropertyCommand,
   createSpaceCommand,
   createUnitCommand,
-  endTenancyCommand,
   getPartyQuery,
   getPropertyQuery,
-  getTenancyQuery,
-  giveTenancyNoticeCommand,
   listOwnershipPeriodsByUnitQuery,
   listPartiesQuery,
   listPropertiesQuery,
   listSpacesByUnitQuery,
-  listTenanciesByUnitQuery,
   listUnitsByPropertyQuery,
-  markTenancyMoveOutPendingCommand,
-  planTenancyCommand,
   resolveActor,
   type CreateOwnershipPeriodCommandInput,
   type CreatePartyCommandInput,
-  type CreateTenancyCommandInput,
   type CreatePropertyCommandInput,
   type CreateSpaceCommandInput,
   type CreateUnitCommandInput,
@@ -38,25 +27,18 @@ import {
   type VerifiedIdentity,
 } from '@portfolio/application';
 import {
-  activateTenancyRequestSchema,
-  addTenancyPartyRequestSchema,
   createOwnershipPeriodRequestSchema,
   createPartyRequestSchema,
-  createTenancyRequestSchema,
   createPropertyRequestSchema,
   createSpaceRequestSchema,
   createUnitRequestSchema,
-  endTenancyRequestSchema,
   entityIdSchema,
-  giveTenancyNoticeRequestSchema,
-  planTenancyRequestSchema,
-  tenancyVersionRequestSchema,
 } from '@portfolio/contracts';
+import { handleTenancyHttp } from './tenancy-http-routes.js';
 import {
   DomainError,
   asPartyId,
   asPropertyId,
-  asTenancyId,
   asUnitId,
   type OwnershipPeriod,
 } from '@portfolio/domain';
@@ -160,217 +142,7 @@ export function createPortfolioHttpHandler(
     try {
       const path = routePath(request, basePath);
       if (path === null) {
-  
-      const unitTenanciesMatch = /^\/units\/([^/]+)\/tenancies$/.exec(path);
-      if (unitTenanciesMatch) {
-        const parsedUnitId = entityIdSchema.safeParse(unitTenanciesMatch[1]);
-        if (!parsedUnitId.success) return validationFailure();
-        const unitId = asUnitId(parsedUnitId.data);
-
-        if (method === 'GET') {
-          const tenancies = await listTenanciesByUnitQuery(
-            {
-              tenancyRepository: deps.tenancyRepository,
-              portfolioRepository: deps.portfolioRepository,
-            },
-            actor,
-            unitId,
-          );
-
-          return json({ data: { items: tenancies } });
-        }
-
-        if (method === 'POST') {
-          const parsed = createTenancyRequestSchema.safeParse(
-            await requestJson(request),
-          );
-          if (!parsed.success) return validationFailure();
-
-          const input: CreateTenancyCommandInput = {
-            unitId,
-            code: parsed.data.code,
-            ...(parsed.data.parties !== undefined
-              ? {
-                  parties: parsed.data.parties.map((party) => ({
-                    partyId: asPartyId(party.partyId),
-                    role: party.role,
-                    ...(party.isPrimary !== undefined
-                      ? { isPrimary: party.isPrimary }
-                      : {}),
-                  })),
-                }
-              : {}),
-          };
-
-          const tenancy = await createTenancyCommand(
-            {
-              tenancyRepository: deps.tenancyRepository,
-              portfolioRepository: deps.portfolioRepository,
-              partyRepository: deps.partyRepository,
-              idGenerator: deps.idGenerator,
-            },
-            actor,
-            input,
-          );
-
-          return json({ data: tenancy }, 201);
-        }
-      }
-
-      const tenancyMatch = /^\/tenancies\/([^/]+)$/.exec(path);
-      if (method === 'GET' && tenancyMatch) {
-        const parsedId = entityIdSchema.safeParse(tenancyMatch[1]);
-        if (!parsedId.success) return validationFailure();
-
-        const tenancy = await getTenancyQuery(
-          deps.tenancyRepository,
-          actor,
-          asTenancyId(parsedId.data),
-        );
-
-        return json({ data: tenancy });
-      }
-
-      const tenancyPartiesMatch = /^\/tenancies\/([^/]+)\/parties$/.exec(path);
-      if (method === 'POST' && tenancyPartiesMatch) {
-        const parsedId = entityIdSchema.safeParse(tenancyPartiesMatch[1]);
-        if (!parsedId.success) return validationFailure();
-
-        const parsed = addTenancyPartyRequestSchema.safeParse(
-          await requestJson(request),
-        );
-        if (!parsed.success) return validationFailure();
-
-        const tenancy = await addTenancyPartyCommand(
-          {
-            tenancyRepository: deps.tenancyRepository,
-            partyRepository: deps.partyRepository,
-            idGenerator: deps.idGenerator,
-          },
-          actor,
-          asTenancyId(parsedId.data),
-          parsed.data.expectedVersion,
-          {
-            partyId: asPartyId(parsed.data.partyId),
-            role: parsed.data.role,
-            ...(parsed.data.isPrimary !== undefined
-              ? { isPrimary: parsed.data.isPrimary }
-              : {}),
-          },
-        );
-
-        return json({ data: tenancy });
-      }
-
-      const tenancyActionMatch =
-        /^\/tenancies\/([^/]+)\/(plan|activate|give-notice|move-out-pending|end|cancel)$/.exec(path);
-
-      if (method === 'POST' && tenancyActionMatch) {
-        const parsedId = entityIdSchema.safeParse(tenancyActionMatch[1]);
-        if (!parsedId.success) return validationFailure();
-        const tenancyId = asTenancyId(parsedId.data);
-        const action = tenancyActionMatch[2];
-
-        if (action === 'plan') {
-          const parsed = planTenancyRequestSchema.safeParse(await requestJson(request));
-          if (!parsed.success) return validationFailure();
-
-          const tenancy = await planTenancyCommand(
-            { tenancyRepository: deps.tenancyRepository },
-            actor,
-            tenancyId,
-            parsed.data.expectedVersion,
-            parsed.data.plannedStart,
-            parsed.data.plannedEnd,
-          );
-
-          return json({ data: tenancy });
-        }
-
-        if (action === 'activate') {
-          const parsed = activateTenancyRequestSchema.safeParse(
-            await requestJson(request),
-          );
-          if (!parsed.success) return validationFailure();
-
-          const tenancy = await activateTenancyCommand(
-            { tenancyRepository: deps.tenancyRepository },
-            actor,
-            tenancyId,
-            parsed.data.expectedVersion,
-            parsed.data.actualStart,
-          );
-
-          return json({ data: tenancy });
-        }
-
-        if (action === 'give-notice') {
-          const parsed = giveTenancyNoticeRequestSchema.safeParse(
-            await requestJson(request),
-          );
-          if (!parsed.success) return validationFailure();
-
-          const tenancy = await giveTenancyNoticeCommand(
-            { tenancyRepository: deps.tenancyRepository },
-            actor,
-            tenancyId,
-            parsed.data.expectedVersion,
-            parsed.data.noticeGivenAt,
-            parsed.data.terminationEffectiveAt,
-          );
-
-          return json({ data: tenancy });
-        }
-
-        if (action === 'move-out-pending') {
-          const parsed = tenancyVersionRequestSchema.safeParse(
-            await requestJson(request),
-          );
-          if (!parsed.success) return validationFailure();
-
-          const tenancy = await markTenancyMoveOutPendingCommand(
-            { tenancyRepository: deps.tenancyRepository },
-            actor,
-            tenancyId,
-            parsed.data.expectedVersion,
-          );
-
-          return json({ data: tenancy });
-        }
-
-        if (action === 'end') {
-          const parsed = endTenancyRequestSchema.safeParse(await requestJson(request));
-          if (!parsed.success) return validationFailure();
-
-          const tenancy = await endTenancyCommand(
-            { tenancyRepository: deps.tenancyRepository },
-            actor,
-            tenancyId,
-            parsed.data.expectedVersion,
-            parsed.data.actualEnd,
-          );
-
-          return json({ data: tenancy });
-        }
-
-        if (action === 'cancel') {
-          const parsed = tenancyVersionRequestSchema.safeParse(
-            await requestJson(request),
-          );
-          if (!parsed.success) return validationFailure();
-
-          const tenancy = await cancelTenancyCommand(
-            { tenancyRepository: deps.tenancyRepository },
-            actor,
-            tenancyId,
-            parsed.data.expectedVersion,
-          );
-
-          return json({ data: tenancy });
-        }
-      }
-
-      return errorResponse('NOT_FOUND', 'Route not found.', 404);
+        return errorResponse('NOT_FOUND', 'Route not found.', 404);
       }
 
       if (!identity) {
@@ -655,6 +427,19 @@ export function createPortfolioHttpHandler(
           return json({ data: ownershipResponse(period) }, 201);
         }
       }
+
+      const tenancyResponse = await handleTenancyHttp(
+        {
+          tenancyRepository: deps.tenancyRepository,
+          portfolioRepository: deps.portfolioRepository,
+          partyRepository: deps.partyRepository,
+          idGenerator: deps.idGenerator,
+        },
+        actor,
+        request,
+        path,
+      );
+      if (tenancyResponse) return tenancyResponse;
 
       return errorResponse('NOT_FOUND', 'Route not found.', 404);
     } catch (error) {
