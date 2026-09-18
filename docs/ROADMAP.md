@@ -74,7 +74,8 @@ Use HandoverApp as a feature bank only.
 - Asset
 - manufacturer/model/serial
 - structured identifiers
-- Unit/Space placement
+- Property placement with optional Unit/Space
+- correctable name/manufacturer/model metadata
 - lifecycle/status
 - replacement relationships
 
