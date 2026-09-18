@@ -14,3 +14,4 @@ export * from './contracts/tenancy-term-version.js';
 export * from './documents/document.js';
 export * from './inspections/inspection-schema.js';
 export * from './inspections/inspection.js';
+export * from './inspections/inspection-evidence.js';
