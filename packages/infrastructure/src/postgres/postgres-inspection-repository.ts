@@ -24,6 +24,7 @@ import {
   type InspectionItemType,
   type InspectionOption,
   type InspectionResponse,
+  type InspectionSectionState,
   type InspectionSchemaStatus,
   type InspectionSchemaVersion,
   type InspectionSchemaVersionId,
@@ -357,6 +358,26 @@ export class PostgresInspectionRepository implements InspectionRepository {
       limit 1
     `;
     return rows[0]?.revision ?? null;
+  }
+
+  async listSectionStates(
+    inspectionId: InspectionId,
+  ): Promise<readonly InspectionSectionState[]> {
+    const rows = await this.sql<{
+      inspection_id: string;
+      section_id: string;
+      revision: number;
+    }[]>`
+      select inspection_id, section_id, revision
+      from public.inspection_section_states
+      where inspection_id = ${inspectionId}
+      order by section_id
+    `;
+    return rows.map((row) => ({
+      inspectionId: asInspectionId(row.inspection_id),
+      sectionId: asInspectionSchemaSectionId(row.section_id),
+      revision: row.revision,
+    }));
   }
 
   async saveSection(

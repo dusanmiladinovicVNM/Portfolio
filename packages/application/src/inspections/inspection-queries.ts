@@ -4,6 +4,7 @@ import {
   type InspectionFinding,
   type InspectionId,
   type InspectionResponse,
+  type InspectionSectionState,
   type InspectionSchemaVersion,
   type InspectionSchemaVersionId,
   type UnitId,
@@ -91,4 +92,37 @@ export async function listInspectionSchemaVersionsQuery(
 ): Promise<readonly InspectionSchemaVersion[]> {
   requireCapability(actor, 'inspection_schemas:read');
   return repository.listSchemaVersions();
+}
+
+export interface InspectionBundle {
+  readonly inspection: Inspection;
+  readonly schema: InspectionSchemaVersion;
+  readonly sectionStates: readonly InspectionSectionState[];
+  readonly responses: readonly InspectionResponse[];
+  readonly findings: readonly InspectionFinding[];
+}
+
+export async function getInspectionBundleQuery(
+  repository: InspectionRepository,
+  actor: Actor,
+  id: InspectionId,
+): Promise<InspectionBundle> {
+  const inspection = await getInspectionQuery(repository, actor, id);
+  const schema = await repository.getSchemaVersionById(
+    inspection.schemaVersionId,
+  );
+  if (!schema) {
+    throw new DomainError(
+      'INSPECTION_SCHEMA_NOT_FOUND',
+      'Inspection schema version not found.',
+    );
+  }
+
+  const [sectionStates, responses, findings] = await Promise.all([
+    repository.listSectionStates(id),
+    repository.listResponses(id),
+    repository.listFindings(id),
+  ]);
+
+  return { inspection, schema, sectionStates, responses, findings };
 }

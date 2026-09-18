@@ -3,6 +3,7 @@ import type {
   InspectionFinding,
   InspectionId,
   InspectionResponse,
+  InspectionSectionState,
   InspectionSchemaSectionId,
   InspectionSchemaVersion,
   InspectionSchemaVersionId,
@@ -31,6 +32,9 @@ export interface InspectionRepository {
     inspectionId: InspectionId,
     sectionId: InspectionSchemaSectionId,
   ): Promise<number | null>;
+  listSectionStates(
+    inspectionId: InspectionId,
+  ): Promise<readonly InspectionSectionState[]>;
   saveSection(
     inspectionId: InspectionId,
     sectionId: InspectionSchemaSectionId,
