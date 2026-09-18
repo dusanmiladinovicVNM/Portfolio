@@ -1,0 +1,18 @@
+{
+  "name": "@portfolio/infrastructure",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "pnpm --workspace-root exec tsc --noEmit -p packages/infrastructure/tsconfig.json",
+    "test": "pnpm --workspace-root exec vitest run --passWithNoTests packages/infrastructure/test/unit",
+    "test:integration": "pnpm --workspace-root exec vitest run packages/infrastructure/test/integration"
+  },
+  "dependencies": {
+    "@portfolio/application": "workspace:*",
+    "@portfolio/domain": "workspace:*",
+    "postgres": "3.4.9"
+  }
+}
