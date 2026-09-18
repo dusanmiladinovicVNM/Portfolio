@@ -1,15 +1,22 @@
 begin;
 
+create or replace function public.text_array_is_unique(values text[])
+returns boolean
+language sql
+immutable
+strict
+as $
+  select cardinality(values) = count(distinct value)
+  from unnest(values) as value
+$;
+
 alter table public.inspection_schema_versions
   add column required_signature_roles text[] not null default '{}'::text[];
 
 alter table public.inspection_schema_versions
   add constraint inspection_schema_signature_roles_valid check (
     required_signature_roles <@ array['landlord','tenant','witness','agent']::text[]
-    and cardinality(required_signature_roles) = (
-      select count(distinct role)
-      from unnest(required_signature_roles) as role
-    )
+    and public.text_array_is_unique(required_signature_roles)
   );
 
 -- Preserve the legacy handover business expectation for already-published
