@@ -21,6 +21,8 @@ export const CAPABILITIES = [
   'inspections:write',
   'inspection_schemas:read',
   'inspection_schemas:write',
+  'assets:read',
+  'assets:write',
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
@@ -51,6 +53,7 @@ const ROLE_CAPABILITIES: Readonly<Record<StaffRole, ReadonlySet<Capability>>> = 
     'inspections:read',
     'inspections:write',
     'inspection_schemas:read',
+    'assets:read',
   ]),
 };
 
