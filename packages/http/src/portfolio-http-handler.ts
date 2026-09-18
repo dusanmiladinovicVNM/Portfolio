@@ -1,22 +1,33 @@
 import {
   ApplicationError,
+  createOwnershipPeriodCommand,
+  createPartyCommand,
   createPropertyCommand,
   createSpaceCommand,
   createUnitCommand,
+  getPartyQuery,
   getPropertyQuery,
+  listOwnershipPeriodsByUnitQuery,
+  listPartiesQuery,
   listPropertiesQuery,
   listSpacesByUnitQuery,
   listUnitsByPropertyQuery,
   resolveActor,
+  type CreateOwnershipPeriodCommandInput,
+  type CreatePartyCommandInput,
   type CreatePropertyCommandInput,
   type CreateSpaceCommandInput,
   type CreateUnitCommandInput,
   type IdGenerator,
+  type OwnershipRepository,
+  type PartyRepository,
   type PortfolioRepository,
   type UserAccessRepository,
   type VerifiedIdentity,
 } from '@portfolio/application';
 import {
+  createOwnershipPeriodRequestSchema,
+  createPartyRequestSchema,
   createPropertyRequestSchema,
   createSpaceRequestSchema,
   createUnitRequestSchema,
@@ -24,12 +35,16 @@ import {
 } from '@portfolio/contracts';
 import {
   DomainError,
+  asPartyId,
   asPropertyId,
   asUnitId,
+  type OwnershipPeriod,
 } from '@portfolio/domain';
 
 export interface PortfolioHttpDependencies {
   readonly portfolioRepository: PortfolioRepository;
+  readonly partyRepository: PartyRepository;
+  readonly ownershipRepository: OwnershipRepository;
   readonly userAccessRepository: UserAccessRepository;
   readonly idGenerator: IdGenerator;
   readonly onUnexpectedError?: (error: unknown) => void;
@@ -90,8 +105,23 @@ function errorStatus(code: string): number {
   if (code === 'FORBIDDEN') return 403;
   if (code === 'INVALID_REQUEST') return 400;
   if (code.endsWith('_NOT_FOUND')) return 404;
-  if (code.endsWith('_ALREADY_EXISTS')) return 409;
+  if (code.endsWith('_ALREADY_EXISTS') || code === 'OWNERSHIP_PERIOD_OVERLAP') {
+    return 409;
+  }
   return 422;
+}
+
+function ownershipResponse(period: OwnershipPeriod) {
+  return {
+    id: period.id,
+    unitId: period.unitId,
+    validFrom: period.validFrom,
+    validTo: period.validTo,
+    owners: period.owners.map((owner) => ({
+      partyId: owner.partyId,
+      sharePercent: owner.shareBasisPoints / 100,
+    })),
+  };
 }
 
 export function createPortfolioHttpHandler(
@@ -245,6 +275,149 @@ export function createPortfolioHttpHandler(
         );
 
         return json({ data: space }, 201);
+      }
+
+      if (method === 'GET' && path === '/parties') {
+        const parties = await listPartiesQuery(deps.partyRepository, actor);
+        return json({ data: { items: parties } });
+      }
+
+      if (method === 'POST' && path === '/parties') {
+        const parsed = createPartyRequestSchema.safeParse(await requestJson(request));
+        if (!parsed.success) return validationFailure();
+
+        const common = {
+          code: parsed.data.code,
+          ...(parsed.data.displayName !== undefined
+            ? { displayName: parsed.data.displayName }
+            : {}),
+          ...(parsed.data.contactPoints !== undefined
+            ? {
+                contactPoints: parsed.data.contactPoints.map((contact) => ({
+                  contactType: contact.contactType,
+                  value: contact.value,
+                  ...(contact.label !== undefined ? { label: contact.label } : {}),
+                  ...(contact.isPrimary !== undefined
+                    ? { isPrimary: contact.isPrimary }
+                    : {}),
+                })),
+              }
+            : {}),
+          ...(parsed.data.addresses !== undefined
+            ? {
+                addresses: parsed.data.addresses.map((address) => ({
+                  addressType: address.addressType,
+                  line1: address.line1,
+                  ...(address.line2 !== undefined ? { line2: address.line2 } : {}),
+                  postalCode: address.postalCode,
+                  city: address.city,
+                  ...(address.region !== undefined ? { region: address.region } : {}),
+                  countryCode: address.countryCode,
+                  ...(address.isPrimary !== undefined
+                    ? { isPrimary: address.isPrimary }
+                    : {}),
+                })),
+              }
+            : {}),
+        };
+
+        const input: CreatePartyCommandInput =
+          parsed.data.partyType === 'person'
+            ? {
+                ...common,
+                partyType: 'person',
+                firstName: parsed.data.firstName,
+                ...(parsed.data.middleName !== undefined
+                  ? { middleName: parsed.data.middleName }
+                  : {}),
+                lastName: parsed.data.lastName,
+              }
+            : {
+                ...common,
+                partyType: 'company',
+                legalName: parsed.data.legalName,
+              };
+
+        const party = await createPartyCommand(
+          {
+            partyRepository: deps.partyRepository,
+            idGenerator: deps.idGenerator,
+          },
+          actor,
+          input,
+        );
+
+        return json({ data: party }, 201);
+      }
+
+      const partyMatch = /^\/parties\/([^/]+)$/.exec(path);
+      if (method === 'GET' && partyMatch) {
+        const parsedId = entityIdSchema.safeParse(partyMatch[1]);
+        if (!parsedId.success) return validationFailure();
+
+        const party = await getPartyQuery(
+          deps.partyRepository,
+          actor,
+          asPartyId(parsedId.data),
+        );
+
+        return json({ data: party });
+      }
+
+      const ownershipMatch = /^\/units\/([^/]+)\/ownership-periods$/.exec(path);
+      if (ownershipMatch) {
+        const parsedUnitId = entityIdSchema.safeParse(ownershipMatch[1]);
+        if (!parsedUnitId.success) return validationFailure();
+        const unitId = asUnitId(parsedUnitId.data);
+
+        if (method === 'GET') {
+          const periods = await listOwnershipPeriodsByUnitQuery(
+            {
+              portfolioRepository: deps.portfolioRepository,
+              ownershipRepository: deps.ownershipRepository,
+            },
+            actor,
+            unitId,
+          );
+
+          return json({
+            data: {
+              items: periods.map(ownershipResponse),
+            },
+          });
+        }
+
+        if (method === 'POST') {
+          const parsed = createOwnershipPeriodRequestSchema.safeParse(
+            await requestJson(request),
+          );
+          if (!parsed.success) return validationFailure();
+
+          const input: CreateOwnershipPeriodCommandInput = {
+            unitId,
+            validFrom: parsed.data.validFrom,
+            ...(parsed.data.validTo !== undefined
+              ? { validTo: parsed.data.validTo }
+              : {}),
+            owners: parsed.data.owners.map((owner) => ({
+              partyId: asPartyId(owner.partyId),
+              shareBasisPoints: Math.round(owner.sharePercent * 100),
+            })),
+          };
+
+          const period = await createOwnershipPeriodCommand(
+            {
+              portfolioRepository: deps.portfolioRepository,
+              partyRepository: deps.partyRepository,
+              ownershipRepository: deps.ownershipRepository,
+              idGenerator: deps.idGenerator,
+            },
+            actor,
+            input,
+          );
+
+          return json({ data: ownershipResponse(period) }, 201);
+        }
       }
 
       return errorResponse('NOT_FOUND', 'Route not found.', 404);
