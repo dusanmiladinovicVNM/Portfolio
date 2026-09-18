@@ -1448,15 +1448,50 @@ describe('PostgreSQL infrastructure', () => {
       constraint_name: 'document_versions_append_only',
     });
 
+    await sql`
+      insert into public.documents (
+        id, code, title, category, status, latest_version_number, revision
+      ) values (
+        '62000000-0000-4000-8000-000000000100',
+        'DOC-SECOND-SIGNED-ORIGINAL',
+        'Second signed original candidate',
+        'legal',
+        'active',
+        1,
+        2
+      )
+    `;
+
+    await sql`
+      insert into public.document_versions (
+        id, document_id, version_number, file_name, mime_type,
+        byte_size, sha256, status, finalized_at,
+        storage_provider, storage_object_id, storage_object_key
+      ) values (
+        '62000000-0000-4000-8000-000000000101',
+        '62000000-0000-4000-8000-000000000100',
+        1,
+        'second.pdf',
+        'application/pdf',
+        5,
+        ${'e'.repeat(64)},
+        'final',
+        '2026-09-20T12:30:00.000Z',
+        'integration-test',
+        'object-second',
+        'document-version:second'
+      )
+    `;
+
     await expect(
       sql`
         insert into public.document_links (
           id, document_id, document_version_id, relation, target_type,
           lease_agreement_id
         ) values (
-          '62000000-0000-4000-8000-000000000002',
-          ${document.id},
-          ${version.id},
+          '62000000-0000-4000-8000-000000000102',
+          '62000000-0000-4000-8000-000000000100',
+          '62000000-0000-4000-8000-000000000101',
           'signed_original',
           'lease_agreement',
           ${agreement.id}
