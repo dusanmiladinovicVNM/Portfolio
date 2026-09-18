@@ -52,16 +52,19 @@ function concatBytes(parts: readonly Uint8Array[]): Uint8Array {
   return result;
 }
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
 async function sha256Hex(
   cryptoImpl: Crypto,
   content: Uint8Array,
 ): Promise<string> {
   const digest = await cryptoImpl.subtle.digest(
     'SHA-256',
-    content.buffer.slice(
-      content.byteOffset,
-      content.byteOffset + content.byteLength,
-    ),
+    toArrayBuffer(content),
   );
 
   return [...new Uint8Array(digest)]
@@ -161,7 +164,7 @@ export class GoogleDriveFileStorage implements FileStoragePort {
           authorization: `Bearer ${token}`,
           'content-type': `multipart/related; boundary=${boundary}`,
         },
-        body,
+        body: toArrayBuffer(body),
       }),
     );
 
