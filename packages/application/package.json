@@ -6,14 +6,10 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run --passWithNoTests"
+    "typecheck": "pnpm --workspace-root exec tsc --noEmit -p packages/application/tsconfig.json",
+    "test": "pnpm --workspace-root exec vitest run --passWithNoTests packages/application/test"
   },
   "dependencies": {
     "@portfolio/domain": "workspace:*"
-  },
-  "devDependencies": {
-    "typescript": "workspace:*",
-    "vitest": "workspace:*"
   }
 }
