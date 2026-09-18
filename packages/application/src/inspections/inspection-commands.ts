@@ -1,26 +1,42 @@
 import {
   DomainError,
+  asDocumentVersionId,
+  asInspectionEvidenceId,
+  asInspectionFinalSnapshotId,
   asInspectionFindingId,
   asInspectionId,
   asInspectionResponseId,
   asInspectionSchemaItemId,
   asInspectionSchemaSectionId,
   asInspectionSchemaVersionId,
+  asInspectionSignatureId,
+  asInspectionUnlockId,
+  asPartyId,
   assertInspectionContentEditable,
+  createInspectionEvidence,
+  createInspectionFinalSnapshot,
+  createInspectionSignature,
+  createInspectionUnlockRecord,
   cancelInspection,
   createInspection,
   createInspectionFinding,
   createInspectionResponse,
   createInspectionSchemaVersion,
+  finalizeInspection,
+  findInspectionSchemaItem,
   findInspectionSchemaSection,
   findMissingRequiredInspectionItems,
   lockInspection,
   publishInspectionSchemaVersion,
   startInspection,
+  unlockInspection,
   type Inspection,
   type InspectionAnswerValue,
+  type InspectionEvidence,
+  type InspectionEvidenceKind,
   type InspectionFinding,
   type InspectionFindingSeverity,
+  type InspectionFinalSnapshot,
   type InspectionId,
   type InspectionItemType,
   type InspectionOption,
@@ -29,6 +45,8 @@ import {
   type InspectionSchemaSectionId,
   type InspectionSchemaVersion,
   type InspectionSchemaVersionId,
+  type InspectionSignature,
+  type InspectionSignatureRole,
   type InspectionType,
   type TenancyId,
   type UnitId,
@@ -38,6 +56,8 @@ import { requireCapability, type Actor } from '../security/access.js';
 import type { ClockPort } from '../shared/clock.js';
 import type { IdGenerator } from '../shared/id-generator.js';
 import type { PortfolioRepository } from '../portfolio/portfolio-repository.js';
+import type { DocumentRepository } from '../documents/document-repository.js';
+import type { PartyRepository } from '../parties/party-repository.js';
 import type { TenancyRepository } from '../tenancy/tenancy-repository.js';
 import type {
   InspectionRepository,
@@ -82,10 +102,26 @@ export interface CreateInspectionFindingCommandInput {
   readonly description?: string | null;
 }
 
+export interface AttachInspectionEvidenceCommandInput {
+  readonly documentVersionId: string;
+  readonly kind: Exclude<InspectionEvidenceKind, 'final_report'>;
+  readonly sectionId?: string | null;
+  readonly itemId?: string | null;
+  readonly caption?: string | null;
+}
+
+export interface AddInspectionSignatureCommandInput {
+  readonly signerRole: InspectionSignatureRole;
+  readonly signerPartyId?: string | null;
+  readonly signerName: string;
+  readonly signatureDocumentVersionId: string;
+}
+
 export interface CreateInspectionSchemaVersionCommandInput {
   readonly schemaCode: string;
   readonly inspectionType: InspectionType;
   readonly title: string;
+  readonly requiredSignatureRoles?: readonly InspectionSignatureRole[];
   readonly sections: readonly {
     readonly key: string;
     readonly title: string;
@@ -479,6 +515,219 @@ export async function createInspectionFindingCommand(
   return finding;
 }
 
+export async function attachInspectionEvidenceCommand(
+  deps: Pick<
+    InspectionDependencies,
+    'inspectionRepository' | 'idGenerator' | 'clock'
+  > & { readonly documentRepository: DocumentRepository },
+  actor: Actor,
+  inspectionId: InspectionId,
+  input: AttachInspectionEvidenceCommandInput,
+): Promise<InspectionEvidence> {
+  requireCapability(actor, 'inspections:write');
+  const inspection = await requireInspection(deps.inspectionRepository, inspectionId);
+  assertInspectionAccess(actor, inspection);
+  assertInspectionContentEditable(inspection);
+
+  const versionId = asDocumentVersionId(input.documentVersionId);
+  const version = await deps.documentRepository.getVersionById(versionId);
+  if (!version) {
+    throw new DomainError(
+      'DOCUMENT_VERSION_NOT_FOUND',
+      'Evidence document version not found.',
+    );
+  }
+
+  const schema = await requireSchema(
+    deps.inspectionRepository,
+    inspection.schemaVersionId,
+  );
+
+  let sectionId = null;
+  let itemId = null;
+  if (input.sectionId !== undefined && input.sectionId !== null) {
+    sectionId = asInspectionSchemaSectionId(input.sectionId);
+    const section = findInspectionSchemaSection(schema, sectionId);
+
+    if (input.itemId !== undefined && input.itemId !== null) {
+      itemId = asInspectionSchemaItemId(input.itemId);
+      if (!section.items.some((item) => item.id === itemId)) {
+        throw new DomainError(
+          'INSPECTION_EVIDENCE_ITEM_NOT_IN_SECTION',
+          'Evidence item does not belong to the selected section.',
+        );
+      }
+    }
+  } else if (input.itemId !== undefined && input.itemId !== null) {
+    throw new DomainError(
+      'INSPECTION_EVIDENCE_SECTION_REQUIRED',
+      'Item-level evidence requires a section.',
+    );
+  }
+
+  const evidence = createInspectionEvidence(inspection, {
+    id: asInspectionEvidenceId(deps.idGenerator.next()),
+    inspectionId: inspection.id,
+    sectionId,
+    itemId,
+    documentVersionId: version.id,
+    kind: input.kind,
+    ...(input.caption !== undefined ? { caption: input.caption } : {}),
+    createdByUserId: actor.userId,
+    createdAt: deps.clock.now(),
+  });
+
+  await deps.inspectionRepository.insertEvidence(evidence);
+  return evidence;
+}
+
+export async function addInspectionSignatureCommand(
+  deps: Pick<
+    InspectionDependencies,
+    'inspectionRepository' | 'idGenerator' | 'clock'
+  > & {
+    readonly documentRepository: DocumentRepository;
+    readonly partyRepository: PartyRepository;
+  },
+  actor: Actor,
+  inspectionId: InspectionId,
+  input: AddInspectionSignatureCommandInput,
+): Promise<InspectionSignature> {
+  requireCapability(actor, 'inspections:write');
+  const inspection = await requireInspection(deps.inspectionRepository, inspectionId);
+  assertInspectionAccess(actor, inspection);
+
+  const version = await deps.documentRepository.getVersionById(
+    asDocumentVersionId(input.signatureDocumentVersionId),
+  );
+  if (!version) {
+    throw new DomainError(
+      'DOCUMENT_VERSION_NOT_FOUND',
+      'Signature document version not found.',
+    );
+  }
+  if (version.status !== 'final') {
+    throw new DomainError(
+      'INSPECTION_SIGNATURE_DOCUMENT_NOT_FINAL',
+      'Signature requires a final immutable document version.',
+    );
+  }
+
+  let signerPartyId = null;
+  if (input.signerPartyId !== undefined && input.signerPartyId !== null) {
+    signerPartyId = asPartyId(input.signerPartyId);
+    if (!(await deps.partyRepository.getById(signerPartyId))) {
+      throw new DomainError('PARTY_NOT_FOUND', 'Signer Party not found.');
+    }
+  }
+
+  const signature = createInspectionSignature(inspection, {
+    id: asInspectionSignatureId(deps.idGenerator.next()),
+    inspectionId: inspection.id,
+    signerRole: input.signerRole,
+    signerPartyId,
+    signerName: input.signerName,
+    signatureDocumentVersionId: version.id,
+    signedByUserId: actor.userId,
+    signedAt: deps.clock.now(),
+  });
+
+  await deps.inspectionRepository.insertSignature(signature);
+  return signature;
+}
+
+export async function unlockInspectionCommand(
+  deps: Pick<
+    InspectionDependencies,
+    'inspectionRepository' | 'idGenerator' | 'clock'
+  >,
+  actor: Actor,
+  id: InspectionId,
+  expectedVersion: number,
+  reason: string,
+): Promise<Inspection> {
+  requireCapability(actor, 'inspections:write');
+  if (actor.role === 'inspector') {
+    throw new DomainError(
+      'INSPECTION_UNLOCK_FORBIDDEN',
+      'Only an admin or manager may unlock an inspection.',
+    );
+  }
+
+  const current = await requireInspection(deps.inspectionRepository, id);
+  assertExpectedVersion(current, expectedVersion);
+  const updated = unlockInspection(current);
+  const now = deps.clock.now();
+  const record = createInspectionUnlockRecord(current, updated, {
+    id: asInspectionUnlockId(deps.idGenerator.next()),
+    unlockedByUserId: actor.userId,
+    unlockedAt: now,
+    reason,
+  });
+
+  await deps.inspectionRepository.unlockInspection(current, updated, record);
+  return updated;
+}
+
+export async function finalizeInspectionCommand(
+  deps: Pick<
+    InspectionDependencies,
+    'inspectionRepository' | 'idGenerator' | 'clock'
+  >,
+  actor: Actor,
+  id: InspectionId,
+  expectedVersion: number,
+): Promise<{
+  readonly inspection: Inspection;
+  readonly snapshot: InspectionFinalSnapshot;
+}> {
+  requireCapability(actor, 'inspections:write');
+  if (actor.role === 'inspector') {
+    throw new DomainError(
+      'INSPECTION_FINALIZE_FORBIDDEN',
+      'Only an admin or manager may finalize an inspection.',
+    );
+  }
+
+  const current = await requireInspection(deps.inspectionRepository, id);
+  assertExpectedVersion(current, expectedVersion);
+  const schema = await requireSchema(
+    deps.inspectionRepository,
+    current.schemaVersionId,
+  );
+
+  const [responses, findings, evidence, signatures] = await Promise.all([
+    deps.inspectionRepository.listResponses(id),
+    deps.inspectionRepository.listFindings(id),
+    deps.inspectionRepository.listEvidence(id),
+    deps.inspectionRepository.listSignatures(id),
+  ]);
+
+  const now = deps.clock.now();
+  const snapshot = createInspectionFinalSnapshot(
+    current,
+    schema,
+    responses,
+    findings,
+    evidence.filter((item) => item.kind !== 'final_report'),
+    signatures,
+    {
+      id: asInspectionFinalSnapshotId(deps.idGenerator.next()),
+      createdByUserId: actor.userId,
+      createdAt: now,
+    },
+  );
+  const updated = finalizeInspection(current, now);
+
+  await deps.inspectionRepository.finalizeInspection(
+    current,
+    updated,
+    snapshot,
+  );
+
+  return { inspection: updated, snapshot };
+}
+
 export async function createInspectionSchemaVersionCommand(
   deps: Pick<InspectionDependencies, 'inspectionRepository' | 'idGenerator'>,
   actor: Actor,
@@ -495,6 +744,9 @@ export async function createInspectionSchemaVersionCommand(
     versionNumber,
     inspectionType: input.inspectionType,
     title: input.title,
+    ...(input.requiredSignatureRoles !== undefined
+      ? { requiredSignatureRoles: input.requiredSignatureRoles }
+      : {}),
     sections: input.sections.map((section) => ({
       id: asInspectionSchemaSectionId(deps.idGenerator.next()),
       key: section.key,
