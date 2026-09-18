@@ -1429,6 +1429,27 @@ describe('PostgreSQL infrastructure', () => {
 
     await expect(
       sql`
+        update public.document_links
+        set relation = 'supporting'
+        where id = ${link.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'document_links_signed_original_immutable',
+    });
+
+    await expect(
+      sql`
+        delete from public.document_links
+        where id = ${link.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'document_links_signed_original_immutable',
+    });
+
+    await expect(
+      sql`
         update public.document_versions
         set file_name = 'rewritten.pdf'
         where id = ${version.id}
