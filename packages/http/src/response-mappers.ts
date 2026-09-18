@@ -1,4 +1,7 @@
 import type {
+  DocumentLinkResponse,
+  DocumentResponse,
+  DocumentVersionResponse,
   LeaseAgreementResponse,
   LeaseAmendmentResponse,
   OwnershipPeriodResponse,
@@ -10,6 +13,9 @@ import type {
   UnitResponse,
 } from '@portfolio/contracts';
 import type {
+  Document,
+  DocumentLink,
+  DocumentVersion,
   LeaseAgreement,
   LeaseAmendment,
   OwnershipPeriod,
@@ -205,5 +211,46 @@ export function toTenancyTermVersionResponse(
     billingFrequency: terms.billingFrequency,
     noticePeriodTenantDays: terms.noticePeriodTenantDays,
     noticePeriodLandlordDays: terms.noticePeriodLandlordDays,
+  };
+}
+
+export function toDocumentResponse(document: Document): DocumentResponse {
+  return {
+    id: document.id,
+    code: document.code,
+    title: document.title,
+    category: document.category,
+    status: document.status,
+    latestVersionNumber: document.latestVersionNumber,
+    revision: document.revision,
+  };
+}
+
+export function toDocumentVersionResponse(
+  version: DocumentVersion,
+): DocumentVersionResponse {
+  return {
+    id: version.id,
+    documentId: version.documentId,
+    versionNumber: version.versionNumber,
+    fileName: version.fileName,
+    mimeType: version.mimeType,
+    byteSize: version.byteSize,
+    sha256: version.sha256,
+    status: version.status,
+    finalizedAt: version.finalizedAt,
+  };
+}
+
+export function toDocumentLinkResponse(
+  link: DocumentLink,
+): DocumentLinkResponse {
+  return {
+    id: link.id,
+    documentId: link.documentId,
+    documentVersionId: link.documentVersionId,
+    relation: link.relation,
+    targetType: link.targetType,
+    targetId: link.targetId,
   };
 }
