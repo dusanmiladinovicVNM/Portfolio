@@ -8,7 +8,9 @@ const tokenProvider = {
 };
 
 async function sha256(content: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', content);
+  const copy = new Uint8Array(content.byteLength);
+  copy.set(content);
+  const digest = await crypto.subtle.digest('SHA-256', copy.buffer);
   return [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');
