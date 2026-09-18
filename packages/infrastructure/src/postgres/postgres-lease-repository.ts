@@ -1,4 +1,5 @@
-import type postgres, { TransactionSql } from 'postgres';
+import type postgres from 'postgres';
+import type { TransactionSql } from 'postgres';
 import type { LeaseRepository } from '@portfolio/application';
 import {
   DomainError,
