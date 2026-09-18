@@ -543,8 +543,8 @@ export async function attachInspectionEvidenceCommand(
     inspection.schemaVersionId,
   );
 
-  let sectionId = null;
-  let itemId = null;
+  let sectionId: InspectionSchemaSectionId | null = null;
+  let itemId: import('@portfolio/domain').InspectionSchemaItemId | null = null;
   if (input.sectionId !== undefined && input.sectionId !== null) {
     sectionId = asInspectionSchemaSectionId(input.sectionId);
     const section = findInspectionSchemaSection(schema, sectionId);
