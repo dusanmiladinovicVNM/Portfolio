@@ -57,15 +57,17 @@ After publish, schema content is immutable. Retirement prevents new use without 
 
 An existing Inspection always points to the exact schema version it started with.
 
-### Two concurrency grains
+### Three concurrency grains
 
 Inspection lifecycle/assignment uses `Inspection.version`.
 
-Field content uses `InspectionSectionState.revision`.
+Field autosave uses `InspectionSectionState.revision`.
+
+Closing transitions use monotonic `Inspection.contentRevision` as a global content barrier.
 
 This is intentional.
 
-A kitchen autosave must not conflict merely because someone saved the meter section. Section-level revisions also give the later offline/PWA workflow the smallest authoritative conflict boundary.
+A kitchen autosave must not conflict merely because someone saved the meter section. However lock/finalization must prove that the authoritative response set did not change after validation. Every content mutation increments `contentRevision`; lock CASes both lifecycle version and the content revision it validated.
 
 ### Typed dynamic responses
 
@@ -117,7 +119,11 @@ PR #11 implements creation, start, section editing, findings, lock and cancellat
 
 `locked` closes response/finding mutation both in application code and PostgreSQL.
 
-PR #12 owns signatures, controlled unlock semantics, final immutable snapshot and transition to finalized.
+Direct `draft → locked` is not valid; a field inspection must start before it can be locked.
+
+Section writes are PATCH semantics: callers explicitly set and/or clear selected answers. Omitted answers are unchanged.
+
+PR #13 owns signatures, controlled unlock semantics, final immutable snapshot and transition to finalized.
 
 ## Consequences
 

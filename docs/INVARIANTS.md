@@ -60,42 +60,44 @@ These rules are architecture gates, not optional implementation notes.
 45. A new Inspection references one exact **published** InspectionSchemaVersion whose inspection type matches the Inspection type.
 46. Published/retired InspectionSchemaVersion structure is immutable; new form evolution creates a new version rather than rewriting history.
 47. Inspection content (responses/findings) is editable only while the Inspection is draft or in progress.
-48. Inspection lifecycle concurrency and section-content concurrency are different grains: lifecycle uses Inspection.version; each section autosave uses its own revision.
+48. Inspection concurrency has three grains: lifecycle uses Inspection.version; each section autosave uses its own revision; closing transitions also CAS a monotonic Inspection.contentRevision incremented by every content mutation.
 49. An inspector may access/mutate only Inspections explicitly assigned to that internal user; createdBy and assignedTo are different facts.
 50. Every InspectionResponse belongs to an item in the Inspection's exact schema version/section and its value type/options must match that item definition.
-51. Locking requires every currently visible required/conditionally-required item to have an answer.
+51. Locking requires an in-progress Inspection, every currently visible required/conditionally-required item to have an answer, and an unchanged contentRevision between authoritative validation and lifecycle CAS.
 52. A Finding is an observed inspection condition; it is not an Issue or WorkOrder and cannot silently mutate those domains.
-53. A finalized/signed Inspection will have an immutable evidence snapshot; PR #12 owns signatures, final snapshot and final document generation.
-54. Form answers are not automatically canonical domain facts. Meter readings, assets, keys and similar facts require their own domain records where applicable.
+53. Inspection historical identity (code/type/Unit/Tenancy/schema/creator) is immutable after creation. A finalized/signed Inspection will have an immutable evidence snapshot; PR #13 owns signatures, final snapshot and final document generation.
+54. Published schema children cannot move between schema versions/sections, and Inspection content rows cannot be retargeted between Inspections after insert.
+57. Section writes use PATCH semantics: omitted answers remain unchanged and explicit clear removes an answer.
+58. Form answers are not automatically canonical domain facts. Meter readings, assets, keys and similar facts require their own domain records where applicable.
 
 ## Assets
 
-55. Asset represents one physical identity.
-56. Moving an Asset does not create a new Asset.
-57. Replacing an Asset does create a new Asset; the old one remains in history.
-58. Serial/product identifiers are historical identity data and must not be collapsed into an unstructured notes field.
-59. Service events are append-only history.
-60. Asset condition assessments preserve history rather than overwriting a single condition field.
+57. Asset represents one physical identity.
+58. Moving an Asset does not create a new Asset.
+59. Replacing an Asset does create a new Asset; the old one remains in history.
+60. Serial/product identifiers are historical identity data and must not be collapsed into an unstructured notes field.
+61. Service events are append-only history.
+62. Asset condition assessments preserve history rather than overwriting a single condition field.
 
 ## Improvements and maintenance
 
-61. ImprovementProject is work; Asset is a physical item; Material is consumed input. They are not interchangeable.
-62. Issue and WorkOrder are different grains: a problem can exist before a work order and may require more than one work order.
-63. Cross-context workflows cannot bypass the owning domain to mutate its state.
+63. ImprovementProject is work; Asset is a physical item; Material is consumed input. They are not interchangeable.
+64. Issue and WorkOrder are different grains: a problem can exist before a work order and may require more than one work order.
+65. Cross-context workflows cannot bypass the owning domain to mutate its state.
 
 ## Money and documents
 
-64. Monetary values use decimal/numeric semantics, never binary floating point.
-65. Each DocumentVersion represents one binary content identity; its file metadata, SHA-256 and storage locator are immutable after registration.
-66. A final DocumentVersion is append-only evidence and cannot return to a mutable/stored state.
-67. A `signed_original` link identifies one exact final DocumentVersion, may only target a signed LeaseAgreement/LeaseAmendment, and is immutable once created.
-68. Binary storage location is infrastructure data, not business identity; Google Drive file IDs must never become Document or DocumentVersion IDs.
-69. External binary storage and PostgreSQL cannot share one ACID transaction. Upload registration therefore uses an idempotent storage object key and compensating delete when DB registration fails.
-70. Financial corrections preserve prior history through correction/reversal records where material.
+66. Monetary values use decimal/numeric semantics, never binary floating point.
+67. Each DocumentVersion represents one binary content identity; its file metadata, SHA-256 and storage locator are immutable after registration.
+68. A final DocumentVersion is append-only evidence and cannot return to a mutable/stored state.
+69. A `signed_original` link identifies one exact final DocumentVersion, may only target a signed LeaseAgreement/LeaseAmendment, and is immutable once created.
+70. Binary storage location is infrastructure data, not business identity; Google Drive file IDs must never become Document or DocumentVersion IDs.
+71. External binary storage and PostgreSQL cannot share one ACID transaction. Upload registration therefore uses an idempotent storage object key and compensating delete when DB registration fails.
+72. Financial corrections preserve prior history through correction/reversal records where material.
 
 ## Architecture
 
-71. Domain code cannot import Supabase, React, Deno, Google APIs or future Fastify infrastructure.
-72. UI components cannot coordinate multi-table business transactions.
-73. Multi-record business commands have one explicit transactional boundary.
-74. Database constraints enforce invariants that can be stated relationally.
+73. Domain code cannot import Supabase, React, Deno, Google APIs or future Fastify infrastructure.
+74. UI components cannot coordinate multi-table business transactions.
+75. Multi-record business commands have one explicit transactional boundary.
+76. Database constraints enforce invariants that can be stated relationally.
