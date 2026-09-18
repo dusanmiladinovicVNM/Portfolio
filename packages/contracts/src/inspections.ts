@@ -261,3 +261,13 @@ export const inspectionFinalSnapshotResponseSchema = z.object({
   createdByUserId: entityIdSchema,
   createdAt: z.string(),
 });
+
+export type InspectionEvidenceResponse = z.infer<
+  typeof inspectionEvidenceResponseSchema
+>;
+export type InspectionSignatureResponse = z.infer<
+  typeof inspectionSignatureResponseSchema
+>;
+export type InspectionFinalSnapshotResponse = z.infer<
+  typeof inspectionFinalSnapshotResponseSchema
+>;

@@ -377,7 +377,19 @@ export async function handleInspectionHttp(
       },
       actor,
       asInspectionId(parsedId.data),
-      parsed.data,
+      {
+        documentVersionId: parsed.data.documentVersionId,
+        kind: parsed.data.kind,
+        ...(parsed.data.sectionId !== undefined
+          ? { sectionId: parsed.data.sectionId }
+          : {}),
+        ...(parsed.data.itemId !== undefined
+          ? { itemId: parsed.data.itemId }
+          : {}),
+        ...(parsed.data.caption !== undefined
+          ? { caption: parsed.data.caption }
+          : {}),
+      },
     );
     return json({ data: toInspectionEvidenceResponse(evidence) }, 201);
   }
@@ -400,7 +412,14 @@ export async function handleInspectionHttp(
       },
       actor,
       asInspectionId(parsedId.data),
-      parsed.data,
+      {
+        signerRole: parsed.data.signerRole,
+        ...(parsed.data.signerPartyId !== undefined
+          ? { signerPartyId: parsed.data.signerPartyId }
+          : {}),
+        signerName: parsed.data.signerName,
+        signatureDocumentVersionId: parsed.data.signatureDocumentVersionId,
+      },
     );
     return json({ data: toInspectionSignatureResponse(signature) }, 201);
   }
