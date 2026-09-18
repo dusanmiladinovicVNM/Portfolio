@@ -65,19 +65,18 @@ These rules are architecture gates, not optional implementation notes.
 50. Every InspectionResponse belongs to an item in the Inspection's exact schema version/section and its value type/options must match that item definition.
 51. Locking requires an in-progress Inspection, every currently visible required/conditionally-required item to have an answer, and an unchanged contentRevision between authoritative validation and lifecycle CAS.
 52. A Finding is an observed inspection condition; it is not an Issue or WorkOrder and cannot silently mutate those domains.
-53. Inspection historical identity (code/type/Unit/Tenancy/schema/creator) is immutable after creation. A finalized/signed Inspection will have an immutable evidence snapshot; PR #13 owns signatures, final snapshot and final document generation.
+53. Inspection historical identity (code/type/Unit/Tenancy/schema/creator) is immutable after creation. A finalized/signed Inspection has an immutable evidence snapshot.
 54. Published schema children cannot move between schema versions/sections, and Inspection content rows cannot be retargeted between Inspections after insert.
 55. Section writes use PATCH semantics: omitted answers remain unchanged and explicit clear removes an answer.
 56. Form answers are not automatically canonical domain facts. Meter readings, assets, keys and similar facts require their own domain records where applicable.
-65. Inspection evidence links reference one exact final DocumentVersion and are append-only once linked.
-66. Signatures can be created only for a locked Inspection and reference one exact final DocumentVersion.
-67. The inspector signature must belong to the currently assigned internal user; tenant/co-tenant signatures must match TenancyParty composition.
-68. Unlock is an explicit admin/manager workflow that records an append-only unlock event and invalidates, never deletes, all currently valid signatures.
-69. Finalization requires a locked Inspection and a valid assigned-inspector signature.
-70. Finalization snapshots one exact schema/content/evidence/signature/unlock history and links one exact final PDF DocumentVersion.
-71. Finalization CASes the lifecycle version and contentRevision represented by the snapshot; a concurrent signature/evidence change must prevent commit.
-72. InspectionFinalization and its snapshot are immutable and one-to-one with Inspection.
-
+57. Inspection evidence links reference one exact final DocumentVersion and are append-only once linked.
+58. Signatures can be created only for a locked Inspection and reference one exact final DocumentVersion.
+59. The inspector signature must belong to the currently assigned internal user; tenant/co-tenant signatures must match TenancyParty composition.
+60. Unlock is an explicit admin/manager workflow that records an append-only unlock event and invalidates, never deletes, all currently valid signatures.
+61. Finalization requires a locked Inspection and a valid assigned-inspector signature.
+62. Finalization snapshots one exact schema/content/evidence/signature/unlock history and links one exact final PDF DocumentVersion.
+63. Finalization CASes the lifecycle version and contentRevision represented by the snapshot; a concurrent signature/evidence change must prevent commit.
+64. InspectionFinalization and its snapshot are immutable and one-to-one with Inspection.
 
 ## Assets
 
