@@ -1311,6 +1311,48 @@ describe('PostgreSQL infrastructure', () => {
       },
     );
 
+    const landlordPartyId = 'a4000000-0000-4000-8000-000000000001';
+    const tenantPartyId = 'a4000000-0000-4000-8000-000000000002';
+    const outsiderPartyId = 'a4000000-0000-4000-8000-000000000003';
+    const tenancyId = 'a5000000-0000-4000-8000-000000000001';
+
+    await sql`
+      insert into public.parties (
+        id, code, party_type, display_name, first_name, last_name, status
+      ) values
+        (${landlordPartyId}, 'P-EVIDENCE-LANDLORD', 'person', 'Landlord Owner', 'Landlord', 'Owner', 'active'),
+        (${tenantPartyId}, 'P-EVIDENCE-TENANT', 'person', 'Tenant Occupant', 'Tenant', 'Occupant', 'active'),
+        (${outsiderPartyId}, 'P-EVIDENCE-OUTSIDER', 'person', 'Outsider', 'Outside', 'Person', 'active')
+    `;
+    await sql`
+      insert into public.unit_ownership_periods (id, unit_id, valid_from)
+      values ('a4100000-0000-4000-8000-000000000001', ${unit.id}, '2026-01-01')
+    `;
+    await sql`
+      insert into public.unit_ownership_shares (
+        ownership_period_id, party_id, share_basis_points
+      ) values (
+        'a4100000-0000-4000-8000-000000000001',
+        ${landlordPartyId},
+        10000
+      )
+    `;
+    await sql`
+      insert into public.tenancies (
+        id, code, unit_id, status, actual_start, version
+      ) values (
+        ${tenancyId}, 'TEN-EVIDENCE', ${unit.id}, 'active', '2026-09-01', 1
+      )
+    `;
+    await sql`
+      insert into public.tenancy_parties (
+        id, tenancy_id, party_id, role, is_primary
+      ) values (
+        'a5100000-0000-4000-8000-000000000001',
+        ${tenancyId}, ${tenantPartyId}, 'tenant', true
+      )
+    `;
+
     const inspection = await createInspectionCommand(
       {
         inspectionRepository,
@@ -1325,6 +1367,7 @@ describe('PostgreSQL infrastructure', () => {
         code: 'INS-EVIDENCE',
         inspectionType: 'move_in',
         unitId: unit.id,
+        tenancyId: asTenancyId(tenancyId),
         schemaVersionId: published.id,
         assignedToUserId:
           'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' as import('@portfolio/domain').UserId,
@@ -1459,6 +1502,8 @@ describe('PostgreSQL infrastructure', () => {
         inspectionRepository,
         documentRepository,
         partyRepository,
+        ownershipRepository,
+        tenancyRepository,
         idGenerator: ids,
         clock: { now: () => '2026-09-21T08:25:00.000Z' },
       },
@@ -1466,11 +1511,53 @@ describe('PostgreSQL infrastructure', () => {
       inspection.id,
       {
         signerRole: 'landlord',
+        signerPartyId: landlordPartyId,
         signerName: 'Landlord Representative',
         signatureDocumentVersionId: 'a3000000-0000-4000-8000-000000000002',
       },
     );
     expect(landlord1.invalidatedAt).toBeNull();
+
+    await expect(
+      addInspectionSignatureCommand(
+        {
+          inspectionRepository,
+          documentRepository,
+          partyRepository,
+          ownershipRepository,
+          tenancyRepository,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-21T08:25:30.000Z' },
+        },
+        actor,
+        inspection.id,
+        {
+          signerRole: 'tenant',
+          signerPartyId: outsiderPartyId,
+          signerName: 'Outsider',
+          signatureDocumentVersionId: 'a3000000-0000-4000-8000-000000000004',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'INSPECTION_SIGNATURE_TENANT_PARTY_MISMATCH',
+    });
+
+    await expect(
+      sql`
+        insert into public.inspection_signatures (
+          id, inspection_id, signer_role, signer_party_id, signer_name,
+          signature_document_version_id, signed_by_user_id, signed_at
+        ) values (
+          'a6100000-0000-4000-8000-000000000001',
+          ${inspection.id}, 'tenant', ${outsiderPartyId}, 'Outsider',
+          'a3000000-0000-4000-8000-000000000004',
+          ${actor.userId}, '2026-09-21T08:26:00.000Z'
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_signature_tenant_party_mismatch',
+    });
 
     await expect(
       finalizeInspectionCommand(
@@ -1540,6 +1627,8 @@ describe('PostgreSQL infrastructure', () => {
         inspectionRepository,
         documentRepository,
         partyRepository,
+        ownershipRepository,
+        tenancyRepository,
         idGenerator: ids,
         clock: { now: () => '2026-09-21T08:45:00.000Z' },
       },
@@ -1547,6 +1636,7 @@ describe('PostgreSQL infrastructure', () => {
       inspection.id,
       {
         signerRole: 'landlord',
+        signerPartyId: landlordPartyId,
         signerName: 'Landlord Representative',
         signatureDocumentVersionId: 'a3000000-0000-4000-8000-000000000003',
       },
@@ -1556,6 +1646,8 @@ describe('PostgreSQL infrastructure', () => {
         inspectionRepository,
         documentRepository,
         partyRepository,
+        ownershipRepository,
+        tenancyRepository,
         idGenerator: ids,
         clock: { now: () => '2026-09-21T08:46:00.000Z' },
       },
@@ -1563,6 +1655,7 @@ describe('PostgreSQL infrastructure', () => {
       inspection.id,
       {
         signerRole: 'tenant',
+        signerPartyId: tenantPartyId,
         signerName: 'Tenant',
         signatureDocumentVersionId: 'a3000000-0000-4000-8000-000000000004',
       },

@@ -123,6 +123,7 @@ export function createPortfolioHttpHandler(
               inspectionRepository: deps.inspectionRepository,
               documentRepository: deps.documentRepository,
               partyRepository: deps.partyRepository,
+              ownershipRepository: deps.ownershipRepository,
               portfolioRepository: deps.portfolioRepository,
               tenancyRepository: deps.tenancyRepository,
               staffDirectoryRepository: deps.staffDirectoryRepository,

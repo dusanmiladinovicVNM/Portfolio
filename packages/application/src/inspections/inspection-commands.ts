@@ -1,5 +1,6 @@
 import {
   DomainError,
+  asDateOnly,
   asDocumentVersionId,
   asInspectionEvidenceId,
   asInspectionFinalSnapshotId,
@@ -58,6 +59,7 @@ import type { IdGenerator } from '../shared/id-generator.js';
 import type { PortfolioRepository } from '../portfolio/portfolio-repository.js';
 import type { DocumentRepository } from '../documents/document-repository.js';
 import type { PartyRepository } from '../parties/party-repository.js';
+import type { OwnershipRepository } from '../ownership/ownership-repository.js';
 import type { TenancyRepository } from '../tenancy/tenancy-repository.js';
 import type {
   InspectionRepository,
@@ -588,6 +590,8 @@ export async function addInspectionSignatureCommand(
   > & {
     readonly documentRepository: DocumentRepository;
     readonly partyRepository: PartyRepository;
+    readonly ownershipRepository: OwnershipRepository;
+    readonly tenancyRepository: TenancyRepository;
   },
   actor: Actor,
   inspectionId: InspectionId,
@@ -613,11 +617,74 @@ export async function addInspectionSignatureCommand(
     );
   }
 
+  const partyRequired =
+    input.signerRole === 'landlord' || input.signerRole === 'tenant';
+  if (
+    partyRequired &&
+    (input.signerPartyId === undefined || input.signerPartyId === null)
+  ) {
+    throw new DomainError(
+      'INSPECTION_SIGNATURE_PARTY_REQUIRED',
+      `${input.signerRole} signature must reference the Party who actually holds that role.`,
+    );
+  }
+
   let signerPartyId = null;
   if (input.signerPartyId !== undefined && input.signerPartyId !== null) {
     signerPartyId = asPartyId(input.signerPartyId);
     if (!(await deps.partyRepository.getById(signerPartyId))) {
       throw new DomainError('PARTY_NOT_FOUND', 'Signer Party not found.');
+    }
+  }
+
+  if (input.signerRole === 'tenant') {
+    if (inspection.tenancyId === null || signerPartyId === null) {
+      throw new DomainError(
+        'INSPECTION_SIGNATURE_TENANCY_REQUIRED',
+        'Tenant signature requires an inspection linked to a tenancy and a signer Party.',
+      );
+    }
+    const tenancy = await deps.tenancyRepository.getById(inspection.tenancyId);
+    if (!tenancy) {
+      throw new DomainError('TENANCY_NOT_FOUND', 'Inspection tenancy not found.');
+    }
+    const isTenant = tenancy.parties.some(
+      (party) =>
+        party.partyId === signerPartyId &&
+        (party.role === 'tenant' || party.role === 'co_tenant'),
+    );
+    if (!isTenant) {
+      throw new DomainError(
+        'INSPECTION_SIGNATURE_TENANT_PARTY_MISMATCH',
+        'Tenant signature Party must be a tenant or co-tenant of the inspection tenancy.',
+      );
+    }
+  }
+
+  if (input.signerRole === 'landlord') {
+    if (signerPartyId === null || inspection.lockedAt === null) {
+      throw new DomainError(
+        'INSPECTION_SIGNATURE_LANDLORD_PARTY_MISMATCH',
+        'Landlord signature requires an owner Party and a locked inspection.',
+      );
+    }
+    const lockedDate = asDateOnly(
+      new Date(inspection.lockedAt).toISOString().slice(0, 10),
+    );
+    const ownershipPeriods = await deps.ownershipRepository.listByUnit(
+      inspection.unitId,
+    );
+    const isOwnerAtLock = ownershipPeriods.some(
+      (period) =>
+        period.validFrom <= lockedDate &&
+        (period.validTo === null || period.validTo >= lockedDate) &&
+        period.owners.some((owner) => owner.partyId === signerPartyId),
+    );
+    if (!isOwnerAtLock) {
+      throw new DomainError(
+        'INSPECTION_SIGNATURE_LANDLORD_PARTY_MISMATCH',
+        'Landlord signature Party must own the inspected unit on the inspection lock date.',
+      );
     }
   }
 

@@ -16,17 +16,11 @@ alter table public.inspection_schema_versions
     and public.text_array_is_unique(required_signature_roles)
   );
 
--- Preserve the legacy handover business expectation for already-published
--- handover schemas while allowing all future schemas to state policy explicitly.
-update public.inspection_schema_versions
-set required_signature_roles =
-  case
-    when inspection_type in ('move_in', 'move_out', 'key_handover')
-      then array['landlord','tenant']::text[]
-    else array['landlord']::text[]
-  end
-where status in ('published', 'retired')
-  and cardinality(required_signature_roles) = 0;
+-- Rows that predate signature policy keep the historically accurate empty
+-- policy supplied by the ADD COLUMN default. Future rows must state the policy
+-- explicitly, including an explicit empty array when no signatures are required.
+alter table public.inspection_schema_versions
+  alter column required_signature_roles drop default;
 
 create table public.inspection_evidence (
   id uuid primary key,
@@ -277,11 +271,24 @@ language plpgsql
 as $inspection_signature_guard$
 declare
   inspection_status text;
+  inspection_tenancy_id uuid;
+  inspection_unit_id uuid;
+  inspection_locked_date date;
   version_status text;
 begin
   if tg_op = 'INSERT' then
-    select status into inspection_status
-    from public.inspections where id = new.inspection_id;
+    select
+      status,
+      tenancy_id,
+      unit_id,
+      (locked_at at time zone 'UTC')::date
+    into
+      inspection_status,
+      inspection_tenancy_id,
+      inspection_unit_id,
+      inspection_locked_date
+    from public.inspections
+    where id = new.inspection_id;
 
     if inspection_status <> 'locked' then
       raise exception 'Inspection signatures require a locked inspection.'
@@ -297,6 +304,41 @@ begin
       raise exception 'Inspection signature requires a final document version.'
         using errcode = '23514',
               constraint = 'inspection_signature_document_not_final';
+    end if;
+
+    if new.signer_role in ('landlord', 'tenant')
+       and new.signer_party_id is null
+    then
+      raise exception 'Landlord/tenant signatures require a signer Party.'
+        using errcode = '23514',
+              constraint = 'inspection_signature_party_required';
+    end if;
+
+    if new.signer_role = 'tenant' and not exists (
+      select 1
+      from public.tenancy_parties tp
+      where tp.tenancy_id = inspection_tenancy_id
+        and tp.party_id = new.signer_party_id
+        and tp.role in ('tenant', 'co_tenant')
+    ) then
+      raise exception 'Tenant signature Party must belong to the inspection tenancy.'
+        using errcode = '23514',
+              constraint = 'inspection_signature_tenant_party_mismatch';
+    end if;
+
+    if new.signer_role = 'landlord' and not exists (
+      select 1
+      from public.unit_ownership_periods op
+      join public.unit_ownership_shares os
+        on os.ownership_period_id = op.id
+      where op.unit_id = inspection_unit_id
+        and op.valid_from <= inspection_locked_date
+        and (op.valid_to is null or op.valid_to >= inspection_locked_date)
+        and os.party_id = new.signer_party_id
+    ) then
+      raise exception 'Landlord signature Party must own the unit on the inspection lock date.'
+        using errcode = '23514',
+              constraint = 'inspection_signature_landlord_party_mismatch';
     end if;
 
     return new;

@@ -20,6 +20,7 @@ import {
   type IdGenerator,
   type DocumentRepository,
   type InspectionRepository,
+  type OwnershipRepository,
   type PartyRepository,
   type PortfolioRepository,
   type StaffDirectoryRepository,
@@ -60,6 +61,7 @@ export interface InspectionHttpDependencies {
   readonly inspectionRepository: InspectionRepository;
   readonly documentRepository: DocumentRepository;
   readonly partyRepository: PartyRepository;
+  readonly ownershipRepository: OwnershipRepository;
   readonly portfolioRepository: PortfolioRepository;
   readonly tenancyRepository: TenancyRepository;
   readonly staffDirectoryRepository: StaffDirectoryRepository;
@@ -407,6 +409,8 @@ export async function handleInspectionHttp(
         inspectionRepository: deps.inspectionRepository,
         documentRepository: deps.documentRepository,
         partyRepository: deps.partyRepository,
+        ownershipRepository: deps.ownershipRepository,
+        tenancyRepository: deps.tenancyRepository,
         idGenerator: deps.idGenerator,
         clock: deps.clock,
       },

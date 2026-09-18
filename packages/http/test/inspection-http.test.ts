@@ -688,7 +688,7 @@ describe('Inspection HTTP backbone', () => {
           schemaCode: 'MOVE-IN-SIGNED',
           inspectionType: 'move_in',
           title: 'Signed move-in',
-          requiredSignatureRoles: ['landlord', 'tenant'],
+          requiredSignatureRoles: ['witness', 'agent'],
           sections: [{
             key: 'general',
             title: 'General',
@@ -827,8 +827,8 @@ describe('Inspection HTTP backbone', () => {
         {
           method: 'POST',
           body: JSON.stringify({
-            signerRole: 'landlord',
-            signerName: 'Landlord',
+            signerRole: 'witness',
+            signerName: 'Witness',
             signatureDocumentVersionId:
               '83000000-0000-4000-8000-000000000002',
           }),
@@ -884,7 +884,7 @@ describe('Inspection HTTP backbone', () => {
     expect(await afterUnlock.json()).toMatchObject({
       data: {
         signatures: [{
-          signerRole: 'landlord',
+          signerRole: 'witness',
           invalidationReason: 'Correction',
         }],
       },
@@ -900,13 +900,13 @@ describe('Inspection HTTP backbone', () => {
 
     for (const [signerRole, signerName, signatureDocumentVersionId] of [
       [
-        'landlord',
-        'Landlord',
+        'witness',
+        'Witness',
         '83000000-0000-4000-8000-000000000002',
       ],
       [
-        'tenant',
-        'Tenant',
+        'agent',
+        'Agent',
         '83000000-0000-4000-8000-000000000003',
       ],
     ] as const) {
@@ -955,9 +955,9 @@ describe('Inspection HTTP backbone', () => {
         finalSnapshot: { snapshotVersion: 1 },
         evidence: [{ kind: 'photo' }],
         signatures: [
-          { signerRole: 'landlord', invalidationReason: 'Correction' },
-          { signerRole: 'landlord', invalidatedAt: null },
-          { signerRole: 'tenant', invalidatedAt: null },
+          { signerRole: 'witness', invalidationReason: 'Correction' },
+          { signerRole: 'witness', invalidatedAt: null },
+          { signerRole: 'agent', invalidatedAt: null },
         ],
       },
     });
