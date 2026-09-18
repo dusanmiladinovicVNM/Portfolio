@@ -15,3 +15,6 @@ export * from './ownership/ownership-queries.js';
 export * from './tenancy/tenancy-repository.js';
 export * from './tenancy/tenancy-commands.js';
 export * from './tenancy/tenancy-queries.js';
+export * from './contracts/lease-repository.js';
+export * from './contracts/lease-commands.js';
+export * from './contracts/lease-queries.js';
