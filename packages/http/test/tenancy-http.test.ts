@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   type Actor,
   type IdGenerator,
+  type LeaseRepository,
   type OwnershipRepository,
   type PartyRepository,
   type PortfolioRepository,
@@ -13,6 +14,10 @@ import {
   asDateOnly,
   asUserId,
   type DateOnly,
+  type LeaseAgreement,
+  type LeaseAgreementId,
+  type LeaseAmendment,
+  type LeaseAmendmentId,
   type OwnershipPeriod,
   type Party,
   type PartyId,
@@ -23,6 +28,7 @@ import {
   type Tenancy,
   type TenancyId,
   type TenancyParty,
+  type TenancyTermVersion,
   type Unit,
   type UnitId,
 } from '@portfolio/domain';
@@ -208,6 +214,38 @@ class InMemoryTenancyRepository implements TenancyRepository {
   }
 }
 
+class EmptyLeaseRepository implements LeaseRepository {
+  async getAgreementById(_id: LeaseAgreementId): Promise<LeaseAgreement | null> { return null; }
+  async listAgreementsByTenancy(_tenancyId: TenancyId): Promise<readonly LeaseAgreement[]> { return []; }
+  async agreementCodeExists(_code: string): Promise<boolean> { return false; }
+  async insertAgreement(_agreement: LeaseAgreement): Promise<void> {}
+  async signAgreement(
+    _agreement: LeaseAgreement,
+    _expectedVersion: number,
+    _terms: TenancyTermVersion,
+  ): Promise<void> {}
+  async cancelAgreement(
+    _agreement: LeaseAgreement,
+    _expectedVersion: number,
+  ): Promise<void> {}
+  async getAmendmentById(_id: LeaseAmendmentId): Promise<LeaseAmendment | null> { return null; }
+  async listAmendmentsByAgreement(
+    _agreementId: LeaseAgreementId,
+  ): Promise<readonly LeaseAmendment[]> { return []; }
+  async amendmentCodeExists(_code: string): Promise<boolean> { return false; }
+  async insertAmendment(_amendment: LeaseAmendment): Promise<void> {}
+  async signAmendment(
+    _amendment: LeaseAmendment,
+    _expectedVersion: number,
+    _terms: TenancyTermVersion,
+  ): Promise<void> {}
+  async cancelAmendment(
+    _amendment: LeaseAmendment,
+    _expectedVersion: number,
+  ): Promise<void> {}
+  async getEffectiveTermsAt(): Promise<TenancyTermVersion | null> { return null; }
+}
+
 function buildHandler() {
   const portfolioRepository = new InMemoryPortfolioRepository();
   const partyRepository = new InMemoryPartyRepository();
@@ -218,6 +256,7 @@ function buildHandler() {
     partyRepository,
     ownershipRepository: new InMemoryOwnershipRepository(),
     tenancyRepository,
+    leaseRepository: new EmptyLeaseRepository(),
     userAccessRepository: new InMemoryAccessRepository(),
     idGenerator: new FixedIds([
       '10000000-0000-4000-8000-000000000001',

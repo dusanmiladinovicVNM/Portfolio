@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   type Actor,
   type IdGenerator,
+  type LeaseRepository,
   type OwnershipRepository,
   type PartyRepository,
   type PortfolioRepository,
@@ -12,6 +13,10 @@ import {
 import {
   asUserId,
   type DateOnly,
+  type LeaseAgreement,
+  type LeaseAgreementId,
+  type LeaseAmendment,
+  type LeaseAmendmentId,
   type OwnershipPeriod,
   type Party,
   type PartyId,
@@ -22,6 +27,7 @@ import {
   type Tenancy,
   type TenancyId,
   type TenancyParty,
+  type TenancyTermVersion,
   type Unit,
   type UnitId,
 } from '@portfolio/domain';
@@ -195,6 +201,38 @@ class EmptyTenancyRepository implements TenancyRepository {
   ): Promise<void> {}
 }
 
+class EmptyLeaseRepository implements LeaseRepository {
+  async getAgreementById(_id: LeaseAgreementId): Promise<LeaseAgreement | null> { return null; }
+  async listAgreementsByTenancy(_tenancyId: TenancyId): Promise<readonly LeaseAgreement[]> { return []; }
+  async agreementCodeExists(_code: string): Promise<boolean> { return false; }
+  async insertAgreement(_agreement: LeaseAgreement): Promise<void> {}
+  async signAgreement(
+    _agreement: LeaseAgreement,
+    _expectedVersion: number,
+    _terms: TenancyTermVersion,
+  ): Promise<void> {}
+  async cancelAgreement(
+    _agreement: LeaseAgreement,
+    _expectedVersion: number,
+  ): Promise<void> {}
+  async getAmendmentById(_id: LeaseAmendmentId): Promise<LeaseAmendment | null> { return null; }
+  async listAmendmentsByAgreement(
+    _agreementId: LeaseAgreementId,
+  ): Promise<readonly LeaseAmendment[]> { return []; }
+  async amendmentCodeExists(_code: string): Promise<boolean> { return false; }
+  async insertAmendment(_amendment: LeaseAmendment): Promise<void> {}
+  async signAmendment(
+    _amendment: LeaseAmendment,
+    _expectedVersion: number,
+    _terms: TenancyTermVersion,
+  ): Promise<void> {}
+  async cancelAmendment(
+    _amendment: LeaseAmendment,
+    _expectedVersion: number,
+  ): Promise<void> {}
+  async getEffectiveTermsAt(): Promise<TenancyTermVersion | null> { return null; }
+}
+
 function buildHandler(
   ids: readonly string[] = [
     '6a644eaa-dae0-4c4a-9ae4-6e5a93ceef3f',
@@ -210,6 +248,7 @@ function buildHandler(
     partyRepository: new InMemoryPartyRepository(),
     ownershipRepository: new InMemoryOwnershipRepository(),
     tenancyRepository: new EmptyTenancyRepository(),
+    leaseRepository: new EmptyLeaseRepository(),
     userAccessRepository: new InMemoryAccessRepository(),
     idGenerator: new FixedIds(ids),
   });
