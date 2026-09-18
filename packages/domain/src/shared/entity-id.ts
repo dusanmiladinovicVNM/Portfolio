@@ -27,6 +27,10 @@ export type InspectionSchemaSectionId = EntityId<'InspectionSchemaSection'>;
 export type InspectionSchemaItemId = EntityId<'InspectionSchemaItem'>;
 export type InspectionResponseId = EntityId<'InspectionResponse'>;
 export type InspectionFindingId = EntityId<'InspectionFinding'>;
+export type InspectionEvidenceId = EntityId<'InspectionEvidence'>;
+export type InspectionSignatureId = EntityId<'InspectionSignature'>;
+export type InspectionUnlockEventId = EntityId<'InspectionUnlockEvent'>;
+export type InspectionFinalizationId = EntityId<'InspectionFinalization'>;
 
 export const asUserId = (value: string): UserId => value as UserId;
 export const asPropertyId = (value: string): PropertyId => value as PropertyId;
@@ -51,3 +55,7 @@ export const asInspectionSchemaSectionId = (value: string): InspectionSchemaSect
 export const asInspectionSchemaItemId = (value: string): InspectionSchemaItemId => value as InspectionSchemaItemId;
 export const asInspectionResponseId = (value: string): InspectionResponseId => value as InspectionResponseId;
 export const asInspectionFindingId = (value: string): InspectionFindingId => value as InspectionFindingId;
+export const asInspectionEvidenceId = (value: string): InspectionEvidenceId => value as InspectionEvidenceId;
+export const asInspectionSignatureId = (value: string): InspectionSignatureId => value as InspectionSignatureId;
+export const asInspectionUnlockEventId = (value: string): InspectionUnlockEventId => value as InspectionUnlockEventId;
+export const asInspectionFinalizationId = (value: string): InspectionFinalizationId => value as InspectionFinalizationId;

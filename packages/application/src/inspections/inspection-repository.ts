@@ -1,9 +1,13 @@
 import type {
   Inspection,
+  InspectionEvidence,
+  InspectionFinalization,
   InspectionFinding,
   InspectionId,
   InspectionResponse,
   InspectionSectionState,
+  InspectionSignature,
+  InspectionUnlockEvent,
   InspectionSchemaSectionId,
   InspectionSchemaVersion,
   InspectionSchemaVersionId,
@@ -61,6 +65,34 @@ export interface InspectionRepository {
   latestSchemaVersionNumber(schemaCode: string): Promise<number>;
   insertSchemaVersion(schema: InspectionSchemaVersion): Promise<void>;
   updateSchemaVersionStatus(schema: InspectionSchemaVersion): Promise<void>;
+
+  insertEvidence(evidence: InspectionEvidence): Promise<number>;
+  listEvidence(inspectionId: InspectionId): Promise<readonly InspectionEvidence[]>;
+
+  insertSignature(signature: InspectionSignature): Promise<number>;
+  listSignatures(
+    inspectionId: InspectionId,
+  ): Promise<readonly InspectionSignature[]>;
+
+  unlock(
+    inspection: Inspection,
+    expectedVersion: number,
+    expectedContentRevision: number,
+    event: InspectionUnlockEvent,
+  ): Promise<void>;
+  listUnlockEvents(
+    inspectionId: InspectionId,
+  ): Promise<readonly InspectionUnlockEvent[]>;
+
+  finalize(
+    inspection: Inspection,
+    expectedVersion: number,
+    expectedContentRevision: number,
+    finalization: InspectionFinalization,
+  ): Promise<void>;
+  getFinalization(
+    inspectionId: InspectionId,
+  ): Promise<InspectionFinalization | null>;
 }
 
 export interface StaffDirectoryEntry {

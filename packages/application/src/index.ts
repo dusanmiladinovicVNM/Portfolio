@@ -26,3 +26,4 @@ export * from './documents/document-queries.js';
 export * from './inspections/inspection-repository.js';
 export * from './inspections/inspection-commands.js';
 export * from './inspections/inspection-queries.js';
+export * from './inspections/pdf-port.js';
