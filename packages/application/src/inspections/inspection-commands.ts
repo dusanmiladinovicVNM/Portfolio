@@ -1,26 +1,43 @@
 import {
   DomainError,
+  asDateOnly,
+  asDocumentVersionId,
+  asInspectionEvidenceId,
+  asInspectionFinalSnapshotId,
   asInspectionFindingId,
   asInspectionId,
   asInspectionResponseId,
   asInspectionSchemaItemId,
   asInspectionSchemaSectionId,
   asInspectionSchemaVersionId,
+  asInspectionSignatureId,
+  asInspectionUnlockId,
+  asPartyId,
   assertInspectionContentEditable,
+  createInspectionEvidence,
+  createInspectionFinalSnapshot,
+  createInspectionSignature,
+  createInspectionUnlockRecord,
   cancelInspection,
   createInspection,
   createInspectionFinding,
   createInspectionResponse,
   createInspectionSchemaVersion,
+  finalizeInspection,
+  findInspectionSchemaItem,
   findInspectionSchemaSection,
   findMissingRequiredInspectionItems,
   lockInspection,
   publishInspectionSchemaVersion,
   startInspection,
+  unlockInspection,
   type Inspection,
   type InspectionAnswerValue,
+  type InspectionEvidence,
+  type InspectionEvidenceKind,
   type InspectionFinding,
   type InspectionFindingSeverity,
+  type InspectionFinalSnapshot,
   type InspectionId,
   type InspectionItemType,
   type InspectionOption,
@@ -29,6 +46,8 @@ import {
   type InspectionSchemaSectionId,
   type InspectionSchemaVersion,
   type InspectionSchemaVersionId,
+  type InspectionSignature,
+  type InspectionSignatureRole,
   type InspectionType,
   type TenancyId,
   type UnitId,
@@ -38,6 +57,11 @@ import { requireCapability, type Actor } from '../security/access.js';
 import type { ClockPort } from '../shared/clock.js';
 import type { IdGenerator } from '../shared/id-generator.js';
 import type { PortfolioRepository } from '../portfolio/portfolio-repository.js';
+import { assertDocumentVersionStorageIntegrity } from '../documents/document-commands.js';
+import type { DocumentRepository } from '../documents/document-repository.js';
+import type { FileStoragePort } from '../documents/file-storage-port.js';
+import type { PartyRepository } from '../parties/party-repository.js';
+import type { OwnershipRepository } from '../ownership/ownership-repository.js';
 import type { TenancyRepository } from '../tenancy/tenancy-repository.js';
 import type {
   InspectionRepository,
@@ -82,10 +106,26 @@ export interface CreateInspectionFindingCommandInput {
   readonly description?: string | null;
 }
 
+export interface AttachInspectionEvidenceCommandInput {
+  readonly documentVersionId: string;
+  readonly kind: Exclude<InspectionEvidenceKind, 'final_report'>;
+  readonly sectionId?: string | null;
+  readonly itemId?: string | null;
+  readonly caption?: string | null;
+}
+
+export interface AddInspectionSignatureCommandInput {
+  readonly signerRole: InspectionSignatureRole;
+  readonly signerPartyId?: string | null;
+  readonly signerName: string;
+  readonly signatureDocumentVersionId: string;
+}
+
 export interface CreateInspectionSchemaVersionCommandInput {
   readonly schemaCode: string;
   readonly inspectionType: InspectionType;
   readonly title: string;
+  readonly requiredSignatureRoles: readonly InspectionSignatureRole[];
   readonly sections: readonly {
     readonly key: string;
     readonly title: string;
@@ -479,6 +519,353 @@ export async function createInspectionFindingCommand(
   return finding;
 }
 
+export async function attachInspectionEvidenceCommand(
+  deps: Pick<
+    InspectionDependencies,
+    'inspectionRepository' | 'idGenerator' | 'clock'
+  > & {
+    readonly documentRepository: DocumentRepository;
+    readonly fileStorage: FileStoragePort;
+  },
+  actor: Actor,
+  inspectionId: InspectionId,
+  input: AttachInspectionEvidenceCommandInput,
+): Promise<InspectionEvidence> {
+  requireCapability(actor, 'inspections:write');
+  const inspection = await requireInspection(deps.inspectionRepository, inspectionId);
+  assertInspectionAccess(actor, inspection);
+  assertInspectionContentEditable(inspection);
+
+  const versionId = asDocumentVersionId(input.documentVersionId);
+  const version = await deps.documentRepository.getVersionById(versionId);
+  if (!version) {
+    throw new DomainError(
+      'DOCUMENT_VERSION_NOT_FOUND',
+      'Evidence document version not found.',
+    );
+  }
+  await assertDocumentVersionStorageIntegrity(deps, version);
+
+  const schema = await requireSchema(
+    deps.inspectionRepository,
+    inspection.schemaVersionId,
+  );
+
+  let sectionId: InspectionSchemaSectionId | null = null;
+  let itemId: import('@portfolio/domain').InspectionSchemaItemId | null = null;
+  if (input.sectionId !== undefined && input.sectionId !== null) {
+    sectionId = asInspectionSchemaSectionId(input.sectionId);
+    const section = findInspectionSchemaSection(schema, sectionId);
+
+    if (input.itemId !== undefined && input.itemId !== null) {
+      itemId = asInspectionSchemaItemId(input.itemId);
+      if (!section.items.some((item) => item.id === itemId)) {
+        throw new DomainError(
+          'INSPECTION_EVIDENCE_ITEM_NOT_IN_SECTION',
+          'Evidence item does not belong to the selected section.',
+        );
+      }
+    }
+  } else if (input.itemId !== undefined && input.itemId !== null) {
+    throw new DomainError(
+      'INSPECTION_EVIDENCE_SECTION_REQUIRED',
+      'Item-level evidence requires a section.',
+    );
+  }
+
+  const evidence = createInspectionEvidence(inspection, {
+    id: asInspectionEvidenceId(deps.idGenerator.next()),
+    inspectionId: inspection.id,
+    sectionId,
+    itemId,
+    documentVersionId: version.id,
+    kind: input.kind,
+    ...(input.caption !== undefined ? { caption: input.caption } : {}),
+    createdByUserId: actor.userId,
+    createdAt: deps.clock.now(),
+  });
+
+  await deps.inspectionRepository.insertEvidence(evidence);
+  return evidence;
+}
+
+export async function addInspectionSignatureCommand(
+  deps: Pick<
+    InspectionDependencies,
+    'inspectionRepository' | 'idGenerator' | 'clock'
+  > & {
+    readonly documentRepository: DocumentRepository;
+    readonly fileStorage: FileStoragePort;
+    readonly partyRepository: PartyRepository;
+    readonly ownershipRepository: OwnershipRepository;
+    readonly tenancyRepository: TenancyRepository;
+  },
+  actor: Actor,
+  inspectionId: InspectionId,
+  input: AddInspectionSignatureCommandInput,
+): Promise<InspectionSignature> {
+  requireCapability(actor, 'inspections:write');
+  const inspection = await requireInspection(deps.inspectionRepository, inspectionId);
+  assertInspectionAccess(actor, inspection);
+
+  const version = await deps.documentRepository.getVersionById(
+    asDocumentVersionId(input.signatureDocumentVersionId),
+  );
+  if (!version) {
+    throw new DomainError(
+      'DOCUMENT_VERSION_NOT_FOUND',
+      'Signature document version not found.',
+    );
+  }
+  if (version.status !== 'final') {
+    throw new DomainError(
+      'INSPECTION_SIGNATURE_DOCUMENT_NOT_FINAL',
+      'Signature requires a final immutable document version.',
+    );
+  }
+
+  const signatureDocument = await deps.documentRepository.getDocumentById(
+    version.documentId,
+  );
+  if (!signatureDocument) {
+    throw new DomainError(
+      'DOCUMENT_NOT_FOUND',
+      'Signature parent document not found.',
+    );
+  }
+  if (signatureDocument.category !== 'signature') {
+    throw new DomainError(
+      'INSPECTION_SIGNATURE_DOCUMENT_CATEGORY_INVALID',
+      'Signature must reference a final DocumentVersion owned by a signature document.',
+    );
+  }
+  await assertDocumentVersionStorageIntegrity(deps, version);
+
+  const partyRequired =
+    input.signerRole === 'landlord' || input.signerRole === 'tenant';
+  if (
+    partyRequired &&
+    (input.signerPartyId === undefined || input.signerPartyId === null)
+  ) {
+    throw new DomainError(
+      'INSPECTION_SIGNATURE_PARTY_REQUIRED',
+      `${input.signerRole} signature must reference the Party who actually holds that role.`,
+    );
+  }
+
+  let signerPartyId = null;
+  if (input.signerPartyId !== undefined && input.signerPartyId !== null) {
+    signerPartyId = asPartyId(input.signerPartyId);
+    if (!(await deps.partyRepository.getById(signerPartyId))) {
+      throw new DomainError('PARTY_NOT_FOUND', 'Signer Party not found.');
+    }
+  }
+
+  if (input.signerRole === 'tenant') {
+    if (inspection.tenancyId === null || signerPartyId === null) {
+      throw new DomainError(
+        'INSPECTION_SIGNATURE_TENANCY_REQUIRED',
+        'Tenant signature requires an inspection linked to a tenancy and a signer Party.',
+      );
+    }
+    const tenancy = await deps.tenancyRepository.getById(inspection.tenancyId);
+    if (!tenancy) {
+      throw new DomainError('TENANCY_NOT_FOUND', 'Inspection tenancy not found.');
+    }
+    const isTenant = tenancy.parties.some(
+      (party) =>
+        party.partyId === signerPartyId &&
+        (party.role === 'tenant' || party.role === 'co_tenant'),
+    );
+    if (!isTenant) {
+      throw new DomainError(
+        'INSPECTION_SIGNATURE_TENANT_PARTY_MISMATCH',
+        'Tenant signature Party must be a tenant or co-tenant of the inspection tenancy.',
+      );
+    }
+  }
+
+  if (input.signerRole === 'landlord') {
+    if (signerPartyId === null || inspection.lockedAt === null) {
+      throw new DomainError(
+        'INSPECTION_SIGNATURE_LANDLORD_PARTY_MISMATCH',
+        'Landlord signature requires an owner Party and a locked inspection.',
+      );
+    }
+    const lockedDate = asDateOnly(
+      new Date(inspection.lockedAt).toISOString().slice(0, 10),
+    );
+    const ownershipPeriods = await deps.ownershipRepository.listByUnit(
+      inspection.unitId,
+    );
+    const isOwnerAtLock = ownershipPeriods.some(
+      (period) =>
+        period.validFrom <= lockedDate &&
+        (period.validTo === null || period.validTo >= lockedDate) &&
+        period.owners.some((owner) => owner.partyId === signerPartyId),
+    );
+    if (!isOwnerAtLock) {
+      throw new DomainError(
+        'INSPECTION_SIGNATURE_LANDLORD_PARTY_MISMATCH',
+        'Landlord signature Party must own the inspected unit on the inspection lock date.',
+      );
+    }
+  }
+
+  const signature = createInspectionSignature(inspection, {
+    id: asInspectionSignatureId(deps.idGenerator.next()),
+    inspectionId: inspection.id,
+    signerRole: input.signerRole,
+    signerPartyId,
+    signerName: input.signerName,
+    signatureDocumentVersionId: version.id,
+    signedByUserId: actor.userId,
+    signedAt: deps.clock.now(),
+  });
+
+  await deps.inspectionRepository.insertSignature(signature);
+  return signature;
+}
+
+export async function unlockInspectionCommand(
+  deps: Pick<
+    InspectionDependencies,
+    'inspectionRepository' | 'idGenerator' | 'clock'
+  >,
+  actor: Actor,
+  id: InspectionId,
+  expectedVersion: number,
+  reason: string,
+): Promise<Inspection> {
+  requireCapability(actor, 'inspections:write');
+  if (actor.role === 'inspector') {
+    throw new DomainError(
+      'INSPECTION_UNLOCK_FORBIDDEN',
+      'Only an admin or manager may unlock an inspection.',
+    );
+  }
+
+  const current = await requireInspection(deps.inspectionRepository, id);
+  assertExpectedVersion(current, expectedVersion);
+  const updated = unlockInspection(current);
+  const now = deps.clock.now();
+  const record = createInspectionUnlockRecord(current, updated, {
+    id: asInspectionUnlockId(deps.idGenerator.next()),
+    unlockedByUserId: actor.userId,
+    unlockedAt: now,
+    reason,
+  });
+
+  await deps.inspectionRepository.unlockInspection(current, updated, record);
+  return updated;
+}
+
+export async function finalizeInspectionCommand(
+  deps: Pick<
+    InspectionDependencies,
+    'inspectionRepository' | 'idGenerator' | 'clock'
+  > & {
+    readonly documentRepository: DocumentRepository;
+    readonly fileStorage: FileStoragePort;
+  },
+  actor: Actor,
+  id: InspectionId,
+  expectedVersion: number,
+): Promise<{
+  readonly inspection: Inspection;
+  readonly snapshot: InspectionFinalSnapshot;
+}> {
+  requireCapability(actor, 'inspections:write');
+  if (actor.role === 'inspector') {
+    throw new DomainError(
+      'INSPECTION_FINALIZE_FORBIDDEN',
+      'Only an admin or manager may finalize an inspection.',
+    );
+  }
+
+  const current = await requireInspection(deps.inspectionRepository, id);
+  assertExpectedVersion(current, expectedVersion);
+  const schema = await requireSchema(
+    deps.inspectionRepository,
+    current.schemaVersionId,
+  );
+
+  const [responses, findings, evidence, signatures, unlockHistory] =
+    await Promise.all([
+      deps.inspectionRepository.listResponses(id),
+      deps.inspectionRepository.listFindings(id),
+      deps.inspectionRepository.listEvidence(id),
+      deps.inspectionRepository.listSignatures(id),
+      deps.inspectionRepository.listUnlocks(id),
+    ]);
+
+  const canonicalEvidence = evidence.filter(
+    (item) => item.kind !== 'final_report',
+  );
+  const evidenceManifest = await Promise.all(
+    canonicalEvidence.map(async (item) => {
+      const version = await deps.documentRepository.getVersionById(
+        item.documentVersionId,
+      );
+      if (!version) {
+        throw new DomainError(
+          'DOCUMENT_VERSION_NOT_FOUND',
+          'Inspection evidence references a missing document version.',
+        );
+      }
+      await assertDocumentVersionStorageIntegrity(deps, version);
+      return { evidence: item, documentVersion: version };
+    }),
+  );
+  const signatureManifest = await Promise.all(
+    signatures.map(async (signature) => {
+      const version = await deps.documentRepository.getVersionById(
+        signature.signatureDocumentVersionId,
+      );
+      if (!version) {
+        throw new DomainError(
+          'DOCUMENT_VERSION_NOT_FOUND',
+          'Inspection signature references a missing document version.',
+        );
+      }
+      if (version.status !== 'final') {
+        throw new DomainError(
+          'INSPECTION_SIGNATURE_DOCUMENT_NOT_FINAL',
+          'Final snapshot requires final signature document versions.',
+        );
+      }
+      await assertDocumentVersionStorageIntegrity(deps, version);
+      return { signature, documentVersion: version };
+    }),
+  );
+
+  const now = deps.clock.now();
+  const updated = finalizeInspection(current, now);
+  const snapshot = createInspectionFinalSnapshot(
+    current,
+    updated,
+    schema,
+    responses,
+    findings,
+    evidenceManifest,
+    signatureManifest,
+    unlockHistory,
+    {
+      id: asInspectionFinalSnapshotId(deps.idGenerator.next()),
+      createdByUserId: actor.userId,
+      createdAt: now,
+    },
+  );
+
+  await deps.inspectionRepository.finalizeInspection(
+    current,
+    updated,
+    snapshot,
+  );
+
+  return { inspection: updated, snapshot };
+}
+
 export async function createInspectionSchemaVersionCommand(
   deps: Pick<InspectionDependencies, 'inspectionRepository' | 'idGenerator'>,
   actor: Actor,
@@ -495,6 +882,7 @@ export async function createInspectionSchemaVersionCommand(
     versionNumber,
     inspectionType: input.inspectionType,
     title: input.title,
+    requiredSignatureRoles: input.requiredSignatureRoles,
     sections: input.sections.map((section) => ({
       id: asInspectionSchemaSectionId(deps.idGenerator.next()),
       key: section.key,

@@ -125,6 +125,7 @@ export class GoogleDriveFileStorage implements FileStoragePort {
         objectKey,
         byteSize: Number(existing.size ?? input.content.byteLength),
         sha256,
+        disposition: 'reused',
       };
     }
 
@@ -181,6 +182,47 @@ export class GoogleDriveFileStorage implements FileStoragePort {
       objectId: created.id,
       objectKey,
       byteSize: Number(created.size ?? input.content.byteLength),
+      sha256,
+      disposition: 'created',
+    };
+  }
+
+  async stat(reference: StorageObjectReference) {
+    if (reference.provider !== PROVIDER) {
+      throw new Error(
+        `GoogleDriveFileStorage cannot inspect provider '${reference.provider}'.`,
+      );
+    }
+
+    const token = await this.accessTokenProvider.getAccessToken();
+    const url = new URL(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(reference.objectId)}`,
+    );
+    url.searchParams.set('supportsAllDrives', 'true');
+    url.searchParams.set('fields', 'id,size,sha256Checksum,appProperties');
+
+    const response = await this.fetchImpl(url, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (response.status === 404) return null;
+
+    const file = await readJson<DriveFile>(response);
+    if (file.appProperties?.portfolioObjectKey !== reference.objectKey) {
+      throw new Error(
+        'Google Drive object metadata does not match the Portfolio object key.',
+      );
+    }
+
+    const sha256 = file.sha256Checksum?.toLowerCase();
+    if (!sha256 || !/^[0-9a-f]{64}$/.test(sha256)) {
+      throw new Error(
+        'Google Drive object does not expose a valid SHA-256 checksum.',
+      );
+    }
+
+    return {
+      ...reference,
+      byteSize: Number(file.size ?? 0),
       sha256,
     };
   }

@@ -160,6 +160,7 @@ export async function handleDocumentHttp(
     const version = await finalizeDocumentVersionCommand(
       {
         documentRepository: deps.documentRepository,
+        fileStorage: deps.fileStorage,
         clock: deps.clock,
       },
       actor,

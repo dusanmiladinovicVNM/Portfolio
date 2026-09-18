@@ -2,10 +2,13 @@ import type {
   DocumentLinkResponse,
   DocumentResponse,
   DocumentVersionResponse,
+  InspectionEvidenceResponse,
   InspectionFindingResponse,
+  InspectionFinalSnapshotResponse,
   InspectionItemResponse,
   InspectionResponseDto,
   InspectionSchemaVersionResponse,
+  InspectionSignatureResponse,
   LeaseAgreementResponse,
   LeaseAmendmentResponse,
   OwnershipPeriodResponse,
@@ -21,9 +24,12 @@ import type {
   DocumentLink,
   DocumentVersion,
   Inspection,
+  InspectionEvidence,
   InspectionFinding,
+  InspectionFinalSnapshot,
   InspectionResponse,
   InspectionSchemaVersion,
+  InspectionSignature,
   LeaseAgreement,
   LeaseAmendment,
   OwnershipPeriod,
@@ -294,6 +300,7 @@ export function toInspectionSchemaVersionResponse(
     inspectionType: schema.inspectionType,
     title: schema.title,
     status: schema.status,
+    requiredSignatureRoles: [...schema.requiredSignatureRoles],
     sections: schema.sections.map((section) => ({
       id: section.id,
       key: section.key,
@@ -348,5 +355,31 @@ export function toInspectionFindingResponse(
     description: finding.description,
     createdByUserId: finding.createdByUserId,
     createdAt: finding.createdAt,
+  };
+}
+
+export function toInspectionEvidenceResponse(
+  evidence: InspectionEvidence,
+): InspectionEvidenceResponse {
+  return { ...evidence };
+}
+
+export function toInspectionSignatureResponse(
+  signature: InspectionSignature,
+): InspectionSignatureResponse {
+  return { ...signature };
+}
+
+export function toInspectionFinalSnapshotResponse(
+  snapshot: InspectionFinalSnapshot,
+): InspectionFinalSnapshotResponse {
+  return {
+    id: snapshot.id,
+    inspectionId: snapshot.inspectionId,
+    snapshotVersion: snapshot.snapshotVersion,
+    inspectionVersion: snapshot.inspectionVersion,
+    contentRevision: snapshot.contentRevision,
+    createdByUserId: snapshot.createdByUserId,
+    createdAt: snapshot.createdAt,
   };
 }

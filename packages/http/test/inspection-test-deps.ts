@@ -8,12 +8,16 @@ import {
   DomainError,
   asUserId,
   type Inspection,
+  type InspectionEvidence,
+  type InspectionFinalSnapshot,
   type InspectionFinding,
   type InspectionId,
   type InspectionResponse,
   type InspectionSchemaSectionId,
   type InspectionSchemaVersion,
   type InspectionSchemaVersionId,
+  type InspectionSignature,
+  type InspectionUnlockRecord,
   type InspectionSectionState,
   type UnitId,
   type UserId,
@@ -25,6 +29,10 @@ export class InMemoryInspectionRepository implements InspectionRepository {
   readonly states = new Map<string, InspectionSectionState>();
   readonly responses = new Map<string, InspectionResponse>();
   readonly findings: InspectionFinding[] = [];
+  readonly evidence: InspectionEvidence[] = [];
+  readonly signatures: InspectionSignature[] = [];
+  readonly snapshots = new Map<InspectionId, InspectionFinalSnapshot>();
+  readonly unlocks: InspectionUnlockRecord[] = [];
 
   async getById(id: InspectionId) {
     return this.inspections.get(id) ?? null;
@@ -160,6 +168,156 @@ export class InMemoryInspectionRepository implements InspectionRepository {
     return this.findings.filter(
       (finding) => finding.inspectionId === inspectionId,
     );
+  }
+
+  async insertEvidence(evidence: InspectionEvidence) {
+    const inspection = this.inspections.get(evidence.inspectionId);
+    if (!inspection || !['draft', 'in_progress'].includes(inspection.status)) {
+      throw new DomainError(
+        'INSPECTION_EVIDENCE_LOCKED',
+        'Inspection evidence can only be attached before lock.',
+      );
+    }
+    const contentRevision = inspection.contentRevision + 1;
+    this.inspections.set(evidence.inspectionId, {
+      ...inspection,
+      contentRevision,
+    });
+    this.evidence.push(evidence);
+    return contentRevision;
+  }
+
+  async insertFinalReportEvidence(evidence: InspectionEvidence) {
+    const inspection = this.inspections.get(evidence.inspectionId);
+    if (!inspection || inspection.status !== 'finalized') {
+      throw new DomainError(
+        'INSPECTION_FINAL_REPORT_STATE_INVALID',
+        'Final report evidence requires a finalized inspection.',
+      );
+    }
+    if (
+      this.evidence.some(
+        (item) =>
+          item.inspectionId === evidence.inspectionId &&
+          item.kind === 'final_report',
+      )
+    ) {
+      throw new DomainError(
+        'INSPECTION_FINAL_REPORT_ALREADY_EXISTS',
+        'Inspection already has a final report.',
+      );
+    }
+    this.evidence.push(evidence);
+  }
+
+  async listEvidence(inspectionId: InspectionId) {
+    return this.evidence.filter((item) => item.inspectionId === inspectionId);
+  }
+
+  async insertSignature(signature: InspectionSignature) {
+    const inspection = this.inspections.get(signature.inspectionId);
+    if (!inspection || inspection.status !== 'locked') {
+      throw new DomainError(
+        'INSPECTION_SIGNATURE_STATE_INVALID',
+        'Signatures may only be collected while the inspection is locked.',
+      );
+    }
+    if (
+      this.signatures.some(
+        (item) =>
+          item.inspectionId === signature.inspectionId &&
+          item.signerRole === signature.signerRole &&
+          item.invalidatedAt === null,
+      )
+    ) {
+      throw new DomainError(
+        'INSPECTION_SIGNATURE_ROLE_ALREADY_SIGNED',
+        'This inspection already has an active signature for that role.',
+      );
+    }
+    const contentRevision = inspection.contentRevision + 1;
+    this.inspections.set(signature.inspectionId, {
+      ...inspection,
+      contentRevision,
+    });
+    this.signatures.push(signature);
+    return contentRevision;
+  }
+
+  async listSignatures(inspectionId: InspectionId) {
+    return this.signatures.filter(
+      (signature) => signature.inspectionId === inspectionId,
+    );
+  }
+
+  async unlockInspection(
+    current: Inspection,
+    updated: Inspection,
+    record: InspectionUnlockRecord,
+  ) {
+    const stored = this.inspections.get(current.id);
+    if (
+      !stored ||
+      stored.version !== current.version ||
+      stored.contentRevision !== current.contentRevision ||
+      stored.status !== 'locked'
+    ) {
+      throw new DomainError(
+        'INSPECTION_VERSION_CONFLICT',
+        'Inspection changed before it could be unlocked.',
+      );
+    }
+    this.signatures.splice(
+      0,
+      this.signatures.length,
+      ...this.signatures.map((signature) =>
+        signature.inspectionId === current.id &&
+        signature.invalidatedAt === null
+          ? {
+              ...signature,
+              invalidatedAt: record.unlockedAt,
+              invalidationReason: record.reason,
+            }
+          : signature,
+      ),
+    );
+    this.unlocks.push(record);
+    this.inspections.set(current.id, updated);
+  }
+
+  async listUnlocks(inspectionId: InspectionId) {
+    return this.unlocks.filter((record) => record.inspectionId === inspectionId);
+  }
+
+  async getFinalSnapshot(inspectionId: InspectionId) {
+    return this.snapshots.get(inspectionId) ?? null;
+  }
+
+  async finalizeInspection(
+    current: Inspection,
+    updated: Inspection,
+    snapshot: InspectionFinalSnapshot,
+  ) {
+    const stored = this.inspections.get(current.id);
+    if (
+      !stored ||
+      stored.version !== current.version ||
+      stored.contentRevision !== current.contentRevision ||
+      stored.status !== 'locked'
+    ) {
+      throw new DomainError(
+        'INSPECTION_FINALIZATION_CONFLICT',
+        'Inspection changed before finalization completed.',
+      );
+    }
+    if (this.snapshots.has(current.id)) {
+      throw new DomainError(
+        'INSPECTION_FINAL_SNAPSHOT_ALREADY_EXISTS',
+        'Inspection already has a final snapshot.',
+      );
+    }
+    this.snapshots.set(current.id, snapshot);
+    this.inspections.set(current.id, updated);
   }
 
   async getSchemaVersionById(id: InspectionSchemaVersionId) {

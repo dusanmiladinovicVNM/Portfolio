@@ -189,6 +189,42 @@ export function lockInspection(
   };
 }
 
+export function unlockInspection(
+  inspection: Inspection,
+): Inspection {
+  if (inspection.status !== 'locked') {
+    throw new DomainError(
+      'INSPECTION_INVALID_TRANSITION',
+      'Only a locked inspection can be unlocked.',
+    );
+  }
+  return {
+    ...inspection,
+    status: 'in_progress',
+    lockedAt: null,
+    version: inspection.version + 1,
+    contentRevision: inspection.contentRevision + 1,
+  };
+}
+
+export function finalizeInspection(
+  inspection: Inspection,
+  finalizedAtValue: string,
+): Inspection {
+  if (inspection.status !== 'locked') {
+    throw new DomainError(
+      'INSPECTION_INVALID_TRANSITION',
+      'Only a locked inspection can be finalized.',
+    );
+  }
+  return {
+    ...inspection,
+    status: 'finalized',
+    finalizedAt: instant(finalizedAtValue, 'finalizedAt'),
+    version: inspection.version + 1,
+  };
+}
+
 export function cancelInspection(
   inspection: Inspection,
   cancelledAtValue: string,

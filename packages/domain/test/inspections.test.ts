@@ -1,23 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import {
+  asDocumentId,
+  asDocumentVersionId,
+  asInspectionFinalSnapshotId,
   asInspectionFindingId,
   asInspectionId,
   asInspectionResponseId,
   asInspectionSchemaItemId,
   asInspectionSchemaSectionId,
   asInspectionSchemaVersionId,
+  asInspectionSignatureId,
+  asInspectionUnlockId,
   asTenancyId,
   asUnitId,
   asUserId,
   cancelInspection,
   createInspection,
+  createInspectionFinalSnapshot,
   createInspectionFinding,
   createInspectionResponse,
   createInspectionSchemaVersion,
+  createInspectionSignature,
+  createInspectionUnlockRecord,
+  finalizeInspection,
   findMissingRequiredInspectionItems,
   lockInspection,
   publishInspectionSchemaVersion,
   startInspection,
+  unlockInspection,
 } from '../src/index.js';
 
 const schema = createInspectionSchemaVersion({
@@ -26,6 +36,7 @@ const schema = createInspectionSchemaVersion({
   versionNumber: 1,
   inspectionType: 'move_in',
   title: 'Move-in inspection',
+  requiredSignatureRoles: ['landlord', 'tenant'],
   sections: [
     {
       id: asInspectionSchemaSectionId('71000000-0000-4000-8000-000000000002'),
@@ -65,6 +76,21 @@ const schema = createInspectionSchemaVersion({
       ],
     },
   ],
+});
+
+const signatureVersion = (
+  id: ReturnType<typeof asDocumentVersionId>,
+  documentIdValue: string,
+) => ({
+  id,
+  documentId: asDocumentId(documentIdValue),
+  versionNumber: 1,
+  fileName: 'signature.png',
+  mimeType: 'image/png',
+  byteSize: 42,
+  sha256: 'a'.repeat(64),
+  status: 'final' as const,
+  finalizedAt: '2026-09-18T21:00:00.000Z',
 });
 
 const inspection = createInspection({
@@ -146,6 +172,129 @@ describe('Inspection schema and lifecycle', () => {
         label: 'Damage note',
       },
     ]);
+  });
+
+  it('requires the schema signature policy before creating a final snapshot', () => {
+    const started = startInspection(inspection, '2026-09-18T20:00:00.000Z');
+    const locked = lockInspection(started, '2026-09-18T21:00:00.000Z');
+    const landlord = createInspectionSignature(locked, {
+      id: asInspectionSignatureId('73000000-0000-4000-8000-000000000001'),
+      inspectionId: locked.id,
+      signerRole: 'landlord',
+      signerPartyId: null,
+      signerName: 'Landlord Representative',
+      signatureDocumentVersionId: asDocumentVersionId(
+        '73000000-0000-4000-8000-000000000002',
+      ),
+      signedByUserId: locked.assignedToUserId,
+      signedAt: '2026-09-18T21:05:00.000Z',
+    });
+
+    expect(() =>
+      createInspectionFinalSnapshot(
+        locked,
+        finalizeInspection(locked, '2026-09-18T21:10:00.000Z'),
+        schema,
+        [],
+        [],
+        [],
+        [{
+          signature: landlord,
+          documentVersion: signatureVersion(
+            landlord.signatureDocumentVersionId,
+            '73000000-0000-4000-8000-000000000012',
+          ),
+        }],
+        [],
+        {
+          id: asInspectionFinalSnapshotId(
+            '73000000-0000-4000-8000-000000000003',
+          ),
+          createdByUserId: inspection.createdByUserId,
+          createdAt: '2026-09-18T21:10:00.000Z',
+        },
+      ),
+    ).toThrowError(/tenant/);
+
+    const tenant = createInspectionSignature(locked, {
+      id: asInspectionSignatureId('73000000-0000-4000-8000-000000000004'),
+      inspectionId: locked.id,
+      signerRole: 'tenant',
+      signerPartyId: null,
+      signerName: 'Tenant',
+      signatureDocumentVersionId: asDocumentVersionId(
+        '73000000-0000-4000-8000-000000000005',
+      ),
+      signedByUserId: locked.assignedToUserId,
+      signedAt: '2026-09-18T21:06:00.000Z',
+    });
+
+    const finalizedHeader = finalizeInspection(
+      locked,
+      '2026-09-18T21:10:00.000Z',
+    );
+    const snapshot = createInspectionFinalSnapshot(
+      locked,
+      finalizedHeader,
+      schema,
+      [],
+      [],
+      [],
+      [landlord, tenant].map((signature, index) => ({
+        signature,
+        documentVersion: signatureVersion(
+          signature.signatureDocumentVersionId,
+          index === 0
+            ? '73000000-0000-4000-8000-000000000013'
+            : '73000000-0000-4000-8000-000000000014',
+        ),
+      })),
+      [],
+      {
+        id: asInspectionFinalSnapshotId(
+          '73000000-0000-4000-8000-000000000006',
+        ),
+        createdByUserId: inspection.createdByUserId,
+        createdAt: '2026-09-18T21:10:00.000Z',
+      },
+    );
+    expect(
+      snapshot.payload.signatures.map((item) => item.signature.signerRole),
+    ).toEqual(['landlord', 'tenant']);
+    expect(
+      snapshot.payload.signatures.map((item) => item.documentVersion.sha256),
+    ).toEqual(['a'.repeat(64), 'a'.repeat(64)]);
+    expect(snapshot.payload.unlockHistory).toEqual([]);
+
+    expect(snapshot.payload.inspection).toMatchObject({
+      status: 'finalized',
+      finalizedAt: '2026-09-18T21:10:00.000Z',
+      version: locked.version + 1,
+    });
+  });
+
+  it('models controlled unlock as a new revision boundary', () => {
+    const started = startInspection(inspection, '2026-09-18T20:00:00.000Z');
+    const locked = lockInspection(started, '2026-09-18T21:00:00.000Z');
+    const unlocked = unlockInspection(locked);
+    expect(unlocked).toMatchObject({
+      status: 'in_progress',
+      lockedAt: null,
+      version: locked.version + 1,
+      contentRevision: locked.contentRevision + 1,
+    });
+
+    const record = createInspectionUnlockRecord(locked, unlocked, {
+      id: asInspectionUnlockId('73000000-0000-4000-8000-000000000007'),
+      unlockedByUserId: inspection.createdByUserId,
+      unlockedAt: '2026-09-18T21:15:00.000Z',
+      reason: 'Correct a handover answer',
+    });
+    expect(record).toMatchObject({
+      previousVersion: locked.version,
+      newVersion: unlocked.version,
+      reason: 'Correct a handover answer',
+    });
   });
 
   it('keeps cancelled inspection terminal for the backbone workflow', () => {

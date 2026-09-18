@@ -54,6 +54,7 @@ describe('GoogleDriveFileStorage', () => {
       objectKey: 'document-version:123',
       byteSize: content.byteLength,
       sha256: expectedHash,
+      disposition: 'created',
     });
     expect(requests).toHaveLength(2);
     expect(requests[0]!.url).toContain('includeItemsFromAllDrives=true');
@@ -88,7 +89,10 @@ describe('GoogleDriveFileStorage', () => {
       content,
     });
 
-    expect(stored.objectId).toBe('drive-existing');
+    expect(stored).toMatchObject({
+      objectId: 'drive-existing',
+      disposition: 'reused',
+    });
     expect(calls).toBe(1);
   });
 
@@ -114,6 +118,35 @@ describe('GoogleDriveFileStorage', () => {
         content: new TextEncoder().encode('different'),
       }),
     ).rejects.toThrowError(/different content/);
+  });
+
+  it('stats an exact object reference and returns checksum metadata', async () => {
+    const expectedHash = 'a'.repeat(64);
+    const storage = new GoogleDriveFileStorage({
+      folderId: 'folder-1',
+      accessTokenProvider: tokenProvider,
+      fetchImpl: async () =>
+        Response.json({
+          id: 'drive-file-1',
+          size: '42',
+          sha256Checksum: expectedHash,
+          appProperties: { portfolioObjectKey: 'document-version:123' },
+        }),
+    });
+
+    await expect(
+      storage.stat({
+        provider: 'google-drive',
+        objectId: 'drive-file-1',
+        objectKey: 'document-version:123',
+      }),
+    ).resolves.toEqual({
+      provider: 'google-drive',
+      objectId: 'drive-file-1',
+      objectKey: 'document-version:123',
+      byteSize: 42,
+      sha256: expectedHash,
+    });
   });
 
   it('treats a missing object as already removed during compensation', async () => {

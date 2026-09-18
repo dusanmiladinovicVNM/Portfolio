@@ -44,9 +44,16 @@ class FailingDocumentRepository implements DocumentRepository {
   async insertDocument() {}
   async getVersionById(_id: DocumentVersionId): Promise<DocumentVersion | null> { return null; }
   async listVersionsByDocument(): Promise<readonly DocumentVersion[]> { return []; }
-  async insertVersion() { throw new Error('database unavailable'); }
+  async insertVersion(
+    _document: Document,
+    _expectedDocumentRevision: number,
+    _version: DocumentVersion,
+    _storage: StorageObjectReference,
+  ) { throw new Error('database unavailable'); }
   async finalizeVersion() {}
-  async getStorageReference(): Promise<StorageObjectReference | null> { return null; }
+  async getStorageReference(
+    _versionId: DocumentVersionId,
+  ): Promise<StorageObjectReference | null> { return null; }
   async insertLink(_link: DocumentLink) {}
   async listLinksByDocument(): Promise<readonly DocumentLink[]> { return []; }
 }
@@ -62,12 +69,45 @@ class TrackingStorage implements FileStoragePort {
       objectKey: input.objectKey,
       byteSize: input.content.byteLength,
       sha256: 'a'.repeat(64),
+      disposition: 'created' as const,
+    };
+  }
+
+  async stat(reference: StorageObjectReference) {
+    return {
+      ...reference,
+      byteSize: 3,
+      sha256: 'a'.repeat(64),
     };
   }
 
   async remove(reference: StorageObjectReference) {
     this.removed.push(reference);
     if (this.removeFails) throw new Error('delete failed');
+  }
+}
+
+class AmbiguousCommitDocumentRepository extends FailingDocumentRepository {
+  private persisted: DocumentVersion | null = null;
+  private persistedStorage: StorageObjectReference | null = null;
+
+  override async getVersionById(id: DocumentVersionId) {
+    return this.persisted?.id === id ? this.persisted : null;
+  }
+
+  override async getStorageReference(versionId: DocumentVersionId) {
+    return this.persisted?.id === versionId ? this.persistedStorage : null;
+  }
+
+  override async insertVersion(
+    _document: Document,
+    _expectedDocumentRevision: number,
+    version: DocumentVersion,
+    storage: StorageObjectReference,
+  ) {
+    this.persisted = version;
+    this.persistedStorage = storage;
+    throw new Error('commit acknowledgement lost');
   }
 }
 
@@ -101,6 +141,31 @@ describe('Document application workflow', () => {
           'document-version:50000000-0000-4000-8000-000000000002',
       },
     ]);
+  });
+
+  it('recovers a committed version when the database acknowledgement is lost', async () => {
+    const repository = new AmbiguousCommitDocumentRepository();
+    const storage = new TrackingStorage();
+
+    const version = await uploadDocumentVersionCommand(
+      {
+        documentRepository: repository,
+        fileStorage: storage,
+        idGenerator: new FixedId(),
+      },
+      actor,
+      {
+        documentId: repository.document.id,
+        fileName: 'lease.pdf',
+        mimeType: 'application/pdf',
+        content: new Uint8Array([1, 2, 3]),
+      },
+    );
+
+    expect(version.id).toBe(
+      '50000000-0000-4000-8000-000000000002',
+    );
+    expect(storage.removed).toEqual([]);
   });
 
   it('surfaces a reconciliation error if compensating storage delete also fails', async () => {

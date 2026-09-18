@@ -93,7 +93,25 @@ A Finding is an observed condition/problem. It is not yet an Issue or WorkOrder;
 
 The inspector assignment is explicit and separate from `createdByUserId`. An inspector may work only on inspections assigned to them; admin/manager roles have broader operational access.
 
-Photos, signatures, immutable final snapshot and generated PDF remain PR #13 scope.
+PR #13 completes the evidentiary lifecycle:
+
+```text
+Inspection
+  ├─ Evidence[]       exact immutable DocumentVersion references
+  ├─ Signature[]      append-only signature events
+  ├─ UnlockRecord[]   append-only controlled-unlock audit
+  └─ FinalSnapshot    exactly one authoritative immutable snapshot
+```
+
+Evidence can attach at Inspection, Section or Item grain. Binary identity remains owned by Documents/FileStorage.
+
+Signature requirements are part of the exact InspectionSchemaVersion through `requiredSignatureRoles`. A signature records an evidentiary signer role plus an optional Party reference and signer-name snapshot. The role is the role asserted for that signature event; PR #13 does not infer or independently prove landlord/tenant legal relationship from the Party reference.
+
+Unlocking a locked Inspection is an explicit admin/manager workflow. It returns the Inspection to `in_progress`, creates an append-only UnlockRecord, advances version/contentRevision and invalidates all active signatures. Prior signatures remain historical records.
+
+Finalization creates one immutable FinalSnapshot and transitions `locked → finalized` in one database transaction. Snapshot row metadata identifies the locked source revision that was CAS-validated; the snapshot payload contains the resulting finalized Inspection header plus exact schema, responses, findings, evidence references and active signatures.
+
+The final PDF is a derived projection of FinalSnapshot behind `PdfPort`. Rendering/storage is deliberately outside the atomic finalization transaction.
 
 ### Asset
 

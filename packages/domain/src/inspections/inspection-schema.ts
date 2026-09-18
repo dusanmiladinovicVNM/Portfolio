@@ -31,6 +31,13 @@ export const INSPECTION_ITEM_TYPES = [
   'radio',
 ] as const;
 
+export const INSPECTION_SIGNATURE_ROLES = [
+  'landlord',
+  'tenant',
+  'witness',
+  'agent',
+] as const;
+
 export const INSPECTION_CONDITION_OPERATORS = [
   'equals',
   'notEquals',
@@ -44,6 +51,8 @@ export type InspectionType = (typeof INSPECTION_TYPES)[number];
 export type InspectionSchemaStatus =
   (typeof INSPECTION_SCHEMA_STATUSES)[number];
 export type InspectionItemType = (typeof INSPECTION_ITEM_TYPES)[number];
+export type InspectionSignatureRole =
+  (typeof INSPECTION_SIGNATURE_ROLES)[number];
 export type InspectionConditionOperator =
   (typeof INSPECTION_CONDITION_OPERATORS)[number];
 export type InspectionScalarValue = string | boolean;
@@ -99,6 +108,7 @@ export interface InspectionSchemaVersion {
   readonly inspectionType: InspectionType;
   readonly title: string;
   readonly status: InspectionSchemaStatus;
+  readonly requiredSignatureRoles: readonly InspectionSignatureRole[];
   readonly sections: readonly InspectionSchemaSection[];
 }
 
@@ -108,6 +118,7 @@ export interface CreateInspectionSchemaVersionInput {
   readonly versionNumber: number;
   readonly inspectionType: InspectionType;
   readonly title: string;
+  readonly requiredSignatureRoles?: readonly InspectionSignatureRole[];
   readonly sections: readonly {
     readonly id: InspectionSchemaSectionId;
     readonly key: string;
@@ -276,6 +287,13 @@ export function createInspectionSchemaVersion(
   );
 
   const knownFieldKeys = new Set(allItemKeys.map((key) => key.toLowerCase()));
+  const requiredSignatureRoles = [...(input.requiredSignatureRoles ?? [])];
+  if (new Set(requiredSignatureRoles).size !== requiredSignatureRoles.length) {
+    throw new DomainError(
+      'INSPECTION_SCHEMA_DUPLICATE_SIGNATURE_ROLE',
+      'Required signature roles must be unique.',
+    );
+  }
 
   const sections = input.sections.map((section) => {
     assertNonnegativeInteger(section.sortOrder, 'section.sortOrder');
@@ -341,6 +359,7 @@ export function createInspectionSchemaVersion(
     inspectionType: input.inspectionType,
     title: requiredText(input.title, 'title'),
     status: 'draft',
+    requiredSignatureRoles,
     sections,
   };
 }

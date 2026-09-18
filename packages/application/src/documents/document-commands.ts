@@ -32,6 +32,7 @@ import type { TenancyRepository } from '../tenancy/tenancy-repository.js';
 import type { DocumentRepository } from './document-repository.js';
 import type {
   FileStoragePort,
+  StorageObjectMetadata,
   StorageObjectReference,
 } from './file-storage-port.js';
 
@@ -46,6 +47,7 @@ export interface UploadDocumentVersionCommandInput {
   readonly fileName: string;
   readonly mimeType: string;
   readonly content: Uint8Array;
+  readonly expectedDocumentRevision?: number;
 }
 
 interface LinkDocumentCommandBase {
@@ -91,6 +93,7 @@ export interface UploadDocumentVersionDependencies extends DocumentDependencies 
 
 export interface FinalizeDocumentVersionDependencies {
   readonly documentRepository: DocumentRepository;
+  readonly fileStorage: FileStoragePort;
   readonly clock: ClockPort;
 }
 
@@ -151,6 +154,68 @@ export async function createDocumentCommand(
   return document;
 }
 
+function storageMatchesVersion(
+  metadata: StorageObjectMetadata,
+  version: DocumentVersion,
+): boolean {
+  return (
+    metadata.byteSize === version.byteSize &&
+    metadata.sha256.toLowerCase() === version.sha256.toLowerCase()
+  );
+}
+
+function storageReferenceMatches(
+  left: StorageObjectReference,
+  right: StorageObjectReference,
+): boolean {
+  return (
+    left.provider === right.provider &&
+    left.objectId === right.objectId &&
+    left.objectKey === right.objectKey
+  );
+}
+
+export async function assertDocumentVersionStorageIntegrity(
+  deps: Pick<UploadDocumentVersionDependencies, 'documentRepository' | 'fileStorage'>,
+  version: DocumentVersion,
+): Promise<StorageObjectMetadata> {
+  const reference = await deps.documentRepository.getStorageReference(version.id);
+  if (!reference) {
+    throw new DomainError(
+      'DOCUMENT_STORAGE_REFERENCE_MISSING',
+      'Document version has no registered storage reference.',
+    );
+  }
+
+  let metadata: StorageObjectMetadata | null;
+  try {
+    metadata = await deps.fileStorage.stat(reference);
+  } catch {
+    throw new ApplicationError(
+      'DOCUMENT_STORAGE_VERIFICATION_FAILED',
+      'Document binary could not be verified against its storage provider.',
+    );
+  }
+
+  if (!metadata) {
+    throw new DomainError(
+      'DOCUMENT_BINARY_MISSING',
+      'Document binary is missing from storage.',
+    );
+  }
+  if (
+    !storageReferenceMatches(metadata, reference) ||
+    !storageMatchesVersion(metadata, version)
+  ) {
+    throw new DomainError(
+      'DOCUMENT_BINARY_INTEGRITY_MISMATCH',
+      'Stored document binary no longer matches the immutable DocumentVersion metadata.',
+    );
+  }
+
+  return metadata;
+}
+
 export async function uploadDocumentVersionCommand(
   deps: UploadDocumentVersionDependencies,
   actor: Actor,
@@ -167,6 +232,16 @@ export async function uploadDocumentVersionCommand(
     throw new DomainError(
       'DOCUMENT_NOT_ACTIVE',
       'A new version may only be added to an active document.',
+    );
+  }
+
+  if (
+    input.expectedDocumentRevision !== undefined &&
+    document.revision !== input.expectedDocumentRevision
+  ) {
+    throw new DomainError(
+      'DOCUMENT_VERSION_CONFLICT',
+      'Document changed before the new version upload started.',
     );
   }
 
@@ -209,13 +284,54 @@ export async function uploadDocumentVersionCommand(
       storage,
     );
   } catch (persistenceError) {
+    // The database may have committed even if the commit acknowledgement was
+    // lost. Re-read the exact deterministic version id before deleting bytes.
     try {
-      await deps.fileStorage.remove(storage);
-    } catch {
+      const persisted = await deps.documentRepository.getVersionById(versionId);
+      if (persisted) {
+        const persistedStorage =
+          await deps.documentRepository.getStorageReference(versionId);
+        if (
+          persistedStorage &&
+          storageReferenceMatches(persistedStorage, storage) &&
+          persisted.documentId === added.version.documentId &&
+          persisted.versionNumber === added.version.versionNumber &&
+          persisted.fileName === added.version.fileName &&
+          persisted.mimeType === added.version.mimeType &&
+          storageMatchesVersion(stored, persisted)
+        ) {
+          return persisted;
+        }
+
+        throw new ApplicationError(
+          'DOCUMENT_STORAGE_RECONCILIATION_REQUIRED',
+          'Document registration returned an error but persisted state does not match the uploaded binary.',
+        );
+      }
+    } catch (reconciliationError) {
+      if (
+        reconciliationError instanceof ApplicationError &&
+        reconciliationError.code === 'DOCUMENT_STORAGE_RECONCILIATION_REQUIRED'
+      ) {
+        throw reconciliationError;
+      }
       throw new ApplicationError(
-        'DOCUMENT_STORAGE_COMPENSATION_FAILED',
-        'Document metadata could not be persisted and the uploaded object could not be removed. Manual storage reconciliation is required.',
+        'DOCUMENT_STORAGE_RECONCILIATION_REQUIRED',
+        'Document registration outcome could not be verified. The storage object was preserved for reconciliation.',
       );
+    }
+
+    // Only a newly-created object is eligible for compensation. A reused
+    // object may belong to a prior retry/reconciliation attempt and is kept.
+    if (stored.disposition === 'created') {
+      try {
+        await deps.fileStorage.remove(storage);
+      } catch {
+        throw new ApplicationError(
+          'DOCUMENT_STORAGE_COMPENSATION_FAILED',
+          'Document metadata was confirmed absent but the newly created storage object could not be removed. Manual storage reconciliation is required.',
+        );
+      }
     }
     throw persistenceError;
   }
@@ -231,6 +347,7 @@ export async function finalizeDocumentVersionCommand(
   requireCapability(actor, 'documents:write');
 
   const current = await requireVersion(deps.documentRepository, versionId);
+  await assertDocumentVersionStorageIntegrity(deps, current);
   const finalized = finalizeDocumentVersion(current, deps.clock.now());
   await deps.documentRepository.finalizeVersion(finalized);
   return finalized;

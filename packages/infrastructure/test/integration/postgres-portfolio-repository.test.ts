@@ -4,6 +4,8 @@ import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   activateTenancyCommand,
+  addInspectionSignatureCommand,
+  attachInspectionEvidenceCommand,
   cancelLeaseAgreementCommand,
   createDocumentCommand,
   createInspectionCommand,
@@ -18,6 +20,8 @@ import {
   createSpaceCommand,
   createUnitCommand,
   finalizeDocumentVersionCommand,
+  finalizeInspectionCommand,
+  generateInspectionFinalReportCommand,
   getEffectiveTenancyTermsQuery,
   giveTenancyNoticeCommand,
   linkDocumentCommand,
@@ -32,6 +36,7 @@ import {
   resolveActor,
   saveInspectionSectionCommand,
   startInspectionCommand,
+  unlockInspectionCommand,
   signLeaseAgreementCommand,
   signLeaseAmendmentCommand,
   uploadDocumentVersionCommand,
@@ -94,6 +99,10 @@ class SequenceIds implements IdGenerator {
 async function resetAndMigrate(): Promise<void> {
   await sql.unsafe(
     `drop table if exists
+      public.inspection_final_snapshots,
+      public.inspection_unlocks,
+      public.inspection_signatures,
+      public.inspection_evidence,
       public.inspection_findings,
       public.inspection_responses,
       public.inspection_section_states,
@@ -173,6 +182,10 @@ beforeAll(async () => {
 afterAll(async () => {
   await sql.unsafe(
     `drop table if exists
+      public.inspection_final_snapshots,
+      public.inspection_unlocks,
+      public.inspection_signatures,
+      public.inspection_evidence,
       public.inspection_findings,
       public.inspection_responses,
       public.inspection_section_states,
@@ -1204,6 +1217,759 @@ describe('PostgreSQL infrastructure', () => {
     });
   });
 
+  it('persists inspection evidence, controlled unlock, final snapshot and derived report', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+
+    const ids = new SequenceIds([
+      'a1000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000002',
+      'a1000000-0000-4000-8000-000000000003',
+      'a1000000-0000-4000-8000-000000000004',
+      'a1000000-0000-4000-8000-000000000005',
+      'a1000000-0000-4000-8000-000000000006',
+      'a1000000-0000-4000-8000-000000000007',
+      'a1000000-0000-4000-8000-000000000008',
+      'a1000000-0000-4000-8000-000000000009',
+      'a1000000-0000-4000-8000-000000000010',
+      'a1000000-0000-4000-8000-000000000011',
+      'a1000000-0000-4000-8000-000000000012',
+      'a1000000-0000-4000-8000-000000000013',
+      'a1000000-0000-4000-8000-000000000014',
+      'a1000000-0000-4000-8000-000000000015',
+      'a1000000-0000-4000-8000-000000000016',
+      'a1000000-0000-4000-8000-000000000017',
+      'a1000000-0000-4000-8000-000000000018',
+      'a1000000-0000-4000-8000-000000000019',
+      'a1000000-0000-4000-8000-000000000020',
+      'a1000000-0000-4000-8000-000000000021',
+      'a1000000-0000-4000-8000-000000000022',
+      'a1000000-0000-4000-8000-000000000023',
+      'a1000000-0000-4000-8000-000000000024',
+      'a1000000-0000-4000-8000-000000000025',
+      'a1000000-0000-4000-8000-000000000026',
+      'a1000000-0000-4000-8000-000000000027',
+      'a1000000-0000-4000-8000-000000000028',
+      'a1000000-0000-4000-8000-000000000029',
+      'a1000000-0000-4000-8000-000000000030',
+    ]);
+
+    const schema = await createInspectionSchemaVersionCommand(
+      { inspectionRepository, idGenerator: ids },
+      actor,
+      {
+        schemaCode: 'MOVE-IN-EVIDENCE',
+        inspectionType: 'move_in',
+        title: 'Move-in evidence flow',
+        requiredSignatureRoles: ['landlord', 'tenant'],
+        sections: [{
+          key: 'general',
+          title: 'General',
+          sortOrder: 0,
+          items: [{
+            key: 'condition',
+            type: 'text',
+            label: 'Condition',
+            required: true,
+            sortOrder: 0,
+          }],
+        }],
+      },
+    );
+    const published = await publishInspectionSchemaVersionCommand(
+      inspectionRepository,
+      actor,
+      schema.id,
+    );
+    expect(published.requiredSignatureRoles).toEqual(['landlord', 'tenant']);
+
+    await expect(
+      sql`
+        update public.inspection_schema_versions
+        set required_signature_roles = array['landlord']::text[]
+        where id = ${published.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_schema_version_immutable',
+    });
+
+    const property = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-EVIDENCE',
+        name: 'Evidence Property',
+        propertyType: 'apartment_building',
+        street: 'Evidence',
+        houseNumber: '13',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+    const unit = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-EVIDENCE',
+        unitNumber: 'E-1',
+        unitType: 'apartment',
+      },
+    );
+
+    const landlordPartyId = 'a4000000-0000-4000-8000-000000000001';
+    const tenantPartyId = 'a4000000-0000-4000-8000-000000000002';
+    const outsiderPartyId = 'a4000000-0000-4000-8000-000000000003';
+    const tenancyId = 'a5000000-0000-4000-8000-000000000001';
+
+    await sql`
+      insert into public.parties (
+        id, code, party_type, display_name, first_name, last_name, status
+      ) values
+        (${landlordPartyId}, 'P-EVIDENCE-LANDLORD', 'person', 'Landlord Owner', 'Landlord', 'Owner', 'active'),
+        (${tenantPartyId}, 'P-EVIDENCE-TENANT', 'person', 'Tenant Occupant', 'Tenant', 'Occupant', 'active'),
+        (${outsiderPartyId}, 'P-EVIDENCE-OUTSIDER', 'person', 'Outsider', 'Outside', 'Person', 'active')
+    `;
+    await sql`
+      insert into public.unit_ownership_periods (id, unit_id, valid_from)
+      values ('a4100000-0000-4000-8000-000000000001', ${unit.id}, '2026-01-01')
+    `;
+    await sql`
+      insert into public.unit_ownership_shares (
+        ownership_period_id, party_id, share_basis_points
+      ) values (
+        'a4100000-0000-4000-8000-000000000001',
+        ${landlordPartyId},
+        10000
+      )
+    `;
+    await sql`
+      insert into public.tenancies (
+        id, code, unit_id, status, planned_start, version
+      ) values (
+        ${tenancyId}, 'TEN-EVIDENCE', ${unit.id}, 'planned', '2026-09-01', 1
+      )
+    `;
+    await sql`
+      insert into public.tenancy_parties (
+        id, tenancy_id, party_id, role, is_primary
+      ) values (
+        'a5100000-0000-4000-8000-000000000001',
+        ${tenancyId}, ${tenantPartyId}, 'tenant', true
+      )
+    `;
+
+    const inspection = await createInspectionCommand(
+      {
+        inspectionRepository,
+        portfolioRepository,
+        tenancyRepository,
+        staffDirectoryRepository: accessRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-21T08:00:00.000Z' },
+      },
+      actor,
+      {
+        code: 'INS-EVIDENCE',
+        inspectionType: 'move_in',
+        unitId: unit.id,
+        tenancyId: asTenancyId(tenancyId),
+        schemaVersionId: published.id,
+        assignedToUserId:
+          'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' as import('@portfolio/domain').UserId,
+      },
+    );
+
+    const started = await startInspectionCommand(
+      {
+        inspectionRepository,
+        clock: { now: () => '2026-09-21T08:05:00.000Z' },
+      },
+      actor,
+      inspection.id,
+      1,
+    );
+
+    const section = published.sections[0]!;
+    const item = section.items[0]!;
+    await saveInspectionSectionCommand(
+      {
+        inspectionRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-21T08:10:00.000Z' },
+      },
+      actor,
+      inspection.id,
+      section.id,
+      0,
+      {
+        set: [{ itemId: item.id, value: 'Good' }],
+        clearItemIds: [],
+      },
+    );
+
+    // Exact immutable document versions used by photo/signature evidence.
+    await sql`
+      insert into public.documents (
+        id, code, title, category, status, latest_version_number, revision
+      ) values
+        ('a2000000-0000-4000-8000-000000000001', 'DOC-EVIDENCE-PHOTO', 'Photo', 'photo', 'active', 1, 2),
+        ('a2000000-0000-4000-8000-000000000002', 'DOC-EVIDENCE-LANDLORD-1', 'Landlord signature 1', 'signature', 'active', 1, 2),
+        ('a2000000-0000-4000-8000-000000000003', 'DOC-EVIDENCE-LANDLORD-2', 'Landlord signature 2', 'signature', 'active', 1, 2),
+        ('a2000000-0000-4000-8000-000000000004', 'DOC-EVIDENCE-TENANT', 'Tenant signature', 'signature', 'active', 1, 2)
+    `;
+    await sql`
+      insert into public.document_versions (
+        id, document_id, version_number, file_name, mime_type,
+        byte_size, sha256, status, finalized_at,
+        storage_provider, storage_object_id, storage_object_key
+      ) values
+        (
+          'a3000000-0000-4000-8000-000000000001',
+          'a2000000-0000-4000-8000-000000000001',
+          1, 'photo.jpg', 'image/jpeg', 10, ${'1'.repeat(64)},
+          'final', '2026-09-21T08:11:00.000Z',
+          'test', 'photo-1', 'photo-key-1'
+        ),
+        (
+          'a3000000-0000-4000-8000-000000000002',
+          'a2000000-0000-4000-8000-000000000002',
+          1, 'landlord-1.png', 'image/png', 10, ${'2'.repeat(64)},
+          'final', '2026-09-21T08:12:00.000Z',
+          'test', 'sig-landlord-1', 'sig-key-landlord-1'
+        ),
+        (
+          'a3000000-0000-4000-8000-000000000003',
+          'a2000000-0000-4000-8000-000000000003',
+          1, 'landlord-2.png', 'image/png', 10, ${'3'.repeat(64)},
+          'final', '2026-09-21T08:13:00.000Z',
+          'test', 'sig-landlord-2', 'sig-key-landlord-2'
+        ),
+        (
+          'a3000000-0000-4000-8000-000000000004',
+          'a2000000-0000-4000-8000-000000000004',
+          1, 'tenant.png', 'image/png', 10, ${'4'.repeat(64)},
+          'final', '2026-09-21T08:14:00.000Z',
+          'test', 'sig-tenant', 'sig-key-tenant'
+        )
+    `;
+
+    const evidenceBinaries = new Map([
+      ['photo-1', { byteSize: 10, sha256: '1111111111111111111111111111111111111111111111111111111111111111' }],
+      ['sig-landlord-1', { byteSize: 10, sha256: '2222222222222222222222222222222222222222222222222222222222222222' }],
+      ['sig-landlord-2', { byteSize: 10, sha256: '3333333333333333333333333333333333333333333333333333333333333333' }],
+      ['sig-tenant', { byteSize: 10, sha256: '4444444444444444444444444444444444444444444444444444444444444444' }],
+    ]);
+    const evidenceFileStorage = {
+      async put() {
+        throw new Error('not used by seeded inspection evidence');
+      },
+      async stat(reference: import('@portfolio/application').StorageObjectReference) {
+        const metadata = evidenceBinaries.get(reference.objectId);
+        return metadata ? { ...reference, ...metadata } : null;
+      },
+      async remove() {},
+    };
+
+    const evidence = await attachInspectionEvidenceCommand(
+      {
+        inspectionRepository,
+        documentRepository,
+        fileStorage: evidenceFileStorage,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-21T08:15:00.000Z' },
+      },
+      actor,
+      inspection.id,
+      {
+        documentVersionId: 'a3000000-0000-4000-8000-000000000001',
+        kind: 'photo',
+        sectionId: section.id,
+        itemId: item.id,
+        caption: 'Entrance condition',
+      },
+    );
+    expect(evidence.documentVersionId).toBe(
+      'a3000000-0000-4000-8000-000000000001',
+    );
+
+    const beforeLock = (await inspectionRepository.getById(inspection.id))!;
+    const locked = await lockInspectionCommand(
+      {
+        inspectionRepository,
+        clock: { now: () => '2026-09-21T08:20:00.000Z' },
+      },
+      actor,
+      inspection.id,
+      beforeLock.version,
+    );
+
+    await expect(
+      attachInspectionEvidenceCommand(
+        {
+          inspectionRepository,
+          documentRepository,
+          fileStorage: evidenceFileStorage,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-21T08:21:00.000Z' },
+        },
+        actor,
+        inspection.id,
+        {
+          documentVersionId: 'a3000000-0000-4000-8000-000000000001',
+          kind: 'photo',
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'INSPECTION_CONTENT_LOCKED' });
+
+    const landlord1 = await addInspectionSignatureCommand(
+      {
+        inspectionRepository,
+        documentRepository,
+        fileStorage: evidenceFileStorage,
+        partyRepository,
+        ownershipRepository,
+        tenancyRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-21T08:25:00.000Z' },
+      },
+      actor,
+      inspection.id,
+      {
+        signerRole: 'landlord',
+        signerPartyId: landlordPartyId,
+        signerName: 'Landlord Representative',
+        signatureDocumentVersionId: 'a3000000-0000-4000-8000-000000000002',
+      },
+    );
+    expect(landlord1.invalidatedAt).toBeNull();
+
+    await expect(
+      addInspectionSignatureCommand(
+        {
+          inspectionRepository,
+          documentRepository,
+          fileStorage: evidenceFileStorage,
+          partyRepository,
+          ownershipRepository,
+          tenancyRepository,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-21T08:25:10.000Z' },
+        },
+        actor,
+        inspection.id,
+        {
+          signerRole: 'witness',
+          signerName: 'Witness',
+          signatureDocumentVersionId: 'a3000000-0000-4000-8000-000000000001',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'INSPECTION_SIGNATURE_DOCUMENT_CATEGORY_INVALID',
+    });
+
+    await expect(
+      sql`
+        insert into public.inspection_signatures (
+          id, inspection_id, signer_role, signer_name,
+          signature_document_version_id, signed_by_user_id, signed_at
+        ) values (
+          'a6100000-0000-4000-8000-000000000002',
+          ${inspection.id}, 'witness', 'Witness',
+          'a3000000-0000-4000-8000-000000000001',
+          ${actor.userId}, '2026-09-21T08:25:20.000Z'
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_signature_document_category_invalid',
+    });
+
+    await expect(
+      addInspectionSignatureCommand(
+        {
+          inspectionRepository,
+          documentRepository,
+          fileStorage: evidenceFileStorage,
+          partyRepository,
+          ownershipRepository,
+          tenancyRepository,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-21T08:25:30.000Z' },
+        },
+        actor,
+        inspection.id,
+        {
+          signerRole: 'tenant',
+          signerPartyId: outsiderPartyId,
+          signerName: 'Outsider',
+          signatureDocumentVersionId: 'a3000000-0000-4000-8000-000000000004',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'INSPECTION_SIGNATURE_TENANT_PARTY_MISMATCH',
+    });
+
+    await expect(
+      sql`
+        insert into public.inspection_signatures (
+          id, inspection_id, signer_role, signer_party_id, signer_name,
+          signature_document_version_id, signed_by_user_id, signed_at
+        ) values (
+          'a6100000-0000-4000-8000-000000000001',
+          ${inspection.id}, 'tenant', ${outsiderPartyId}, 'Outsider',
+          'a3000000-0000-4000-8000-000000000004',
+          ${actor.userId}, '2026-09-21T08:26:00.000Z'
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_signature_tenant_party_mismatch',
+    });
+
+    await expect(
+      finalizeInspectionCommand(
+        {
+          inspectionRepository,
+          documentRepository,
+          fileStorage: evidenceFileStorage,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-21T08:30:00.000Z' },
+        },
+        actor,
+        inspection.id,
+        locked.version,
+      ),
+    ).rejects.toMatchObject({
+      code: 'INSPECTION_REQUIRED_SIGNATURES_MISSING',
+    });
+
+    const beforeUnlock = (await inspectionRepository.getById(inspection.id))!;
+
+    await expect(
+      sql`
+        update public.inspections
+        set status = 'in_progress',
+            locked_at = null,
+            version = version + 1,
+            content_revision = content_revision + 1
+        where id = ${inspection.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_unlock_record_required',
+    });
+
+    await expect(
+      sql.begin(async (tx) => {
+        await tx`
+          insert into public.inspection_unlocks (
+            id, inspection_id, unlocked_by_user_id, unlocked_at, reason,
+            previous_locked_at, previous_version, previous_content_revision,
+            new_version, new_content_revision
+          ) values (
+            'a6200000-0000-4000-8000-000000000001',
+            ${inspection.id}, ${actor.userId},
+            '2026-09-21T08:34:00.000Z',
+            'Attempt unlock without invalidating signatures',
+            ${beforeUnlock.lockedAt}, ${beforeUnlock.version},
+            ${beforeUnlock.contentRevision},
+            ${beforeUnlock.version + 1},
+            ${beforeUnlock.contentRevision + 1}
+          )
+        `;
+
+        await tx`
+          update public.inspections
+          set status = 'in_progress',
+              locked_at = null,
+              version = version + 1,
+              content_revision = content_revision + 1
+          where id = ${inspection.id}
+        `;
+      }),
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_unlock_active_signatures',
+    });
+
+    const unlocked = await unlockInspectionCommand(
+      {
+        inspectionRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-21T08:35:00.000Z' },
+      },
+      actor,
+      inspection.id,
+      beforeUnlock.version,
+      'Correct handover details',
+    );
+    expect(unlocked.status).toBe('in_progress');
+
+    const signaturesAfterUnlock =
+      await inspectionRepository.listSignatures(inspection.id);
+    expect(signaturesAfterUnlock).toHaveLength(1);
+    expect(signaturesAfterUnlock[0]).toMatchObject({
+      signerRole: 'landlord',
+      invalidatedAt: '2026-09-21T08:35:00.000Z',
+      invalidationReason: 'Correct handover details',
+    });
+
+    const relocked = await lockInspectionCommand(
+      {
+        inspectionRepository,
+        clock: { now: () => '2026-09-21T08:40:00.000Z' },
+      },
+      actor,
+      inspection.id,
+      unlocked.version,
+    );
+
+    await addInspectionSignatureCommand(
+      {
+        inspectionRepository,
+        documentRepository,
+        fileStorage: evidenceFileStorage,
+        partyRepository,
+        ownershipRepository,
+        tenancyRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-21T08:45:00.000Z' },
+      },
+      actor,
+      inspection.id,
+      {
+        signerRole: 'landlord',
+        signerPartyId: landlordPartyId,
+        signerName: 'Landlord Representative',
+        signatureDocumentVersionId: 'a3000000-0000-4000-8000-000000000003',
+      },
+    );
+    await addInspectionSignatureCommand(
+      {
+        inspectionRepository,
+        documentRepository,
+        fileStorage: evidenceFileStorage,
+        partyRepository,
+        ownershipRepository,
+        tenancyRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-21T08:46:00.000Z' },
+      },
+      actor,
+      inspection.id,
+      {
+        signerRole: 'tenant',
+        signerPartyId: tenantPartyId,
+        signerName: 'Tenant',
+        signatureDocumentVersionId: 'a3000000-0000-4000-8000-000000000004',
+      },
+    );
+
+    await expect(
+      sql`
+        update public.inspections
+        set status = 'finalized',
+            finalized_at = '2026-09-21T08:50:00.000Z',
+            version = version + 1
+        where id = ${inspection.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_final_snapshot_required',
+    });
+
+    const beforeFinalize = (await inspectionRepository.getById(inspection.id))!;
+    const finalized = await finalizeInspectionCommand(
+      {
+        inspectionRepository,
+        documentRepository,
+        fileStorage: evidenceFileStorage,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-21T08:50:00.000Z' },
+      },
+      actor,
+      inspection.id,
+      beforeFinalize.version,
+    );
+    expect(finalized.inspection.status).toBe('finalized');
+    expect(finalized.snapshot.payload.evidence).toHaveLength(1);
+    expect(finalized.snapshot.payload.evidence[0]).toMatchObject({
+      documentVersion: {
+        id: 'a3000000-0000-4000-8000-000000000001',
+        fileName: 'photo.jpg',
+        mimeType: 'image/jpeg',
+        byteSize: 10,
+        sha256: '1111111111111111111111111111111111111111111111111111111111111111',
+      },
+    });
+    expect(
+      finalized.snapshot.payload.signatures.map(
+        (item) => item.signature.signerRole,
+      ),
+    ).toEqual(['landlord', 'landlord', 'tenant']);
+    expect(
+      finalized.snapshot.payload.signatures.map(
+        (item) => item.signature.invalidatedAt !== null,
+      ),
+    ).toEqual([true, false, false]);
+    expect(finalized.snapshot.payload.unlockHistory).toHaveLength(1);
+    expect(finalized.snapshot.payload.unlockHistory[0]).toMatchObject({
+      reason: 'Correct handover details',
+      previousVersion: beforeUnlock.version,
+      newVersion: unlocked.version,
+    });
+
+    await expect(
+      sql`
+        update public.inspection_final_snapshots
+        set content_revision = content_revision + 1
+        where inspection_id = ${inspection.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_final_snapshot_immutable',
+    });
+
+    await expect(
+      sql`
+        insert into public.inspection_evidence (
+          id, inspection_id, schema_version_id, document_version_id,
+          kind, created_by_user_id, created_at
+        ) values (
+          'a6200000-0000-4000-8000-000000000001',
+          ${inspection.id}, ${published.id},
+          'a3000000-0000-4000-8000-000000000001',
+          'final_report', ${actor.userId}, '2026-09-21T08:55:00.000Z'
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_final_report_document_category_invalid',
+    });
+
+    let renderCalls = 0;
+    let releaseRenderRace!: () => void;
+    const bothRendered = new Promise<void>((resolve) => {
+      releaseRenderRace = resolve;
+    });
+    const pdfPort = {
+      async renderInspectionFinalReport(
+        snapshot: import('@portfolio/domain').InspectionFinalSnapshot,
+      ) {
+        renderCalls += 1;
+        expect(snapshot.inspectionId).toBe(inspection.id);
+        if (renderCalls === 2) releaseRenderRace();
+        await bothRendered;
+        return {
+          fileName: 'inspection-final.pdf',
+          content: new Uint8Array([37, 80, 68, 70, 45, 49]),
+        };
+      },
+    };
+    const reportObjects = new Set<string>();
+    const fileStorage = {
+      async put(input: {
+        objectKey: string;
+        content: Uint8Array;
+      }) {
+        reportObjects.add(input.objectKey);
+        return {
+          provider: 'report-test',
+          objectId: input.objectKey,
+          objectKey: input.objectKey,
+          byteSize: input.content.byteLength,
+          sha256: 'f'.repeat(64),
+          disposition: 'created' as const,
+        };
+      },
+      async stat(reference: import('@portfolio/application').StorageObjectReference) {
+        if (!reportObjects.has(reference.objectKey)) return null;
+        return {
+          ...reference,
+          byteSize: 6,
+          sha256: 'f'.repeat(64),
+        };
+      },
+      async remove(reference: import('@portfolio/application').StorageObjectReference) {
+        reportObjects.delete(reference.objectKey);
+      },
+    };
+
+    const [reportVersion, concurrentReportVersion] = await Promise.all([
+      generateInspectionFinalReportCommand(
+        {
+          inspectionRepository,
+          documentRepository,
+          fileStorage,
+          pdfPort,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-21T09:00:00.000Z' },
+        },
+        actor,
+        inspection.id,
+      ),
+      generateInspectionFinalReportCommand(
+        {
+          inspectionRepository,
+          documentRepository,
+          fileStorage,
+          pdfPort,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-21T09:00:00.000Z' },
+        },
+        actor,
+        inspection.id,
+      ),
+    ]);
+
+    expect(reportVersion).toMatchObject({
+      status: 'final',
+      mimeType: 'application/pdf',
+    });
+    expect(concurrentReportVersion.id).toBe(reportVersion.id);
+    expect(renderCalls).toBe(2);
+    expect(reportObjects.size).toBe(1);
+
+    const reportDocuments = await sql<{ id: string }[]>`
+      select id
+      from public.documents
+      where code = ${`INSPECTION-FINAL-${inspection.id}`}
+    `;
+    expect(reportDocuments).toHaveLength(1);
+    const reportVersions = await sql<{ id: string }[]>`
+      select id
+      from public.document_versions
+      where document_id = ${reportDocuments[0]!.id}
+    `;
+    expect(reportVersions).toHaveLength(1);
+
+    const reportAgain = await generateInspectionFinalReportCommand(
+      {
+        inspectionRepository,
+        documentRepository,
+        fileStorage,
+        pdfPort,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-21T09:01:00.000Z' },
+      },
+      actor,
+      inspection.id,
+    );
+    expect(reportAgain.id).toBe(reportVersion.id);
+    expect(renderCalls).toBe(2);
+
+    const allEvidence = await inspectionRepository.listEvidence(inspection.id);
+    expect(allEvidence.map((item) => item.kind)).toEqual([
+      'photo',
+      'final_report',
+    ]);
+  });
+
   it('enforces relational ownership independently of application code', async () => {
     await expect(
       sql`
@@ -1382,6 +2148,14 @@ describe('PostgreSQL infrastructure', () => {
           objectKey: input.objectKey,
           byteSize: input.content.byteLength,
           sha256: 'b'.repeat(64),
+          disposition: 'created' as const,
+        };
+      },
+      async stat(reference: import('@portfolio/application').StorageObjectReference) {
+        return {
+          ...reference,
+          byteSize: 4,
+          sha256: 'b'.repeat(64),
         };
       },
       async remove() {},
@@ -1430,9 +2204,27 @@ describe('PostgreSQL infrastructure', () => {
       constraint_name: 'document_links_signed_original_version_final',
     });
 
+    await expect(
+      finalizeDocumentVersionCommand(
+        {
+          documentRepository,
+          fileStorage: {
+            ...fileStorage,
+            async stat() { return null; },
+          },
+          clock: {
+            now: () => '2026-09-20T11:59:00.000Z',
+          },
+        },
+        actor,
+        version.id,
+      ),
+    ).rejects.toMatchObject({ code: 'DOCUMENT_BINARY_MISSING' });
+
     const final = await finalizeDocumentVersionCommand(
       {
         documentRepository,
+        fileStorage,
         clock: {
           now: () => '2026-09-20T12:00:00.000Z',
         },
@@ -1698,6 +2490,7 @@ describe('PostgreSQL infrastructure', () => {
         schemaCode: 'MOVE-IN-INT',
         inspectionType: 'move_in',
         title: 'Move-in integration schema',
+        requiredSignatureRoles: [],
         sections: [
           {
             key: 'general',
@@ -2199,6 +2992,7 @@ describe('PostgreSQL infrastructure', () => {
         schemaCode: 'MOVE-IN-INT',
         inspectionType: 'move_in',
         title: 'Move-in integration schema v2',
+        requiredSignatureRoles: [],
         sections: [
           {
             key: 'general',

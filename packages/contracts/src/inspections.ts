@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import {
   INSPECTION_CONDITION_OPERATORS,
+  INSPECTION_EVIDENCE_KINDS,
   INSPECTION_FINDING_SEVERITIES,
   INSPECTION_ITEM_TYPES,
   INSPECTION_SCHEMA_STATUSES,
+  INSPECTION_SIGNATURE_ROLES,
   INSPECTION_STATUSES,
   INSPECTION_TYPES,
   type InspectionCondition,
@@ -63,6 +65,7 @@ export const createInspectionSchemaVersionRequestSchema = z.object({
   schemaCode: z.string().trim().min(1),
   inspectionType: z.enum(INSPECTION_TYPES),
   title: z.string().trim().min(1),
+  requiredSignatureRoles: z.array(z.enum(INSPECTION_SIGNATURE_ROLES)),
   sections: z.array(schemaSectionRequestSchema).min(1),
 });
 
@@ -153,6 +156,7 @@ export const inspectionSchemaVersionResponseSchema = z.object({
   inspectionType: z.enum(INSPECTION_TYPES),
   title: z.string(),
   status: z.enum(INSPECTION_SCHEMA_STATUSES),
+  requiredSignatureRoles: z.array(z.enum(INSPECTION_SIGNATURE_ROLES)),
   sections: z.array(schemaSectionResponseSchema),
 });
 
@@ -195,4 +199,75 @@ export type InspectionSchemaVersionResponse = z.infer<
 export type InspectionItemResponse = z.infer<typeof inspectionItemResponseSchema>;
 export type InspectionFindingResponse = z.infer<
   typeof inspectionFindingResponseSchema
+>;
+
+export const attachInspectionEvidenceRequestSchema = z.object({
+  documentVersionId: entityIdSchema,
+  kind: z.enum(INSPECTION_EVIDENCE_KINDS).refine(
+    (value) => value !== 'final_report',
+  ),
+  sectionId: entityIdSchema.nullable().optional(),
+  itemId: entityIdSchema.nullable().optional(),
+  caption: z.string().nullable().optional(),
+});
+
+export const addInspectionSignatureRequestSchema = z.object({
+  signerRole: z.enum(INSPECTION_SIGNATURE_ROLES),
+  signerPartyId: entityIdSchema.nullable().optional(),
+  signerName: z.string().trim().min(1),
+  signatureDocumentVersionId: entityIdSchema,
+});
+
+export const unlockInspectionRequestSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+  reason: z.string().trim().min(1),
+});
+
+export const finalizeInspectionRequestSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+});
+
+export const inspectionEvidenceResponseSchema = z.object({
+  id: entityIdSchema,
+  inspectionId: entityIdSchema,
+  sectionId: entityIdSchema.nullable(),
+  itemId: entityIdSchema.nullable(),
+  documentVersionId: entityIdSchema,
+  kind: z.enum(INSPECTION_EVIDENCE_KINDS),
+  caption: z.string().nullable(),
+  createdByUserId: entityIdSchema,
+  createdAt: z.string(),
+});
+
+export const inspectionSignatureResponseSchema = z.object({
+  id: entityIdSchema,
+  inspectionId: entityIdSchema,
+  signerRole: z.enum(INSPECTION_SIGNATURE_ROLES),
+  signerPartyId: entityIdSchema.nullable(),
+  signerName: z.string(),
+  signatureDocumentVersionId: entityIdSchema,
+  signedByUserId: entityIdSchema,
+  signedAt: z.string(),
+  invalidatedAt: z.string().nullable(),
+  invalidationReason: z.string().nullable(),
+});
+
+export const inspectionFinalSnapshotResponseSchema = z.object({
+  id: entityIdSchema,
+  inspectionId: entityIdSchema,
+  snapshotVersion: z.literal(1),
+  inspectionVersion: z.number().int().positive(),
+  contentRevision: z.number().int().nonnegative(),
+  createdByUserId: entityIdSchema,
+  createdAt: z.string(),
+});
+
+export type InspectionEvidenceResponse = z.infer<
+  typeof inspectionEvidenceResponseSchema
+>;
+export type InspectionSignatureResponse = z.infer<
+  typeof inspectionSignatureResponseSchema
+>;
+export type InspectionFinalSnapshotResponse = z.infer<
+  typeof inspectionFinalSnapshotResponseSchema
 >;
