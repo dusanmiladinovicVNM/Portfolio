@@ -1,6 +1,8 @@
 # ADR 0016: Inspection schema versions, section concurrency and form-fact boundary
 
-**Status:** Accepted
+**Status:** Accepted — amended by ADR 0017
+
+> Planning note: after PR #11 merged, the review hardening became PR #12 and inspection evidence/finalization moved to PR #13. ADR 0017 supersedes the concurrency/immutability details below where they differ.
 
 ## Context
 
@@ -57,17 +59,15 @@ After publish, schema content is immutable. Retirement prevents new use without 
 
 An existing Inspection always points to the exact schema version it started with.
 
-### Three concurrency grains
+### Two concurrency grains
 
 Inspection lifecycle/assignment uses `Inspection.version`.
 
-Field autosave uses `InspectionSectionState.revision`.
-
-Closing transitions use monotonic `Inspection.contentRevision` as a global content barrier.
+Field content uses `InspectionSectionState.revision`.
 
 This is intentional.
 
-A kitchen autosave must not conflict merely because someone saved the meter section. However lock/finalization must prove that the authoritative response set did not change after validation. Every content mutation increments `contentRevision`; lock CASes both lifecycle version and the content revision it validated.
+A kitchen autosave must not conflict merely because someone saved the meter section. Section-level revisions also give the later offline/PWA workflow the smallest authoritative conflict boundary.
 
 ### Typed dynamic responses
 
@@ -119,11 +119,7 @@ PR #11 implements creation, start, section editing, findings, lock and cancellat
 
 `locked` closes response/finding mutation both in application code and PostgreSQL.
 
-Direct `draft → locked` is not valid; a field inspection must start before it can be locked.
-
-Section writes are PATCH semantics: callers explicitly set and/or clear selected answers. Omitted answers are unchanged.
-
-PR #13 owns signatures, controlled unlock semantics, final immutable snapshot and transition to finalized.
+PR #12 owns signatures, controlled unlock semantics, final immutable snapshot and transition to finalized.
 
 ## Consequences
 
