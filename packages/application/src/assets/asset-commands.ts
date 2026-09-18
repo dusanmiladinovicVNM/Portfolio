@@ -178,10 +178,13 @@ export async function replaceAssetCommand(
   const current = await requireAsset(deps.assetRepository, assetId);
   assertExpectedVersion(current, input.expectedVersion);
 
+  const replacementSpaceId =
+    input.spaceId === undefined ? current.spaceId : input.spaceId;
+
   await assertPlacement(
     deps.portfolioRepository,
     current.unitId,
-    input.spaceId,
+    replacementSpaceId,
   );
 
   const replacementAsset = createAsset({
@@ -189,7 +192,7 @@ export async function replaceAssetCommand(
     code: input.code,
     name: input.name,
     unitId: current.unitId,
-    ...(input.spaceId !== undefined ? { spaceId: input.spaceId } : {}),
+    spaceId: replacementSpaceId,
     ...(input.manufacturer !== undefined
       ? { manufacturer: input.manufacturer }
       : {}),
