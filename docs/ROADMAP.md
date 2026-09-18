@@ -19,7 +19,8 @@ The order is dependency-driven. A planned PR may be split if evidence shows that
 | #9 | Core Boundary Hardening — DTOs, routing, lockfile, transaction rule | DONE |
 | #10 | Documents foundation — versioned evidence + FileStoragePort | DONE |
 | #11 | Inspection domain backbone | DONE |
-| #12 | Inspection hardening — concurrency, immutability, PATCH semantics | IN PROGRESS |
+| #12 | Inspection hardening — concurrency, immutability, PATCH semantics | DONE |
+| #13 | Inspection evidence and finalization | IN PROGRESS |
 
 ## Evidence and operational domains
 
@@ -46,7 +47,7 @@ Use HandoverApp as a feature bank only.
 - findings
 - Unit/Tenancy references
 
-### PR #12 — Inspection hardening (IN PROGRESS)
+### PR #12 — Inspection hardening (DONE)
 
 - `Inspection.contentRevision` closing barrier
 - per-section revision remains local autosave concurrency
@@ -58,7 +59,7 @@ Use HandoverApp as a feature bank only.
 - DB/domain parity for multiselect duplicates
 - adversarial concurrency and direct-SQL sabotage tests
 
-### PR #13 — Inspection evidence and finalization
+### PR #13 — Inspection evidence and finalization (IN PROGRESS)
 
 - document/photo links
 - signatures
