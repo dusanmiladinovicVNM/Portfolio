@@ -1,0 +1,18 @@
+{
+  "name": "@portfolio/api",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "pnpm --workspace-root exec tsc --noEmit -p apps/api/tsconfig.json",
+    "test": "pnpm --workspace-root exec vitest run --passWithNoTests apps/api/test"
+  },
+  "dependencies": {
+    "@portfolio/http": "workspace:*",
+    "@portfolio/infrastructure": "workspace:*",
+    "@supabase/server": "1.7.0",
+    "postgres": "3.4.9"
+  }
+}
