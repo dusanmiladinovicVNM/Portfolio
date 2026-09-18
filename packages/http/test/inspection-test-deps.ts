@@ -187,6 +187,29 @@ export class InMemoryInspectionRepository implements InspectionRepository {
     return contentRevision;
   }
 
+  async insertFinalReportEvidence(evidence: InspectionEvidence) {
+    const inspection = this.inspections.get(evidence.inspectionId);
+    if (!inspection || inspection.status !== 'finalized') {
+      throw new DomainError(
+        'INSPECTION_FINAL_REPORT_STATE_INVALID',
+        'Final report evidence requires a finalized inspection.',
+      );
+    }
+    if (
+      this.evidence.some(
+        (item) =>
+          item.inspectionId === evidence.inspectionId &&
+          item.kind === 'final_report',
+      )
+    ) {
+      throw new DomainError(
+        'INSPECTION_FINAL_REPORT_ALREADY_EXISTS',
+        'Inspection already has a final report.',
+      );
+    }
+    this.evidence.push(evidence);
+  }
+
   async listEvidence(inspectionId: InspectionId) {
     return this.evidence.filter((item) => item.inspectionId === inspectionId);
   }
