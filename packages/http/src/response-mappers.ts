@@ -2,6 +2,10 @@ import type {
   DocumentLinkResponse,
   DocumentResponse,
   DocumentVersionResponse,
+  InspectionFindingResponse,
+  InspectionItemResponse,
+  InspectionResponseDto,
+  InspectionSchemaVersionResponse,
   LeaseAgreementResponse,
   LeaseAmendmentResponse,
   OwnershipPeriodResponse,
@@ -16,6 +20,10 @@ import type {
   Document,
   DocumentLink,
   DocumentVersion,
+  Inspection,
+  InspectionFinding,
+  InspectionResponse,
+  InspectionSchemaVersion,
   LeaseAgreement,
   LeaseAmendment,
   OwnershipPeriod,
@@ -252,5 +260,88 @@ export function toDocumentLinkResponse(
     relation: link.relation,
     targetType: link.targetType,
     targetId: link.targetId,
+  };
+}
+
+export function toInspectionResponse(inspection: Inspection): InspectionResponseDto {
+  return {
+    id: inspection.id,
+    code: inspection.code,
+    inspectionType: inspection.inspectionType,
+    unitId: inspection.unitId,
+    tenancyId: inspection.tenancyId,
+    schemaVersionId: inspection.schemaVersionId,
+    assignedToUserId: inspection.assignedToUserId,
+    createdByUserId: inspection.createdByUserId,
+    scheduledFor: inspection.scheduledFor,
+    status: inspection.status,
+    startedAt: inspection.startedAt,
+    lockedAt: inspection.lockedAt,
+    finalizedAt: inspection.finalizedAt,
+    cancelledAt: inspection.cancelledAt,
+    version: inspection.version,
+  };
+}
+
+export function toInspectionSchemaVersionResponse(
+  schema: InspectionSchemaVersion,
+): InspectionSchemaVersionResponse {
+  return {
+    id: schema.id,
+    schemaCode: schema.schemaCode,
+    versionNumber: schema.versionNumber,
+    inspectionType: schema.inspectionType,
+    title: schema.title,
+    status: schema.status,
+    sections: schema.sections.map((section) => ({
+      id: section.id,
+      key: section.key,
+      title: section.title,
+      description: section.description,
+      sortOrder: section.sortOrder,
+      items: section.items.map((item) => ({
+        id: item.id,
+        sectionId: item.sectionId,
+        key: item.key,
+        type: item.type,
+        label: item.label,
+        required: item.required,
+        sortOrder: item.sortOrder,
+        options: item.options.map((option) => ({ ...option })),
+        visibleWhen: item.visibleWhen,
+        requiredWhen: item.requiredWhen,
+      })),
+    })),
+  };
+}
+
+export function toInspectionItemResponse(
+  response: InspectionResponse,
+): InspectionItemResponse {
+  return {
+    id: response.id,
+    inspectionId: response.inspectionId,
+    sectionId: response.sectionId,
+    itemId: response.itemId,
+    value: response.value,
+    comment: response.comment,
+    updatedByUserId: response.updatedByUserId,
+    updatedAt: response.updatedAt,
+  };
+}
+
+export function toInspectionFindingResponse(
+  finding: InspectionFinding,
+): InspectionFindingResponse {
+  return {
+    id: finding.id,
+    inspectionId: finding.inspectionId,
+    sectionId: finding.sectionId,
+    itemId: finding.itemId,
+    severity: finding.severity,
+    title: finding.title,
+    description: finding.description,
+    createdByUserId: finding.createdByUserId,
+    createdAt: finding.createdAt,
   };
 }

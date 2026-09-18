@@ -5,3 +5,4 @@ export * from './ownership.js';
 export * from './tenancy.js';
 export * from './lease.js';
 export * from './documents.js';
+export * from './inspections.js';
