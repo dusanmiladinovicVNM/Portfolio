@@ -516,7 +516,7 @@ describe('Inspection HTTP backbone', () => {
         {
           method: 'PATCH',
           body: JSON.stringify({
-            expectedRevision: 4,
+            expectedRevision: 2,
             set: [{ itemId: conditionItemId, value: 'good' }],
             clear: [damageItemId],
           }),
