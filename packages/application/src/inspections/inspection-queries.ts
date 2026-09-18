@@ -1,11 +1,14 @@
 import {
   DomainError,
   type Inspection,
+  type InspectionEvidence,
+  type InspectionFinalSnapshot,
   type InspectionFinding,
   type InspectionId,
   type InspectionResponse,
   type InspectionSectionState,
   type InspectionSchemaVersion,
+  type InspectionSignature,
   type InspectionSchemaVersionId,
   type UnitId,
 } from '@portfolio/domain';
@@ -100,6 +103,9 @@ export interface InspectionBundle {
   readonly sectionStates: readonly InspectionSectionState[];
   readonly responses: readonly InspectionResponse[];
   readonly findings: readonly InspectionFinding[];
+  readonly evidence: readonly InspectionEvidence[];
+  readonly signatures: readonly InspectionSignature[];
+  readonly finalSnapshot: InspectionFinalSnapshot | null;
 }
 
 export async function getInspectionBundleQuery(
@@ -118,11 +124,30 @@ export async function getInspectionBundleQuery(
     );
   }
 
-  const [sectionStates, responses, findings] = await Promise.all([
+  const [
+    sectionStates,
+    responses,
+    findings,
+    evidence,
+    signatures,
+    finalSnapshot,
+  ] = await Promise.all([
     repository.listSectionStates(id),
     repository.listResponses(id),
     repository.listFindings(id),
+    repository.listEvidence(id),
+    repository.listSignatures(id),
+    repository.getFinalSnapshot(id),
   ]);
 
-  return { inspection, schema, sectionStates, responses, findings };
+  return {
+    inspection,
+    schema,
+    sectionStates,
+    responses,
+    findings,
+    evidence,
+    signatures,
+    finalSnapshot,
+  };
 }

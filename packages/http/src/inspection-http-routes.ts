@@ -1,9 +1,12 @@
 import {
+  addInspectionSignatureCommand,
+  attachInspectionEvidenceCommand,
   cancelInspectionCommand,
   createInspectionCommand,
   createInspectionFindingCommand,
   createInspectionSchemaVersionCommand,
   getInspectionBundleQuery,
+  finalizeInspectionCommand,
   getInspectionSchemaVersionQuery,
   listInspectionSchemaVersionsQuery,
   listInspectionsByUnitQuery,
@@ -11,21 +14,28 @@ import {
   publishInspectionSchemaVersionCommand,
   saveInspectionSectionCommand,
   startInspectionCommand,
+  unlockInspectionCommand,
   type Actor,
   type ClockPort,
   type IdGenerator,
+  type DocumentRepository,
   type InspectionRepository,
+  type PartyRepository,
   type PortfolioRepository,
   type StaffDirectoryRepository,
   type TenancyRepository,
 } from '@portfolio/application';
 import {
+  addInspectionSignatureRequestSchema,
+  attachInspectionEvidenceRequestSchema,
   createInspectionFindingRequestSchema,
   createInspectionRequestSchema,
   createInspectionSchemaVersionRequestSchema,
   entityIdSchema,
   expectedInspectionVersionRequestSchema,
+  finalizeInspectionRequestSchema,
   saveInspectionSectionRequestSchema,
+  unlockInspectionRequestSchema,
 } from '@portfolio/contracts';
 import {
   asInspectionId,
@@ -37,14 +47,19 @@ import {
 } from '@portfolio/domain';
 import { json, requestJson, validationFailure } from './http-utils.js';
 import {
+  toInspectionEvidenceResponse,
   toInspectionFindingResponse,
+  toInspectionFinalSnapshotResponse,
   toInspectionItemResponse,
   toInspectionResponse,
   toInspectionSchemaVersionResponse,
+  toInspectionSignatureResponse,
 } from './response-mappers.js';
 
 export interface InspectionHttpDependencies {
   readonly inspectionRepository: InspectionRepository;
+  readonly documentRepository: DocumentRepository;
+  readonly partyRepository: PartyRepository;
   readonly portfolioRepository: PortfolioRepository;
   readonly tenancyRepository: TenancyRepository;
   readonly staffDirectoryRepository: StaffDirectoryRepository;
@@ -87,6 +102,9 @@ export async function handleInspectionHttp(
           schemaCode: parsed.data.schemaCode,
           inspectionType: parsed.data.inspectionType,
           title: parsed.data.title,
+          ...(parsed.data.requiredSignatureRoles !== undefined
+            ? { requiredSignatureRoles: parsed.data.requiredSignatureRoles }
+            : {}),
           sections: parsed.data.sections.map((section) => ({
             key: section.key,
             title: section.title,
@@ -229,6 +247,12 @@ export async function handleInspectionHttp(
         })),
         responses: bundle.responses.map(toInspectionItemResponse),
         findings: bundle.findings.map(toInspectionFindingResponse),
+        evidence: bundle.evidence.map(toInspectionEvidenceResponse),
+        signatures: bundle.signatures.map(toInspectionSignatureResponse),
+        finalSnapshot:
+          bundle.finalSnapshot === null
+            ? null
+            : toInspectionFinalSnapshotResponse(bundle.finalSnapshot),
       },
     });
   }
@@ -333,6 +357,100 @@ export async function handleInspectionHttp(
     );
 
     return json({ data: toInspectionFindingResponse(finding) }, 201);
+  }
+
+
+  const evidenceMatch = /^\/inspections\/([^/]+)\/evidence$/.exec(path);
+  if (method === 'POST' && evidenceMatch) {
+    const parsedId = entityIdSchema.safeParse(evidenceMatch[1]);
+    const parsed = attachInspectionEvidenceRequestSchema.safeParse(
+      await requestJson(request),
+    );
+    if (!parsedId.success || !parsed.success) return validationFailure();
+
+    const evidence = await attachInspectionEvidenceCommand(
+      {
+        inspectionRepository: deps.inspectionRepository,
+        documentRepository: deps.documentRepository,
+        idGenerator: deps.idGenerator,
+        clock: deps.clock,
+      },
+      actor,
+      asInspectionId(parsedId.data),
+      parsed.data,
+    );
+    return json({ data: toInspectionEvidenceResponse(evidence) }, 201);
+  }
+
+  const signatureMatch = /^\/inspections\/([^/]+)\/signatures$/.exec(path);
+  if (method === 'POST' && signatureMatch) {
+    const parsedId = entityIdSchema.safeParse(signatureMatch[1]);
+    const parsed = addInspectionSignatureRequestSchema.safeParse(
+      await requestJson(request),
+    );
+    if (!parsedId.success || !parsed.success) return validationFailure();
+
+    const signature = await addInspectionSignatureCommand(
+      {
+        inspectionRepository: deps.inspectionRepository,
+        documentRepository: deps.documentRepository,
+        partyRepository: deps.partyRepository,
+        idGenerator: deps.idGenerator,
+        clock: deps.clock,
+      },
+      actor,
+      asInspectionId(parsedId.data),
+      parsed.data,
+    );
+    return json({ data: toInspectionSignatureResponse(signature) }, 201);
+  }
+
+  const unlockMatch = /^\/inspections\/([^/]+)\/unlock$/.exec(path);
+  if (method === 'POST' && unlockMatch) {
+    const parsedId = entityIdSchema.safeParse(unlockMatch[1]);
+    const parsed = unlockInspectionRequestSchema.safeParse(
+      await requestJson(request),
+    );
+    if (!parsedId.success || !parsed.success) return validationFailure();
+
+    const inspection = await unlockInspectionCommand(
+      {
+        inspectionRepository: deps.inspectionRepository,
+        idGenerator: deps.idGenerator,
+        clock: deps.clock,
+      },
+      actor,
+      asInspectionId(parsedId.data),
+      parsed.data.expectedVersion,
+      parsed.data.reason,
+    );
+    return json({ data: toInspectionResponse(inspection) });
+  }
+
+  const finalizeMatch = /^\/inspections\/([^/]+)\/finalize$/.exec(path);
+  if (method === 'POST' && finalizeMatch) {
+    const parsedId = entityIdSchema.safeParse(finalizeMatch[1]);
+    const parsed = finalizeInspectionRequestSchema.safeParse(
+      await requestJson(request),
+    );
+    if (!parsedId.success || !parsed.success) return validationFailure();
+
+    const result = await finalizeInspectionCommand(
+      {
+        inspectionRepository: deps.inspectionRepository,
+        idGenerator: deps.idGenerator,
+        clock: deps.clock,
+      },
+      actor,
+      asInspectionId(parsedId.data),
+      parsed.data.expectedVersion,
+    );
+    return json({
+      data: {
+        inspection: toInspectionResponse(result.inspection),
+        snapshot: toInspectionFinalSnapshotResponse(result.snapshot),
+      },
+    });
   }
 
   return null;

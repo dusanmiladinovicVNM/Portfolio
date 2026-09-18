@@ -69,7 +69,9 @@ function errorStatus(code: string): number {
   if (
     code === 'FORBIDDEN' ||
     code === 'INSPECTION_ACCESS_DENIED' ||
-    code === 'INSPECTION_ASSIGNMENT_FORBIDDEN'
+    code === 'INSPECTION_ASSIGNMENT_FORBIDDEN' ||
+    code === 'INSPECTION_UNLOCK_FORBIDDEN' ||
+    code === 'INSPECTION_FINALIZE_FORBIDDEN'
   ) return 403;
   if (code === 'INVALID_REQUEST') return 400;
   if (code.endsWith('_NOT_FOUND')) return 404;
@@ -119,6 +121,8 @@ export function createPortfolioHttpHandler(
           handleInspectionHttp(
             {
               inspectionRepository: deps.inspectionRepository,
+              documentRepository: deps.documentRepository,
+              partyRepository: deps.partyRepository,
               portfolioRepository: deps.portfolioRepository,
               tenancyRepository: deps.tenancyRepository,
               staffDirectoryRepository: deps.staffDirectoryRepository,
