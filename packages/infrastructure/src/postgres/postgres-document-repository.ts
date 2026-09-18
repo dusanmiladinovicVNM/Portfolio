@@ -380,6 +380,39 @@ export class PostgresDocumentRepository implements DocumentRepository {
       : null;
   }
 
+  async insertGeneratedFinal(
+    document: Document,
+    version: DocumentVersion,
+    storage: StorageObjectReference,
+  ): Promise<void> {
+    await withTranslatedErrors(async () => {
+      await this.sql.begin(async (tx) => {
+        await tx`
+          insert into public.documents (
+            id, code, title, category, status, latest_version_number, revision
+          ) values (
+            ${document.id}, ${document.code}, ${document.title},
+            ${document.category}, ${document.status},
+            ${document.latestVersionNumber}, ${document.revision}
+          )
+        `;
+
+        await tx`
+          insert into public.document_versions (
+            id, document_id, version_number, file_name, mime_type,
+            byte_size, sha256, status, finalized_at,
+            storage_provider, storage_object_id, storage_object_key
+          ) values (
+            ${version.id}, ${version.documentId}, ${version.versionNumber},
+            ${version.fileName}, ${version.mimeType}, ${version.byteSize},
+            ${version.sha256}, ${version.status}, ${version.finalizedAt},
+            ${storage.provider}, ${storage.objectId}, ${storage.objectKey}
+          )
+        `;
+      });
+    });
+  }
+
   async insertLink(link: DocumentLink): Promise<void> {
     const target = {
       propertyId: link.targetType === 'property' ? link.targetId : null,

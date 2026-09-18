@@ -27,6 +27,11 @@ export interface DocumentRepository {
   getStorageReference(
     versionId: DocumentVersionId,
   ): Promise<StorageObjectReference | null>;
+  insertGeneratedFinal(
+    document: Document,
+    version: DocumentVersion,
+    storage: StorageObjectReference,
+  ): Promise<void>;
 
   insertLink(link: DocumentLink): Promise<void>;
   listLinksByDocument(documentId: DocumentId): Promise<readonly DocumentLink[]>;

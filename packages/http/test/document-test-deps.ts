@@ -79,6 +79,16 @@ export class InMemoryDocumentRepository implements DocumentRepository {
     return this.storage.get(versionId) ?? null;
   }
 
+  async insertGeneratedFinal(
+    document: Document,
+    version: DocumentVersion,
+    storage: StorageObjectReference,
+  ) {
+    this.documents.set(document.id, document);
+    this.versions.set(version.id, version);
+    this.storage.set(version.id, storage);
+  }
+
   async insertLink(link: DocumentLink) {
     this.links.push(link);
   }
