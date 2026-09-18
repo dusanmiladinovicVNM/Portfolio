@@ -116,10 +116,6 @@ export interface CreateStoredDocumentVersionInput {
   sha256: string;
 }
 
-export type CreateDocumentLinkInput = Omit<DocumentLink, 'documentId'> & {
-  documentId: DocumentId;
-};
-
 function required(value: string, field: string): string {
   const normalized = value.trim();
   if (!normalized) {
@@ -234,7 +230,7 @@ export function archiveDocument(document: Document): Document {
   };
 }
 
-export function createDocumentLink(input: CreateDocumentLinkInput): DocumentLink {
+export function createDocumentLink(input: DocumentLink): DocumentLink {
   if (
     input.relation === 'signed_original' &&
     input.targetType !== 'lease_agreement' &&
