@@ -23,3 +23,6 @@ export * from './documents/file-storage-port.js';
 export * from './documents/document-repository.js';
 export * from './documents/document-commands.js';
 export * from './documents/document-queries.js';
+export * from './inspections/inspection-repository.js';
+export * from './inspections/inspection-commands.js';
+export * from './inspections/inspection-queries.js';
