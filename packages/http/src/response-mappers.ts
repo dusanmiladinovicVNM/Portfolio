@@ -323,7 +323,11 @@ export function toInspectionItemResponse(
     inspectionId: response.inspectionId,
     sectionId: response.sectionId,
     itemId: response.itemId,
-    value: response.value,
+    value:
+      typeof response.value === 'string' ||
+      typeof response.value === 'boolean'
+        ? response.value
+        : [...response.value],
     comment: response.comment,
     updatedByUserId: response.updatedByUserId,
     updatedAt: response.updatedAt,
