@@ -330,9 +330,9 @@ type InspectionScalarConditionValue =
 
 function isTruthy(value: InspectionScalarConditionValue): boolean {
   if (value === undefined) return false;
-  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'string') return value.trim().length > 0;
   if (typeof value === 'boolean') return value;
-  return value.trim().length > 0;
+  return value.length > 0;
 }
 
 function equality(
@@ -386,9 +386,9 @@ export function evaluateInspectionCondition(
 
 function answered(value: InspectionAnswerValue | undefined): boolean {
   if (value === undefined) return false;
-  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'string') return value.trim().length > 0;
   if (typeof value === 'boolean') return true;
-  return value.trim().length > 0;
+  return value.length > 0;
 }
 
 export interface MissingInspectionItem {
