@@ -47,6 +47,7 @@ export interface UploadDocumentVersionCommandInput {
   readonly fileName: string;
   readonly mimeType: string;
   readonly content: Uint8Array;
+  readonly expectedDocumentRevision?: number;
 }
 
 interface LinkDocumentCommandBase {
@@ -231,6 +232,16 @@ export async function uploadDocumentVersionCommand(
     throw new DomainError(
       'DOCUMENT_NOT_ACTIVE',
       'A new version may only be added to an active document.',
+    );
+  }
+
+  if (
+    input.expectedDocumentRevision !== undefined &&
+    document.revision !== input.expectedDocumentRevision
+  ) {
+    throw new DomainError(
+      'DOCUMENT_VERSION_CONFLICT',
+      'Document changed before the new version upload started.',
     );
   }
 

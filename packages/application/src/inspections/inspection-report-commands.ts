@@ -9,6 +9,7 @@ import { requireCapability, type Actor } from '../security/access.js';
 import type { ClockPort } from '../shared/clock.js';
 import type { IdGenerator } from '../shared/id-generator.js';
 import {
+  assertDocumentVersionStorageIntegrity,
   createDocumentCommand,
   finalizeDocumentVersionCommand,
   uploadDocumentVersionCommand,
@@ -46,9 +47,11 @@ export async function generateInspectionFinalReportCommand(
     );
   }
 
-  const existing = (await deps.inspectionRepository.listEvidence(inspectionId))
-    .find((item) => item.kind === 'final_report');
-  if (existing) {
+  const resolveExistingEvidence = async (): Promise<DocumentVersion | null> => {
+    const existing = (await deps.inspectionRepository.listEvidence(inspectionId))
+      .find((item) => item.kind === 'final_report');
+    if (!existing) return null;
+
     const version = await deps.documentRepository.getVersionById(
       existing.documentVersionId,
     );
@@ -58,8 +61,18 @@ export async function generateInspectionFinalReportCommand(
         'Final report evidence references a missing document version.',
       );
     }
+    if (version.status !== 'final' || version.mimeType !== 'application/pdf') {
+      throw new DomainError(
+        'INSPECTION_FINAL_REPORT_DOCUMENT_INVALID',
+        'Final report evidence must reference one final PDF DocumentVersion.',
+      );
+    }
+    await assertDocumentVersionStorageIntegrity(deps, version);
     return version;
-  }
+  };
+
+  const existing = await resolveExistingEvidence();
+  if (existing) return existing;
 
   const snapshot = await deps.inspectionRepository.getFinalSnapshot(inspectionId);
   if (!snapshot) {
@@ -69,51 +82,123 @@ export async function generateInspectionFinalReportCommand(
     );
   }
 
-  const rendered = await deps.pdfPort.renderInspectionFinalReport(snapshot);
-  if (rendered.content.byteLength === 0) {
+  const reportCode = `INSPECTION-FINAL-${inspection.id}`;
+  const findReportDocument = async () =>
+    (await deps.documentRepository.listDocuments()).find(
+      (document) => document.code.toLowerCase() === reportCode.toLowerCase(),
+    ) ?? null;
+
+  let document = await findReportDocument();
+  if (!document) {
+    try {
+      document = await createDocumentCommand(
+        {
+          documentRepository: deps.documentRepository,
+          idGenerator: deps.idGenerator,
+        },
+        actor,
+        {
+          code: reportCode,
+          title: `${inspection.code} final inspection report`,
+          category: 'inspection',
+        },
+      );
+    } catch (error) {
+      if (!(error instanceof DomainError) || error.code !== 'DOCUMENT_CODE_ALREADY_EXISTS') {
+        throw error;
+      }
+      document = await findReportDocument();
+      if (!document) {
+        throw new DomainError(
+          'INSPECTION_FINAL_REPORT_RECONCILIATION_REQUIRED',
+          'Final report document reservation exists but cannot be resolved.',
+        );
+      }
+    }
+  }
+
+  if (document.category !== 'inspection' || document.status !== 'active') {
     throw new DomainError(
-      'INSPECTION_FINAL_REPORT_EMPTY',
-      'PDF renderer returned empty content.',
+      'INSPECTION_FINAL_REPORT_DOCUMENT_INVALID',
+      'Canonical final report document has an invalid category or status.',
     );
   }
 
-  const document = await createDocumentCommand(
-    {
-      documentRepository: deps.documentRepository,
-      idGenerator: deps.idGenerator,
-    },
-    actor,
-    {
-      code: `INSPECTION-FINAL-${inspection.id}`,
-      title: `${inspection.code} final inspection report`,
-      category: 'inspection',
-    },
-  );
+  const resolveCanonicalVersion = async (): Promise<DocumentVersion | null> => {
+    const versions = await deps.documentRepository.listVersionsByDocument(document.id);
+    if (versions.length > 1) {
+      throw new DomainError(
+        'INSPECTION_FINAL_REPORT_VERSION_CONFLICT',
+        'Canonical final report document contains more than one version.',
+      );
+    }
+    return versions[0] ?? null;
+  };
 
-  const stored = await uploadDocumentVersionCommand(
-    {
-      documentRepository: deps.documentRepository,
-      fileStorage: deps.fileStorage,
-      idGenerator: deps.idGenerator,
-    },
-    actor,
-    {
-      documentId: document.id,
-      fileName: rendered.fileName,
-      mimeType: 'application/pdf',
-      content: rendered.content,
-    },
-  );
+  const ensureFinal = async (candidate: DocumentVersion): Promise<DocumentVersion> => {
+    if (candidate.status === 'final') {
+      await assertDocumentVersionStorageIntegrity(deps, candidate);
+      return candidate;
+    }
 
-  const finalVersion = await finalizeDocumentVersionCommand(
-    {
-      documentRepository: deps.documentRepository,
-      fileStorage: deps.fileStorage,
-      clock: deps.clock,
-    },
-    actor,
-    stored.id,
-  );
+    try {
+      return await finalizeDocumentVersionCommand(
+        {
+          documentRepository: deps.documentRepository,
+          fileStorage: deps.fileStorage,
+          clock: deps.clock,
+        },
+        actor,
+        candidate.id,
+      );
+    } catch (error) {
+      if (!(error instanceof DomainError) || error.code !== 'DOCUMENT_VERSION_CONFLICT') {
+        throw error;
+      }
+      const winner = await deps.documentRepository.getVersionById(candidate.id);
+      if (!winner || winner.status !== 'final') throw error;
+      await assertDocumentVersionStorageIntegrity(deps, winner);
+      return winner;
+    }
+  };
+
+  let canonicalVersion = await resolveCanonicalVersion();
+  if (!canonicalVersion) {
+    const expectedDocumentRevision = document.revision;
+    const rendered = await deps.pdfPort.renderInspectionFinalReport(snapshot);
+    if (rendered.content.byteLength === 0) {
+      throw new DomainError(
+        'INSPECTION_FINAL_REPORT_EMPTY',
+        'PDF renderer returned empty content.',
+      );
+    }
+
+    try {
+      canonicalVersion = await uploadDocumentVersionCommand(
+        {
+          documentRepository: deps.documentRepository,
+          fileStorage: deps.fileStorage,
+          idGenerator: deps.idGenerator,
+        },
+        actor,
+        {
+          documentId: document.id,
+          fileName: rendered.fileName,
+          mimeType: 'application/pdf',
+          content: rendered.content,
+          expectedDocumentRevision,
+        },
+      );
+    } catch (error) {
+      if (!(error instanceof DomainError) || error.code !== 'DOCUMENT_VERSION_CONFLICT') {
+        throw error;
+      }
+      canonicalVersion = await resolveCanonicalVersion();
+      if (!canonicalVersion) throw error;
+    }
+  }
+
+  const finalVersion = await ensureFinal(canonicalVersion);
 
   const evidence = createInspectionFinalReportEvidence(inspection, {
     id: asInspectionEvidenceId(deps.idGenerator.next()),
@@ -121,7 +206,27 @@ export async function generateInspectionFinalReportCommand(
     createdByUserId: actor.userId,
     createdAt: deps.clock.now(),
   });
-  await deps.inspectionRepository.insertFinalReportEvidence(evidence);
 
-  return finalVersion;
+  try {
+    await deps.inspectionRepository.insertFinalReportEvidence(evidence);
+    return finalVersion;
+  } catch (error) {
+    if (!(error instanceof DomainError) || error.code !== 'INSPECTION_FINAL_REPORT_ALREADY_EXISTS') {
+      throw error;
+    }
+    const winner = await resolveExistingEvidence();
+    if (!winner) {
+      throw new DomainError(
+        'INSPECTION_FINAL_REPORT_RECONCILIATION_REQUIRED',
+        'Final report uniqueness was claimed but the canonical evidence cannot be resolved.',
+      );
+    }
+    if (winner.id !== finalVersion.id) {
+      throw new DomainError(
+        'INSPECTION_FINAL_REPORT_VERSION_CONFLICT',
+        'Concurrent final report generation resolved to different document versions.',
+      );
+    }
+    return winner;
+  }
 }

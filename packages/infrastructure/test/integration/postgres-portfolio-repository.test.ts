@@ -1244,6 +1244,16 @@ describe('PostgreSQL infrastructure', () => {
       'a1000000-0000-4000-8000-000000000018',
       'a1000000-0000-4000-8000-000000000019',
       'a1000000-0000-4000-8000-000000000020',
+      'a1000000-0000-4000-8000-000000000021',
+      'a1000000-0000-4000-8000-000000000022',
+      'a1000000-0000-4000-8000-000000000023',
+      'a1000000-0000-4000-8000-000000000024',
+      'a1000000-0000-4000-8000-000000000025',
+      'a1000000-0000-4000-8000-000000000026',
+      'a1000000-0000-4000-8000-000000000027',
+      'a1000000-0000-4000-8000-000000000028',
+      'a1000000-0000-4000-8000-000000000029',
+      'a1000000-0000-4000-8000-000000000030',
     ]);
 
     const schema = await createInspectionSchemaVersionCommand(
@@ -1793,23 +1803,31 @@ describe('PostgreSQL infrastructure', () => {
     });
 
     let renderCalls = 0;
+    let releaseRenderRace!: () => void;
+    const bothRendered = new Promise<void>((resolve) => {
+      releaseRenderRace = resolve;
+    });
     const pdfPort = {
       async renderInspectionFinalReport(
         snapshot: import('@portfolio/domain').InspectionFinalSnapshot,
       ) {
         renderCalls += 1;
         expect(snapshot.inspectionId).toBe(inspection.id);
+        if (renderCalls === 2) releaseRenderRace();
+        await bothRendered;
         return {
           fileName: 'inspection-final.pdf',
           content: new Uint8Array([37, 80, 68, 70, 45, 49]),
         };
       },
     };
+    const reportObjects = new Set<string>();
     const fileStorage = {
       async put(input: {
         objectKey: string;
         content: Uint8Array;
       }) {
+        reportObjects.add(input.objectKey);
         return {
           provider: 'report-test',
           objectId: input.objectKey,
@@ -1820,31 +1838,65 @@ describe('PostgreSQL infrastructure', () => {
         };
       },
       async stat(reference: import('@portfolio/application').StorageObjectReference) {
+        if (!reportObjects.has(reference.objectKey)) return null;
         return {
           ...reference,
           byteSize: 6,
           sha256: 'f'.repeat(64),
         };
       },
-      async remove() {},
+      async remove(reference: import('@portfolio/application').StorageObjectReference) {
+        reportObjects.delete(reference.objectKey);
+      },
     };
 
-    const reportVersion = await generateInspectionFinalReportCommand(
-      {
-        inspectionRepository,
-        documentRepository,
-        fileStorage,
-        pdfPort,
-        idGenerator: ids,
-        clock: { now: () => '2026-09-21T09:00:00.000Z' },
-      },
-      actor,
-      inspection.id,
-    );
+    const [reportVersion, concurrentReportVersion] = await Promise.all([
+      generateInspectionFinalReportCommand(
+        {
+          inspectionRepository,
+          documentRepository,
+          fileStorage,
+          pdfPort,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-21T09:00:00.000Z' },
+        },
+        actor,
+        inspection.id,
+      ),
+      generateInspectionFinalReportCommand(
+        {
+          inspectionRepository,
+          documentRepository,
+          fileStorage,
+          pdfPort,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-21T09:00:00.000Z' },
+        },
+        actor,
+        inspection.id,
+      ),
+    ]);
+
     expect(reportVersion).toMatchObject({
       status: 'final',
       mimeType: 'application/pdf',
     });
+    expect(concurrentReportVersion.id).toBe(reportVersion.id);
+    expect(renderCalls).toBe(2);
+    expect(reportObjects.size).toBe(1);
+
+    const reportDocuments = await sql<{ id: string }[]>`
+      select id
+      from public.documents
+      where code = ${`INSPECTION-FINAL-${inspection.id}`}
+    `;
+    expect(reportDocuments).toHaveLength(1);
+    const reportVersions = await sql<{ id: string }[]>`
+      select id
+      from public.document_versions
+      where document_id = ${reportDocuments[0]!.id}
+    `;
+    expect(reportVersions).toHaveLength(1);
 
     const reportAgain = await generateInspectionFinalReportCommand(
       {
@@ -1859,7 +1911,7 @@ describe('PostgreSQL infrastructure', () => {
       inspection.id,
     );
     expect(reportAgain.id).toBe(reportVersion.id);
-    expect(renderCalls).toBe(1);
+    expect(renderCalls).toBe(2);
 
     const allEvidence = await inspectionRepository.listEvidence(inspection.id);
     expect(allEvidence.map((item) => item.kind)).toEqual([
