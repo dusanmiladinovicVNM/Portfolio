@@ -13,6 +13,7 @@ import {
   createSpaceCommand,
   createUnitCommand,
   getEffectiveTenancyTermsQuery,
+  giveTenancyNoticeCommand,
   listOwnershipPeriodsByUnitQuery,
   listPropertiesQuery,
   listSpacesByUnitQuery,
@@ -428,7 +429,7 @@ describe('PostgreSQL infrastructure', () => {
     expect(period.owners.map((owner) => owner.shareBasisPoints)).toEqual([5000, 5000]);
   });
 
-  it('persists tenancy lifecycle, rejects stale writes and enforces overlap at DB level', async () => {
+  it('separates planned reservation from actual occupancy and hardens tenancy history', async () => {
     const actor = await resolveActor(accessRepository, {
       provider: 'supabase',
       subject: 'external-admin-subject',
@@ -440,6 +441,9 @@ describe('PostgreSQL infrastructure', () => {
       '21000000-0000-4000-8000-000000000003',
       '21000000-0000-4000-8000-000000000004',
       '21000000-0000-4000-8000-000000000005',
+      '21000000-0000-4000-8000-000000000006',
+      '21000000-0000-4000-8000-000000000007',
+      '21000000-0000-4000-8000-000000000008',
     ]);
 
     const property = await createPropertyCommand(
@@ -468,6 +472,8 @@ describe('PostgreSQL infrastructure', () => {
       },
     );
 
+    expect(unit.status).toBe('active');
+
     const tenant = await createPartyCommand(
       { partyRepository, idGenerator: ids },
       actor,
@@ -479,7 +485,7 @@ describe('PostgreSQL infrastructure', () => {
       },
     );
 
-    const draft = await createTenancyCommand(
+    const currentDraft = await createTenancyCommand(
       {
         tenancyRepository,
         portfolioRepository,
@@ -489,7 +495,7 @@ describe('PostgreSQL infrastructure', () => {
       actor,
       {
         unitId: unit.id,
-        code: 'TEN-INT-1',
+        code: 'TEN-INT-CURRENT',
         parties: [
           {
             partyId: tenant.id,
@@ -500,50 +506,52 @@ describe('PostgreSQL infrastructure', () => {
       },
     );
 
-    const planned = await planTenancyCommand(
+    const currentPlanned = await planTenancyCommand(
       { tenancyRepository },
       actor,
-      draft.id,
+      currentDraft.id,
       1,
       '2026-10-01',
       '2027-09-30',
     );
 
-    expect(planned.version).toBe(2);
-    expect((await tenancyRepository.getById(draft.id))?.status).toBe('planned');
-
-    const staleCancelled = cancelTenancy(draft);
-    await expect(
-      tenancyRepository.updateLifecycle(staleCancelled, 1),
-    ).rejects.toMatchObject({ code: 'TENANCY_VERSION_CONFLICT' });
-
-    const overlappingDraft = createTenancy({
-      id: asTenancyId('22000000-0000-4000-8000-000000000001'),
-      code: 'TEN-INT-OVERLAP',
-      unitId: unit.id,
-      parties: [
-        {
-          id: asTenancyPartyId('22000000-0000-4000-8000-000000000002'),
-          partyId: tenant.id,
-          role: 'tenant',
-          isPrimary: true,
-        },
-      ],
-    });
-    const overlappingPlanned = planTenancy(
-      overlappingDraft,
-      '2027-01-01',
-      '2027-12-31',
+    const successorDraft = await createTenancyCommand(
+      {
+        tenancyRepository,
+        portfolioRepository,
+        partyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        unitId: unit.id,
+        code: 'TEN-INT-SUCCESSOR',
+        parties: [
+          {
+            partyId: tenant.id,
+            role: 'tenant',
+            isPrimary: true,
+          },
+        ],
+      },
     );
 
-    await expect(
-      tenancyRepository.insert(overlappingPlanned),
-    ).rejects.toMatchObject({ code: 'TENANCY_PERIOD_OVERLAP' });
+    const successorPlanned = await planTenancyCommand(
+      { tenancyRepository },
+      actor,
+      successorDraft.id,
+      1,
+      '2027-10-01',
+      '2028-09-30',
+    );
 
+    expect(successorPlanned.status).toBe('planned');
+
+    // A future reservation does not block the tenancy that becomes actual.
     const active = await activateTenancyCommand(
       { tenancyRepository },
       actor,
-      draft.id,
+      currentPlanned.id,
       2,
       '2026-10-01',
     );
@@ -551,14 +559,123 @@ describe('PostgreSQL infrastructure', () => {
     expect(active.status).toBe('active');
     expect(active.version).toBe(3);
 
+    // Once actual occupancy is open-ended, a new reservation cannot be created
+    // over it until an actual termination boundary is known.
+    const thirdDraft = await createTenancyCommand(
+      {
+        tenancyRepository,
+        portfolioRepository,
+        partyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        unitId: unit.id,
+        code: 'TEN-INT-BLOCKED-PLAN',
+      },
+    );
+
+    await expect(
+      planTenancyCommand(
+        { tenancyRepository },
+        actor,
+        thirdDraft.id,
+        1,
+        '2029-01-01',
+        '2029-12-31',
+      ),
+    ).rejects.toMatchObject({
+      code: 'TENANCY_PLANNED_OCCUPANCY_CONFLICT',
+    });
+
+    const noticed = await giveTenancyNoticeCommand(
+      { tenancyRepository },
+      actor,
+      active.id,
+      3,
+      '2027-08-01',
+      '2027-09-30',
+    );
+
+    expect(noticed.status).toBe('notice_given');
+
+    await expect(
+      sql`
+        update public.tenancies
+        set
+          notice_given_at = '2027-09-01',
+          termination_effective_at = '2027-08-31'
+        where id = ${currentDraft.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'tenancies_termination_not_before_notice',
+    });
+
+    // Party composition is frozen after actual occupancy begins, even if SQL
+    // bypasses the application/domain layers.
+    await expect(
+      sql`
+        insert into public.tenancy_parties (
+          id, tenancy_id, party_id, role, is_primary
+        ) values (
+          '22000000-0000-4000-8000-000000000001',
+          ${currentDraft.id},
+          ${tenant.id},
+          'co_tenant',
+          false
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'tenancy_parties_change_state_guard',
+    });
+
+    // Planned reservations remain independently protected from each other.
+    const overlappingPlanned = planTenancy(
+      createTenancy({
+        id: asTenancyId('22000000-0000-4000-8000-000000000002'),
+        code: 'TEN-INT-PLAN-OVERLAP',
+        unitId: unit.id,
+      }),
+      '2027-11-01',
+      '2028-01-31',
+    );
+
+    await expect(
+      tenancyRepository.insert(overlappingPlanned),
+    ).rejects.toMatchObject({
+      code: 'TENANCY_PLANNED_RESERVATION_OVERLAP',
+    });
+
+    // Actual occupancy remains independently protected from another actual row.
+    await expect(
+      sql`
+        insert into public.tenancies (
+          id, code, unit_id, status, actual_start, version
+        ) values (
+          '22000000-0000-4000-8000-000000000003',
+          'TEN-INT-ACTUAL-OVERLAP',
+          ${unit.id},
+          'active',
+          '2027-09-15',
+          1
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23P01',
+      constraint_name: 'tenancies_unit_actual_period_no_overlap',
+    });
+
     const listed = await listTenanciesByUnitQuery(
       { tenancyRepository, portfolioRepository },
       actor,
       unit.id,
     );
 
-    expect(listed).toHaveLength(1);
-    expect(listed[0]?.parties[0]?.partyId).toBe(tenant.id);
+    expect(listed).toHaveLength(3);
+    expect(listed.find((item) => item.id === currentDraft.id)?.status).toBe('notice_given');
+    expect(listed.find((item) => item.id === successorDraft.id)?.status).toBe('planned');
   });
 
   it('persists immutable lease history and resolves exact terms as-of a date', async () => {
@@ -883,7 +1000,7 @@ describe('PostgreSQL infrastructure', () => {
           'UNIT-ORPHAN',
           'X',
           'apartment',
-          'vacant'
+          'active'
         )
       `,
     ).rejects.toMatchObject({ code: '23503' });
