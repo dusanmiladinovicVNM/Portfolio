@@ -80,7 +80,7 @@ These rules are architecture gates, not optional implementation notes.
 56. Monetary values use decimal/numeric semantics, never binary floating point.
 57. Each DocumentVersion represents one binary content identity; its file metadata, SHA-256 and storage locator are immutable after registration.
 58. A final DocumentVersion is append-only evidence and cannot return to a mutable/stored state.
-59. A `signed_original` link identifies one exact final DocumentVersion and may only target a signed LeaseAgreement/LeaseAmendment.
+59. A `signed_original` link identifies one exact final DocumentVersion, may only target a signed LeaseAgreement/LeaseAmendment, and is immutable once created.
 60. Binary storage location is infrastructure data, not business identity; Google Drive file IDs must never become Document or DocumentVersion IDs.
 61. External binary storage and PostgreSQL cannot share one ACID transaction. Upload registration therefore uses an idempotent storage object key and compensating delete when DB registration fails.
 62. Financial corrections preserve prior history through correction/reversal records where material.
