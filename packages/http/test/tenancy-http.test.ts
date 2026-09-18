@@ -135,25 +135,6 @@ class InMemoryOwnershipRepository implements OwnershipRepository {
   async insert(_period: OwnershipPeriod) {}
 }
 
-function effectivePeriod(tenancy: Tenancy): [DateOnly, DateOnly | null] | null {
-  if (tenancy.status === 'planned' && tenancy.plannedStart) {
-    return [tenancy.plannedStart, tenancy.plannedEnd];
-  }
-  if (tenancy.status === 'active' && tenancy.actualStart) {
-    return [tenancy.actualStart, null];
-  }
-  if (
-    (tenancy.status === 'notice_given' || tenancy.status === 'move_out_pending') &&
-    tenancy.actualStart
-  ) {
-    return [tenancy.actualStart, tenancy.terminationEffectiveAt];
-  }
-  if (tenancy.status === 'ended' && tenancy.actualStart) {
-    return [tenancy.actualStart, tenancy.actualEnd];
-  }
-  return null;
-}
-
 class InMemoryTenancyRepository implements TenancyRepository {
   readonly tenancies = new Map<TenancyId, Tenancy>();
 

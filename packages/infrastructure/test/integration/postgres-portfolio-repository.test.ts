@@ -31,8 +31,6 @@ import {
   asPartyAddressId,
   asPartyId,
   asTenancyId,
-  asTenancyPartyId,
-  cancelTenancy,
   createOwnershipPeriod,
   createTenancy,
   planTenancy,
