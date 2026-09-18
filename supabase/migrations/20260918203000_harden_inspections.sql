@@ -182,12 +182,12 @@ begin
             constraint = 'inspection_schema_parent_immutable';
   end if;
 
-  if tg_table_name = 'inspection_schema_items'
-     and new.section_id is distinct from old.section_id
-  then
-    raise exception 'Schema item section ownership is immutable after insert.'
-      using errcode = '23514',
-            constraint = 'inspection_schema_parent_immutable';
+  if tg_table_name = 'inspection_schema_items' then
+    if new.section_id is distinct from old.section_id then
+      raise exception 'Schema item section ownership is immutable after insert.'
+        using errcode = '23514',
+              constraint = 'inspection_schema_parent_immutable';
+    end if;
   end if;
 
   return new;
@@ -249,12 +249,18 @@ begin
             constraint = 'inspection_content_identity_immutable';
   end if;
 
-  if tg_table_name in ('inspection_responses', 'inspection_findings')
-     and new.item_id is distinct from old.item_id
-  then
-    raise exception 'Inspection item ownership is immutable after insert.'
-      using errcode = '23514',
-            constraint = 'inspection_content_identity_immutable';
+  if tg_table_name = 'inspection_responses' then
+    if new.item_id is distinct from old.item_id then
+      raise exception 'Inspection item ownership is immutable after insert.'
+        using errcode = '23514',
+              constraint = 'inspection_content_identity_immutable';
+    end if;
+  elsif tg_table_name = 'inspection_findings' then
+    if new.item_id is distinct from old.item_id then
+      raise exception 'Inspection item ownership is immutable after insert.'
+        using errcode = '23514',
+              constraint = 'inspection_content_identity_immutable';
+    end if;
   end if;
 
   return new;
