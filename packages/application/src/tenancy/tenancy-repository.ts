@@ -10,7 +10,13 @@ export interface TenancyRepository {
   getById(id: TenancyId): Promise<Tenancy | null>;
   listByUnit(unitId: UnitId): Promise<readonly Tenancy[]>;
   codeExists(code: string): Promise<boolean>;
-  hasEffectivePeriodOverlap(
+  hasPlannedReservationOverlap(
+    unitId: UnitId,
+    validFrom: DateOnly,
+    validTo: DateOnly | null,
+    excludeTenancyId?: TenancyId,
+  ): Promise<boolean>;
+  hasActualOccupancyOverlap(
     unitId: UnitId,
     validFrom: DateOnly,
     validTo: DateOnly | null,

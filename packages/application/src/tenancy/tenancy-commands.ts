@@ -167,7 +167,7 @@ export async function planTenancyCommand(
   const updated = planTenancy(tenancy, plannedStart, plannedEnd);
 
   if (
-    await deps.tenancyRepository.hasEffectivePeriodOverlap(
+    await deps.tenancyRepository.hasPlannedReservationOverlap(
       updated.unitId,
       updated.plannedStart!,
       updated.plannedEnd,
@@ -175,8 +175,22 @@ export async function planTenancyCommand(
     )
   ) {
     throw new DomainError(
-      'TENANCY_PERIOD_OVERLAP',
-      'The planned tenancy period overlaps another tenancy for this unit.',
+      'TENANCY_PLANNED_RESERVATION_OVERLAP',
+      'The planned tenancy period overlaps another planned tenancy for this unit.',
+    );
+  }
+
+  if (
+    await deps.tenancyRepository.hasActualOccupancyOverlap(
+      updated.unitId,
+      updated.plannedStart!,
+      updated.plannedEnd,
+      updated.id,
+    )
+  ) {
+    throw new DomainError(
+      'TENANCY_PLANNED_OCCUPANCY_CONFLICT',
+      'The planned tenancy period overlaps known actual occupancy for this unit.',
     );
   }
 
@@ -198,7 +212,7 @@ export async function activateTenancyCommand(
   const updated = activateTenancy(tenancy, actualStart);
 
   if (
-    await deps.tenancyRepository.hasEffectivePeriodOverlap(
+    await deps.tenancyRepository.hasActualOccupancyOverlap(
       updated.unitId,
       updated.actualStart!,
       null,
@@ -206,8 +220,8 @@ export async function activateTenancyCommand(
     )
   ) {
     throw new DomainError(
-      'TENANCY_PERIOD_OVERLAP',
-      'The active tenancy period overlaps another tenancy for this unit.',
+      'TENANCY_ACTUAL_OCCUPANCY_OVERLAP',
+      'The actual tenancy period overlaps another actual occupancy for this unit.',
     );
   }
 
@@ -266,7 +280,7 @@ export async function endTenancyCommand(
   const updated = endTenancy(tenancy, actualEnd);
 
   if (
-    await deps.tenancyRepository.hasEffectivePeriodOverlap(
+    await deps.tenancyRepository.hasActualOccupancyOverlap(
       updated.unitId,
       updated.actualStart!,
       updated.actualEnd,
@@ -274,8 +288,8 @@ export async function endTenancyCommand(
     )
   ) {
     throw new DomainError(
-      'TENANCY_PERIOD_OVERLAP',
-      'The final tenancy period overlaps another tenancy for this unit.',
+      'TENANCY_ACTUAL_OCCUPANCY_OVERLAP',
+      'The final tenancy period overlaps another actual occupancy for this unit.',
     );
   }
 

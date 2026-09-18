@@ -110,13 +110,35 @@ function mapTenancy(row: TenancyRow): Tenancy {
 function translateTenancyError(error: unknown): DomainError | null {
   const pg = error as PostgresErrorLike;
 
+  if (pg.code === '23P01') {
+    switch (pg.constraint_name) {
+      case 'tenancies_unit_planned_period_no_overlap':
+        return new DomainError(
+          'TENANCY_PLANNED_RESERVATION_OVERLAP',
+          'Planned tenancy periods for the same unit cannot overlap.',
+        );
+      case 'tenancies_unit_actual_period_no_overlap':
+        return new DomainError(
+          'TENANCY_ACTUAL_OCCUPANCY_OVERLAP',
+          'Actual occupancy periods for the same unit cannot overlap.',
+        );
+      case 'tenancies_planned_against_actual_conflict':
+        return new DomainError(
+          'TENANCY_PLANNED_OCCUPANCY_CONFLICT',
+          'A planned tenancy cannot overlap known actual occupancy.',
+        );
+      default:
+        return null;
+    }
+  }
+
   if (
-    pg.code === '23P01' &&
-    pg.constraint_name === 'tenancies_unit_effective_period_no_overlap'
+    pg.code === '23514' &&
+    pg.constraint_name === 'tenancy_parties_change_state_guard'
   ) {
     return new DomainError(
-      'TENANCY_PERIOD_OVERLAP',
-      'Effective tenancy periods for the same unit cannot overlap.',
+      'TENANCY_PARTY_CHANGE_NOT_ALLOWED',
+      'Parties may only be changed while a tenancy is draft or planned.',
     );
   }
 
@@ -193,7 +215,7 @@ export class PostgresTenancyRepository implements TenancyRepository {
     return rows[0]?.exists ?? false;
   }
 
-  async hasEffectivePeriodOverlap(
+  async hasPlannedReservationOverlap(
     unitId: UnitId,
     validFrom: DateOnly,
     validTo: DateOnly | null,
@@ -206,21 +228,47 @@ export class PostgresTenancyRepository implements TenancyRepository {
         select 1
         from public.tenancies t
         where t.unit_id = ${unitId}
+          and t.status = 'planned'
           and (
             ${excludedId}::uuid is null
             or t.id <> ${excludedId}::uuid
           )
-          and t.status in (
-            'planned', 'active', 'notice_given', 'move_out_pending', 'ended'
+          and daterange(
+            t.planned_start,
+            case when t.planned_end is null then null else t.planned_end + 1 end,
+            '[)'
+          ) && daterange(
+            ${validFrom}::date,
+            case when ${validTo}::date is null then null else ${validTo}::date + 1 end,
+            '[)'
+          )
+      ) as exists
+    `;
+
+    return rows[0]?.exists ?? false;
+  }
+
+  async hasActualOccupancyOverlap(
+    unitId: UnitId,
+    validFrom: DateOnly,
+    validTo: DateOnly | null,
+    excludeTenancyId?: TenancyId,
+  ): Promise<boolean> {
+    const excludedId = excludeTenancyId ?? null;
+
+    const rows = await this.sql<{ exists: boolean }[]>`
+      select exists(
+        select 1
+        from public.tenancies t
+        where t.unit_id = ${unitId}
+          and t.status in ('active', 'notice_given', 'move_out_pending', 'ended')
+          and (
+            ${excludedId}::uuid is null
+            or t.id <> ${excludedId}::uuid
           )
           and daterange(
+            t.actual_start,
             case
-              when t.status = 'planned' then t.planned_start
-              else t.actual_start
-            end,
-            case
-              when t.status = 'planned' and t.planned_end is not null
-                then t.planned_end + 1
               when t.status in ('notice_given', 'move_out_pending')
                 then t.termination_effective_at + 1
               when t.status = 'ended'
@@ -230,10 +278,7 @@ export class PostgresTenancyRepository implements TenancyRepository {
             '[)'
           ) && daterange(
             ${validFrom}::date,
-            case
-              when ${validTo}::date is null then null
-              else ${validTo}::date + 1
-            end,
+            case when ${validTo}::date is null then null else ${validTo}::date + 1 end,
             '[)'
           )
       ) as exists
