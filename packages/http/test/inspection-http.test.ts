@@ -258,6 +258,7 @@ describe('Inspection HTTP backbone', () => {
           schemaCode: 'MOVE-IN',
           inspectionType: 'move_in',
           title: 'Move-in',
+          requiredSignatureRoles: [],
           sections: [
             {
               key: 'general',
@@ -299,6 +300,31 @@ describe('Inspection HTTP backbone', () => {
       adminIdentity,
     );
     expect(schemaCreated.status).toBe(201);
+
+    const omittedSignaturePolicy = await handler(
+      new Request('https://portfolio.test/inspection-schemas', {
+        method: 'POST',
+        body: JSON.stringify({
+          schemaCode: 'MISSING-POLICY',
+          inspectionType: 'move_in',
+          title: 'Missing policy',
+          sections: [{
+            key: 'general',
+            title: 'General',
+            sortOrder: 0,
+            items: [{
+              key: 'condition',
+              type: 'text',
+              label: 'Condition',
+              sortOrder: 0,
+            }],
+          }],
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(omittedSignaturePolicy.status).toBe(400);
+
     const schema = (await schemaCreated.json()).data as {
       id: string;
       sections: Array<{ id: string; items: Array<{ id: string }> }>;
@@ -311,6 +337,7 @@ describe('Inspection HTTP backbone', () => {
           schemaCode: 'NOPE',
           inspectionType: 'move_in',
           title: 'Nope',
+          requiredSignatureRoles: [],
           sections: [{
             key: 'x',
             title: 'X',

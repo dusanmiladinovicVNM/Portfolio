@@ -65,7 +65,7 @@ export const createInspectionSchemaVersionRequestSchema = z.object({
   schemaCode: z.string().trim().min(1),
   inspectionType: z.enum(INSPECTION_TYPES),
   title: z.string().trim().min(1),
-  requiredSignatureRoles: z.array(z.enum(INSPECTION_SIGNATURE_ROLES)).optional(),
+  requiredSignatureRoles: z.array(z.enum(INSPECTION_SIGNATURE_ROLES)),
   sections: z.array(schemaSectionRequestSchema).min(1),
 });
 

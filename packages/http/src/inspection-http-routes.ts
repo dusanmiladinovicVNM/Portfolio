@@ -104,9 +104,7 @@ export async function handleInspectionHttp(
           schemaCode: parsed.data.schemaCode,
           inspectionType: parsed.data.inspectionType,
           title: parsed.data.title,
-          ...(parsed.data.requiredSignatureRoles !== undefined
-            ? { requiredSignatureRoles: parsed.data.requiredSignatureRoles }
-            : {}),
+          requiredSignatureRoles: parsed.data.requiredSignatureRoles,
           sections: parsed.data.sections.map((section) => ({
             key: section.key,
             title: section.title,

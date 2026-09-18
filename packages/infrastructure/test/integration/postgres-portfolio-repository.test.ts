@@ -1339,9 +1339,9 @@ describe('PostgreSQL infrastructure', () => {
     `;
     await sql`
       insert into public.tenancies (
-        id, code, unit_id, status, actual_start, version
+        id, code, unit_id, status, planned_start, version
       ) values (
-        ${tenancyId}, 'TEN-EVIDENCE', ${unit.id}, 'active', '2026-09-01', 1
+        ${tenancyId}, 'TEN-EVIDENCE', ${unit.id}, 'planned', '2026-09-01', 1
       )
     `;
     await sql`
@@ -2264,6 +2264,7 @@ describe('PostgreSQL infrastructure', () => {
         schemaCode: 'MOVE-IN-INT',
         inspectionType: 'move_in',
         title: 'Move-in integration schema',
+        requiredSignatureRoles: [],
         sections: [
           {
             key: 'general',
@@ -2765,6 +2766,7 @@ describe('PostgreSQL infrastructure', () => {
         schemaCode: 'MOVE-IN-INT',
         inspectionType: 'move_in',
         title: 'Move-in integration schema v2',
+        requiredSignatureRoles: [],
         sections: [
           {
             key: 'general',

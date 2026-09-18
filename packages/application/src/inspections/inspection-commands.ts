@@ -123,7 +123,7 @@ export interface CreateInspectionSchemaVersionCommandInput {
   readonly schemaCode: string;
   readonly inspectionType: InspectionType;
   readonly title: string;
-  readonly requiredSignatureRoles?: readonly InspectionSignatureRole[];
+  readonly requiredSignatureRoles: readonly InspectionSignatureRole[];
   readonly sections: readonly {
     readonly key: string;
     readonly title: string;
@@ -812,9 +812,7 @@ export async function createInspectionSchemaVersionCommand(
     versionNumber,
     inspectionType: input.inspectionType,
     title: input.title,
-    ...(input.requiredSignatureRoles !== undefined
-      ? { requiredSignatureRoles: input.requiredSignatureRoles }
-      : {}),
+    requiredSignatureRoles: input.requiredSignatureRoles,
     sections: input.sections.map((section) => ({
       id: asInspectionSchemaSectionId(deps.idGenerator.next()),
       key: section.key,
