@@ -6,11 +6,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
-  },
-  "devDependencies": {
-    "typescript": "workspace:*",
-    "vitest": "workspace:*"
+    "typecheck": "pnpm --workspace-root exec tsc --noEmit -p packages/domain/tsconfig.json",
+    "test": "pnpm --workspace-root exec vitest run packages/domain/test"
   }
 }
