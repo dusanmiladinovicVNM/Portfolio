@@ -335,6 +335,7 @@ describe('Portfolio HTTP boundary', () => {
       'd1000000-0000-4000-8000-000000000006',
       'd1000000-0000-4000-8000-000000000007',
       'd1000000-0000-4000-8000-000000000008',
+      'd1000000-0000-4000-8000-000000000009',
     ]);
 
     const propertyResponse = await handler(
@@ -390,9 +391,10 @@ describe('Portfolio HTTP boundary', () => {
         body: JSON.stringify({
           code: 'ASSET-HTTP-001',
           name: 'Refrigerator',
+          propertyId: property.id,
           unitId: unit.id,
           spaceId: space.id,
-          manufacturer: 'Bosch',
+          manufacturer: 'Bosh',
           model: 'KGN39',
           identifiers: [
             {
@@ -409,12 +411,72 @@ describe('Portfolio HTTP boundary', () => {
     expect(asset).toMatchObject({
       status: 'active',
       version: 1,
+      propertyId: property.id,
       unitId: unit.id,
       spaceId: space.id,
-      manufacturer: 'Bosch',
+      manufacturer: 'Bosh',
       model: 'KGN39',
     });
     expect(asset.identifiers).toHaveLength(1);
+
+    const buildingAssetResponse = await handler(
+      new Request('https://portfolio.test/assets', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          code: 'ASSET-BUILDING-HTTP',
+          name: 'Lift controller',
+          propertyId: property.id,
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(buildingAssetResponse.status).toBe(201);
+    expect(await buildingAssetResponse.json()).toMatchObject({
+      data: {
+        code: 'ASSET-BUILDING-HTTP',
+        propertyId: property.id,
+        unitId: null,
+        spaceId: null,
+      },
+    });
+
+    const propertyAssetsResponse = await handler(
+      new Request(`https://portfolio.test/properties/${property.id}/assets`),
+      inspectorIdentity,
+    );
+    expect(propertyAssetsResponse.status).toBe(200);
+    expect(await propertyAssetsResponse.json()).toMatchObject({
+      data: {
+        items: [
+          { code: 'ASSET-BUILDING-HTTP', unitId: null },
+          { code: 'ASSET-HTTP-001', unitId: unit.id },
+        ],
+      },
+    });
+
+    const metadataResponse = await handler(
+      new Request(`https://portfolio.test/assets/${asset.id}/metadata`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          expectedVersion: 1,
+          manufacturer: 'Bosch',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(metadataResponse.status).toBe(200);
+    expect(await metadataResponse.json()).toMatchObject({
+      data: {
+        id: asset.id,
+        manufacturer: 'Bosch',
+        version: 2,
+        propertyId: property.id,
+        unitId: unit.id,
+        spaceId: space.id,
+      },
+    });
 
     const inspectorList = await handler(
       new Request(`https://portfolio.test/units/${unit.id}/assets`),
@@ -430,7 +492,7 @@ describe('Portfolio HTTP boundary', () => {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          expectedVersion: 1,
+          expectedVersion: 2,
           status: 'inactive',
         }),
       }),
@@ -443,7 +505,7 @@ describe('Portfolio HTTP boundary', () => {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          expectedVersion: 1,
+          expectedVersion: 2,
           status: 'inactive',
         }),
       }),
@@ -451,7 +513,7 @@ describe('Portfolio HTTP boundary', () => {
     );
     expect(inactiveResponse.status).toBe(200);
     expect(await inactiveResponse.json()).toMatchObject({
-      data: { id: asset.id, status: 'inactive', version: 2 },
+      data: { id: asset.id, status: 'inactive', version: 3 },
     });
 
     const replacementResponse = await handler(
@@ -459,7 +521,7 @@ describe('Portfolio HTTP boundary', () => {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          expectedVersion: 2,
+          expectedVersion: 3,
           code: 'ASSET-HTTP-002',
           name: 'Replacement refrigerator',
           manufacturer: 'Bosch',
@@ -481,12 +543,13 @@ describe('Portfolio HTTP boundary', () => {
         replacedAsset: {
           id: asset.id,
           status: 'replaced',
-          version: 3,
+          version: 4,
         },
         replacementAsset: {
           code: 'ASSET-HTTP-002',
           status: 'active',
           version: 1,
+          propertyId: property.id,
           unitId: unit.id,
           spaceId: space.id,
         },
