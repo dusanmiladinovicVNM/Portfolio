@@ -8,9 +8,13 @@ import {
   DomainError,
   asUserId,
   type Inspection,
+  type InspectionEvidence,
+  type InspectionFinalization,
   type InspectionFinding,
   type InspectionId,
   type InspectionResponse,
+  type InspectionSignature,
+  type InspectionUnlockEvent,
   type InspectionSchemaSectionId,
   type InspectionSchemaVersion,
   type InspectionSchemaVersionId,
@@ -25,6 +29,10 @@ export class InMemoryInspectionRepository implements InspectionRepository {
   readonly states = new Map<string, InspectionSectionState>();
   readonly responses = new Map<string, InspectionResponse>();
   readonly findings: InspectionFinding[] = [];
+  readonly evidence: InspectionEvidence[] = [];
+  readonly signatures: InspectionSignature[] = [];
+  readonly unlockEvents: InspectionUnlockEvent[] = [];
+  readonly finalizations = new Map<InspectionId, InspectionFinalization>();
 
   async getById(id: InspectionId) {
     return this.inspections.get(id) ?? null;
@@ -162,6 +170,127 @@ export class InMemoryInspectionRepository implements InspectionRepository {
     );
   }
 
+  async insertEvidence(evidence: InspectionEvidence) {
+    const inspection = this.inspections.get(evidence.inspectionId);
+    if (!inspection || !['draft', 'in_progress'].includes(inspection.status)) {
+      throw new DomainError(
+        'INSPECTION_CONTENT_LOCKED',
+        'Inspection evidence may only be added before lock.',
+      );
+    }
+    const contentRevision = inspection.contentRevision + 1;
+    this.inspections.set(evidence.inspectionId, {
+      ...inspection,
+      contentRevision,
+    });
+    this.evidence.push(evidence);
+    return contentRevision;
+  }
+
+  async listEvidence(inspectionId: InspectionId) {
+    return this.evidence.filter((item) => item.inspectionId === inspectionId);
+  }
+
+  async insertSignature(signature: InspectionSignature) {
+    const inspection = this.inspections.get(signature.inspectionId);
+    if (!inspection || inspection.status !== 'locked') {
+      throw new DomainError(
+        'INSPECTION_SIGNATURE_REQUIRES_LOCK',
+        'Inspection must be locked before signing.',
+      );
+    }
+    const contentRevision = inspection.contentRevision + 1;
+    this.inspections.set(signature.inspectionId, {
+      ...inspection,
+      contentRevision,
+    });
+    this.signatures.push(signature);
+    return contentRevision;
+  }
+
+  async listSignatures(inspectionId: InspectionId) {
+    return this.signatures.filter(
+      (signature) => signature.inspectionId === inspectionId,
+    );
+  }
+
+  async unlock(
+    inspection: Inspection,
+    expectedVersion: number,
+    expectedContentRevision: number,
+    event: InspectionUnlockEvent,
+  ) {
+    const current = this.inspections.get(inspection.id);
+    if (
+      !current ||
+      current.status !== 'locked' ||
+      current.version !== expectedVersion ||
+      current.contentRevision !== expectedContentRevision
+    ) {
+      throw new DomainError(
+        'INSPECTION_CONTENT_REVISION_CONFLICT',
+        'Inspection changed before unlock could commit.',
+      );
+    }
+
+    let count = 0;
+    for (let index = 0; index < this.signatures.length; index += 1) {
+      const signature = this.signatures[index]!;
+      if (
+        signature.inspectionId === inspection.id &&
+        signature.status === 'valid'
+      ) {
+        this.signatures[index] = {
+          ...signature,
+          status: 'invalidated',
+          invalidatedAt: event.unlockedAt,
+          invalidatedByUserId: event.unlockedByUserId,
+          invalidationReason: event.reason,
+        };
+        count += 1;
+      }
+    }
+    if (count !== event.invalidatedSignatureCount) {
+      throw new DomainError(
+        'INSPECTION_CONTENT_REVISION_CONFLICT',
+        'Inspection signatures changed before unlock could commit.',
+      );
+    }
+
+    this.unlockEvents.push(event);
+    this.inspections.set(inspection.id, inspection);
+  }
+
+  async listUnlockEvents(inspectionId: InspectionId) {
+    return this.unlockEvents.filter((event) => event.inspectionId === inspectionId);
+  }
+
+  async finalize(
+    inspection: Inspection,
+    expectedVersion: number,
+    expectedContentRevision: number,
+    finalization: InspectionFinalization,
+  ) {
+    const current = this.inspections.get(inspection.id);
+    if (
+      !current ||
+      current.status !== 'locked' ||
+      current.version !== expectedVersion ||
+      current.contentRevision !== expectedContentRevision
+    ) {
+      throw new DomainError(
+        'INSPECTION_CONTENT_REVISION_CONFLICT',
+        'Inspection changed before finalization could commit.',
+      );
+    }
+    this.finalizations.set(inspection.id, finalization);
+    this.inspections.set(inspection.id, inspection);
+  }
+
+  async getFinalization(inspectionId: InspectionId) {
+    return this.finalizations.get(inspectionId) ?? null;
+  }
+
   async getSchemaVersionById(id: InspectionSchemaVersionId) {
     return this.schemas.get(id) ?? null;
   }
@@ -196,13 +325,13 @@ export class InMemoryStaffDirectoryRepository
   readonly users = new Map<UserId, StaffDirectoryEntry>();
 
   constructor() {
-    for (const [id, role] of [
-      ['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'admin'],
-      ['bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'inspector'],
-      ['cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'manager'],
+    for (const [id, displayName, role] of [
+      ['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Portfolio Admin', 'admin'],
+      ['bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'Portfolio Inspector', 'inspector'],
+      ['cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'Portfolio Manager', 'manager'],
     ] as const) {
       const userId = asUserId(id);
-      this.users.set(userId, { userId, role });
+      this.users.set(userId, { userId, displayName, role });
     }
   }
 
