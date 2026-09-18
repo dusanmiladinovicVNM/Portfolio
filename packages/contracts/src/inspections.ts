@@ -79,16 +79,23 @@ export const expectedInspectionVersionRequestSchema = z.object({
   expectedVersion: z.number().int().positive(),
 });
 
-export const saveInspectionSectionRequestSchema = z.object({
-  expectedRevision: z.number().int().nonnegative(),
-  items: z.array(
-    z.object({
-      itemId: entityIdSchema,
-      value: z.union([z.string(), z.boolean(), z.array(z.string())]),
-      comment: z.string().nullable().optional(),
-    }),
-  ),
-});
+export const saveInspectionSectionRequestSchema = z
+  .object({
+    expectedRevision: z.number().int().nonnegative(),
+    set: z
+      .array(
+        z.object({
+          itemId: entityIdSchema,
+          value: z.union([z.string(), z.boolean(), z.array(z.string())]),
+          comment: z.string().nullable().optional(),
+        }),
+      )
+      .default([]),
+    clear: z.array(entityIdSchema).default([]),
+  })
+  .refine((value) => value.set.length > 0 || value.clear.length > 0, {
+    message: 'Section patch must set or clear at least one item.',
+  });
 
 export const createInspectionFindingRequestSchema = z.object({
   sectionId: entityIdSchema,
@@ -114,6 +121,7 @@ export const inspectionResponseSchema = z.object({
   finalizedAt: z.string().nullable(),
   cancelledAt: z.string().nullable(),
   version: z.number().int().positive(),
+  contentRevision: z.number().int().nonnegative(),
 });
 
 const schemaItemResponseSchema = z.object({

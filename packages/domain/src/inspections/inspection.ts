@@ -54,6 +54,7 @@ export interface Inspection {
   readonly finalizedAt: string | null;
   readonly cancelledAt: string | null;
   readonly version: number;
+  readonly contentRevision: number;
 }
 
 export interface InspectionSectionState {
@@ -148,6 +149,7 @@ export function createInspection(input: CreateInspectionInput): Inspection {
     finalizedAt: null,
     cancelledAt: null,
     version: 1,
+    contentRevision: 0,
   };
 }
 
@@ -173,10 +175,10 @@ export function lockInspection(
   inspection: Inspection,
   lockedAtValue: string,
 ): Inspection {
-  if (!['draft', 'in_progress'].includes(inspection.status)) {
+  if (inspection.status !== 'in_progress') {
     throw new DomainError(
       'INSPECTION_INVALID_TRANSITION',
-      'Only a draft or in-progress inspection can be locked.',
+      'Only an in-progress inspection can be locked.',
     );
   }
   return {

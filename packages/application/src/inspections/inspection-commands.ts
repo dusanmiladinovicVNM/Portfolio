@@ -69,6 +69,11 @@ export interface SaveInspectionSectionItemInput {
   readonly comment?: string | null;
 }
 
+export interface PatchInspectionSectionInput {
+  readonly set: readonly SaveInspectionSectionItemInput[];
+  readonly clearItemIds: readonly string[];
+}
+
 export interface CreateInspectionFindingCommandInput {
   readonly sectionId: InspectionSchemaSectionId;
   readonly itemId?: string | null;
@@ -286,8 +291,13 @@ export async function saveInspectionSectionCommand(
   inspectionId: InspectionId,
   sectionId: InspectionSchemaSectionId,
   expectedRevision: number,
-  items: readonly SaveInspectionSectionItemInput[],
-): Promise<{ readonly revision: number; readonly responses: readonly InspectionResponse[] }> {
+  patch: PatchInspectionSectionInput,
+): Promise<{
+  readonly revision: number;
+  readonly contentRevision: number;
+  readonly responses: readonly InspectionResponse[];
+  readonly clearedItemIds: readonly import('@portfolio/domain').InspectionSchemaItemId[];
+}> {
   requireCapability(actor, 'inspections:write');
   const inspection = await requireInspection(
     deps.inspectionRepository,
@@ -319,17 +329,42 @@ export async function saveInspectionSectionCommand(
     );
   }
 
-  const itemIds = items.map((item) => item.itemId);
-  if (new Set(itemIds).size !== itemIds.length) {
+  if (patch.set.length === 0 && patch.clearItemIds.length === 0) {
+    throw new DomainError(
+      'INSPECTION_SECTION_PATCH_EMPTY',
+      'Section patch must set or clear at least one item.',
+    );
+  }
+
+  const setIds = patch.set.map((item) => item.itemId);
+  const clearIds = patch.clearItemIds;
+  if (new Set(setIds).size !== setIds.length || new Set(clearIds).size !== clearIds.length) {
     throw new DomainError(
       'INSPECTION_RESPONSE_DUPLICATE_ITEM',
-      'A section save cannot contain the same item twice.',
+      'A section patch cannot repeat an item.',
+    );
+  }
+  if (setIds.some((itemId) => clearIds.includes(itemId))) {
+    throw new DomainError(
+      'INSPECTION_RESPONSE_SET_CLEAR_CONFLICT',
+      'The same item cannot be set and cleared in one patch.',
     );
   }
 
   const itemById = new Map(section.items.map((item) => [item.id, item] as const));
+  const normalizedClearIds = clearIds.map((value) => {
+    const itemId = asInspectionSchemaItemId(value);
+    if (!itemById.has(itemId)) {
+      throw new DomainError(
+        'INSPECTION_RESPONSE_ITEM_NOT_IN_SECTION',
+        'Cleared response item does not belong to this inspection section.',
+      );
+    }
+    return itemId;
+  });
+
   const now = deps.clock.now();
-  const responses = items.map((input) => {
+  const responses = patch.set.map((input) => {
     const itemId = asInspectionSchemaItemId(input.itemId);
     const item = itemById.get(itemId);
     if (!item) {
@@ -355,6 +390,7 @@ export async function saveInspectionSectionCommand(
     section.id,
     expectedRevision,
     responses,
+    normalizedClearIds,
   );
 }
 
@@ -385,7 +421,11 @@ export async function lockInspectionCommand(
   }
 
   const updated = lockInspection(current, deps.clock.now());
-  await deps.inspectionRepository.updateLifecycle(updated, current.version);
+  await deps.inspectionRepository.updateLifecycle(
+    updated,
+    current.version,
+    current.contentRevision,
+  );
   return updated;
 }
 
