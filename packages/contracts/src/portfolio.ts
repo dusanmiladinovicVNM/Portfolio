@@ -7,7 +7,7 @@ import {
   UNIT_TYPES,
 } from '@portfolio/domain';
 
-const entityIdSchema = z.uuid();
+export const entityIdSchema = z.uuid();
 
 export const createPropertyRequestSchema = z.object({
   code: z.string().trim().min(1),

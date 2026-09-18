@@ -6,6 +6,7 @@ import {
   type Property,
 } from '@portfolio/domain';
 import type { IdGenerator } from '../shared/id-generator.js';
+import { requireCapability, type Actor } from '../security/access.js';
 import type { PortfolioRepository } from './portfolio-repository.js';
 
 export type CreatePropertyCommandInput = Omit<CreatePropertyInput, 'id'>;
@@ -17,8 +18,11 @@ export interface CreatePropertyDependencies {
 
 export async function createPropertyCommand(
   deps: CreatePropertyDependencies,
+  actor: Actor,
   input: CreatePropertyCommandInput,
 ): Promise<Property> {
+  requireCapability(actor, 'portfolio:write');
+
   const property = createProperty({
     ...input,
     id: asPropertyId(deps.idGenerator.next()),

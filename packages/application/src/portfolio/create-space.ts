@@ -6,6 +6,7 @@ import {
   type Space,
 } from '@portfolio/domain';
 import type { IdGenerator } from '../shared/id-generator.js';
+import { requireCapability, type Actor } from '../security/access.js';
 import type { PortfolioRepository } from './portfolio-repository.js';
 
 export type CreateSpaceCommandInput = Omit<CreateSpaceInput, 'id'>;
@@ -17,8 +18,11 @@ export interface CreateSpaceDependencies {
 
 export async function createSpaceCommand(
   deps: CreateSpaceDependencies,
+  actor: Actor,
   input: CreateSpaceCommandInput,
 ): Promise<Space> {
+  requireCapability(actor, 'portfolio:write');
+
   const unit = await deps.portfolioRepository.getUnitById(input.unitId);
   if (!unit) {
     throw new DomainError('UNIT_NOT_FOUND', 'Unit not found.');

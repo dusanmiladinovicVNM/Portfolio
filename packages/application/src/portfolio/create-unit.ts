@@ -6,6 +6,7 @@ import {
   type Unit,
 } from '@portfolio/domain';
 import type { IdGenerator } from '../shared/id-generator.js';
+import { requireCapability, type Actor } from '../security/access.js';
 import type { PortfolioRepository } from './portfolio-repository.js';
 
 export type CreateUnitCommandInput = Omit<CreateUnitInput, 'id'>;
@@ -17,8 +18,11 @@ export interface CreateUnitDependencies {
 
 export async function createUnitCommand(
   deps: CreateUnitDependencies,
+  actor: Actor,
   input: CreateUnitCommandInput,
 ): Promise<Unit> {
+  requireCapability(actor, 'portfolio:write');
+
   const property = await deps.portfolioRepository.getPropertyById(input.propertyId);
   if (!property) {
     throw new DomainError('PROPERTY_NOT_FOUND', 'Property not found.');
