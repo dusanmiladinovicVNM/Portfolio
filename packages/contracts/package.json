@@ -1,0 +1,16 @@
+{
+  "name": "@portfolio/contracts",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "pnpm --workspace-root exec tsc --noEmit -p packages/contracts/tsconfig.json",
+    "test": "pnpm --workspace-root exec vitest run --passWithNoTests packages/contracts/test"
+  },
+  "dependencies": {
+    "@portfolio/domain": "workspace:*",
+    "zod": "4.6.5"
+  }
+}
