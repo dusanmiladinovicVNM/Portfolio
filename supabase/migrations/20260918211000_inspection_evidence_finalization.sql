@@ -588,6 +588,18 @@ begin
         using errcode = '23514',
               constraint = 'inspection_unlock_record_required';
     end if;
+
+    if exists (
+      select 1
+      from public.inspection_signatures s
+      where s.inspection_id = old.id
+        and s.invalidated_at is null
+    ) then
+      raise exception 'Unlock requires every active signature to be invalidated first.'
+        using errcode = '23514',
+              constraint = 'inspection_unlock_active_signatures';
+    end if;
+
     return new;
   end if;
 
