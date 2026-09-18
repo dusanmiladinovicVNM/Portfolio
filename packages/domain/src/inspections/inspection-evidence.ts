@@ -145,6 +145,34 @@ export function createInspectionEvidence(
   };
 }
 
+export function createInspectionFinalReportEvidence(
+  inspection: Inspection,
+  input: {
+    readonly id: InspectionEvidenceId;
+    readonly documentVersionId: DocumentVersionId;
+    readonly createdByUserId: UserId;
+    readonly createdAt: string;
+  },
+): InspectionEvidence {
+  if (inspection.status !== 'finalized') {
+    throw new DomainError(
+      'INSPECTION_FINAL_REPORT_STATE_INVALID',
+      'Final report evidence requires a finalized inspection.',
+    );
+  }
+  return {
+    id: input.id,
+    inspectionId: inspection.id,
+    sectionId: null,
+    itemId: null,
+    documentVersionId: input.documentVersionId,
+    kind: 'final_report',
+    caption: null,
+    createdByUserId: input.createdByUserId,
+    createdAt: instant(input.createdAt, 'createdAt'),
+  };
+}
+
 export function createInspectionSignature(
   inspection: Inspection,
   input: Omit<

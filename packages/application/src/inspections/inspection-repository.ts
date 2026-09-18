@@ -59,6 +59,7 @@ export interface InspectionRepository {
   ): Promise<readonly InspectionFinding[]>;
 
   insertEvidence(evidence: InspectionEvidence): Promise<number>;
+  insertFinalReportEvidence(evidence: InspectionEvidence): Promise<void>;
   listEvidence(inspectionId: InspectionId): Promise<readonly InspectionEvidence[]>;
 
   insertSignature(signature: InspectionSignature): Promise<number>;

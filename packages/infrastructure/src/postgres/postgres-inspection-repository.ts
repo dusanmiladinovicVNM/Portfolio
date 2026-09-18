@@ -752,6 +752,44 @@ export class PostgresInspectionRepository implements InspectionRepository {
     );
   }
 
+  async insertFinalReportEvidence(
+    evidence: InspectionEvidence,
+  ): Promise<void> {
+    if (evidence.kind !== 'final_report') {
+      throw new DomainError(
+        'INSPECTION_FINAL_REPORT_KIND_REQUIRED',
+        'Final report evidence must use final_report kind.',
+      );
+    }
+    const rows = await translated(() => this.sql<{ schema_version_id: string }[]>`
+      select schema_version_id
+      from public.inspections
+      where id = ${evidence.inspectionId}
+        and status = 'finalized'
+      limit 1
+    `);
+    const inspection = rows[0];
+    if (!inspection) {
+      throw new DomainError(
+        'INSPECTION_FINAL_REPORT_STATE_INVALID',
+        'Final report evidence requires a finalized inspection.',
+      );
+    }
+    await translated(async () => {
+      await this.sql`
+        insert into public.inspection_evidence (
+          id, inspection_id, schema_version_id, section_id, item_id,
+          document_version_id, kind, caption, created_by_user_id, created_at
+        ) values (
+          ${evidence.id}, ${evidence.inspectionId},
+          ${inspection.schema_version_id}, null, null,
+          ${evidence.documentVersionId}, 'final_report', null,
+          ${evidence.createdByUserId}, ${evidence.createdAt}
+        )
+      `;
+    });
+  }
+
   async listEvidence(
     inspectionId: InspectionId,
   ): Promise<readonly InspectionEvidence[]> {
