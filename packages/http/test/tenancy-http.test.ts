@@ -33,6 +33,11 @@ import {
   type UnitId,
 } from '@portfolio/domain';
 import { createPortfolioHttpHandler } from '../src/index.js';
+import {
+  FixedClock,
+  InMemoryDocumentRepository,
+  MemoryFileStorage,
+} from './document-test-deps.js';
 
 const adminIdentity: VerifiedIdentity = {
   provider: 'supabase',
@@ -272,6 +277,9 @@ function buildHandler() {
     ownershipRepository: new InMemoryOwnershipRepository(),
     tenancyRepository,
     leaseRepository: new EmptyLeaseRepository(),
+    documentRepository: new InMemoryDocumentRepository(),
+    fileStorage: new MemoryFileStorage(),
+    clock: new FixedClock(),
     userAccessRepository: new InMemoryAccessRepository(),
     idGenerator: new FixedIds([
       '10000000-0000-4000-8000-000000000001',
