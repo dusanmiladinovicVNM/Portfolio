@@ -1,4 +1,4 @@
-import type postgres from 'postgres';
+import type postgres, { TransactionSql } from 'postgres';
 import type { LeaseRepository } from '@portfolio/application';
 import {
   DomainError,
@@ -251,7 +251,7 @@ async function withTranslatedErrors<T>(operation: () => Promise<T>): Promise<T> 
 }
 
 async function insertTerms(
-  tx: Sql,
+  tx: TransactionSql<{}>,
   terms: TenancyTermVersion,
 ): Promise<void> {
   await tx`
@@ -382,7 +382,7 @@ export class PostgresLeaseRepository implements LeaseRepository {
           );
         }
 
-        await insertTerms(tx as Sql, terms);
+        await insertTerms(tx, terms);
       });
     });
   }
@@ -488,7 +488,7 @@ export class PostgresLeaseRepository implements LeaseRepository {
           );
         }
 
-        await insertTerms(tx as Sql, terms);
+        await insertTerms(tx, terms);
       });
     });
   }
