@@ -45,7 +45,7 @@ describe('Portfolio domain', () => {
     ).toThrow(DomainError);
   });
 
-  it('creates a vacant unit under a stable property identity', () => {
+  it('creates an active unit without encoding occupancy in Unit status', () => {
     const propertyId = asPropertyId('6a644eaa-dae0-4c4a-9ae4-6e5a93ceef3f');
 
     const unit = createUnit({
@@ -59,7 +59,7 @@ describe('Portfolio domain', () => {
     });
 
     expect(unit.propertyId).toBe(propertyId);
-    expect(unit.status).toBe('vacant');
+    expect(unit.status).toBe('active');
   });
 
   it('rejects non-positive unit area', () => {

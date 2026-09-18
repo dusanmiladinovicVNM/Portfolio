@@ -154,7 +154,8 @@ class InMemoryTenancyRepository implements TenancyRepository {
     );
   }
 
-  async hasEffectivePeriodOverlap(): Promise<boolean> { return false; }
+  async hasPlannedReservationOverlap(): Promise<boolean> { return false; }
+  async hasActualOccupancyOverlap(): Promise<boolean> { return false; }
   async insert(tenancy: Tenancy): Promise<void> { this.tenancies.set(tenancy.id, tenancy); }
 
   async insertParty(

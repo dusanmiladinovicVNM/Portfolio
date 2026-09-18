@@ -72,7 +72,7 @@ describe('Tenancy lifecycle', () => {
       .toThrowError(/Cannot transition/);
   });
 
-  it('allows a party to be added before the tenancy is terminal', () => {
+  it('allows a party to be added while the tenancy is draft or planned', () => {
     const draft = createTenancy({
       id: tenancyId,
       code: 'TEN-0001',
@@ -88,6 +88,32 @@ describe('Tenancy lifecycle', () => {
 
     expect(withTenant.parties).toHaveLength(1);
     expect(withTenant.version).toBe(2);
+  });
+
+  it('freezes party composition once actual occupancy starts', () => {
+    const active = activateTenancy(
+      planTenancy(draftWithTenant(), '2026-10-01'),
+      '2026-10-01',
+    );
+
+    expect(() =>
+      addTenancyParty(active, {
+        id: asTenancyPartyId('55555555-5555-4555-8555-555555555555'),
+        partyId: asPartyId('66666666-6666-4666-8666-666666666666'),
+        role: 'co_tenant',
+      }),
+    ).toThrowError(/draft or planned/);
+  });
+
+  it('requires terminationEffectiveAt to be on or after noticeGivenAt', () => {
+    const active = activateTenancy(
+      planTenancy(draftWithTenant(), '2026-10-01'),
+      '2026-10-01',
+    );
+
+    expect(() =>
+      giveTenancyNotice(active, '2027-09-01', '2027-08-31'),
+    ).toThrowError(/cannot be earlier than noticeGivenAt/);
   });
 
   it('forbids more than one primary occupant', () => {

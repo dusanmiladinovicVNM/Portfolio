@@ -167,7 +167,7 @@ class InMemoryTenancyRepository implements TenancyRepository {
     return [...this.tenancies.values()].some((item) => item.code.toLowerCase() === code.toLowerCase());
   }
 
-  async hasEffectivePeriodOverlap(
+  async hasPlannedReservationOverlap(
     unitId: UnitId,
     validFrom: DateOnly,
     validTo: DateOnly | null,
@@ -175,12 +175,45 @@ class InMemoryTenancyRepository implements TenancyRepository {
   ) {
     const rightEnd = validTo ?? asDateOnly('9999-12-31');
     return [...this.tenancies.values()].some((tenancy) => {
-      if (tenancy.unitId !== unitId || tenancy.id === excludeTenancyId) return false;
-      const period = effectivePeriod(tenancy);
-      if (!period) return false;
-      const [leftStart, leftEndValue] = period;
-      const leftEnd = leftEndValue ?? asDateOnly('9999-12-31');
-      return leftStart <= rightEnd && validFrom <= leftEnd;
+      if (
+        tenancy.unitId !== unitId ||
+        tenancy.id === excludeTenancyId ||
+        tenancy.status !== 'planned' ||
+        tenancy.plannedStart === null
+      ) {
+        return false;
+      }
+
+      const leftEnd = tenancy.plannedEnd ?? asDateOnly('9999-12-31');
+      return tenancy.plannedStart <= rightEnd && validFrom <= leftEnd;
+    });
+  }
+
+  async hasActualOccupancyOverlap(
+    unitId: UnitId,
+    validFrom: DateOnly,
+    validTo: DateOnly | null,
+    excludeTenancyId?: TenancyId,
+  ) {
+    const rightEnd = validTo ?? asDateOnly('9999-12-31');
+    return [...this.tenancies.values()].some((tenancy) => {
+      if (
+        tenancy.unitId !== unitId ||
+        tenancy.id === excludeTenancyId ||
+        tenancy.actualStart === null ||
+        !['active', 'notice_given', 'move_out_pending', 'ended'].includes(tenancy.status)
+      ) {
+        return false;
+      }
+
+      const leftEnd =
+        tenancy.status === 'ended'
+          ? tenancy.actualEnd
+          : tenancy.status === 'notice_given' || tenancy.status === 'move_out_pending'
+            ? tenancy.terminationEffectiveAt
+            : null;
+      const normalizedLeftEnd = leftEnd ?? asDateOnly('9999-12-31');
+      return tenancy.actualStart <= rightEnd && validFrom <= normalizedLeftEnd;
     });
   }
 
