@@ -646,6 +646,7 @@ describe('Inspection HTTP backbone', () => {
     expect(await badAssignment.json()).toMatchObject({
       error: { code: 'INSPECTION_ASSIGNMENT_FORBIDDEN' },
     });
+  });
 
   it('enforces evidence/signature permissions and returns final snapshot over HTTP', async () => {
     const { handler, documentRepository } = buildHandler();
@@ -960,6 +961,5 @@ describe('Inspection HTTP backbone', () => {
         ],
       },
     });
-  });
   });
 });
