@@ -3,6 +3,7 @@ import {
   type Asset,
   type AssetId,
   type AssetReplacement,
+  type PropertyId,
   type UnitId,
 } from '@portfolio/domain';
 import type { PortfolioRepository } from '../portfolio/portfolio-repository.js';
@@ -16,6 +17,21 @@ export function getAssetQuery(
 ): Promise<Asset | null> {
   requireCapability(actor, 'assets:read');
   return repository.getById(id);
+}
+
+export async function listAssetsByPropertyQuery(
+  assetRepository: AssetRepository,
+  portfolioRepository: PortfolioRepository,
+  actor: Actor,
+  propertyId: PropertyId,
+): Promise<readonly Asset[]> {
+  requireCapability(actor, 'assets:read');
+
+  if (!(await portfolioRepository.getPropertyById(propertyId))) {
+    throw new DomainError('PROPERTY_NOT_FOUND', 'Property not found.');
+  }
+
+  return assetRepository.listByProperty(propertyId);
 }
 
 export async function listAssetsByUnitQuery(
