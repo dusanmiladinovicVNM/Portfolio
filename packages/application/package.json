@@ -1,0 +1,19 @@
+{
+  "name": "@portfolio/application",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@portfolio/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "workspace:*",
+    "vitest": "workspace:*"
+  }
+}
