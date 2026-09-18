@@ -12,9 +12,14 @@ import {
   type DocumentId,
   type DocumentLink,
   type DocumentLinkRelation,
-  type DocumentTargetType,
   type DocumentVersion,
   type DocumentVersionId,
+  type LeaseAgreementId,
+  type LeaseAmendmentId,
+  type PartyId,
+  type PropertyId,
+  type TenancyId,
+  type UnitId,
 } from '@portfolio/domain';
 import { ApplicationError } from '../shared/application-error.js';
 import type { ClockPort } from '../shared/clock.js';
@@ -43,13 +48,37 @@ export interface UploadDocumentVersionCommandInput {
   readonly content: Uint8Array;
 }
 
-export interface LinkDocumentCommandInput {
+interface LinkDocumentCommandBase {
   readonly documentId: DocumentId;
   readonly documentVersionId?: DocumentVersionId | null;
   readonly relation: DocumentLinkRelation;
-  readonly targetType: DocumentTargetType;
-  readonly targetId: string;
 }
+
+export type LinkDocumentCommandInput =
+  | (LinkDocumentCommandBase & {
+      readonly targetType: 'property';
+      readonly targetId: PropertyId;
+    })
+  | (LinkDocumentCommandBase & {
+      readonly targetType: 'unit';
+      readonly targetId: UnitId;
+    })
+  | (LinkDocumentCommandBase & {
+      readonly targetType: 'party';
+      readonly targetId: PartyId;
+    })
+  | (LinkDocumentCommandBase & {
+      readonly targetType: 'tenancy';
+      readonly targetId: TenancyId;
+    })
+  | (LinkDocumentCommandBase & {
+      readonly targetType: 'lease_agreement';
+      readonly targetId: LeaseAgreementId;
+    })
+  | (LinkDocumentCommandBase & {
+      readonly targetType: 'lease_amendment';
+      readonly targetId: LeaseAmendmentId;
+    });
 
 interface DocumentDependencies {
   readonly documentRepository: DocumentRepository;
@@ -213,28 +242,28 @@ async function assertTargetExists(
 ): Promise<void> {
   switch (input.targetType) {
     case 'property':
-      if (!await deps.portfolioRepository.getPropertyById(input.targetId as never)) {
+      if (!await deps.portfolioRepository.getPropertyById(input.targetId)) {
         throw new DomainError('PROPERTY_NOT_FOUND', 'Property not found.');
       }
       return;
     case 'unit':
-      if (!await deps.portfolioRepository.getUnitById(input.targetId as never)) {
+      if (!await deps.portfolioRepository.getUnitById(input.targetId)) {
         throw new DomainError('UNIT_NOT_FOUND', 'Unit not found.');
       }
       return;
     case 'party':
-      if (!await deps.partyRepository.getById(input.targetId as never)) {
+      if (!await deps.partyRepository.getById(input.targetId)) {
         throw new DomainError('PARTY_NOT_FOUND', 'Party not found.');
       }
       return;
     case 'tenancy':
-      if (!await deps.tenancyRepository.getById(input.targetId as never)) {
+      if (!await deps.tenancyRepository.getById(input.targetId)) {
         throw new DomainError('TENANCY_NOT_FOUND', 'Tenancy not found.');
       }
       return;
     case 'lease_agreement': {
       const agreement = await deps.leaseRepository.getAgreementById(
-        input.targetId as never,
+        input.targetId,
       );
       if (!agreement) {
         throw new DomainError(
@@ -255,7 +284,7 @@ async function assertTargetExists(
     }
     case 'lease_amendment': {
       const amendment = await deps.leaseRepository.getAmendmentById(
-        input.targetId as never,
+        input.targetId,
       );
       if (!amendment) {
         throw new DomainError(
@@ -321,8 +350,8 @@ export async function linkDocumentCommand(
   const link = createDocumentLink({
     ...common,
     targetType: input.targetType,
-    targetId: input.targetId as never,
-  } as never);
+    targetId: input.targetId,
+  } as DocumentLink);
 
   await deps.documentRepository.insertLink(link);
   return link;
