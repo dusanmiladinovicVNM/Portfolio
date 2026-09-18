@@ -8,6 +8,9 @@ import {
   listSpacesByUnitQuery,
   listUnitsByPropertyQuery,
   resolveActor,
+  type CreatePropertyCommandInput,
+  type CreateSpaceCommandInput,
+  type CreateUnitCommandInput,
   type IdGenerator,
   type PortfolioRepository,
   type UserAccessRepository,
@@ -120,13 +123,27 @@ export function createPortfolioHttpHandler(
         const parsed = createPropertyRequestSchema.safeParse(await requestJson(request));
         if (!parsed.success) return validationFailure();
 
+        const input: CreatePropertyCommandInput = {
+          code: parsed.data.code,
+          name: parsed.data.name,
+          propertyType: parsed.data.propertyType,
+          street: parsed.data.street,
+          houseNumber: parsed.data.houseNumber,
+          postalCode: parsed.data.postalCode,
+          city: parsed.data.city,
+          countryCode: parsed.data.countryCode,
+          ...(parsed.data.yearBuilt !== undefined
+            ? { yearBuilt: parsed.data.yearBuilt }
+            : {}),
+        };
+
         const property = await createPropertyCommand(
           {
             portfolioRepository: deps.portfolioRepository,
             idGenerator: deps.idGenerator,
           },
           actor,
-          parsed.data,
+          input,
         );
 
         return json({ data: property }, 201);
@@ -168,16 +185,24 @@ export function createPortfolioHttpHandler(
         const parsed = createUnitRequestSchema.safeParse(await requestJson(request));
         if (!parsed.success) return validationFailure();
 
+        const input: CreateUnitCommandInput = {
+          propertyId: asPropertyId(parsed.data.propertyId),
+          code: parsed.data.code,
+          unitNumber: parsed.data.unitNumber,
+          unitType: parsed.data.unitType,
+          ...(parsed.data.floor !== undefined ? { floor: parsed.data.floor } : {}),
+          ...(parsed.data.areaM2 !== undefined ? { areaM2: parsed.data.areaM2 } : {}),
+          ...(parsed.data.rooms !== undefined ? { rooms: parsed.data.rooms } : {}),
+          ...(parsed.data.notes !== undefined ? { notes: parsed.data.notes } : {}),
+        };
+
         const unit = await createUnitCommand(
           {
             portfolioRepository: deps.portfolioRepository,
             idGenerator: deps.idGenerator,
           },
           actor,
-          {
-            ...parsed.data,
-            propertyId: asPropertyId(parsed.data.propertyId),
-          },
+          input,
         );
 
         return json({ data: unit }, 201);
@@ -201,16 +226,22 @@ export function createPortfolioHttpHandler(
         const parsed = createSpaceRequestSchema.safeParse(await requestJson(request));
         if (!parsed.success) return validationFailure();
 
+        const input: CreateSpaceCommandInput = {
+          unitId: asUnitId(parsed.data.unitId),
+          code: parsed.data.code,
+          name: parsed.data.name,
+          spaceType: parsed.data.spaceType,
+          ...(parsed.data.areaM2 !== undefined ? { areaM2: parsed.data.areaM2 } : {}),
+          ...(parsed.data.sortOrder !== undefined ? { sortOrder: parsed.data.sortOrder } : {}),
+        };
+
         const space = await createSpaceCommand(
           {
             portfolioRepository: deps.portfolioRepository,
             idGenerator: deps.idGenerator,
           },
           actor,
-          {
-            ...parsed.data,
-            unitId: asUnitId(parsed.data.unitId),
-          },
+          input,
         );
 
         return json({ data: space }, 201);
