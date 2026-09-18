@@ -6,6 +6,7 @@ import {
   asInspectionSchemaItemId,
   asInspectionSchemaSectionId,
   asInspectionSchemaVersionId,
+  assertInspectionContentEditable,
   cancelInspection,
   createInspection,
   createInspectionFinding,
@@ -293,6 +294,7 @@ export async function saveInspectionSectionCommand(
     inspectionId,
   );
   assertInspectionAccess(actor, inspection);
+  assertInspectionContentEditable(inspection);
 
   const schema = await requireSchema(
     deps.inspectionRepository,
