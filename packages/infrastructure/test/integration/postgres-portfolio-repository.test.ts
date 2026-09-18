@@ -1664,6 +1664,39 @@ describe('PostgreSQL infrastructure', () => {
       constraint_name: 'inspection_unlock_record_required',
     });
 
+    await expect(
+      sql.begin(async (tx) => {
+        await tx`
+          insert into public.inspection_unlocks (
+            id, inspection_id, unlocked_by_user_id, unlocked_at, reason,
+            previous_locked_at, previous_version, previous_content_revision,
+            new_version, new_content_revision
+          ) values (
+            'a6200000-0000-4000-8000-000000000001',
+            ${inspection.id}, ${actor.userId},
+            '2026-09-21T08:34:00.000Z',
+            'Attempt unlock without invalidating signatures',
+            ${beforeUnlock.lockedAt}, ${beforeUnlock.version},
+            ${beforeUnlock.contentRevision},
+            ${beforeUnlock.version + 1},
+            ${beforeUnlock.contentRevision + 1}
+          )
+        `;
+
+        await tx`
+          update public.inspections
+          set status = 'in_progress',
+              locked_at = null,
+              version = version + 1,
+              content_revision = content_revision + 1
+          where id = ${inspection.id}
+        `;
+      }),
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_unlock_active_signatures',
+    });
+
     const unlocked = await unlockInspectionCommand(
       {
         inspectionRepository,
