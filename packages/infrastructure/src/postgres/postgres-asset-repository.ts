@@ -132,6 +132,7 @@ function translate(error: unknown): DomainError | null {
       case 'asset_replacement_predecessor_state':
       case 'asset_replacement_successor_state':
       case 'asset_replacement_required':
+      case 'asset_replacement_status_required':
       case 'asset_lifecycle_transition_invalid':
       case 'asset_initial_state':
         return new DomainError(
