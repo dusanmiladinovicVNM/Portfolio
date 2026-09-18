@@ -1,4 +1,11 @@
-import type { Property, PropertyId, Space, Unit, UnitId } from '@portfolio/domain';
+import {
+  DomainError,
+  type Property,
+  type PropertyId,
+  type Space,
+  type Unit,
+  type UnitId,
+} from '@portfolio/domain';
 import { requireCapability, type Actor } from '../security/access.js';
 import type { PortfolioRepository } from './portfolio-repository.js';
 
@@ -19,20 +26,30 @@ export function listPropertiesQuery(
   return repository.listProperties();
 }
 
-export function listUnitsByPropertyQuery(
+export async function listUnitsByPropertyQuery(
   repository: PortfolioRepository,
   actor: Actor,
   propertyId: PropertyId,
 ): Promise<readonly Unit[]> {
   requireCapability(actor, 'portfolio:read');
+
+  if (!(await repository.getPropertyById(propertyId))) {
+    throw new DomainError('PROPERTY_NOT_FOUND', 'Property not found.');
+  }
+
   return repository.listUnitsByProperty(propertyId);
 }
 
-export function listSpacesByUnitQuery(
+export async function listSpacesByUnitQuery(
   repository: PortfolioRepository,
   actor: Actor,
   unitId: UnitId,
 ): Promise<readonly Space[]> {
   requireCapability(actor, 'portfolio:read');
+
+  if (!(await repository.getUnitById(unitId))) {
+    throw new DomainError('UNIT_NOT_FOUND', 'Unit not found.');
+  }
+
   return repository.listSpacesByUnit(unitId);
 }
