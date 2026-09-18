@@ -200,9 +200,13 @@ begin
             constraint = 'lease_agreement_parties_signed_immutable';
   end if;
 
-  return case when tg_op = 'DELETE' then old else new end;
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+
+  return new;
 end;
-$$;
+$;
 
 create trigger lease_agreement_parties_signed_immutable_trg
 before insert or update or delete on public.lease_agreement_parties

@@ -31,42 +31,48 @@ These rules are architecture gates, not optional implementation notes.
 19. Ended and cancelled Tenancies are terminal.
 20. Effective tenancy periods for the same Unit never overlap.
 21. Every Tenancy aggregate mutation increments an optimistic concurrency version.
-22. A signed LeaseAgreement is immutable.
-23. Changes to signed legal terms create an amendment/successor version; they do not rewrite history.
-24. Effective tenancy terms must be answerable for an arbitrary historical date.
-25. Multiple tenants are modeled as TenancyParty relationships, never tenant1/tenant2 columns.
+22. LeaseAgreement is a legal record separate from the operational Tenancy.
+23. AgreementParty is a legal snapshot; signed agreement party composition must not follow later live Party/Tenancy changes.
+24. A signed LeaseAgreement is immutable except for explicit lifecycle metadata transitions.
+25. A signed LeaseAmendment is immutable.
+26. Every signed agreement/amendment that changes effective terms emits exactly one immutable TenancyTermVersion.
+27. Signing and term-version creation are one transaction; a signed legal record without its effective term snapshot is invalid.
+28. Effective tenancy terms must be answerable for an arbitrary historical date from append-only term versions.
+29. Money uses exact decimal semantics across API/domain/storage; JS floating-point numbers are not canonical money.
+30. A term version source must belong to the same Tenancy as the term version.
+31. Multiple tenants are modeled as TenancyParty relationships, never tenant1/tenant2 columns.
 
 ## Inspections
 
-26. Inspection references Unit/Tenancy; it does not own property or party master data.
-27. A finalized/signed inspection has an immutable snapshot.
-28. Form answers are not automatically canonical domain facts. Meter readings, assets, keys, damages and similar facts require their own domain records where applicable.
+32. Inspection references Unit/Tenancy; it does not own property or party master data.
+33. A finalized/signed inspection has an immutable snapshot.
+34. Form answers are not automatically canonical domain facts. Meter readings, assets, keys, damages and similar facts require their own domain records where applicable.
 
 ## Assets
 
-29. Asset represents one physical identity.
-30. Moving an Asset does not create a new Asset.
-31. Replacing an Asset does create a new Asset; the old one remains in history.
-32. Serial/product identifiers are historical identity data and must not be collapsed into an unstructured notes field.
-33. Service events are append-only history.
-34. Asset condition assessments preserve history rather than overwriting a single condition field.
+35. Asset represents one physical identity.
+36. Moving an Asset does not create a new Asset.
+37. Replacing an Asset does create a new Asset; the old one remains in history.
+38. Serial/product identifiers are historical identity data and must not be collapsed into an unstructured notes field.
+39. Service events are append-only history.
+40. Asset condition assessments preserve history rather than overwriting a single condition field.
 
 ## Improvements and maintenance
 
-35. ImprovementProject is work; Asset is a physical item; Material is consumed input. They are not interchangeable.
-36. Issue and WorkOrder are different grains: a problem can exist before a work order and may require more than one work order.
-37. Cross-context workflows cannot bypass the owning domain to mutate its state.
+41. ImprovementProject is work; Asset is a physical item; Material is consumed input. They are not interchangeable.
+42. Issue and WorkOrder are different grains: a problem can exist before a work order and may require more than one work order.
+43. Cross-context workflows cannot bypass the owning domain to mutate its state.
 
 ## Money and documents
 
-38. Monetary values use decimal/numeric semantics, never binary floating point.
-39. Signed/final legal documents are immutable versions and must have a content hash.
-40. Binary storage location is infrastructure data, not business identity.
-41. Financial corrections preserve prior history through correction/reversal records where material.
+44. Monetary values use decimal/numeric semantics, never binary floating point.
+45. Signed/final legal documents are immutable versions and must have a content hash.
+46. Binary storage location is infrastructure data, not business identity.
+47. Financial corrections preserve prior history through correction/reversal records where material.
 
 ## Architecture
 
-42. Domain code cannot import Supabase, React, Deno, Google APIs or future Fastify infrastructure.
-43. UI components cannot coordinate multi-table business transactions.
-44. Multi-record business commands have one explicit transactional boundary.
-45. Database constraints enforce invariants that can be stated relationally.
+48. Domain code cannot import Supabase, React, Deno, Google APIs or future Fastify infrastructure.
+49. UI components cannot coordinate multi-table business transactions.
+50. Multi-record business commands have one explicit transactional boundary.
+51. Database constraints enforce invariants that can be stated relationally.
