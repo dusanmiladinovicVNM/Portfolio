@@ -91,7 +91,8 @@ function errorStatus(code: string): number {
     code === 'LEASE_AGREEMENT_TERMS_ALREADY_EXIST' ||
     code === 'LEASE_AMENDMENT_TERMS_ALREADY_EXIST' ||
     code === 'ASSET_ALREADY_REPLACED' ||
-    code === 'ASSET_REPLACEMENT_ALREADY_LINKED'
+    code === 'ASSET_REPLACEMENT_ALREADY_LINKED' ||
+    code === 'ASSET_IDENTIFIER_GLOBAL_CONFLICT'
   ) {
     return 409;
   }
