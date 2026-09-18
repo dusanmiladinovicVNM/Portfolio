@@ -486,6 +486,11 @@ function translate(error: unknown): DomainError | null {
           'INSPECTION_UNLOCK_RECORD_REQUIRED',
           'Unlock requires a matching append-only unlock record.',
         );
+      case 'inspection_unlock_active_signatures':
+        return new DomainError(
+          'INSPECTION_UNLOCK_SIGNATURES_ACTIVE',
+          'Unlock requires every active signature to be invalidated first.',
+        );
       case 'inspection_final_report_requires_finalized':
         return new DomainError(
           'INSPECTION_FINAL_REPORT_STATE_INVALID',
