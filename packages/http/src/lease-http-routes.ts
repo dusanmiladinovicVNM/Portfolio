@@ -33,38 +33,22 @@ import {
   asTenancyId,
   type TermSnapshotInput,
 } from '@portfolio/domain';
+import {
+  json,
+  requestJson,
+  validationFailure,
+} from './http-utils.js';
+import {
+  toLeaseAgreementResponse,
+  toLeaseAmendmentResponse,
+  toTenancyTermVersionResponse,
+} from './response-mappers.js';
 
 export interface LeaseHttpDependencies {
   readonly leaseRepository: LeaseRepository;
   readonly tenancyRepository: TenancyRepository;
   readonly partyRepository: PartyRepository;
   readonly idGenerator: IdGenerator;
-}
-
-const JSON_HEADERS = {
-  'content-type': 'application/json; charset=utf-8',
-};
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: JSON_HEADERS,
-  });
-}
-
-async function requestJson(request: Request): Promise<unknown> {
-  try {
-    return await request.json();
-  } catch {
-    return Symbol.for('invalid-json');
-  }
-}
-
-function invalidRequest(): Response {
-  return json(
-    { error: { code: 'INVALID_REQUEST', message: 'Request payload is invalid.' } },
-    400,
-  );
 }
 
 function mapTerms(input: ReturnType<typeof leaseTermsRequestSchema.parse>): TermSnapshotInput {
@@ -109,7 +93,7 @@ export async function handleLeaseHttp(
   const tenancyAgreementsMatch = /^\/tenancies\/([^/]+)\/agreements$/.exec(path);
   if (tenancyAgreementsMatch) {
     const parsedTenancyId = entityIdSchema.safeParse(tenancyAgreementsMatch[1]);
-    if (!parsedTenancyId.success) return invalidRequest();
+    if (!parsedTenancyId.success) return validationFailure();
     const tenancyId = asTenancyId(parsedTenancyId.data);
 
     if (method === 'GET') {
@@ -122,15 +106,13 @@ export async function handleLeaseHttp(
         tenancyId,
       );
 
-      return json({ data: { items: agreements } });
+      return json({ data: { items: agreements.map(toLeaseAgreementResponse) } });
     }
 
     if (method === 'POST') {
       const body = await requestJson(request);
-      if (typeof body === 'symbol') return invalidRequest();
-
       const parsed = createLeaseAgreementRequestSchema.safeParse(body);
-      if (!parsed.success) return invalidRequest();
+      if (!parsed.success) return validationFailure();
 
       const input: CreateLeaseAgreementCommandInput = {
         tenancyId,
@@ -160,7 +142,7 @@ export async function handleLeaseHttp(
         input,
       );
 
-      return json({ data: agreement }, 201);
+      return json({ data: toLeaseAgreementResponse(agreement) }, 201);
     }
 
     return null;
@@ -169,10 +151,10 @@ export async function handleLeaseHttp(
   const tenancyTermsMatch = /^\/tenancies\/([^/]+)\/terms$/.exec(path);
   if (method === 'GET' && tenancyTermsMatch) {
     const parsedTenancyId = entityIdSchema.safeParse(tenancyTermsMatch[1]);
-    if (!parsedTenancyId.success) return invalidRequest();
+    if (!parsedTenancyId.success) return validationFailure();
 
     const at = new URL(request.url).searchParams.get('at');
-    if (!at) return invalidRequest();
+    if (!at) return validationFailure();
 
     const terms = await getEffectiveTenancyTermsQuery(
       {
@@ -184,13 +166,13 @@ export async function handleLeaseHttp(
       at,
     );
 
-    return json({ data: terms });
+    return json({ data: toTenancyTermVersionResponse(terms) });
   }
 
   const agreementMatch = /^\/agreements\/([^/]+)$/.exec(path);
   if (method === 'GET' && agreementMatch) {
     const parsedId = entityIdSchema.safeParse(agreementMatch[1]);
-    if (!parsedId.success) return invalidRequest();
+    if (!parsedId.success) return validationFailure();
 
     const agreement = await getLeaseAgreementQuery(
       deps.leaseRepository,
@@ -198,19 +180,17 @@ export async function handleLeaseHttp(
       asLeaseAgreementId(parsedId.data),
     );
 
-    return json({ data: agreement });
+    return json({ data: toLeaseAgreementResponse(agreement) });
   }
 
   const agreementSignMatch = /^\/agreements\/([^/]+)\/sign$/.exec(path);
   if (method === 'POST' && agreementSignMatch) {
     const parsedId = entityIdSchema.safeParse(agreementSignMatch[1]);
-    if (!parsedId.success) return invalidRequest();
+    if (!parsedId.success) return validationFailure();
 
     const body = await requestJson(request);
-    if (typeof body === 'symbol') return invalidRequest();
-
     const parsed = signLeaseAgreementRequestSchema.safeParse(body);
-    if (!parsed.success) return invalidRequest();
+    if (!parsed.success) return validationFailure();
 
     const agreement = await signLeaseAgreementCommand(
       {
@@ -226,19 +206,17 @@ export async function handleLeaseHttp(
       mapTerms(parsed.data.terms),
     );
 
-    return json({ data: agreement });
+    return json({ data: toLeaseAgreementResponse(agreement) });
   }
 
   const agreementCancelMatch = /^\/agreements\/([^/]+)\/cancel$/.exec(path);
   if (method === 'POST' && agreementCancelMatch) {
     const parsedId = entityIdSchema.safeParse(agreementCancelMatch[1]);
-    if (!parsedId.success) return invalidRequest();
+    if (!parsedId.success) return validationFailure();
 
     const body = await requestJson(request);
-    if (typeof body === 'symbol') return invalidRequest();
-
     const parsed = contractVersionRequestSchema.safeParse(body);
-    if (!parsed.success) return invalidRequest();
+    if (!parsed.success) return validationFailure();
 
     const agreement = await cancelLeaseAgreementCommand(
       { leaseRepository: deps.leaseRepository },
@@ -247,13 +225,13 @@ export async function handleLeaseHttp(
       parsed.data.expectedVersion,
     );
 
-    return json({ data: agreement });
+    return json({ data: toLeaseAgreementResponse(agreement) });
   }
 
   const amendmentsMatch = /^\/agreements\/([^/]+)\/amendments$/.exec(path);
   if (amendmentsMatch) {
     const parsedAgreementId = entityIdSchema.safeParse(amendmentsMatch[1]);
-    if (!parsedAgreementId.success) return invalidRequest();
+    if (!parsedAgreementId.success) return validationFailure();
     const agreementId = asLeaseAgreementId(parsedAgreementId.data);
 
     if (method === 'GET') {
@@ -262,15 +240,13 @@ export async function handleLeaseHttp(
         actor,
         agreementId,
       );
-      return json({ data: { items: amendments } });
+      return json({ data: { items: amendments.map(toLeaseAmendmentResponse) } });
     }
 
     if (method === 'POST') {
       const body = await requestJson(request);
-      if (typeof body === 'symbol') return invalidRequest();
-
       const parsed = createLeaseAmendmentRequestSchema.safeParse(body);
-      if (!parsed.success) return invalidRequest();
+      if (!parsed.success) return validationFailure();
 
       const input: CreateLeaseAmendmentCommandInput = {
         agreementId,
@@ -291,7 +267,7 @@ export async function handleLeaseHttp(
         input,
       );
 
-      return json({ data: amendment }, 201);
+      return json({ data: toLeaseAmendmentResponse(amendment) }, 201);
     }
 
     return null;
@@ -300,13 +276,11 @@ export async function handleLeaseHttp(
   const amendmentSignMatch = /^\/amendments\/([^/]+)\/sign$/.exec(path);
   if (method === 'POST' && amendmentSignMatch) {
     const parsedId = entityIdSchema.safeParse(amendmentSignMatch[1]);
-    if (!parsedId.success) return invalidRequest();
+    if (!parsedId.success) return validationFailure();
 
     const body = await requestJson(request);
-    if (typeof body === 'symbol') return invalidRequest();
-
     const parsed = signLeaseAmendmentRequestSchema.safeParse(body);
-    if (!parsed.success) return invalidRequest();
+    if (!parsed.success) return validationFailure();
 
     const amendment = await signLeaseAmendmentCommand(
       {
@@ -321,19 +295,17 @@ export async function handleLeaseHttp(
       mapTerms(parsed.data.terms),
     );
 
-    return json({ data: amendment });
+    return json({ data: toLeaseAmendmentResponse(amendment) });
   }
 
   const amendmentCancelMatch = /^\/amendments\/([^/]+)\/cancel$/.exec(path);
   if (method === 'POST' && amendmentCancelMatch) {
     const parsedId = entityIdSchema.safeParse(amendmentCancelMatch[1]);
-    if (!parsedId.success) return invalidRequest();
+    if (!parsedId.success) return validationFailure();
 
     const body = await requestJson(request);
-    if (typeof body === 'symbol') return invalidRequest();
-
     const parsed = contractVersionRequestSchema.safeParse(body);
-    if (!parsed.success) return invalidRequest();
+    if (!parsed.success) return validationFailure();
 
     const amendment = await cancelLeaseAmendmentCommand(
       { leaseRepository: deps.leaseRepository },
@@ -342,7 +314,7 @@ export async function handleLeaseHttp(
       parsed.data.expectedVersion,
     );
 
-    return json({ data: amendment });
+    return json({ data: toLeaseAmendmentResponse(amendment) });
   }
 
   return null;

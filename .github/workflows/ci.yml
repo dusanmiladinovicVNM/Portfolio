@@ -45,7 +45,7 @@ jobs:
         run: npm install --global pnpm@12.4.2
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Typecheck
         run: pnpm typecheck

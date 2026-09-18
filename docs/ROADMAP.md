@@ -1,73 +1,73 @@
-# Roadmap
+# Canonical PR roadmap
 
-The sequence is dependency-driven. Later phases must not pull concepts backward into earlier entity grains.
+This is the canonical implementation sequence for Portfolio.
 
-## Phase 0 — foundation
+The order is dependency-driven. A planned PR may be split if evidence shows that its domain grain is too broad, but features must not be pulled forward in a way that makes later contexts depend on provisional truth.
 
-- architecture and ADRs
-- monorepo/package boundaries
-- TypeScript strictness
-- PostgreSQL migration convention
-- first Portfolio domain tests
+## Foundation and rental core
 
-## Phase 1 — Portfolio
+| PR | Scope | Status |
+| --- | --- | --- |
+| #1 | Bootstrap architecture + Portfolio core | DONE |
+| #2 | Portable persistence + first application/API vertical slice | DONE |
+| #3 | Auth + HTTP/API boundary | DONE |
+| #4 | Party + Ownership | DONE |
+| #5 | Tenancy backbone | DONE |
+| #6 | LeaseAgreement + effective terms | DONE |
+| #7 | Core Hardening A — Unit/Tenancy temporal truth | DONE |
+| #8 | Core Hardening B — lease successor chain + bounded term history | DONE |
+| #9 | Core Boundary Hardening — DTOs, routing, lockfile, transaction rule | IN PROGRESS |
 
-- Property
-- Unit
-- Space
-- first API/query vertical slice
-- authorization added before exposure to end users
+## Evidence and operational domains
 
-## Phase 2 — Parties and ownership
-
-- Party
-- UnitOwnership
-- contacts/addresses only as complexity requires
-
-## Phase 3 — Tenancy
-
-- Tenancy
-- TenancyParty
-- lifecycle/status transitions
-- overlap rules
-
-## Phase 4 — Contracts
-
-- LeaseAgreement
-- agreement parties
-- amendments
-- effective term versions
-- signed-document immutability
-
-## Phase 5 — Documents
+### PR #10 — Documents foundation
 
 - Document
 - DocumentVersion
 - DocumentLink
+- immutable/final version rules
+- content hash
 - FileStoragePort
-- Google Drive adapter
+- Google Drive first adapter
 
-## Phase 6 — Inspections
+Binary storage must not become business identity.
 
-Use HandoverApp as feature reference only.
+### PR #11 — Inspection domain backbone
 
-- schema/version model
-- section responses
+Use HandoverApp as a feature bank only.
+
+- Inspection
+- inspection type/lifecycle
+- versioned schema
+- sections/responses
 - findings
-- attachments
-- signatures
-- final immutable snapshot
-- field/offline behavior
+- Unit/Tenancy references
 
-## Phase 7 — Asset registry
+### PR #12 — Inspection evidence and finalization
+
+- document/photo links
+- signatures
+- immutable final snapshot
+- generated final evidence/PDF boundary
+- finalization invariants
+
+### PR #13 — Asset Registry
 
 - Asset
-- identifiers
-- location history
-- condition history
-- tenancy inventory assignment
+- manufacturer/model/serial
+- structured identifiers
+- Unit/Space placement
+- lifecycle/status
+- replacement relationships
 
-## Phase 8 — Warranty and service
+### PR #14 — Asset history + tenancy inventory
+
+- AssetLocationHistory
+- condition assessments/history
+- TenancyAssetAssignment
+- move-in/move-out inventory truth
+
+### PR #15 — Warranty + Service
 
 - Warranty
 - WarrantyClaim
@@ -75,47 +75,131 @@ Use HandoverApp as feature reference only.
 - ServiceEvent
 - ServicePart
 
-## Phase 9 — Improvements
+Service history must reference the exact physical Asset identity.
+
+### PR #16 — Improvements / Works
 
 - ImprovementProject
 - WorkItem
 - WorkMaterial
 - ProjectAsset
+- contractor/work history
 
-## Phase 10 — Costs
+### PR #17 — Unified Cost Ledger
 
-- normalized Cost ledger
+- normalized Cost
 - source links
-- capex/opex classification as reporting metadata
+- supplier/invoice references
+- exact money
+- CAPEX/OPEX reporting metadata
 
-## Phase 11 — Maintenance
+Cost is a financial projection/fact, not a substitute for its source business entity.
+
+### PR #18 — Maintenance
 
 - Issue
 - WorkOrder
-- connection to assets, inspections and service events
+- assignment/status/priority
+- Inspection finding → Issue linkage
+- Asset/Service/Cost links
 
-## Phase 12 — Timeline and reporting
+### PR #19 — Keys + Access
 
-- DomainEvent projection
-- unit dossier timeline
-- investment and maintenance summaries
+- keys
+- cards
+- remotes
+- issue/return/loss history
+- Tenancy assignments
+- immutable access-item transactions
+
+### PR #20 — Meters + Utilities
+
+- meter identity
+- Unit/Space placement
+- readings
+- move-in/move-out readings
+- historical consumption basis
+
+## Read models and product surface
+
+### PR #21 — Domain Events + Unit Timeline
+
+- business-event projection
+- Unit dossier timeline
+- cross-context chronology
+- technical audit remains separate from domain timeline
+
+### PR #22 — Reporting / Portfolio projections
+
+- Unit overview
+- occupancy/tenancy status
+- contract status
+- investments/costs
+- maintenance
+- asset/service summaries
+- portfolio dashboards
+
+### PR #23 — React/Vite PWA + Unit dossier
+
+- authenticated internal shell
+- navigation
+- Unit-centric UX
+- typed API client
+- Portfolio/Party/Tenancy/Contracts/Documents/Assets surfaces
+- no raw database business writes from React
+
+### PR #24 — Field workflow + offline
+
+- inspection field UX
+- section autosave
+- IndexedDB/local cache
+- reconnect/retry
+- optimistic conflict handling
+- photo/signature workflows
+- mobile/PWA behavior
+
+## PR #25 — Production hardening + MVP release
+
+Final MVP gate:
+
+- backup automation
+- restore rehearsal
+- migration rehearsal
+- full lifecycle E2E
+- authorization/security gates
+- audit checks
+- observability
+- deployment runbook
+- recovery runbook
+
+A release is not complete until restore has been proven.
 
 ## Professional-stack port
 
-Introduce a Fastify API when the operational need justifies it.
+The professional-stack port is deliberately **not** part of the MVP PR sequence.
 
-Expected change:
+Introduce it only when an operational requirement justifies the infrastructure change.
+
+Expected replacement:
 
 ```text
-Supabase Edge transport → Fastify transport
-Supabase provider DB     → any PostgreSQL provider if needed
-Drive adapter            → S3-compatible adapter if needed
+React/Vite PWA                stays
+API contracts                 stay
+application commands/queries  stay
+domain                        stays
+PostgreSQL semantics          stay
+
+Supabase Edge Functions
+          ↓
+Fastify / Node host
+
+Supabase PostgreSQL
+          ↓
+managed PostgreSQL provider
+
+Google Drive adapter
+          ↓
+S3/R2-compatible adapter
 ```
 
-Expected non-change:
-
-- domain model
-- invariants
-- application commands/queries
-- API contracts
-- SQL semantics
+If moving from Supabase to Fastify requires redesigning Tenancy, Contracts, Assets, Inspections or application use cases, the portability boundary was designed incorrectly.
