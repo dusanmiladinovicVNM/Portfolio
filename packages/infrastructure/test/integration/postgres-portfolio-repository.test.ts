@@ -1883,9 +1883,13 @@ describe('PostgreSQL infrastructure', () => {
       inspection.id,
       section.id,
       0,
-      [{ itemId: conditionItem.id, value: 'good' }],
+      {
+        set: [{ itemId: conditionItem.id, value: 'good' }],
+        clearItemIds: [],
+      },
     );
     expect(saved.revision).toBe(1);
+    expect(saved.contentRevision).toBe(1);
 
     await expect(
       saveInspectionSectionCommand(
@@ -1898,7 +1902,10 @@ describe('PostgreSQL infrastructure', () => {
         inspection.id,
         section.id,
         0,
-        [{ itemId: conditionItem.id, value: 'damaged' }],
+        {
+          set: [{ itemId: conditionItem.id, value: 'damaged' }],
+          clearItemIds: [],
+        },
       ),
     ).rejects.toMatchObject({
       code: 'INSPECTION_SECTION_REVISION_CONFLICT',

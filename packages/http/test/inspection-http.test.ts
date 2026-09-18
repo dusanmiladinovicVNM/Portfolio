@@ -431,10 +431,10 @@ describe('Inspection HTTP backbone', () => {
       new Request(
         `https://portfolio.test/inspections/${inspection.id}/sections/${sectionId}`,
         {
-          method: 'PUT',
+          method: 'PATCH',
           body: JSON.stringify({
             expectedRevision: 0,
-            items: [
+            set: [
               { itemId: conditionItemId, value: 'damaged' },
             ],
           }),
@@ -444,17 +444,17 @@ describe('Inspection HTTP backbone', () => {
     );
     expect(firstSave.status).toBe(200);
     expect(await firstSave.clone().json()).toMatchObject({
-      data: { revision: 1 },
+      data: { revision: 1, contentRevision: 1 },
     });
 
     const staleSave = await handler(
       new Request(
         `https://portfolio.test/inspections/${inspection.id}/sections/${sectionId}`,
         {
-          method: 'PUT',
+          method: 'PATCH',
           body: JSON.stringify({
             expectedRevision: 0,
-            items: [
+            set: [
               { itemId: conditionItemId, value: 'good' },
             ],
           }),
@@ -486,14 +486,14 @@ describe('Inspection HTTP backbone', () => {
       new Request(
         `https://portfolio.test/inspections/${inspection.id}/sections/${sectionId}`,
         {
-          method: 'PUT',
+          method: 'PATCH',
           body: JSON.stringify({
             expectedRevision: 1,
-            items: [
+            set: [
               {
                 itemId: damageItemId,
                 value: 'Scratch on wall',
-                comment: 'Photo will be attached in PR12',
+                comment: 'Photo will be attached in PR13',
               },
             ],
           }),
@@ -503,7 +503,7 @@ describe('Inspection HTTP backbone', () => {
     );
     expect(secondSave.status).toBe(200);
     expect(await secondSave.clone().json()).toMatchObject({
-      data: { revision: 2 },
+      data: { revision: 2, contentRevision: 2 },
     });
 
     const finding = await handler(
@@ -543,10 +543,10 @@ describe('Inspection HTTP backbone', () => {
       new Request(
         `https://portfolio.test/inspections/${inspection.id}/sections/${sectionId}`,
         {
-          method: 'PUT',
+          method: 'PATCH',
           body: JSON.stringify({
             expectedRevision: 2,
-            items: [{ itemId: conditionItemId, value: 'good' }],
+            set: [{ itemId: conditionItemId, value: 'good' }],
           }),
         },
       ),
