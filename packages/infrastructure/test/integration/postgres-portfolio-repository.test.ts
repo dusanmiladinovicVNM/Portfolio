@@ -32,11 +32,13 @@ import {
   listSpacesByUnitQuery,
   listTenanciesByUnitQuery,
   listUnitsByPropertyQuery,
+  listAssetsByPropertyQuery,
   listAssetsByUnitQuery,
   lockInspectionCommand,
   planTenancyCommand,
   publishInspectionSchemaVersionCommand,
   replaceAssetCommand,
+  updateAssetMetadataCommand,
   resolveActor,
   saveInspectionSectionCommand,
   startInspectionCommand,
@@ -3260,9 +3262,10 @@ describe('PostgreSQL infrastructure', () => {
       {
         code: 'ASSET-FRIDGE-001',
         name: 'Kitchen refrigerator',
+        propertyId: property.id,
         unitId: unit.id,
         spaceId: kitchen.id,
-        manufacturer: 'Bosch',
+        manufacturer: 'Bosh',
         model: 'KGN39',
         identifiers: [
           {
@@ -3274,6 +3277,10 @@ describe('PostgreSQL infrastructure', () => {
             value: 'PN-001',
             label: 'E-Nr',
           },
+          {
+            identifierType: 'inventory_tag',
+            value: 'INV-001',
+          },
         ],
       },
     );
@@ -3281,12 +3288,13 @@ describe('PostgreSQL infrastructure', () => {
     expect(asset).toMatchObject({
       status: 'active',
       version: 1,
+      propertyId: property.id,
       unitId: unit.id,
       spaceId: kitchen.id,
-      manufacturer: 'Bosch',
+      manufacturer: 'Bosh',
       model: 'KGN39',
     });
-    expect(asset.identifiers).toHaveLength(2);
+    expect(asset.identifiers).toHaveLength(3);
 
     await expect(
       createAssetCommand(
@@ -3295,6 +3303,7 @@ describe('PostgreSQL infrastructure', () => {
         {
           code: 'ASSET-BAD-SPACE',
           name: 'Wrong placement',
+          propertyId: property.id,
           unitId: unit.id,
           spaceId: otherSpace.id,
         },
@@ -3307,6 +3316,7 @@ describe('PostgreSQL infrastructure', () => {
       {
         code: 'ASSET-OTHER-UNIT',
         name: 'Other unit appliance',
+        propertyId: property.id,
         unitId: otherUnit.id,
         spaceId: otherSpace.id,
       },
@@ -3321,7 +3331,7 @@ describe('PostgreSQL infrastructure', () => {
       `,
     ).rejects.toMatchObject({
       code: '23514',
-      constraint_name: 'asset_identity_immutable',
+      constraint_name: 'asset_identity_placement_immutable',
     });
 
     await expect(
@@ -3349,18 +3359,19 @@ describe('PostgreSQL infrastructure', () => {
       `,
     ).rejects.toMatchObject({
       code: '23514',
-      constraint_name: 'asset_replacement_unit_mismatch',
+      constraint_name: 'asset_replacement_placement_mismatch',
     });
 
     await expect(
       sql.begin(async (tx) => {
         await tx`
           insert into public.assets (
-            id, code, name, unit_id, space_id, status, version
+            id, code, name, property_id, unit_id, space_id, status, version
           ) values (
             'b1f00000-0000-4000-8000-000000000002',
             'ASSET-DANGLING-SUCCESSOR',
             'Dangling successor',
+            ${property.id},
             ${unit.id},
             ${kitchen.id},
             'active',
@@ -3390,12 +3401,13 @@ describe('PostgreSQL infrastructure', () => {
       sql.begin(async (tx) => {
         await tx`
           insert into public.assets (
-            id, code, name, unit_id, space_id, status, version
+            id, code, name, property_id, unit_id, space_id, status, version
           ) values
           (
             'b1f00000-0000-4000-8000-000000000004',
             'ASSET-CYCLE-A',
             'Cycle A',
+            ${property.id},
             ${unit.id},
             ${kitchen.id},
             'active',
@@ -3405,6 +3417,7 @@ describe('PostgreSQL infrastructure', () => {
             'b1f00000-0000-4000-8000-000000000005',
             'ASSET-CYCLE-B',
             'Cycle B',
+            ${property.id},
             ${unit.id},
             ${kitchen.id},
             'active',
@@ -3443,14 +3456,97 @@ describe('PostgreSQL infrastructure', () => {
       constraint_name: 'asset_replacement_cycle',
     });
 
+    const buildingAsset = await createAssetCommand(
+      { assetRepository, portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'ASSET-BUILDING-LIFT',
+        name: 'Building lift controller',
+        propertyId: property.id,
+      },
+    );
+    expect(buildingAsset).toMatchObject({
+      propertyId: property.id,
+      unitId: null,
+      spaceId: null,
+    });
+
+    await expect(
+      createAssetCommand(
+        { assetRepository, portfolioRepository, idGenerator: ids },
+        actor,
+        {
+          code: 'ASSET-DUP-INVENTORY',
+          name: 'Duplicate inventory tag',
+          propertyId: property.id,
+          identifiers: [
+            {
+              identifierType: 'inventory_tag',
+              value: ' inv-001 ',
+            },
+          ],
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'ASSET_IDENTIFIER_GLOBAL_CONFLICT' });
+
+    await expect(
+      sql`
+        insert into public.asset_identifiers (
+          id, asset_id, identifier_type, value
+        ) values (
+          'b1f00000-0000-4000-8000-000000000008',
+          ${otherAsset.id},
+          'inventory_tag',
+          'inv-001'
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23505',
+      constraint_name: 'asset_identifiers_inventory_tag_uq',
+    });
+
+    await expect(
+      sql`
+        insert into public.asset_identifiers (
+          id, asset_id, identifier_type, value
+        ) values (
+          'b1f00000-0000-4000-8000-000000000009',
+          ${otherAsset.id},
+          'serial_number',
+          ' SN-DIRECT '
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_identifiers_value_canonical',
+    });
+
+    const corrected = await updateAssetMetadataCommand(
+      assetRepository,
+      actor,
+      asset.id,
+      {
+        expectedVersion: asset.version,
+        manufacturer: 'Bosch',
+      },
+    );
+    expect(corrected).toMatchObject({
+      id: asset.id,
+      manufacturer: 'Bosch',
+      version: 2,
+      propertyId: property.id,
+      unitId: unit.id,
+      spaceId: kitchen.id,
+    });
+
     const inactive = await changeAssetStatusCommand(
       assetRepository,
       actor,
       asset.id,
-      asset.version,
+      corrected.version,
       'inactive',
     );
-    expect(inactive).toMatchObject({ status: 'inactive', version: 2 });
+    expect(inactive).toMatchObject({ status: 'inactive', version: 3 });
 
     const replacementResult = await replaceAssetCommand(
       {
@@ -3479,7 +3575,7 @@ describe('PostgreSQL infrastructure', () => {
     expect(replacementResult.replacedAsset).toMatchObject({
       id: asset.id,
       status: 'replaced',
-      version: 3,
+      version: 4,
     });
     expect(replacementResult.replacementAsset).toMatchObject({
       status: 'active',
@@ -3532,6 +3628,19 @@ describe('PostgreSQL infrastructure', () => {
     );
     expect(persistedOld?.status).toBe('replaced');
     expect(persistedReplacement?.identifiers).toHaveLength(1);
+
+    const propertyAssets = await listAssetsByPropertyQuery(
+      assetRepository,
+      portfolioRepository,
+      actor,
+      property.id,
+    );
+    expect(propertyAssets.map((item) => item.code)).toEqual([
+      'ASSET-BUILDING-LIFT',
+      'ASSET-FRIDGE-001',
+      'ASSET-FRIDGE-002',
+      'ASSET-OTHER-UNIT',
+    ]);
   });
 
 });
