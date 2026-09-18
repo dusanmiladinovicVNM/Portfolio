@@ -15,3 +15,5 @@ export * from './documents/document.js';
 export * from './inspections/inspection-schema.js';
 export * from './inspections/inspection.js';
 export * from './inspections/inspection-evidence.js';
+
+export * from './assets/asset.js';
