@@ -20,7 +20,8 @@ The order is dependency-driven. A planned PR may be split if evidence shows that
 | #10 | Documents foundation — versioned evidence + FileStoragePort | DONE |
 | #11 | Inspection domain backbone | DONE |
 | #12 | Inspection hardening — concurrency, immutability, PATCH semantics | DONE |
-| #13 | Inspection evidence and finalization | IN PROGRESS |
+| #13 | Inspection evidence and finalization | DONE |
+| #14 | Asset Registry | IN PROGRESS |
 
 ## Evidence and operational domains
 
@@ -59,7 +60,7 @@ Use HandoverApp as a feature bank only.
 - DB/domain parity for multiselect duplicates
 - adversarial concurrency and direct-SQL sabotage tests
 
-### PR #13 — Inspection evidence and finalization (IN PROGRESS)
+### PR #13 — Inspection evidence and finalization (DONE)
 
 - document/photo links
 - signatures
@@ -68,7 +69,7 @@ Use HandoverApp as a feature bank only.
 - finalization invariants
 - controlled unlock/signature invalidation policy
 
-### PR #14 — Asset Registry
+### PR #14 — Asset Registry (IN PROGRESS)
 
 - Asset
 - manufacturer/model/serial
