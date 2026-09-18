@@ -5,6 +5,7 @@ import {
   asAssetId,
   asAssetIdentifierId,
   asAssetReplacementId,
+  asPropertyId,
   asSpaceId,
   asUnitId,
   asUserId,
@@ -14,6 +15,8 @@ import {
   type AssetIdentifierType,
   type AssetReplacement,
   type AssetStatus,
+  type GloballyUniqueAssetIdentifierType,
+  type PropertyId,
   type UnitId,
 } from '@portfolio/domain';
 
@@ -28,7 +31,8 @@ interface AssetRow {
   id: string;
   code: string;
   name: string;
-  unit_id: string;
+  property_id: string;
+  unit_id: string | null;
   space_id: string | null;
   manufacturer: string | null;
   model: string | null;
@@ -87,6 +91,13 @@ function translate(error: unknown): DomainError | null {
           'ASSET_IDENTIFIER_ALREADY_EXISTS',
           'The same structured identifier already exists for this Asset.',
         );
+      case 'asset_identifiers_inventory_tag_uq':
+      case 'asset_identifiers_imei_uq':
+      case 'asset_identifiers_mac_address_uq':
+        return new DomainError(
+          'ASSET_IDENTIFIER_GLOBAL_CONFLICT',
+          'This globally unique Asset identifier is already assigned.',
+        );
       case 'asset_replacements_replaced_uq':
         return new DomainError(
           'ASSET_ALREADY_REPLACED',
@@ -104,10 +115,10 @@ function translate(error: unknown): DomainError | null {
 
   if (pg.code === '23514') {
     switch (pg.constraint_name) {
-      case 'asset_identity_immutable':
+      case 'asset_identity_placement_immutable':
         return new DomainError(
-          'ASSET_IDENTITY_IMMUTABLE',
-          'Asset identity and placement are immutable in Asset Registry.',
+          'ASSET_IDENTITY_PLACEMENT_IMMUTABLE',
+          'Asset business identity and current placement are protected until location history exists.',
         );
       case 'asset_delete_forbidden':
         return new DomainError(
@@ -124,10 +135,10 @@ function translate(error: unknown): DomainError | null {
           'ASSET_REPLACEMENT_IMMUTABLE',
           'Asset replacement relationships are append-only.',
         );
-      case 'asset_replacement_unit_mismatch':
+      case 'asset_replacement_placement_mismatch':
         return new DomainError(
-          'ASSET_REPLACEMENT_UNIT_MISMATCH',
-          'Replacement Asset must belong to the same Unit.',
+          'ASSET_REPLACEMENT_PLACEMENT_MISMATCH',
+          'Replacement Asset must inherit the exact predecessor placement.',
         );
       case 'asset_replacement_cycle':
         return new DomainError(
@@ -140,6 +151,7 @@ function translate(error: unknown): DomainError | null {
       case 'asset_replacement_status_required':
       case 'asset_lifecycle_transition_invalid':
       case 'asset_initial_state':
+      case 'asset_mixed_mutation_forbidden':
         return new DomainError(
           'ASSET_INVALID_TRANSITION',
           'Invalid Asset lifecycle/replacement transition.',
@@ -147,7 +159,7 @@ function translate(error: unknown): DomainError | null {
       case 'asset_version_step':
         return new DomainError(
           'ASSET_VERSION_CONFLICT',
-          'Asset lifecycle version is invalid.',
+          'Asset mutation version is invalid.',
         );
       default:
         return null;
@@ -169,7 +181,8 @@ async function translated<T>(operation: () => Promise<T>): Promise<T> {
 
 const assetSelect = `
   select
-    id, code, name, unit_id, space_id, manufacturer, model, status, version
+    id, code, name, property_id, unit_id, space_id,
+    manufacturer, model, status, version
   from public.assets
 `;
 
@@ -192,7 +205,8 @@ export class PostgresAssetRepository implements AssetRepository {
       id,
       code: row.code,
       name: row.name,
-      unitId: asUnitId(row.unit_id),
+      propertyId: asPropertyId(row.property_id),
+      unitId: row.unit_id === null ? null : asUnitId(row.unit_id),
       spaceId: row.space_id === null ? null : asSpaceId(row.space_id),
       manufacturer: row.manufacturer,
       model: row.model,
@@ -211,6 +225,15 @@ export class PostgresAssetRepository implements AssetRepository {
     return rows.length === 0 ? null : this.hydrate(rows[0]!);
   }
 
+  async listByProperty(propertyId: PropertyId): Promise<readonly Asset[]> {
+    const rows = await this.sql<AssetRow[]>`
+      ${this.sql.unsafe(assetSelect)}
+      where property_id = ${propertyId}
+      order by lower(code), id
+    `;
+    return Promise.all(rows.map((row) => this.hydrate(row)));
+  }
+
   async listByUnit(unitId: UnitId): Promise<readonly Asset[]> {
     const rows = await this.sql<AssetRow[]>`
       ${this.sql.unsafe(assetSelect)}
@@ -225,7 +248,22 @@ export class PostgresAssetRepository implements AssetRepository {
       select exists(
         select 1
         from public.assets
-        where lower(code) = lower(${code})
+        where lower(btrim(code)) = lower(btrim(${code}))
+      ) as exists
+    `;
+    return rows[0]?.exists ?? false;
+  }
+
+  async globallyUniqueIdentifierExists(
+    identifierType: GloballyUniqueAssetIdentifierType,
+    value: string,
+  ): Promise<boolean> {
+    const rows = await this.sql<{ exists: boolean }[]>`
+      select exists(
+        select 1
+        from public.asset_identifiers
+        where identifier_type = ${identifierType}
+          and lower(btrim(value)) = lower(btrim(${value}))
       ) as exists
     `;
     return rows[0]?.exists ?? false;
@@ -236,12 +274,12 @@ export class PostgresAssetRepository implements AssetRepository {
       await this.sql.begin(async (tx) => {
         await tx`
           insert into public.assets (
-            id, code, name, unit_id, space_id,
+            id, code, name, property_id, unit_id, space_id,
             manufacturer, model, status, version
           ) values (
-            ${asset.id}, ${asset.code}, ${asset.name}, ${asset.unitId},
-            ${asset.spaceId}, ${asset.manufacturer}, ${asset.model},
-            ${asset.status}, ${asset.version}
+            ${asset.id}, ${asset.code}, ${asset.name}, ${asset.propertyId},
+            ${asset.unitId}, ${asset.spaceId}, ${asset.manufacturer},
+            ${asset.model}, ${asset.status}, ${asset.version}
           )
         `;
 
@@ -258,6 +296,28 @@ export class PostgresAssetRepository implements AssetRepository {
         }
       });
     });
+  }
+
+  async updateMetadata(asset: Asset, expectedVersion: number): Promise<void> {
+    const rows = await translated(() => this.sql<{ id: string }[]>`
+      update public.assets
+      set
+        name = ${asset.name},
+        manufacturer = ${asset.manufacturer},
+        model = ${asset.model},
+        version = ${asset.version},
+        updated_at = now()
+      where id = ${asset.id}
+        and version = ${expectedVersion}
+      returning id
+    `);
+
+    if (rows.length === 0) {
+      throw new DomainError(
+        'ASSET_VERSION_CONFLICT',
+        'Asset changed before the metadata correction completed.',
+      );
+    }
   }
 
   async updateStatus(asset: Asset, expectedVersion: number): Promise<void> {
@@ -290,13 +350,13 @@ export class PostgresAssetRepository implements AssetRepository {
       await this.sql.begin(async (tx) => {
         await tx`
           insert into public.assets (
-            id, code, name, unit_id, space_id,
+            id, code, name, property_id, unit_id, space_id,
             manufacturer, model, status, version
           ) values (
             ${replacement.id}, ${replacement.code}, ${replacement.name},
-            ${replacement.unitId}, ${replacement.spaceId},
-            ${replacement.manufacturer}, ${replacement.model},
-            ${replacement.status}, ${replacement.version}
+            ${replacement.propertyId}, ${replacement.unitId},
+            ${replacement.spaceId}, ${replacement.manufacturer},
+            ${replacement.model}, ${replacement.status}, ${replacement.version}
           )
         `;
 
