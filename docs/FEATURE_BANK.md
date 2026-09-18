@@ -55,10 +55,13 @@ Useful production lessons carried forward:
 - unknown item IDs should be rejected in Portfolio rather than silently ignored;
 - Drive folder IDs, copied property/tenant strings, custom tenant tokens and Sheets rows are legacy implementation details, not new domain identity.
 
-Deferred deliberately to PR #13:
+PR #13 carries forward these evidence/finalization requirements:
 
-- photo/document evidence per item/section;
-- signatures and signer roles;
-- controlled unlock with signature invalidation;
-- immutable final snapshot;
-- generated PDF/report boundary.
+- photo/document evidence at inspection/section/item grain, but with exact DocumentVersion identity instead of Drive-folder identity;
+- schema-versioned signature policy; the HandoverApp MVP landlord + tenant rule is preserved for existing handover schemas rather than hardcoded globally;
+- signatures reference final immutable document versions;
+- controlled unlock invalidates active signatures but preserves them historically;
+- finalization freezes authoritative server state into one immutable snapshot;
+- generated PDF is derived from that snapshot, not used as the source of truth.
+
+Rejected legacy coupling remains unchanged: copied landlord/tenant strings, Drive folder IDs, tenant tokens and Sheets rows are not Portfolio identity.
