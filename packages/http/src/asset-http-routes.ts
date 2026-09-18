@@ -69,7 +69,15 @@ export async function handleAssetHttp(
           ? { model: parsed.data.model }
           : {}),
         ...(parsed.data.identifiers !== undefined
-          ? { identifiers: parsed.data.identifiers }
+          ? {
+              identifiers: parsed.data.identifiers.map((identifier) => ({
+                identifierType: identifier.identifierType,
+                value: identifier.value,
+                ...(identifier.label !== undefined
+                  ? { label: identifier.label }
+                  : {}),
+              })),
+            }
           : {}),
       },
     );
@@ -140,7 +148,15 @@ export async function handleAssetHttp(
           ? { model: parsed.data.model }
           : {}),
         ...(parsed.data.identifiers !== undefined
-          ? { identifiers: parsed.data.identifiers }
+          ? {
+              identifiers: parsed.data.identifiers.map((identifier) => ({
+                identifierType: identifier.identifierType,
+                value: identifier.value,
+                ...(identifier.label !== undefined
+                  ? { label: identifier.label }
+                  : {}),
+              })),
+            }
           : {}),
       },
     );
