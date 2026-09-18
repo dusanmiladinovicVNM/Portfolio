@@ -4,3 +4,4 @@ export * from './postgres/postgres-user-access-repository.js';
 export * from './postgres/postgres-party-repository.js';
 export * from './postgres/postgres-ownership-repository.js';
 export * from './postgres/postgres-tenancy-repository.js';
+export * from './postgres/postgres-lease-repository.js';

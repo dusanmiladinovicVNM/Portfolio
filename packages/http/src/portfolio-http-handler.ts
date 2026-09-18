@@ -19,6 +19,7 @@ import {
   type CreateSpaceCommandInput,
   type CreateUnitCommandInput,
   type IdGenerator,
+  type LeaseRepository,
   type OwnershipRepository,
   type PartyRepository,
   type PortfolioRepository,
@@ -34,6 +35,7 @@ import {
   createUnitRequestSchema,
   entityIdSchema,
 } from '@portfolio/contracts';
+import { handleLeaseHttp } from './lease-http-routes.js';
 import { handleTenancyHttp } from './tenancy-http-routes.js';
 import {
   DomainError,
@@ -48,6 +50,7 @@ export interface PortfolioHttpDependencies {
   readonly partyRepository: PartyRepository;
   readonly ownershipRepository: OwnershipRepository;
   readonly tenancyRepository: TenancyRepository;
+  readonly leaseRepository: LeaseRepository;
   readonly userAccessRepository: UserAccessRepository;
   readonly idGenerator: IdGenerator;
   readonly onUnexpectedError?: (error: unknown) => void;
@@ -112,7 +115,12 @@ function errorStatus(code: string): number {
     code.endsWith('_ALREADY_EXISTS') ||
     code === 'OWNERSHIP_PERIOD_OVERLAP' ||
     code === 'TENANCY_PERIOD_OVERLAP' ||
-    code === 'TENANCY_VERSION_CONFLICT'
+    code === 'TENANCY_VERSION_CONFLICT' ||
+    code === 'LEASE_AGREEMENT_VERSION_CONFLICT' ||
+    code === 'LEASE_AMENDMENT_VERSION_CONFLICT' ||
+    code === 'TENANCY_TERM_EFFECTIVE_DATE_CONFLICT' ||
+    code === 'LEASE_AGREEMENT_TERMS_ALREADY_EXIST' ||
+    code === 'LEASE_AMENDMENT_TERMS_ALREADY_EXIST'
   ) {
     return 409;
   }
@@ -427,6 +435,19 @@ export function createPortfolioHttpHandler(
           return json({ data: ownershipResponse(period) }, 201);
         }
       }
+
+      const leaseResponse = await handleLeaseHttp(
+        {
+          leaseRepository: deps.leaseRepository,
+          tenancyRepository: deps.tenancyRepository,
+          partyRepository: deps.partyRepository,
+          idGenerator: deps.idGenerator,
+        },
+        actor,
+        request,
+        path,
+      );
+      if (leaseResponse) return leaseResponse;
 
       const tenancyResponse = await handleTenancyHttp(
         {

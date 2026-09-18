@@ -4,12 +4,15 @@ import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   activateTenancyCommand,
+  createLeaseAgreementCommand,
+  createLeaseAmendmentCommand,
   createOwnershipPeriodCommand,
   createPartyCommand,
   createTenancyCommand,
   createPropertyCommand,
   createSpaceCommand,
   createUnitCommand,
+  getEffectiveTenancyTermsQuery,
   listOwnershipPeriodsByUnitQuery,
   listPropertiesQuery,
   listSpacesByUnitQuery,
@@ -17,6 +20,8 @@ import {
   listUnitsByPropertyQuery,
   planTenancyCommand,
   resolveActor,
+  signLeaseAgreementCommand,
+  signLeaseAmendmentCommand,
   type IdGenerator,
   type VerifiedIdentity,
 } from '@portfolio/application';
@@ -33,6 +38,7 @@ import {
   type Party,
 } from '@portfolio/domain';
 import {
+  PostgresLeaseRepository,
   PostgresOwnershipRepository,
   PostgresPartyRepository,
   PostgresPortfolioRepository,
@@ -49,6 +55,7 @@ const sql = postgres(connectionString, { max: 1 });
 const portfolioRepository = new PostgresPortfolioRepository(sql);
 const partyRepository = new PostgresPartyRepository(sql);
 const ownershipRepository = new PostgresOwnershipRepository(sql);
+const leaseRepository = new PostgresLeaseRepository(sql);
 const tenancyRepository = new PostgresTenancyRepository(sql);
 const accessRepository = new PostgresUserAccessRepository(sql);
 
@@ -68,6 +75,10 @@ class SequenceIds implements IdGenerator {
 async function resetAndMigrate(): Promise<void> {
   await sql.unsafe(
     `drop table if exists
+      public.tenancy_term_versions,
+      public.lease_amendments,
+      public.lease_agreement_parties,
+      public.lease_agreements,
       public.tenancy_parties,
       public.tenancies,
       public.unit_ownership_shares,
@@ -122,6 +133,10 @@ beforeAll(async () => {
 afterAll(async () => {
   await sql.unsafe(
     `drop table if exists
+      public.tenancy_term_versions,
+      public.lease_amendments,
+      public.lease_agreement_parties,
+      public.lease_agreements,
       public.tenancy_parties,
       public.tenancies,
       public.unit_ownership_shares,
@@ -544,6 +559,317 @@ describe('PostgreSQL infrastructure', () => {
 
     expect(listed).toHaveLength(1);
     expect(listed[0]?.parties[0]?.partyId).toBe(tenant.id);
+  });
+
+  it('persists immutable lease history and resolves exact terms as-of a date', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+
+    const ids = new SequenceIds([
+      '31000000-0000-4000-8000-000000000001',
+      '31000000-0000-4000-8000-000000000002',
+      '31000000-0000-4000-8000-000000000003',
+      '31000000-0000-4000-8000-000000000004',
+      '31000000-0000-4000-8000-000000000005',
+      '31000000-0000-4000-8000-000000000006',
+      '31000000-0000-4000-8000-000000000007',
+      '31000000-0000-4000-8000-000000000008',
+      '31000000-0000-4000-8000-000000000009',
+      '31000000-0000-4000-8000-000000000010',
+      '31000000-0000-4000-8000-000000000011',
+      '31000000-0000-4000-8000-000000000012',
+      '31000000-0000-4000-8000-000000000013',
+      '31000000-0000-4000-8000-000000000014',
+      '31000000-0000-4000-8000-000000000015',
+      '31000000-0000-4000-8000-000000000016'
+    ]);
+
+    const property = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-LEASE-INT',
+        name: 'Lease Integration',
+        propertyType: 'apartment_building',
+        street: 'Contract Street',
+        houseNumber: '1',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+
+    const unit = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-LEASE-INT',
+        unitNumber: 'L-1',
+        unitType: 'apartment',
+      },
+    );
+
+    const tenant = await createPartyCommand(
+      { partyRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PTY-LEASE-TENANT',
+        partyType: 'person',
+        firstName: 'Lease',
+        lastName: 'Tenant',
+      },
+    );
+
+    const landlord = await createPartyCommand(
+      { partyRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PTY-LEASE-LANDLORD',
+        partyType: 'company',
+        legalName: 'Lease Landlord d.o.o.',
+      },
+    );
+
+    const tenancy = await createTenancyCommand(
+      {
+        tenancyRepository,
+        portfolioRepository,
+        partyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        unitId: unit.id,
+        code: 'TEN-LEASE-INT',
+        parties: [
+          {
+            partyId: tenant.id,
+            role: 'tenant',
+            isPrimary: true,
+          },
+        ],
+      },
+    );
+
+    const agreement = await createLeaseAgreementCommand(
+      {
+        leaseRepository,
+        tenancyRepository,
+        partyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        tenancyId: tenancy.id,
+        code: 'AGR-LEASE-INT',
+        agreementType: 'initial',
+        effectiveFrom: '2026-10-01',
+        effectiveTo: '2027-09-30',
+        parties: [
+          { partyId: landlord.id, role: 'landlord' },
+          { partyId: tenant.id, role: 'tenant' },
+        ],
+      },
+    );
+
+    const signed = await signLeaseAgreementCommand(
+      {
+        leaseRepository,
+        tenancyRepository,
+        partyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      agreement.id,
+      1,
+      '2026-09-20',
+      {
+        currency: 'EUR',
+        baseRent: '850.50',
+        serviceCharge: '120',
+        depositRequired: '1700',
+        noticePeriodTenantDays: 90,
+        noticePeriodLandlordDays: 90,
+      },
+    );
+
+    expect(signed.status).toBe('signed');
+
+    const beforeAmendment = await getEffectiveTenancyTermsQuery(
+      { leaseRepository, tenancyRepository },
+      actor,
+      tenancy.id,
+      '2027-03-31',
+    );
+    expect(beforeAmendment.baseRent).toBe('850.50');
+    expect(beforeAmendment.serviceCharge).toBe('120.00');
+
+    const amendment = await createLeaseAmendmentCommand(
+      { leaseRepository, idGenerator: ids },
+      actor,
+      {
+        agreementId: agreement.id,
+        code: 'AMD-LEASE-INT',
+        title: 'Rent adjustment',
+        effectiveFrom: '2027-04-01',
+      },
+    );
+
+    await signLeaseAmendmentCommand(
+      {
+        leaseRepository,
+        tenancyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      amendment.id,
+      1,
+      '2027-03-15',
+      {
+        currency: 'EUR',
+        baseRent: '900',
+        serviceCharge: '120',
+        depositRequired: '1700',
+        noticePeriodTenantDays: 90,
+        noticePeriodLandlordDays: 90,
+      },
+    );
+
+    const stillOld = await getEffectiveTenancyTermsQuery(
+      { leaseRepository, tenancyRepository },
+      actor,
+      tenancy.id,
+      '2027-03-31',
+    );
+    const changed = await getEffectiveTenancyTermsQuery(
+      { leaseRepository, tenancyRepository },
+      actor,
+      tenancy.id,
+      '2027-04-01',
+    );
+
+    expect(stillOld.baseRent).toBe('850.50');
+    expect(changed.baseRent).toBe('900.00');
+    expect(changed.sourceType).toBe('amendment');
+
+    await expect(
+      sql`
+        update public.lease_agreements
+        set code = 'ILLEGAL-REWRITE'
+        where id = ${agreement.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'lease_agreements_signed_content_immutable',
+    });
+
+    await expect(
+      sql`
+        insert into public.lease_agreement_parties (
+          id, agreement_id, party_id, role
+        ) values (
+          '32000000-0000-4000-8000-000000000001',
+          ${agreement.id},
+          ${landlord.id},
+          'authorized_signatory'
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'lease_agreement_parties_signed_immutable',
+    });
+
+    await expect(
+      sql`
+        update public.tenancy_term_versions
+        set base_rent = 1
+        where tenancy_id = ${tenancy.id}
+          and effective_from = '2026-10-01'
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'tenancy_term_versions_immutable',
+    });
+
+    await sql`
+      insert into public.tenancies (
+        id, code, unit_id, status, version
+      ) values (
+        '32000000-0000-4000-8000-000000000002',
+        'TEN-SOURCE-MISMATCH',
+        ${unit.id},
+        'draft',
+        1
+      )
+    `;
+
+    await expect(
+      sql`
+        insert into public.tenancy_term_versions (
+          id, tenancy_id, source_type, source_agreement_id,
+          effective_from, currency, base_rent
+        ) values (
+          '32000000-0000-4000-8000-000000000003',
+          '32000000-0000-4000-8000-000000000002',
+          'agreement',
+          ${agreement.id},
+          '2026-10-01',
+          'EUR',
+          1
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'tenancy_term_versions_source_tenancy_match',
+    });
+
+    const conflictingAgreement = await createLeaseAgreementCommand(
+      {
+        leaseRepository,
+        tenancyRepository,
+        partyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        tenancyId: tenancy.id,
+        code: 'AGR-LEASE-CONFLICT',
+        agreementType: 'replacement',
+        effectiveFrom: '2026-10-01',
+        parties: [
+          { partyId: landlord.id, role: 'landlord' },
+          { partyId: tenant.id, role: 'tenant' },
+        ],
+      },
+    );
+
+    await expect(
+      signLeaseAgreementCommand(
+        {
+          leaseRepository,
+          tenancyRepository,
+          partyRepository,
+          idGenerator: ids,
+        },
+        actor,
+        conflictingAgreement.id,
+        1,
+        '2026-09-21',
+        {
+          currency: 'EUR',
+          baseRent: '999',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'TENANCY_TERM_EFFECTIVE_DATE_CONFLICT',
+    });
+
+    expect(
+      (await leaseRepository.getAgreementById(conflictingAgreement.id))?.status,
+    ).toBe('draft');
   });
 
   it('enforces relational ownership independently of application code', async () => {
