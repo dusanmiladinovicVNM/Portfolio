@@ -1,7 +1,11 @@
 import type {
   Inspection,
+  InspectionEvidence,
+  InspectionFinalSnapshot,
   InspectionFinding,
   InspectionId,
+  InspectionSignature,
+  InspectionUnlockRecord,
   InspectionResponse,
   InspectionSectionState,
   InspectionSchemaSectionId,
@@ -53,6 +57,29 @@ export interface InspectionRepository {
   listFindings(
     inspectionId: InspectionId,
   ): Promise<readonly InspectionFinding[]>;
+
+  insertEvidence(evidence: InspectionEvidence): Promise<number>;
+  listEvidence(inspectionId: InspectionId): Promise<readonly InspectionEvidence[]>;
+
+  insertSignature(signature: InspectionSignature): Promise<number>;
+  listSignatures(
+    inspectionId: InspectionId,
+  ): Promise<readonly InspectionSignature[]>;
+
+  unlockInspection(
+    current: Inspection,
+    updated: Inspection,
+    record: InspectionUnlockRecord,
+  ): Promise<void>;
+
+  getFinalSnapshot(
+    inspectionId: InspectionId,
+  ): Promise<InspectionFinalSnapshot | null>;
+  finalizeInspection(
+    current: Inspection,
+    updated: Inspection,
+    snapshot: InspectionFinalSnapshot,
+  ): Promise<void>;
 
   getSchemaVersionById(
     id: InspectionSchemaVersionId,

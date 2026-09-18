@@ -6,17 +6,27 @@ import type {
 import {
   DomainError,
   asDateOnly,
+  asInspectionEvidenceId,
+  asInspectionFinalSnapshotId,
   asInspectionFindingId,
   asInspectionId,
   asInspectionResponseId,
   asInspectionSchemaItemId,
   asInspectionSchemaSectionId,
   asInspectionSchemaVersionId,
+  asInspectionSignatureId,
+  asInspectionUnlockId,
+  asDocumentVersionId,
+  asPartyId,
   asTenancyId,
   asUnitId,
   asUserId,
   type Inspection,
   type InspectionAnswerValue,
+  type InspectionEvidence,
+  type InspectionEvidenceKind,
+  type InspectionFinalSnapshot,
+  type InspectionFinalSnapshotPayload,
   type InspectionCondition,
   type InspectionFinding,
   type InspectionFindingSeverity,
@@ -27,6 +37,9 @@ import {
   type InspectionSectionState,
   type InspectionSchemaStatus,
   type InspectionSchemaVersion,
+  type InspectionSignature,
+  type InspectionSignatureRole,
+  type InspectionUnlockRecord,
   type InspectionSchemaVersionId,
   type InspectionStatus,
   type InspectionType,
@@ -66,6 +79,7 @@ interface SchemaRow {
   inspection_type: InspectionType;
   title: string;
   status: InspectionSchemaStatus;
+  required_signature_roles: InspectionSignatureRole[];
 }
 
 interface SectionRow {
@@ -89,6 +103,43 @@ interface ItemRow {
   options: InspectionOption[];
   visible_when: InspectionCondition | null;
   required_when: InspectionCondition | null;
+}
+
+
+interface EvidenceRow {
+  id: string;
+  inspection_id: string;
+  section_id: string | null;
+  item_id: string | null;
+  document_version_id: string;
+  kind: InspectionEvidenceKind;
+  caption: string | null;
+  created_by_user_id: string;
+  created_at: string | Date;
+}
+
+interface SignatureRow {
+  id: string;
+  inspection_id: string;
+  signer_role: InspectionSignatureRole;
+  signer_party_id: string | null;
+  signer_name: string;
+  signature_document_version_id: string;
+  signed_by_user_id: string;
+  signed_at: string | Date;
+  invalidated_at: string | Date | null;
+  invalidation_reason: string | null;
+}
+
+interface SnapshotRow {
+  id: string;
+  inspection_id: string;
+  snapshot_version: 1;
+  inspection_version: number;
+  content_revision: number;
+  payload: InspectionFinalSnapshotPayload;
+  created_by_user_id: string;
+  created_at: string | Date;
 }
 
 interface ResponseRow {
@@ -195,6 +246,56 @@ function mapInspection(row: InspectionRow): Inspection {
     cancelledAt: instant(row.cancelled_at),
     version: row.version,
     contentRevision: row.content_revision,
+  };
+}
+
+
+function mapEvidence(row: EvidenceRow): InspectionEvidence {
+  return {
+    id: asInspectionEvidenceId(row.id),
+    inspectionId: asInspectionId(row.inspection_id),
+    sectionId:
+      row.section_id === null
+        ? null
+        : asInspectionSchemaSectionId(row.section_id),
+    itemId:
+      row.item_id === null ? null : asInspectionSchemaItemId(row.item_id),
+    documentVersionId: asDocumentVersionId(row.document_version_id),
+    kind: row.kind,
+    caption: row.caption,
+    createdByUserId: asUserId(row.created_by_user_id),
+    createdAt: instant(row.created_at)!,
+  };
+}
+
+function mapSignature(row: SignatureRow): InspectionSignature {
+  return {
+    id: asInspectionSignatureId(row.id),
+    inspectionId: asInspectionId(row.inspection_id),
+    signerRole: row.signer_role,
+    signerPartyId:
+      row.signer_party_id === null ? null : asPartyId(row.signer_party_id),
+    signerName: row.signer_name,
+    signatureDocumentVersionId: asDocumentVersionId(
+      row.signature_document_version_id,
+    ),
+    signedByUserId: asUserId(row.signed_by_user_id),
+    signedAt: instant(row.signed_at)!,
+    invalidatedAt: instant(row.invalidated_at),
+    invalidationReason: row.invalidation_reason,
+  };
+}
+
+function mapSnapshot(row: SnapshotRow): InspectionFinalSnapshot {
+  return {
+    id: asInspectionFinalSnapshotId(row.id),
+    inspectionId: asInspectionId(row.inspection_id),
+    snapshotVersion: row.snapshot_version,
+    inspectionVersion: row.inspection_version,
+    contentRevision: row.content_revision,
+    payload: row.payload,
+    createdByUserId: asUserId(row.created_by_user_id),
+    createdAt: instant(row.created_at)!,
   };
 }
 
@@ -613,11 +714,222 @@ export class PostgresInspectionRepository implements InspectionRepository {
     return rows.map(mapFinding);
   }
 
+  async insertEvidence(evidence: InspectionEvidence): Promise<number> {
+    return translated(async () =>
+      this.sql.begin(async (tx) => {
+        const inspectionRows = await tx<{
+          content_revision: number;
+          schema_version_id: string;
+        }[]>`
+          update public.inspections
+          set content_revision = content_revision + 1, updated_at = now()
+          where id = ${evidence.inspectionId}
+            and status in ('draft', 'in_progress')
+          returning content_revision, schema_version_id
+        `;
+        const inspection = inspectionRows[0];
+        if (!inspection) {
+          throw new DomainError(
+            'INSPECTION_EVIDENCE_LOCKED',
+            'Inspection evidence can only be attached before lock.',
+          );
+        }
+
+        await tx`
+          insert into public.inspection_evidence (
+            id, inspection_id, schema_version_id, section_id, item_id,
+            document_version_id, kind, caption, created_by_user_id, created_at
+          ) values (
+            ${evidence.id}, ${evidence.inspectionId},
+            ${inspection.schema_version_id}, ${evidence.sectionId},
+            ${evidence.itemId}, ${evidence.documentVersionId},
+            ${evidence.kind}, ${evidence.caption},
+            ${evidence.createdByUserId}, ${evidence.createdAt}
+          )
+        `;
+        return inspection.content_revision;
+      }),
+    );
+  }
+
+  async listEvidence(
+    inspectionId: InspectionId,
+  ): Promise<readonly InspectionEvidence[]> {
+    const rows = await this.sql<EvidenceRow[]>`
+      select
+        id, inspection_id, section_id, item_id, document_version_id,
+        kind, caption, created_by_user_id, created_at
+      from public.inspection_evidence
+      where inspection_id = ${inspectionId}
+      order by created_at, id
+    `;
+    return rows.map(mapEvidence);
+  }
+
+  async insertSignature(signature: InspectionSignature): Promise<number> {
+    return translated(async () =>
+      this.sql.begin(async (tx) => {
+        const rows = await tx<{ content_revision: number }[]>`
+          update public.inspections
+          set content_revision = content_revision + 1, updated_at = now()
+          where id = ${signature.inspectionId}
+            and status = 'locked'
+          returning content_revision
+        `;
+        const contentRevision = rows[0]?.content_revision;
+        if (contentRevision === undefined) {
+          throw new DomainError(
+            'INSPECTION_SIGNATURE_STATE_INVALID',
+            'Signatures may only be collected while the inspection is locked.',
+          );
+        }
+
+        await tx`
+          insert into public.inspection_signatures (
+            id, inspection_id, signer_role, signer_party_id, signer_name,
+            signature_document_version_id, signed_by_user_id, signed_at,
+            invalidated_at, invalidation_reason
+          ) values (
+            ${signature.id}, ${signature.inspectionId},
+            ${signature.signerRole}, ${signature.signerPartyId},
+            ${signature.signerName}, ${signature.signatureDocumentVersionId},
+            ${signature.signedByUserId}, ${signature.signedAt},
+            ${signature.invalidatedAt}, ${signature.invalidationReason}
+          )
+        `;
+        return contentRevision;
+      }),
+    );
+  }
+
+  async listSignatures(
+    inspectionId: InspectionId,
+  ): Promise<readonly InspectionSignature[]> {
+    const rows = await this.sql<SignatureRow[]>`
+      select
+        id, inspection_id, signer_role, signer_party_id, signer_name,
+        signature_document_version_id, signed_by_user_id, signed_at,
+        invalidated_at, invalidation_reason
+      from public.inspection_signatures
+      where inspection_id = ${inspectionId}
+      order by signed_at, id
+    `;
+    return rows.map(mapSignature);
+  }
+
+  async unlockInspection(
+    current: Inspection,
+    updated: Inspection,
+    record: InspectionUnlockRecord,
+  ): Promise<void> {
+    await translated(async () => {
+      await this.sql.begin(async (tx) => {
+        await tx`
+          update public.inspection_signatures
+          set invalidated_at = ${record.unlockedAt},
+              invalidation_reason = ${record.reason}
+          where inspection_id = ${current.id}
+            and invalidated_at is null
+        `;
+
+        await tx`
+          insert into public.inspection_unlocks (
+            id, inspection_id, unlocked_by_user_id, unlocked_at, reason,
+            previous_locked_at, previous_version, previous_content_revision,
+            new_version, new_content_revision
+          ) values (
+            ${record.id}, ${record.inspectionId},
+            ${record.unlockedByUserId}, ${record.unlockedAt}, ${record.reason},
+            ${record.previousLockedAt}, ${record.previousVersion},
+            ${record.previousContentRevision}, ${record.newVersion},
+            ${record.newContentRevision}
+          )
+        `;
+
+        const rows = await tx<{ id: string }[]>`
+          update public.inspections
+          set status = ${updated.status},
+              locked_at = ${updated.lockedAt},
+              version = ${updated.version},
+              content_revision = ${updated.contentRevision},
+              updated_at = now()
+          where id = ${current.id}
+            and status = 'locked'
+            and version = ${current.version}
+            and content_revision = ${current.contentRevision}
+          returning id
+        `;
+        if (rows.length === 0) {
+          throw new DomainError(
+            'INSPECTION_VERSION_CONFLICT',
+            'Inspection changed before it could be unlocked.',
+          );
+        }
+      });
+    });
+  }
+
+  async getFinalSnapshot(
+    inspectionId: InspectionId,
+  ): Promise<InspectionFinalSnapshot | null> {
+    const rows = await this.sql<SnapshotRow[]>`
+      select
+        id, inspection_id, snapshot_version, inspection_version,
+        content_revision, payload, created_by_user_id, created_at
+      from public.inspection_final_snapshots
+      where inspection_id = ${inspectionId}
+      limit 1
+    `;
+    return rows.length === 0 ? null : mapSnapshot(rows[0]!);
+  }
+
+  async finalizeInspection(
+    current: Inspection,
+    updated: Inspection,
+    snapshot: InspectionFinalSnapshot,
+  ): Promise<void> {
+    await translated(async () => {
+      await this.sql.begin(async (tx) => {
+        await tx`
+          insert into public.inspection_final_snapshots (
+            id, inspection_id, snapshot_version, inspection_version,
+            content_revision, payload, created_by_user_id, created_at
+          ) values (
+            ${snapshot.id}, ${snapshot.inspectionId},
+            ${snapshot.snapshotVersion}, ${snapshot.inspectionVersion},
+            ${snapshot.contentRevision},
+            ${this.sql.json(snapshot.payload as unknown as MutableJson)},
+            ${snapshot.createdByUserId}, ${snapshot.createdAt}
+          )
+        `;
+
+        const rows = await tx<{ id: string }[]>`
+          update public.inspections
+          set status = ${updated.status},
+              finalized_at = ${updated.finalizedAt},
+              version = ${updated.version},
+              updated_at = now()
+          where id = ${current.id}
+            and status = 'locked'
+            and version = ${current.version}
+            and content_revision = ${current.contentRevision}
+          returning id
+        `;
+        if (rows.length === 0) {
+          throw new DomainError(
+            'INSPECTION_FINALIZATION_CONFLICT',
+            'Inspection changed before finalization completed.',
+          );
+        }
+      });
+    });
+  }
+
   async getSchemaVersionById(
     id: InspectionSchemaVersionId,
   ): Promise<InspectionSchemaVersion | null> {
     const schemaRows = await this.sql<SchemaRow[]>`
-      select id, schema_code, version_number, inspection_type, title, status
+      select id, schema_code, version_number, inspection_type, title, status, required_signature_roles
       from public.inspection_schema_versions
       where id = ${id}
       limit 1
@@ -648,6 +960,7 @@ export class PostgresInspectionRepository implements InspectionRepository {
       inspectionType: schema.inspection_type,
       title: schema.title,
       status: schema.status,
+      requiredSignatureRoles: schema.required_signature_roles,
       sections: sections.map((section) => ({
         id: asInspectionSchemaSectionId(section.id),
         key: section.section_key,
@@ -702,10 +1015,12 @@ export class PostgresInspectionRepository implements InspectionRepository {
       await this.sql.begin(async (tx) => {
         await tx`
           insert into public.inspection_schema_versions (
-            id, schema_code, version_number, inspection_type, title, status
+            id, schema_code, version_number, inspection_type, title, status,
+            required_signature_roles
           ) values (
             ${schema.id}, ${schema.schemaCode}, ${schema.versionNumber},
-            ${schema.inspectionType}, ${schema.title}, ${schema.status}
+            ${schema.inspectionType}, ${schema.title}, ${schema.status},
+            ${schema.requiredSignatureRoles}
           )
         `;
 
