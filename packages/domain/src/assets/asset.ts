@@ -215,6 +215,15 @@ export function createAssetReplacement(input: {
       'An Asset cannot replace itself.',
     );
   }
+  if (
+    input.replacedAsset.status !== 'active' &&
+    input.replacedAsset.status !== 'inactive'
+  ) {
+    throw new DomainError(
+      'ASSET_REPLACEMENT_INVALID_PREDECESSOR',
+      'Only an active or inactive Asset can be replaced.',
+    );
+  }
   if (input.replacedAsset.unitId !== input.replacementAsset.unitId) {
     throw new DomainError(
       'ASSET_REPLACEMENT_UNIT_MISMATCH',
