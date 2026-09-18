@@ -152,7 +152,13 @@ export async function generateInspectionFinalReportCommand(
         candidate.id,
       );
     } catch (error) {
-      if (!(error instanceof DomainError) || error.code !== 'DOCUMENT_VERSION_CONFLICT') {
+      if (
+        !(error instanceof DomainError) ||
+        ![
+          'DOCUMENT_VERSION_CONFLICT',
+          'DOCUMENT_VERSION_INVALID_TRANSITION',
+        ].includes(error.code)
+      ) {
         throw error;
       }
       const winner = await deps.documentRepository.getVersionById(candidate.id);
