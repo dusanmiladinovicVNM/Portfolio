@@ -144,6 +144,23 @@ begin
             constraint = 'asset_replacement_successor_state';
   end if;
 
+  if exists (
+    with recursive successors(asset_id) as (
+      select new.replacement_asset_id
+      union all
+      select r.replacement_asset_id
+      from public.asset_replacements r
+      join successors s on r.replaced_asset_id = s.asset_id
+    )
+    select 1
+    from successors
+    where asset_id = new.replaced_asset_id
+  ) then
+    raise exception 'Asset replacement lineage cannot contain a cycle.'
+      using errcode = '23514',
+            constraint = 'asset_replacement_cycle';
+  end if;
+
   return new;
 end;
 $asset_replacement_guard$;
