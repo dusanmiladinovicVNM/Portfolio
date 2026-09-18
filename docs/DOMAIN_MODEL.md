@@ -4,17 +4,17 @@
 
 ```text
 Property
-  └─ Unit
-      ├─ Space
-      ├─ Ownership
-      ├─ Tenancy
-      │   ├─ TenancyParty
-      │   ├─ LeaseAgreement
-      │   └─ Inspection
-      ├─ Asset
-      ├─ ImprovementProject
-      ├─ Issue / WorkOrder
-      └─ Cost
+  ├─ Unit
+  │   ├─ Space
+  │   ├─ Ownership
+  │   └─ Tenancy
+  │       ├─ TenancyParty
+  │       ├─ LeaseAgreement
+  │       └─ Inspection
+  ├─ Asset
+  ├─ ImprovementProject
+  ├─ Issue / WorkOrder
+  └─ Cost
 ```
 
 Cross-cutting concepts:
