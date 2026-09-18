@@ -83,7 +83,7 @@ These rules are architecture gates, not optional implementation notes.
 65. Asset represents one physical identity and belongs to exactly one Unit; an optional Space placement must belong to that same Unit.
 66. Moving an Asset does not create a new Asset. Until AssetLocationHistory exists in PR #15, Unit/Space placement is immutable rather than silently overwriting location truth.
 67. Replacing an Asset does create a new Asset; the old one remains in history and becomes `replaced` only in the same transaction that appends one predecessor→successor relationship.
-68. Replacement cannot be used as a hidden cross-Unit move; predecessor and successor belong to the same Unit.
+68. Replacement cannot be used as a hidden cross-Unit move; predecessor and successor belong to the same Unit, and replacement lineage is acyclic.
 69. Serial/product/inventory identifiers are structured append-only identity data and must not be collapsed into an unstructured notes field.
 70. Asset lifecycle changes are explicit optimistic-concurrency transitions; retired/replaced Assets are terminal. Service events are append-only history and Asset condition assessments preserve history rather than overwriting a single condition field.
 
