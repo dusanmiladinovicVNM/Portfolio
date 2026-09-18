@@ -90,19 +90,39 @@ export class InMemoryDocumentRepository implements DocumentRepository {
 
 export class MemoryFileStorage implements FileStoragePort {
   readonly removed: StorageObjectReference[] = [];
+  readonly objects = new Map<string, StoredFile>();
 
   async put(input: FileStoragePutInput): Promise<StoredFile> {
-    return {
+    const existing = this.objects.get(input.objectKey);
+    if (existing) return { ...existing, disposition: 'reused' };
+
+    const stored: StoredFile = {
       provider: 'memory',
       objectId: input.objectKey,
       objectKey: input.objectKey,
       byteSize: input.content.byteLength,
       sha256: 'a'.repeat(64),
+      disposition: 'created',
+    };
+    this.objects.set(input.objectKey, stored);
+    return stored;
+  }
+
+  async stat(reference: StorageObjectReference) {
+    const stored = this.objects.get(reference.objectKey);
+    if (!stored || stored.objectId !== reference.objectId) return null;
+    return {
+      provider: stored.provider,
+      objectId: stored.objectId,
+      objectKey: stored.objectKey,
+      byteSize: stored.byteSize,
+      sha256: stored.sha256,
     };
   }
 
   async remove(reference: StorageObjectReference): Promise<void> {
     this.removed.push(reference);
+    this.objects.delete(reference.objectKey);
   }
 }
 

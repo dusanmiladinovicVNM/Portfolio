@@ -1726,6 +1726,14 @@ describe('PostgreSQL infrastructure', () => {
           objectKey: input.objectKey,
           byteSize: input.content.byteLength,
           sha256: 'f'.repeat(64),
+          disposition: 'created' as const,
+        };
+      },
+      async stat(reference: import('@portfolio/application').StorageObjectReference) {
+        return {
+          ...reference,
+          byteSize: 6,
+          sha256: 'f'.repeat(64),
         };
       },
       async remove() {},
@@ -1947,6 +1955,14 @@ describe('PostgreSQL infrastructure', () => {
           objectId: 'object-1',
           objectKey: input.objectKey,
           byteSize: input.content.byteLength,
+          sha256: 'b'.repeat(64),
+          disposition: 'created' as const,
+        };
+      },
+      async stat(reference: import('@portfolio/application').StorageObjectReference) {
+        return {
+          ...reference,
+          byteSize: 4,
           sha256: 'b'.repeat(64),
         };
       },
