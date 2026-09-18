@@ -1,14 +1,11 @@
 begin;
 
-create or replace function public.text_array_is_unique(values text[])
+create or replace function public.text_array_is_unique(items text[])
 returns boolean
 language sql
 immutable
 strict
-as $
-  select cardinality(values) = count(distinct value)
-  from unnest(values) as value
-$;
+as 'select cardinality(items) = count(distinct item) from unnest(items) as item';
 
 alter table public.inspection_schema_versions
   add column required_signature_roles text[] not null default '{}'::text[];
