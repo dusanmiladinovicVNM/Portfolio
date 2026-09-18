@@ -33,14 +33,6 @@ import {
   asTenancyId,
   type TermSnapshotInput,
 } from '@portfolio/domain';
-
-export interface LeaseHttpDependencies {
-  readonly leaseRepository: LeaseRepository;
-  readonly tenancyRepository: TenancyRepository;
-  readonly partyRepository: PartyRepository;
-  readonly idGenerator: IdGenerator;
-}
-
 import {
   json,
   requestJson,
@@ -51,6 +43,13 @@ import {
   toLeaseAmendmentResponse,
   toTenancyTermVersionResponse,
 } from './response-mappers.js';
+
+export interface LeaseHttpDependencies {
+  readonly leaseRepository: LeaseRepository;
+  readonly tenancyRepository: TenancyRepository;
+  readonly partyRepository: PartyRepository;
+  readonly idGenerator: IdGenerator;
+}
 
 function mapTerms(input: ReturnType<typeof leaseTermsRequestSchema.parse>): TermSnapshotInput {
   return {
@@ -112,7 +111,7 @@ export async function handleLeaseHttp(
 
     if (method === 'POST') {
       const body = await requestJson(request);
-            const parsed = createLeaseAgreementRequestSchema.safeParse(body);
+      const parsed = createLeaseAgreementRequestSchema.safeParse(body);
       if (!parsed.success) return validationFailure();
 
       const input: CreateLeaseAgreementCommandInput = {
@@ -190,7 +189,7 @@ export async function handleLeaseHttp(
     if (!parsedId.success) return validationFailure();
 
     const body = await requestJson(request);
-        const parsed = signLeaseAgreementRequestSchema.safeParse(body);
+    const parsed = signLeaseAgreementRequestSchema.safeParse(body);
     if (!parsed.success) return validationFailure();
 
     const agreement = await signLeaseAgreementCommand(
@@ -216,7 +215,7 @@ export async function handleLeaseHttp(
     if (!parsedId.success) return validationFailure();
 
     const body = await requestJson(request);
-        const parsed = contractVersionRequestSchema.safeParse(body);
+    const parsed = contractVersionRequestSchema.safeParse(body);
     if (!parsed.success) return validationFailure();
 
     const agreement = await cancelLeaseAgreementCommand(
@@ -246,7 +245,7 @@ export async function handleLeaseHttp(
 
     if (method === 'POST') {
       const body = await requestJson(request);
-            const parsed = createLeaseAmendmentRequestSchema.safeParse(body);
+      const parsed = createLeaseAmendmentRequestSchema.safeParse(body);
       if (!parsed.success) return validationFailure();
 
       const input: CreateLeaseAmendmentCommandInput = {
@@ -280,7 +279,7 @@ export async function handleLeaseHttp(
     if (!parsedId.success) return validationFailure();
 
     const body = await requestJson(request);
-        const parsed = signLeaseAmendmentRequestSchema.safeParse(body);
+    const parsed = signLeaseAmendmentRequestSchema.safeParse(body);
     if (!parsed.success) return validationFailure();
 
     const amendment = await signLeaseAmendmentCommand(
@@ -305,7 +304,7 @@ export async function handleLeaseHttp(
     if (!parsedId.success) return validationFailure();
 
     const body = await requestJson(request);
-        const parsed = contractVersionRequestSchema.safeParse(body);
+    const parsed = contractVersionRequestSchema.safeParse(body);
     if (!parsed.success) return validationFailure();
 
     const amendment = await cancelLeaseAmendmentCommand(
