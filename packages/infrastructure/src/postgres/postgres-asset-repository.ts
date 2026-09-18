@@ -129,6 +129,11 @@ function translate(error: unknown): DomainError | null {
           'ASSET_REPLACEMENT_UNIT_MISMATCH',
           'Replacement Asset must belong to the same Unit.',
         );
+      case 'asset_replacement_cycle':
+        return new DomainError(
+          'ASSET_REPLACEMENT_CYCLE',
+          'Asset replacement lineage cannot contain a cycle.',
+        );
       case 'asset_replacement_predecessor_state':
       case 'asset_replacement_successor_state':
       case 'asset_replacement_required':
