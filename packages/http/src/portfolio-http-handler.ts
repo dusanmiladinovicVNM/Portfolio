@@ -1,6 +1,9 @@
 import {
   ApplicationError,
   resolveActor,
+  type ClockPort,
+  type DocumentRepository,
+  type FileStoragePort,
   type IdGenerator,
   type LeaseRepository,
   type OwnershipRepository,
@@ -11,6 +14,7 @@ import {
   type VerifiedIdentity,
 } from '@portfolio/application';
 import { DomainError } from '@portfolio/domain';
+import { handleDocumentHttp } from './document-http-routes.js';
 import { errorResponse } from './http-utils.js';
 import { handleLeaseHttp } from './lease-http-routes.js';
 import { handleOwnershipHttp } from './ownership-http-routes.js';
@@ -24,6 +28,9 @@ export interface PortfolioHttpDependencies {
   readonly ownershipRepository: OwnershipRepository;
   readonly tenancyRepository: TenancyRepository;
   readonly leaseRepository: LeaseRepository;
+  readonly documentRepository: DocumentRepository;
+  readonly fileStorage: FileStoragePort;
+  readonly clock: ClockPort;
   readonly userAccessRepository: UserAccessRepository;
   readonly idGenerator: IdGenerator;
   readonly onUnexpectedError?: (error: unknown) => void;
@@ -97,6 +104,22 @@ export function createPortfolioHttpHandler(
       const actor = await resolveActor(deps.userAccessRepository, identity);
 
       const handlers = [
+        () =>
+          handleDocumentHttp(
+            {
+              documentRepository: deps.documentRepository,
+              fileStorage: deps.fileStorage,
+              clock: deps.clock,
+              portfolioRepository: deps.portfolioRepository,
+              partyRepository: deps.partyRepository,
+              tenancyRepository: deps.tenancyRepository,
+              leaseRepository: deps.leaseRepository,
+              idGenerator: deps.idGenerator,
+            },
+            actor,
+            request,
+            path,
+          ),
         () =>
           handlePortfolioHttp(
             {
