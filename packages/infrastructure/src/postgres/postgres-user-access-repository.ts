@@ -16,6 +16,10 @@ interface ActorRow {
   role: StaffRole;
 }
 
+interface StaffRow extends ActorRow {
+  display_name: string;
+}
+
 export class PostgresUserAccessRepository
   implements UserAccessRepository, StaffDirectoryRepository {
   constructor(private readonly sql: Sql) {}
@@ -43,8 +47,8 @@ export class PostgresUserAccessRepository
   async getActiveStaffById(
     userId: UserId,
   ): Promise<StaffDirectoryEntry | null> {
-    const rows = await this.sql<ActorRow[]>`
-      select id, role
+    const rows = await this.sql<StaffRow[]>`
+      select id, display_name, role
       from public.app_users
       where id = ${userId}
         and status = 'active'
@@ -53,7 +57,11 @@ export class PostgresUserAccessRepository
 
     const row = rows[0];
     return row
-      ? { userId: asUserId(row.id), role: row.role }
+      ? {
+          userId: asUserId(row.id),
+          displayName: row.display_name,
+          role: row.role,
+        }
       : null;
   }
 }

@@ -6,17 +6,27 @@ import type {
 import {
   DomainError,
   asDateOnly,
+  asInspectionEvidenceId,
+  asInspectionFinalizationId,
   asInspectionFindingId,
   asInspectionId,
   asInspectionResponseId,
+  asInspectionSignatureId,
+  asInspectionUnlockEventId,
   asInspectionSchemaItemId,
   asInspectionSchemaSectionId,
   asInspectionSchemaVersionId,
+  asDocumentVersionId,
+  asPartyId,
   asTenancyId,
   asUnitId,
   asUserId,
   type Inspection,
   type InspectionAnswerValue,
+  type InspectionEvidence,
+  type InspectionEvidenceType,
+  type InspectionFinalization,
+  type InspectionFinalSnapshot,
   type InspectionCondition,
   type InspectionFinding,
   type InspectionFindingSeverity,
@@ -25,11 +35,17 @@ import {
   type InspectionOption,
   type InspectionResponse,
   type InspectionSectionState,
+  type InspectionSignature,
+  type InspectionSignatureStatus,
+  type InspectionSignerRole,
+  type InspectionSignerType,
+  type InspectionUnlockEvent,
   type InspectionSchemaStatus,
   type InspectionSchemaVersion,
   type InspectionSchemaVersionId,
   type InspectionStatus,
   type InspectionType,
+  type DocumentVersionId,
   type UnitId,
 } from '@portfolio/domain';
 
@@ -112,6 +128,57 @@ interface FindingRow {
   description: string | null;
   created_by_user_id: string;
   created_at: string | Date;
+}
+
+interface EvidenceRow {
+  id: string;
+  inspection_id: string;
+  document_version_id: string;
+  evidence_type: InspectionEvidenceType;
+  section_id: string | null;
+  item_id: string | null;
+  caption: string | null;
+  created_by_user_id: string;
+  created_at: string | Date;
+}
+
+interface SignatureRow {
+  id: string;
+  inspection_id: string;
+  role: InspectionSignerRole;
+  signer_type: InspectionSignerType;
+  signer_user_id: string | null;
+  signer_party_id: string | null;
+  signer_name_snapshot: string;
+  signature_document_version_id: string;
+  status: InspectionSignatureStatus;
+  signed_at: string | Date;
+  created_by_user_id: string;
+  invalidated_at: string | Date | null;
+  invalidated_by_user_id: string | null;
+  invalidation_reason: string | null;
+}
+
+interface UnlockEventRow {
+  id: string;
+  inspection_id: string;
+  reason: string;
+  previous_version: number;
+  previous_content_revision: number;
+  invalidated_signature_count: number;
+  unlocked_by_user_id: string;
+  unlocked_at: string | Date;
+}
+
+interface FinalizationRow {
+  id: string;
+  inspection_id: string;
+  source_version: number;
+  source_content_revision: number;
+  snapshot: InspectionFinalSnapshot;
+  final_report_document_version_id: string;
+  finalized_by_user_id: string;
+  finalized_at: string | Date;
 }
 
 type MutableJson =
@@ -226,6 +293,76 @@ function mapFinding(row: FindingRow): InspectionFinding {
   };
 }
 
+function mapEvidence(row: EvidenceRow): InspectionEvidence {
+  return {
+    id: asInspectionEvidenceId(row.id),
+    inspectionId: asInspectionId(row.inspection_id),
+    documentVersionId: asDocumentVersionId(row.document_version_id),
+    evidenceType: row.evidence_type,
+    sectionId:
+      row.section_id === null ? null : asInspectionSchemaSectionId(row.section_id),
+    itemId:
+      row.item_id === null ? null : asInspectionSchemaItemId(row.item_id),
+    caption: row.caption,
+    createdByUserId: asUserId(row.created_by_user_id),
+    createdAt: instant(row.created_at)!,
+  };
+}
+
+function mapSignature(row: SignatureRow): InspectionSignature {
+  return {
+    id: asInspectionSignatureId(row.id),
+    inspectionId: asInspectionId(row.inspection_id),
+    role: row.role,
+    signerType: row.signer_type,
+    signerUserId:
+      row.signer_user_id === null ? null : asUserId(row.signer_user_id),
+    signerPartyId:
+      row.signer_party_id === null ? null : asPartyId(row.signer_party_id),
+    signerNameSnapshot: row.signer_name_snapshot,
+    signatureDocumentVersionId: asDocumentVersionId(
+      row.signature_document_version_id,
+    ),
+    status: row.status,
+    signedAt: instant(row.signed_at)!,
+    createdByUserId: asUserId(row.created_by_user_id),
+    invalidatedAt: instant(row.invalidated_at),
+    invalidatedByUserId:
+      row.invalidated_by_user_id === null
+        ? null
+        : asUserId(row.invalidated_by_user_id),
+    invalidationReason: row.invalidation_reason,
+  };
+}
+
+function mapUnlockEvent(row: UnlockEventRow): InspectionUnlockEvent {
+  return {
+    id: asInspectionUnlockEventId(row.id),
+    inspectionId: asInspectionId(row.inspection_id),
+    reason: row.reason,
+    previousVersion: row.previous_version,
+    previousContentRevision: row.previous_content_revision,
+    invalidatedSignatureCount: row.invalidated_signature_count,
+    unlockedByUserId: asUserId(row.unlocked_by_user_id),
+    unlockedAt: instant(row.unlocked_at)!,
+  };
+}
+
+function mapFinalization(row: FinalizationRow): InspectionFinalization {
+  return {
+    id: asInspectionFinalizationId(row.id),
+    inspectionId: asInspectionId(row.inspection_id),
+    sourceVersion: row.source_version,
+    sourceContentRevision: row.source_content_revision,
+    snapshot: row.snapshot,
+    finalReportDocumentVersionId: asDocumentVersionId(
+      row.final_report_document_version_id,
+    ),
+    finalizedByUserId: asUserId(row.finalized_by_user_id),
+    finalizedAt: instant(row.finalized_at)!,
+  };
+}
+
 function translate(error: unknown): DomainError | null {
   const pg = error as PgError;
   if (pg.code === '23505') {
@@ -276,6 +413,42 @@ function translate(error: unknown): DomainError | null {
         return new DomainError(
           'INSPECTION_RESPONSE_INVALID_OPTION',
           'Inspection response is not a configured option.',
+        );
+      case 'inspection_evidence_content_locked':
+        return new DomainError(
+          'INSPECTION_CONTENT_LOCKED',
+          'Inspection evidence may only be added before lock.',
+        );
+      case 'inspection_evidence_document_final':
+      case 'inspection_signature_document_final':
+        return new DomainError(
+          'INSPECTION_EVIDENCE_VERSION_NOT_FINAL',
+          'Inspection evidence/signatures require a final DocumentVersion.',
+        );
+      case 'inspection_signature_requires_lock':
+        return new DomainError(
+          'INSPECTION_SIGNATURE_REQUIRES_LOCK',
+          'Inspection must be locked before signing.',
+        );
+      case 'inspection_signature_inspector_mismatch':
+        return new DomainError(
+          'INSPECTION_SIGNATURE_INSPECTOR_MISMATCH',
+          'Inspector signature must belong to the assigned user.',
+        );
+      case 'inspection_signature_tenancy_party_mismatch':
+        return new DomainError(
+          'INSPECTION_SIGNATURE_TENANCY_PARTY_MISMATCH',
+          'Tenant signature must match tenancy party composition.',
+        );
+      case 'inspection_finalization_source_mismatch':
+        return new DomainError(
+          'INSPECTION_CONTENT_REVISION_CONFLICT',
+          'Inspection changed before finalization could commit.',
+        );
+      case 'inspection_finalization_inspector_signature_required':
+        return new DomainError(
+          'INSPECTION_FINALIZATION_INSPECTOR_SIGNATURE_REQUIRED',
+          'Finalization requires the assigned inspector signature.',
         );
       case 'inspection_schema_structure_immutable':
       case 'inspection_schema_version_immutable':
@@ -611,6 +784,262 @@ export class PostgresInspectionRepository implements InspectionRepository {
       order by created_at, id
     `;
     return rows.map(mapFinding);
+  }
+
+  async insertEvidence(evidence: InspectionEvidence): Promise<number> {
+    return translated(async () =>
+      this.sql.begin(async (tx) => {
+        await tx`
+          insert into public.inspection_evidence (
+            id, inspection_id, schema_version_id, section_id, item_id,
+            document_version_id, evidence_type, caption,
+            created_by_user_id, created_at
+          )
+          select
+            ${evidence.id}, i.id, i.schema_version_id,
+            ${evidence.sectionId}, ${evidence.itemId},
+            ${evidence.documentVersionId}, ${evidence.evidenceType},
+            ${evidence.caption}, ${evidence.createdByUserId},
+            ${evidence.createdAt}
+          from public.inspections i
+          where i.id = ${evidence.inspectionId}
+        `;
+
+        const rows = await tx<{ content_revision: number }[]>`
+          select content_revision
+          from public.inspections
+          where id = ${evidence.inspectionId}
+        `;
+        return rows[0]!.content_revision;
+      }),
+    );
+  }
+
+  async listEvidence(
+    inspectionId: InspectionId,
+  ): Promise<readonly InspectionEvidence[]> {
+    const rows = await this.sql<EvidenceRow[]>`
+      select
+        id, inspection_id, document_version_id, evidence_type,
+        section_id, item_id, caption, created_by_user_id, created_at
+      from public.inspection_evidence
+      where inspection_id = ${inspectionId}
+      order by created_at, id
+    `;
+    return rows.map(mapEvidence);
+  }
+
+  async insertSignature(signature: InspectionSignature): Promise<number> {
+    return translated(async () =>
+      this.sql.begin(async (tx) => {
+        await tx`
+          insert into public.inspection_signatures (
+            id, inspection_id, role, signer_type, signer_user_id,
+            signer_party_id, signer_name_snapshot,
+            signature_document_version_id, status, signed_at,
+            created_by_user_id, invalidated_at,
+            invalidated_by_user_id, invalidation_reason
+          ) values (
+            ${signature.id}, ${signature.inspectionId}, ${signature.role},
+            ${signature.signerType}, ${signature.signerUserId},
+            ${signature.signerPartyId}, ${signature.signerNameSnapshot},
+            ${signature.signatureDocumentVersionId}, ${signature.status},
+            ${signature.signedAt}, ${signature.createdByUserId},
+            ${signature.invalidatedAt}, ${signature.invalidatedByUserId},
+            ${signature.invalidationReason}
+          )
+        `;
+
+        const rows = await tx<{ content_revision: number }[]>`
+          select content_revision
+          from public.inspections
+          where id = ${signature.inspectionId}
+        `;
+        return rows[0]!.content_revision;
+      }),
+    );
+  }
+
+  async listSignatures(
+    inspectionId: InspectionId,
+  ): Promise<readonly InspectionSignature[]> {
+    const rows = await this.sql<SignatureRow[]>`
+      select
+        id, inspection_id, role, signer_type, signer_user_id,
+        signer_party_id, signer_name_snapshot,
+        signature_document_version_id, status, signed_at,
+        created_by_user_id, invalidated_at,
+        invalidated_by_user_id, invalidation_reason
+      from public.inspection_signatures
+      where inspection_id = ${inspectionId}
+      order by signed_at, id
+    `;
+    return rows.map(mapSignature);
+  }
+
+  async unlock(
+    inspection: Inspection,
+    expectedVersion: number,
+    expectedContentRevision: number,
+    event: InspectionUnlockEvent,
+  ): Promise<void> {
+    await translated(async () => {
+      await this.sql.begin(async (tx) => {
+        const current = await tx<{
+          version: number;
+          content_revision: number;
+          status: InspectionStatus;
+        }[]>`
+          select version, content_revision, status
+          from public.inspections
+          where id = ${inspection.id}
+          for update
+        `;
+
+        const row = current[0];
+        if (
+          !row ||
+          row.status !== 'locked' ||
+          row.version !== expectedVersion ||
+          row.content_revision !== expectedContentRevision
+        ) {
+          throw new DomainError(
+            'INSPECTION_CONTENT_REVISION_CONFLICT',
+            'Inspection changed before unlock could commit.',
+          );
+        }
+
+        const invalidated = await tx<{ id: string }[]>`
+          update public.inspection_signatures
+          set
+            status = 'invalidated',
+            invalidated_at = ${event.unlockedAt},
+            invalidated_by_user_id = ${event.unlockedByUserId},
+            invalidation_reason = ${event.reason}
+          where inspection_id = ${inspection.id}
+            and status = 'valid'
+          returning id
+        `;
+
+        if (invalidated.length !== event.invalidatedSignatureCount) {
+          throw new DomainError(
+            'INSPECTION_CONTENT_REVISION_CONFLICT',
+            'Inspection signatures changed before unlock could commit.',
+          );
+        }
+
+        await tx`
+          insert into public.inspection_unlock_events (
+            id, inspection_id, reason, previous_version,
+            previous_content_revision, invalidated_signature_count,
+            unlocked_by_user_id, unlocked_at
+          ) values (
+            ${event.id}, ${event.inspectionId}, ${event.reason},
+            ${event.previousVersion}, ${event.previousContentRevision},
+            ${event.invalidatedSignatureCount},
+            ${event.unlockedByUserId}, ${event.unlockedAt}
+          )
+        `;
+
+        const updated = await tx<{ id: string }[]>`
+          update public.inspections
+          set
+            status = ${inspection.status},
+            locked_at = ${inspection.lockedAt},
+            version = ${inspection.version},
+            content_revision = ${inspection.contentRevision},
+            updated_at = now()
+          where id = ${inspection.id}
+            and version = ${expectedVersion}
+            and content_revision = ${expectedContentRevision}
+            and status = 'locked'
+          returning id
+        `;
+
+        if (updated.length === 0) {
+          throw new DomainError(
+            'INSPECTION_CONTENT_REVISION_CONFLICT',
+            'Inspection changed before unlock could commit.',
+          );
+        }
+      });
+    });
+  }
+
+  async listUnlockEvents(
+    inspectionId: InspectionId,
+  ): Promise<readonly InspectionUnlockEvent[]> {
+    const rows = await this.sql<UnlockEventRow[]>`
+      select
+        id, inspection_id, reason, previous_version,
+        previous_content_revision, invalidated_signature_count,
+        unlocked_by_user_id, unlocked_at
+      from public.inspection_unlock_events
+      where inspection_id = ${inspectionId}
+      order by unlocked_at, id
+    `;
+    return rows.map(mapUnlockEvent);
+  }
+
+  async finalize(
+    inspection: Inspection,
+    expectedVersion: number,
+    expectedContentRevision: number,
+    finalization: InspectionFinalization,
+  ): Promise<void> {
+    await translated(async () => {
+      await this.sql.begin(async (tx) => {
+        await tx`
+          insert into public.inspection_finalizations (
+            id, inspection_id, source_version, source_content_revision,
+            snapshot_version, snapshot, final_report_document_version_id,
+            finalized_by_user_id, finalized_at
+          ) values (
+            ${finalization.id}, ${finalization.inspectionId},
+            ${finalization.sourceVersion}, ${finalization.sourceContentRevision},
+            1, ${this.sql.json(JSON.parse(JSON.stringify(finalization.snapshot)))},
+            ${finalization.finalReportDocumentVersionId},
+            ${finalization.finalizedByUserId}, ${finalization.finalizedAt}
+          )
+        `;
+
+        const updated = await tx<{ id: string }[]>`
+          update public.inspections
+          set
+            status = ${inspection.status},
+            finalized_at = ${inspection.finalizedAt},
+            version = ${inspection.version},
+            updated_at = now()
+          where id = ${inspection.id}
+            and status = 'locked'
+            and version = ${expectedVersion}
+            and content_revision = ${expectedContentRevision}
+          returning id
+        `;
+
+        if (updated.length === 0) {
+          throw new DomainError(
+            'INSPECTION_CONTENT_REVISION_CONFLICT',
+            'Inspection changed before finalization could commit.',
+          );
+        }
+      });
+    });
+  }
+
+  async getFinalization(
+    inspectionId: InspectionId,
+  ): Promise<InspectionFinalization | null> {
+    const rows = await this.sql<FinalizationRow[]>`
+      select
+        id, inspection_id, source_version, source_content_revision,
+        snapshot, final_report_document_version_id,
+        finalized_by_user_id, finalized_at
+      from public.inspection_finalizations
+      where inspection_id = ${inspectionId}
+      limit 1
+    `;
+    return rows.length === 0 ? null : mapFinalization(rows[0]!);
   }
 
   async getSchemaVersionById(
