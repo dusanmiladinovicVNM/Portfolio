@@ -3465,7 +3465,6 @@ describe('PostgreSQL infrastructure', () => {
         expectedVersion: inactive.version,
         code: 'ASSET-FRIDGE-002',
         name: 'Replacement refrigerator',
-        spaceId: kitchen.id,
         manufacturer: 'Bosch',
         model: 'KGN49',
         identifiers: [
