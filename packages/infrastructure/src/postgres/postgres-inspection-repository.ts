@@ -398,6 +398,11 @@ function translate(error: unknown): DomainError | null {
           'INSPECTION_SIGNATURE_ROLE_ALREADY_SIGNED',
           'This inspection already has an active signature for that role.',
         );
+      case 'inspection_evidence_identity_uq':
+        return new DomainError(
+          'INSPECTION_EVIDENCE_ALREADY_EXISTS',
+          'This exact inspection evidence relation already exists.',
+        );
       case 'inspection_final_snapshots_inspection_uq':
         return new DomainError(
           'INSPECTION_FINAL_SNAPSHOT_ALREADY_EXISTS',

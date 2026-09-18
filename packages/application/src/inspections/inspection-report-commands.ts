@@ -217,7 +217,13 @@ export async function generateInspectionFinalReportCommand(
     await deps.inspectionRepository.insertFinalReportEvidence(evidence);
     return finalVersion;
   } catch (error) {
-    if (!(error instanceof DomainError) || error.code !== 'INSPECTION_FINAL_REPORT_ALREADY_EXISTS') {
+    if (
+      !(error instanceof DomainError) ||
+      ![
+        'INSPECTION_FINAL_REPORT_ALREADY_EXISTS',
+        'INSPECTION_EVIDENCE_ALREADY_EXISTS',
+      ].includes(error.code)
+    ) {
       throw error;
     }
     const winner = await resolveExistingEvidence();
