@@ -2,12 +2,18 @@ import { describe, expect, it } from 'vitest';
 import {
   type Actor,
   type IdGenerator,
+  type OwnershipRepository,
+  type PartyRepository,
   type PortfolioRepository,
   type UserAccessRepository,
   type VerifiedIdentity,
 } from '@portfolio/application';
 import {
   asUserId,
+  type DateOnly,
+  type OwnershipPeriod,
+  type Party,
+  type PartyId,
   type Property,
   type PropertyId,
   type Space,
@@ -29,7 +35,9 @@ const inspectorIdentity: VerifiedIdentity = {
 
 class FixedIds implements IdGenerator {
   private index = 0;
+
   constructor(private readonly values: readonly string[]) {}
+
   next(): string {
     const value = this.values[this.index++];
     if (!value) throw new Error('No test ID configured.');
@@ -111,15 +119,76 @@ class InMemoryPortfolioRepository implements PortfolioRepository {
   }
 }
 
-function buildHandler() {
+class InMemoryPartyRepository implements PartyRepository {
+  private readonly parties = new Map<PartyId, Party>();
+
+  async getById(id: PartyId): Promise<Party | null> {
+    return this.parties.get(id) ?? null;
+  }
+
+  async getByIds(ids: readonly PartyId[]): Promise<readonly Party[]> {
+    return ids.flatMap((id) => {
+      const party = this.parties.get(id);
+      return party ? [party] : [];
+    });
+  }
+
+  async list(): Promise<readonly Party[]> {
+    return [...this.parties.values()];
+  }
+
+  async codeExists(code: string): Promise<boolean> {
+    return [...this.parties.values()].some(
+      (party) => party.code.toLowerCase() === code.toLowerCase(),
+    );
+  }
+
+  async insert(party: Party): Promise<void> {
+    this.parties.set(party.id, party);
+  }
+}
+
+class InMemoryOwnershipRepository implements OwnershipRepository {
+  private readonly periods: OwnershipPeriod[] = [];
+
+  async listByUnit(unitId: UnitId): Promise<readonly OwnershipPeriod[]> {
+    return this.periods.filter((period) => period.unitId === unitId);
+  }
+
+  async overlaps(
+    unitId: UnitId,
+    validFrom: DateOnly,
+    validTo: DateOnly | null,
+  ): Promise<boolean> {
+    const rightEnd = validTo ?? '9999-12-31';
+    return this.periods.some((period) => {
+      if (period.unitId !== unitId) return false;
+      const leftEnd = period.validTo ?? '9999-12-31';
+      return period.validFrom <= rightEnd && validFrom <= leftEnd;
+    });
+  }
+
+  async insert(period: OwnershipPeriod): Promise<void> {
+    this.periods.push(period);
+  }
+}
+
+function buildHandler(
+  ids: readonly string[] = [
+    '6a644eaa-dae0-4c4a-9ae4-6e5a93ceef3f',
+    'f05296da-8e3c-45e5-8357-957745830c86',
+    'f5d0ee31-0f36-41cf-8660-6de2ed95bd2b',
+    '11111111-1111-4111-8111-111111111111',
+    '22222222-2222-4222-8222-222222222222',
+    '33333333-3333-4333-8333-333333333333',
+  ],
+) {
   return createPortfolioHttpHandler({
     portfolioRepository: new InMemoryPortfolioRepository(),
+    partyRepository: new InMemoryPartyRepository(),
+    ownershipRepository: new InMemoryOwnershipRepository(),
     userAccessRepository: new InMemoryAccessRepository(),
-    idGenerator: new FixedIds([
-      '6a644eaa-dae0-4c4a-9ae4-6e5a93ceef3f',
-      'f05296da-8e3c-45e5-8357-957745830c86',
-      'f5d0ee31-0f36-41cf-8660-6de2ed95bd2b',
-    ]),
+    idGenerator: new FixedIds(ids),
   });
 }
 
@@ -226,10 +295,194 @@ describe('Portfolio HTTP boundary', () => {
     });
   });
 
+  it('creates a Party master without encoding owner/tenant role in the identity', async () => {
+    const handler = buildHandler();
+
+    const response = await handler(
+      new Request('https://portfolio.test/parties', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          code: 'PTY-0001',
+          partyType: 'company',
+          legalName: 'Example Property d.o.o.',
+          contactPoints: [
+            {
+              contactType: 'email',
+              value: 'office@example.test',
+              isPrimary: true,
+            },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({
+      data: {
+        code: 'PTY-0001',
+        partyType: 'company',
+        legalName: 'Example Property d.o.o.',
+      },
+    });
+  });
+
+  it('creates and reads a complete ownership composition for a Unit', async () => {
+    const handler = buildHandler([
+      '6a644eaa-dae0-4c4a-9ae4-6e5a93ceef3f',
+      'f05296da-8e3c-45e5-8357-957745830c86',
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222',
+    ]);
+
+    await handler(
+      new Request('https://portfolio.test/properties', {
+        method: 'POST',
+        body: JSON.stringify(propertyBody),
+      }),
+      adminIdentity,
+    );
+
+    const unitResponse = await handler(
+      new Request('https://portfolio.test/units', {
+        method: 'POST',
+        body: JSON.stringify({
+          propertyId: '6a644eaa-dae0-4c4a-9ae4-6e5a93ceef3f',
+          code: 'UNIT-0001',
+          unitNumber: '4B',
+          unitType: 'apartment',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(unitResponse.status).toBe(201);
+
+    const partyResponse = await handler(
+      new Request('https://portfolio.test/parties', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'PTY-0001',
+          partyType: 'person',
+          firstName: 'Ana',
+          lastName: 'Jovanović',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(partyResponse.status).toBe(201);
+
+    const ownership = await handler(
+      new Request(
+        'https://portfolio.test/units/f05296da-8e3c-45e5-8357-957745830c86/ownership-periods',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            validFrom: '2026-01-01',
+            owners: [
+              {
+                partyId: '11111111-1111-4111-8111-111111111111',
+                sharePercent: 100,
+              },
+            ],
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+
+    expect(ownership.status).toBe(201);
+    expect(await ownership.json()).toMatchObject({
+      data: {
+        validFrom: '2026-01-01',
+        owners: [{ sharePercent: 100 }],
+      },
+    });
+
+    const listed = await handler(
+      new Request(
+        'https://portfolio.test/units/f05296da-8e3c-45e5-8357-957745830c86/ownership-periods',
+      ),
+      adminIdentity,
+    );
+
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toMatchObject({
+      data: { items: [{ owners: [{ sharePercent: 100 }] }] },
+    });
+  });
+
+  it('rejects incomplete ownership compositions', async () => {
+    const handler = buildHandler([
+      '6a644eaa-dae0-4c4a-9ae4-6e5a93ceef3f',
+      'f05296da-8e3c-45e5-8357-957745830c86',
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222',
+    ]);
+
+    await handler(
+      new Request('https://portfolio.test/properties', {
+        method: 'POST',
+        body: JSON.stringify(propertyBody),
+      }),
+      adminIdentity,
+    );
+    await handler(
+      new Request('https://portfolio.test/units', {
+        method: 'POST',
+        body: JSON.stringify({
+          propertyId: '6a644eaa-dae0-4c4a-9ae4-6e5a93ceef3f',
+          code: 'UNIT-0001',
+          unitNumber: '4B',
+          unitType: 'apartment',
+        }),
+      }),
+      adminIdentity,
+    );
+    await handler(
+      new Request('https://portfolio.test/parties', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'PTY-0001',
+          partyType: 'person',
+          firstName: 'Ana',
+          lastName: 'Jovanović',
+        }),
+      }),
+      adminIdentity,
+    );
+
+    const response = await handler(
+      new Request(
+        'https://portfolio.test/units/f05296da-8e3c-45e5-8357-957745830c86/ownership-periods',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            validFrom: '2026-01-01',
+            owners: [
+              {
+                partyId: '11111111-1111-4111-8111-111111111111',
+                sharePercent: 75,
+              },
+            ],
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'OWNERSHIP_SHARES_NOT_COMPLETE' },
+    });
+  });
+
   it('supports a configurable host base path without leaking provider details', async () => {
     const handler = createPortfolioHttpHandler(
       {
         portfolioRepository: new InMemoryPortfolioRepository(),
+        partyRepository: new InMemoryPartyRepository(),
+        ownershipRepository: new InMemoryOwnershipRepository(),
         userAccessRepository: new InMemoryAccessRepository(),
         idGenerator: new FixedIds(['6a644eaa-dae0-4c4a-9ae4-6e5a93ceef3f']),
       },
