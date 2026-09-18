@@ -113,6 +113,51 @@ interface FindingRow {
   created_at: string | Date;
 }
 
+type MutableJson =
+  | string
+  | number
+  | boolean
+  | null
+  | MutableJson[]
+  | { [key: string]: MutableJson };
+
+function answerToJson(value: InspectionAnswerValue): MutableJson {
+  if (typeof value === 'string' || typeof value === 'boolean') return value;
+  return [...value];
+}
+
+function optionsToJson(options: readonly InspectionOption[]): MutableJson {
+  return options.map((option) => ({
+    value: option.value,
+    label: option.label,
+  }));
+}
+
+function conditionValueToJson(
+  value: string | boolean | readonly (string | boolean)[],
+): MutableJson {
+  if (typeof value === 'string' || typeof value === 'boolean') return value;
+  return [...value];
+}
+
+function conditionToJson(condition: InspectionCondition): MutableJson {
+  if ('all' in condition) {
+    return { all: condition.all.map(conditionToJson) };
+  }
+  if ('any' in condition) {
+    return { any: condition.any.map(conditionToJson) };
+  }
+
+  const result: { [key: string]: MutableJson } = {
+    fieldKey: condition.fieldKey,
+    operator: condition.operator,
+  };
+  if (condition.value !== undefined) {
+    result.value = conditionValueToJson(condition.value);
+  }
+  return result;
+}
+
 const inspectionSelect = `
   select
     id, code, inspection_type, unit_id, tenancy_id, schema_version_id,
@@ -418,7 +463,7 @@ export class PostgresInspectionRepository implements InspectionRepository {
               i.schema_version_id,
               ${response.sectionId},
               ${response.itemId},
-              ${this.sql.json(response.value)},
+              ${this.sql.json(answerToJson(response.value))},
               ${response.comment},
               ${response.updatedByUserId},
               ${response.updatedAt}
@@ -605,9 +650,9 @@ export class PostgresInspectionRepository implements InspectionRepository {
               ) values (
                 ${item.id}, ${schema.id}, ${section.id}, ${item.key},
                 ${item.type}, ${item.label}, ${item.required},
-                ${item.sortOrder}, ${this.sql.json(item.options)},
-                ${item.visibleWhen === null ? null : this.sql.json(item.visibleWhen)},
-                ${item.requiredWhen === null ? null : this.sql.json(item.requiredWhen)}
+                ${item.sortOrder}, ${this.sql.json(optionsToJson(item.options))},
+                ${item.visibleWhen === null ? null : this.sql.json(conditionToJson(item.visibleWhen))},
+                ${item.requiredWhen === null ? null : this.sql.json(conditionToJson(item.requiredWhen))}
               )
             `;
           }
