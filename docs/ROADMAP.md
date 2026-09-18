@@ -16,11 +16,12 @@ The order is dependency-driven. A planned PR may be split if evidence shows that
 | #6 | LeaseAgreement + effective terms | DONE |
 | #7 | Core Hardening A — Unit/Tenancy temporal truth | DONE |
 | #8 | Core Hardening B — lease successor chain + bounded term history | DONE |
-| #9 | Core Boundary Hardening — DTOs, routing, lockfile, transaction rule | IN PROGRESS |
+| #9 | Core Boundary Hardening — DTOs, routing, lockfile, transaction rule | DONE |
+| #10 | Documents foundation — versioned evidence + FileStoragePort | IN PROGRESS |
 
 ## Evidence and operational domains
 
-### PR #10 — Documents foundation
+### PR #10 — Documents foundation (IN PROGRESS)
 
 - Document
 - DocumentVersion

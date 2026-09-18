@@ -32,6 +32,11 @@ import {
   type UnitId,
 } from '@portfolio/domain';
 import { createPortfolioHttpHandler } from '../src/index.js';
+import {
+  FixedClock,
+  InMemoryDocumentRepository,
+  MemoryFileStorage,
+} from './document-test-deps.js';
 
 const adminIdentity: VerifiedIdentity = {
   provider: 'supabase',
@@ -251,6 +256,9 @@ function buildHandler(
     ownershipRepository: new InMemoryOwnershipRepository(),
     tenancyRepository: new EmptyTenancyRepository(),
     leaseRepository: new EmptyLeaseRepository(),
+    documentRepository: new InMemoryDocumentRepository(),
+    fileStorage: new MemoryFileStorage(),
+    clock: new FixedClock(),
     userAccessRepository: new InMemoryAccessRepository(),
     idGenerator: new FixedIds(ids),
   });
@@ -617,6 +625,9 @@ describe('Portfolio HTTP boundary', () => {
         ownershipRepository: new InMemoryOwnershipRepository(),
         tenancyRepository: new EmptyTenancyRepository(),
         leaseRepository: new EmptyLeaseRepository(),
+        documentRepository: new InMemoryDocumentRepository(),
+        fileStorage: new MemoryFileStorage(),
+        clock: new FixedClock(),
         userAccessRepository: new InMemoryAccessRepository(),
         idGenerator: new FixedIds(['6a644eaa-dae0-4c4a-9ae4-6e5a93ceef3f']),
       },
@@ -630,4 +641,127 @@ describe('Portfolio HTTP boundary', () => {
 
     expect(response.status).toBe(200);
   });
+
+  it('runs Document → binary version → final → domain link through HTTP', async () => {
+    const handler = buildHandler([
+      '40000000-0000-4000-8000-000000000001',
+      '40000000-0000-4000-8000-000000000002',
+      '40000000-0000-4000-8000-000000000003',
+      '40000000-0000-4000-8000-000000000004',
+    ]);
+
+    const property = await handler(
+      new Request('https://portfolio.test/properties', {
+        method: 'POST',
+        body: JSON.stringify(propertyBody),
+      }),
+      adminIdentity,
+    );
+    expect(property.status).toBe(201);
+
+    const created = await handler(
+      new Request('https://portfolio.test/documents', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'DOC-LEASE-1',
+          title: 'Lease evidence',
+          category: 'legal',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(created.status).toBe(201);
+    const document = (await created.json()).data as {
+      id: string;
+      latestVersionNumber: number;
+    };
+    expect(document.latestVersionNumber).toBe(0);
+
+    const uploaded = await handler(
+      new Request(
+        `https://portfolio.test/documents/${document.id}/versions?fileName=lease.pdf`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/pdf' },
+          body: new Uint8Array([1, 2, 3, 4]),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(uploaded.status).toBe(201);
+    const version = (await uploaded.json()).data as {
+      id: string;
+      versionNumber: number;
+      status: string;
+    };
+    expect(version).toMatchObject({
+      versionNumber: 1,
+      status: 'stored',
+    });
+
+    const finalized = await handler(
+      new Request(
+        `https://portfolio.test/document-versions/${version.id}/finalize`,
+        { method: 'POST' },
+      ),
+      adminIdentity,
+    );
+    expect(finalized.status).toBe(200);
+    expect(await finalized.clone().json()).toMatchObject({
+      data: {
+        status: 'final',
+        finalizedAt: '2026-09-18T20:00:00.000Z',
+      },
+    });
+
+    const linked = await handler(
+      new Request(
+        `https://portfolio.test/documents/${document.id}/links`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            documentVersionId: version.id,
+            relation: 'supporting',
+            targetType: 'property',
+            targetId: '40000000-0000-4000-8000-000000000001',
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(linked.status).toBe(201);
+    expect(await linked.json()).toMatchObject({
+      data: {
+        documentVersionId: version.id,
+        relation: 'supporting',
+        targetType: 'property',
+        targetId: '40000000-0000-4000-8000-000000000001',
+      },
+    });
+
+    const listedVersions = await handler(
+      new Request(
+        `https://portfolio.test/documents/${document.id}/versions`,
+      ),
+      inspectorIdentity,
+    );
+    expect(listedVersions.status).toBe(200);
+    expect(await listedVersions.json()).toMatchObject({
+      data: { items: [{ versionNumber: 1, status: 'final' }] },
+    });
+
+    const inspectorWrite = await handler(
+      new Request('https://portfolio.test/documents', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'DOC-FORBIDDEN',
+          title: 'Forbidden',
+          category: 'other',
+        }),
+      }),
+      inspectorIdentity,
+    );
+    expect(inspectorWrite.status).toBe(403);
+  });
+
 });

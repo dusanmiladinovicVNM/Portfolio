@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   activateTenancyCommand,
   cancelLeaseAgreementCommand,
+  createDocumentCommand,
   createLeaseAgreementCommand,
   createLeaseAmendmentCommand,
   createOwnershipPeriodCommand,
@@ -13,8 +14,10 @@ import {
   createPropertyCommand,
   createSpaceCommand,
   createUnitCommand,
+  finalizeDocumentVersionCommand,
   getEffectiveTenancyTermsQuery,
   giveTenancyNoticeCommand,
+  linkDocumentCommand,
   listOwnershipPeriodsByUnitQuery,
   listPropertiesQuery,
   listSpacesByUnitQuery,
@@ -24,10 +27,13 @@ import {
   resolveActor,
   signLeaseAgreementCommand,
   signLeaseAmendmentCommand,
+  uploadDocumentVersionCommand,
   type IdGenerator,
   type VerifiedIdentity,
 } from '@portfolio/application';
 import {
+  addStoredDocumentVersion,
+  asDocumentVersionId,
   asOwnershipPeriodId,
   asPartyAddressId,
   asPartyId,
@@ -38,6 +44,7 @@ import {
   type Party,
 } from '@portfolio/domain';
 import {
+  PostgresDocumentRepository,
   PostgresLeaseRepository,
   PostgresOwnershipRepository,
   PostgresPartyRepository,
@@ -58,6 +65,7 @@ const ownershipRepository = new PostgresOwnershipRepository(sql);
 const leaseRepository = new PostgresLeaseRepository(sql);
 const tenancyRepository = new PostgresTenancyRepository(sql);
 const accessRepository = new PostgresUserAccessRepository(sql);
+const documentRepository = new PostgresDocumentRepository(sql);
 
 class SequenceIds implements IdGenerator {
   private index = 0;
@@ -75,6 +83,9 @@ class SequenceIds implements IdGenerator {
 async function resetAndMigrate(): Promise<void> {
   await sql.unsafe(
     `drop table if exists
+      public.document_links,
+      public.document_versions,
+      public.documents,
       public.tenancy_term_versions,
       public.lease_amendments,
       public.lease_agreement_parties,
@@ -133,6 +144,9 @@ beforeAll(async () => {
 afterAll(async () => {
   await sql.unsafe(
     `drop table if exists
+      public.document_links,
+      public.document_versions,
+      public.documents,
       public.tenancy_term_versions,
       public.lease_amendments,
       public.lease_agreement_parties,
@@ -1188,4 +1202,422 @@ describe('PostgreSQL infrastructure', () => {
       }),
     ).rejects.toMatchObject({ code: 'PROPERTY_CODE_ALREADY_EXISTS' });
   });
+
+  it('persists immutable document evidence and DB-enforces signed originals', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+
+    const ids = new SequenceIds([
+      '61000000-0000-4000-8000-000000000001',
+      '61000000-0000-4000-8000-000000000002',
+      '61000000-0000-4000-8000-000000000003',
+      '61000000-0000-4000-8000-000000000004',
+      '61000000-0000-4000-8000-000000000005',
+      '61000000-0000-4000-8000-000000000006',
+      '61000000-0000-4000-8000-000000000007',
+      '61000000-0000-4000-8000-000000000008',
+      '61000000-0000-4000-8000-000000000009',
+      '61000000-0000-4000-8000-000000000010',
+      '61000000-0000-4000-8000-000000000011',
+      '61000000-0000-4000-8000-000000000012',
+      '61000000-0000-4000-8000-000000000013',
+    ]);
+
+    const property = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-DOC-INT',
+        name: 'Document Integration',
+        propertyType: 'apartment_building',
+        street: 'Evidence Street',
+        houseNumber: '1',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+
+    const unit = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-DOC-INT',
+        unitNumber: 'D-1',
+        unitType: 'apartment',
+      },
+    );
+
+    const tenant = await createPartyCommand(
+      { partyRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PTY-DOC-TENANT',
+        partyType: 'person',
+        firstName: 'Document',
+        lastName: 'Tenant',
+      },
+    );
+
+    const landlord = await createPartyCommand(
+      { partyRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PTY-DOC-LANDLORD',
+        partyType: 'company',
+        legalName: 'Document Landlord d.o.o.',
+      },
+    );
+
+    const tenancy = await createTenancyCommand(
+      {
+        tenancyRepository,
+        portfolioRepository,
+        partyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        unitId: unit.id,
+        code: 'TEN-DOC-INT',
+        parties: [{
+          partyId: tenant.id,
+          role: 'tenant',
+          isPrimary: true,
+        }],
+      },
+    );
+
+    const agreement = await createLeaseAgreementCommand(
+      {
+        leaseRepository,
+        tenancyRepository,
+        partyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        tenancyId: tenancy.id,
+        code: 'AGR-DOC-INT',
+        agreementType: 'initial',
+        effectiveFrom: '2026-10-01',
+        parties: [
+          { partyId: landlord.id, role: 'landlord' },
+          { partyId: tenant.id, role: 'tenant' },
+        ],
+      },
+    );
+
+    await signLeaseAgreementCommand(
+      {
+        leaseRepository,
+        tenancyRepository,
+        partyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      agreement.id,
+      1,
+      '2026-09-20',
+      { currency: 'EUR', baseRent: '800' },
+    );
+
+    const document = await createDocumentCommand(
+      { documentRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'DOC-DOC-INT',
+        title: 'Signed lease original',
+        category: 'legal',
+      },
+    );
+
+    const fileStorage = {
+      async put(input: {
+        objectKey: string;
+        content: Uint8Array;
+      }) {
+        return {
+          provider: 'integration-test',
+          objectId: 'object-1',
+          objectKey: input.objectKey,
+          byteSize: input.content.byteLength,
+          sha256: 'b'.repeat(64),
+        };
+      },
+      async remove() {},
+    };
+
+    const version = await uploadDocumentVersionCommand(
+      {
+        documentRepository,
+        fileStorage,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        documentId: document.id,
+        fileName: 'signed-lease.pdf',
+        mimeType: 'application/pdf',
+        content: new Uint8Array([1, 2, 3, 4]),
+      },
+    );
+
+    expect(version.status).toBe('stored');
+    expect(
+      await documentRepository.getStorageReference(version.id),
+    ).toEqual({
+      provider: 'integration-test',
+      objectId: 'object-1',
+      objectKey: `document-version:${version.id}`,
+    });
+
+    await expect(
+      sql`
+        insert into public.document_links (
+          id, document_id, document_version_id, relation, target_type,
+          lease_agreement_id
+        ) values (
+          '62000000-0000-4000-8000-000000000001',
+          ${document.id},
+          ${version.id},
+          'signed_original',
+          'lease_agreement',
+          ${agreement.id}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'document_links_signed_original_version_final',
+    });
+
+    const final = await finalizeDocumentVersionCommand(
+      {
+        documentRepository,
+        clock: {
+          now: () => '2026-09-20T12:00:00.000Z',
+        },
+      },
+      actor,
+      version.id,
+    );
+    expect(final.status).toBe('final');
+
+    const link = await linkDocumentCommand(
+      {
+        documentRepository,
+        portfolioRepository,
+        partyRepository,
+        tenancyRepository,
+        leaseRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        documentId: document.id,
+        documentVersionId: final.id,
+        relation: 'signed_original',
+        targetType: 'lease_agreement',
+        targetId: agreement.id,
+      },
+    );
+
+    expect(link.relation).toBe('signed_original');
+
+    await expect(
+      sql`
+        update public.document_links
+        set relation = 'supporting'
+        where id = ${link.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'document_links_signed_original_immutable',
+    });
+
+    await expect(
+      sql`
+        delete from public.document_links
+        where id = ${link.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'document_links_signed_original_immutable',
+    });
+
+    await expect(
+      sql`
+        update public.document_versions
+        set file_name = 'rewritten.pdf'
+        where id = ${version.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'document_versions_content_immutable',
+    });
+
+    await expect(
+      sql`
+        delete from public.document_versions
+        where id = ${version.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'document_versions_append_only',
+    });
+
+    await sql`
+      insert into public.documents (
+        id, code, title, category, status, latest_version_number, revision
+      ) values (
+        '62000000-0000-4000-8000-000000000100',
+        'DOC-SECOND-SIGNED-ORIGINAL',
+        'Second signed original candidate',
+        'legal',
+        'active',
+        1,
+        2
+      )
+    `;
+
+    await sql`
+      insert into public.document_versions (
+        id, document_id, version_number, file_name, mime_type,
+        byte_size, sha256, status, finalized_at,
+        storage_provider, storage_object_id, storage_object_key
+      ) values (
+        '62000000-0000-4000-8000-000000000101',
+        '62000000-0000-4000-8000-000000000100',
+        1,
+        'second.pdf',
+        'application/pdf',
+        5,
+        ${'e'.repeat(64)},
+        'final',
+        '2026-09-20T12:30:00.000Z',
+        'integration-test',
+        'object-second',
+        'document-version:second'
+      )
+    `;
+
+    await expect(
+      sql`
+        insert into public.document_links (
+          id, document_id, document_version_id, relation, target_type,
+          lease_agreement_id
+        ) values (
+          '62000000-0000-4000-8000-000000000102',
+          '62000000-0000-4000-8000-000000000100',
+          '62000000-0000-4000-8000-000000000101',
+          'signed_original',
+          'lease_agreement',
+          ${agreement.id}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23505',
+      constraint_name: 'document_links_signed_agreement_uq',
+    });
+
+    await expect(
+      sql`
+        insert into public.document_links (
+          id, document_id, relation, target_type, property_id
+        ) values (
+          '62000000-0000-4000-8000-000000000003',
+          ${document.id},
+          'supporting',
+          'property',
+          'ffffffff-ffff-4fff-8fff-ffffffffffff'
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23503',
+    });
+
+    await sql`
+      insert into public.lease_amendments (
+        id, agreement_id, code, title, effective_from, status, version
+      ) values (
+        '62000000-0000-4000-8000-000000000004',
+        ${agreement.id},
+        'AMD-DOC-DRAFT',
+        'Unsigned amendment',
+        '2026-11-01',
+        'draft',
+        1
+      )
+    `;
+
+    await expect(
+      sql`
+        insert into public.document_links (
+          id, document_id, document_version_id, relation, target_type,
+          lease_amendment_id
+        ) values (
+          '62000000-0000-4000-8000-000000000005',
+          ${document.id},
+          ${version.id},
+          'signed_original',
+          'lease_amendment',
+          '62000000-0000-4000-8000-000000000004'
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'document_links_signed_original_amendment_signed',
+    });
+
+    const currentDocument = await documentRepository.getDocumentById(document.id);
+    expect(currentDocument).not.toBeNull();
+
+    const candidateA = addStoredDocumentVersion(currentDocument!, {
+      id: asDocumentVersionId('62000000-0000-4000-8000-000000000006'),
+      fileName: 'revision-a.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 5,
+      sha256: 'c'.repeat(64),
+    });
+    const candidateB = addStoredDocumentVersion(currentDocument!, {
+      id: asDocumentVersionId('62000000-0000-4000-8000-000000000007'),
+      fileName: 'revision-b.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 5,
+      sha256: 'd'.repeat(64),
+    });
+
+    await documentRepository.insertVersion(
+      candidateA.document,
+      currentDocument!.revision,
+      candidateA.version,
+      {
+        provider: 'integration-test',
+        objectId: 'object-a',
+        objectKey: 'document-version:concurrency-a',
+      },
+    );
+
+    await expect(
+      documentRepository.insertVersion(
+        candidateB.document,
+        currentDocument!.revision,
+        candidateB.version,
+        {
+          provider: 'integration-test',
+          objectId: 'object-b',
+          objectKey: 'document-version:concurrency-b',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'DOCUMENT_VERSION_CONFLICT',
+    });
+
+    const versions = await documentRepository.listVersionsByDocument(document.id);
+    expect(versions.map((item) => item.versionNumber)).toEqual([1, 2]);
+  });
+
 });

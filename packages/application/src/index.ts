@@ -18,3 +18,8 @@ export * from './tenancy/tenancy-queries.js';
 export * from './contracts/lease-repository.js';
 export * from './contracts/lease-commands.js';
 export * from './contracts/lease-queries.js';
+export * from './shared/clock.js';
+export * from './documents/file-storage-port.js';
+export * from './documents/document-repository.js';
+export * from './documents/document-commands.js';
+export * from './documents/document-queries.js';

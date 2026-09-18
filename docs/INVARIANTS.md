@@ -44,7 +44,7 @@ These rules are architecture gates, not optional implementation notes.
 32. A predecessor has at most one non-cancelled direct successor.
 33. Signing a successor, superseding its predecessor and emitting the successor term snapshot are one transaction.
 34. A successor never rewrites the predecessor's signed `effectiveTo`; historical governing validity is derived from the signed legal period plus the signed successor boundary.
-35. AgreementParty is a legal relationship snapshot; signed agreement party composition must not follow later live Party/Tenancy membership changes.
+35. AgreementParty snapshots legal membership/role, not mutable Party display fields. Names, addresses and other rendered legal identity in a signed instrument are preserved by the exact final signed DocumentVersion.
 36. A signed LeaseAgreement is immutable except for explicit lifecycle metadata transitions.
 37. A signed LeaseAmendment is immutable.
 38. Every signed agreement/amendment that changes effective terms emits exactly one immutable TenancyTermVersion.
@@ -78,13 +78,16 @@ These rules are architecture gates, not optional implementation notes.
 ## Money and documents
 
 56. Monetary values use decimal/numeric semantics, never binary floating point.
-57. Signed/final legal documents are immutable versions and must have a content hash.
-58. Binary storage location is infrastructure data, not business identity.
-59. Financial corrections preserve prior history through correction/reversal records where material.
+57. Each DocumentVersion represents one binary content identity; its file metadata, SHA-256 and storage locator are immutable after registration.
+58. A final DocumentVersion is append-only evidence and cannot return to a mutable/stored state.
+59. A `signed_original` link identifies one exact final DocumentVersion, may only target a signed LeaseAgreement/LeaseAmendment, and is immutable once created.
+60. Binary storage location is infrastructure data, not business identity; Google Drive file IDs must never become Document or DocumentVersion IDs.
+61. External binary storage and PostgreSQL cannot share one ACID transaction. Upload registration therefore uses an idempotent storage object key and compensating delete when DB registration fails.
+62. Financial corrections preserve prior history through correction/reversal records where material.
 
 ## Architecture
 
-60. Domain code cannot import Supabase, React, Deno, Google APIs or future Fastify infrastructure.
-61. UI components cannot coordinate multi-table business transactions.
-62. Multi-record business commands have one explicit transactional boundary.
-63. Database constraints enforce invariants that can be stated relationally.
+63. Domain code cannot import Supabase, React, Deno, Google APIs or future Fastify infrastructure.
+64. UI components cannot coordinate multi-table business transactions.
+65. Multi-record business commands have one explicit transactional boundary.
+66. Database constraints enforce invariants that can be stated relationally.

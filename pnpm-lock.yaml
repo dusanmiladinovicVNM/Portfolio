@@ -178,6 +178,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@portfolio/application':
+        specifier: workspace:*
+        version: link:../../packages/application
       '@portfolio/http':
         specifier: workspace:*
         version: link:../../packages/http
@@ -190,6 +193,12 @@ importers:
       postgres:
         specifier: 3.4.9
         version: 3.4.9
+
+  integrations/google-drive:
+    dependencies:
+      '@portfolio/application':
+        specifier: workspace:*
+        version: link:../../packages/application
 
   packages/application:
     dependencies:

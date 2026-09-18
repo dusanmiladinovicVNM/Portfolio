@@ -1,18 +1,22 @@
 import { createSupabaseContext } from '@supabase/server';
 import postgres from 'postgres';
+import type { FileStoragePort } from '@portfolio/application';
 import { createPortfolioHttpHandler } from '@portfolio/http';
 import {
+  PostgresDocumentRepository,
   PostgresLeaseRepository,
   PostgresOwnershipRepository,
   PostgresPartyRepository,
   PostgresPortfolioRepository,
   PostgresTenancyRepository,
   PostgresUserAccessRepository,
+  SystemClock,
   WebCryptoIdGenerator,
 } from '@portfolio/infrastructure';
 
 export interface SupabaseApiConfig {
   readonly databaseUrl: string;
+  readonly fileStorage: FileStoragePort;
   readonly basePath?: string;
 }
 
@@ -34,6 +38,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
   const leaseRepository = new PostgresLeaseRepository(sql);
   const tenancyRepository = new PostgresTenancyRepository(sql);
   const userAccessRepository = new PostgresUserAccessRepository(sql);
+  const documentRepository = new PostgresDocumentRepository(sql);
 
   const applicationHandler = createPortfolioHttpHandler(
     {
@@ -42,6 +47,9 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
       ownershipRepository,
       tenancyRepository,
       leaseRepository,
+      documentRepository,
+      fileStorage: config.fileStorage,
+      clock: new SystemClock(),
       userAccessRepository,
       idGenerator: new WebCryptoIdGenerator(),
       onUnexpectedError: (error) => {
