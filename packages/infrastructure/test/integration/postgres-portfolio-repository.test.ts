@@ -3,9 +3,12 @@ import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  createOwnershipPeriodCommand,
+  createPartyCommand,
   createPropertyCommand,
   createSpaceCommand,
   createUnitCommand,
+  listOwnershipPeriodsByUnitQuery,
   listPropertiesQuery,
   listSpacesByUnitQuery,
   listUnitsByPropertyQuery,
@@ -14,6 +17,15 @@ import {
   type VerifiedIdentity,
 } from '@portfolio/application';
 import {
+  asOwnershipPeriodId,
+  asPartyAddressId,
+  asPartyId,
+  createOwnershipPeriod,
+  type Party,
+} from '@portfolio/domain';
+import {
+  PostgresOwnershipRepository,
+  PostgresPartyRepository,
   PostgresPortfolioRepository,
   PostgresUserAccessRepository,
 } from '../../src/index.js';
@@ -25,6 +37,8 @@ if (!connectionString) {
 
 const sql = postgres(connectionString, { max: 1 });
 const portfolioRepository = new PostgresPortfolioRepository(sql);
+const partyRepository = new PostgresPartyRepository(sql);
+const ownershipRepository = new PostgresOwnershipRepository(sql);
 const accessRepository = new PostgresUserAccessRepository(sql);
 
 class SequenceIds implements IdGenerator {
@@ -42,7 +56,18 @@ class SequenceIds implements IdGenerator {
 
 async function resetAndMigrate(): Promise<void> {
   await sql.unsafe(
-    'drop table if exists public.auth_identities, public.app_users, public.spaces, public.units, public.properties cascade',
+    `drop table if exists
+      public.unit_ownership_shares,
+      public.unit_ownership_periods,
+      public.party_addresses,
+      public.party_contact_points,
+      public.parties,
+      public.auth_identities,
+      public.app_users,
+      public.spaces,
+      public.units,
+      public.properties
+    cascade`,
   );
 
   const migrationsUrl = new URL('../../../../supabase/migrations/', import.meta.url);
@@ -83,7 +108,18 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await sql.unsafe(
-    'drop table if exists public.auth_identities, public.app_users, public.spaces, public.units, public.properties cascade',
+    `drop table if exists
+      public.unit_ownership_shares,
+      public.unit_ownership_periods,
+      public.party_addresses,
+      public.party_contact_points,
+      public.parties,
+      public.auth_identities,
+      public.app_users,
+      public.spaces,
+      public.units,
+      public.properties
+    cascade`,
   );
   await sql.end();
 });
@@ -179,6 +215,187 @@ describe('PostgreSQL infrastructure', () => {
       .toBe('4B');
     expect((await listSpacesByUnitQuery(portfolioRepository, actor, unit.id))[0]?.name)
       .toBe('Kitchen');
+  });
+
+  it('persists Party + contacts + addresses atomically', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+    const ids = new SequenceIds([
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222',
+      '33333333-3333-4333-8333-333333333333',
+    ]);
+
+    const party = await createPartyCommand(
+      { partyRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PTY-0001',
+        partyType: 'person',
+        firstName: 'Ana',
+        lastName: 'Jovanović',
+        contactPoints: [
+          {
+            contactType: 'email',
+            value: 'ana@example.test',
+            isPrimary: true,
+          },
+        ],
+        addresses: [
+          {
+            addressType: 'residential',
+            line1: 'Example 1',
+            postalCode: '18000',
+            city: 'Niš',
+            countryCode: 'RS',
+            isPrimary: true,
+          },
+        ],
+      },
+    );
+
+    const loaded = await partyRepository.getById(party.id);
+    expect(loaded).toMatchObject({
+      code: 'PTY-0001',
+      displayName: 'Ana Jovanović',
+    });
+    expect(loaded?.contactPoints).toHaveLength(1);
+    expect(loaded?.addresses).toHaveLength(1);
+  });
+
+  it('rolls back the entire Party aggregate when a child row is invalid', async () => {
+    const invalidParty: Party = {
+      id: asPartyId('44444444-4444-4444-8444-444444444444'),
+      code: 'PTY-ROLLBACK',
+      partyType: 'person',
+      displayName: 'Rollback Test',
+      firstName: 'Rollback',
+      middleName: null,
+      lastName: 'Test',
+      status: 'active',
+      contactPoints: [],
+      addresses: [
+        {
+          id: asPartyAddressId('55555555-5555-4555-8555-555555555555'),
+          partyId: asPartyId('44444444-4444-4444-8444-444444444444'),
+          addressType: 'legal',
+          line1: 'Invalid Country',
+          line2: null,
+          postalCode: '1',
+          city: 'Test',
+          region: null,
+          countryCode: 'SER',
+          isPrimary: true,
+        },
+      ],
+    };
+
+    await expect(partyRepository.insert(invalidParty)).rejects.toBeDefined();
+    expect(await partyRepository.codeExists('PTY-ROLLBACK')).toBe(false);
+  });
+
+  it('persists a complete ownership period and rejects an overlapping race at DB level', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+
+    const ids = new SequenceIds([
+      '66666666-6666-4666-8666-666666666666',
+      '77777777-7777-4777-8777-777777777777',
+      '88888888-8888-4888-8888-888888888888',
+      '99999999-9999-4999-8999-999999999999',
+      'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+    ]);
+
+    const property = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-OWN',
+        name: 'Ownership Building',
+        propertyType: 'apartment_building',
+        street: 'Owner Street',
+        houseNumber: '1',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+
+    const unit = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-OWN',
+        unitNumber: 'OWN-1',
+        unitType: 'apartment',
+      },
+    );
+
+    const ownerA = await createPartyCommand(
+      { partyRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PTY-OWN-A',
+        partyType: 'person',
+        firstName: 'Owner',
+        lastName: 'A',
+      },
+    );
+
+    const ownerB = await createPartyCommand(
+      { partyRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PTY-OWN-B',
+        partyType: 'company',
+        legalName: 'Owner B d.o.o.',
+      },
+    );
+
+    const period = await createOwnershipPeriodCommand(
+      {
+        portfolioRepository,
+        partyRepository,
+        ownershipRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        unitId: unit.id,
+        validFrom: '2026-01-01',
+        owners: [
+          { partyId: ownerA.id, shareBasisPoints: 5000 },
+          { partyId: ownerB.id, shareBasisPoints: 5000 },
+        ],
+      },
+    );
+
+    expect(
+      await listOwnershipPeriodsByUnitQuery(
+        { portfolioRepository, ownershipRepository },
+        actor,
+        unit.id,
+      ),
+    ).toHaveLength(1);
+
+    const overlapping = createOwnershipPeriod({
+      id: asOwnershipPeriodId('bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'),
+      unitId: unit.id,
+      validFrom: '2026-06-01',
+      validTo: '2026-12-31',
+      owners: [{ partyId: ownerA.id, shareBasisPoints: 10000 }],
+    });
+
+    await expect(ownershipRepository.insert(overlapping)).rejects.toMatchObject({
+      code: 'OWNERSHIP_PERIOD_OVERLAP',
+    });
+
+    expect(period.owners.map((owner) => owner.shareBasisPoints)).toEqual([5000, 5000]);
   });
 
   it('enforces relational ownership independently of application code', async () => {
