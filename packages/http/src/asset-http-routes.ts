@@ -66,6 +66,14 @@ export async function handleAssetHttp(
                   : asUnitId(parsed.data.unitId),
             }
           : {}),
+        ...(parsed.data.spaceId !== undefined
+          ? {
+              spaceId:
+                parsed.data.spaceId === null
+                  ? null
+                  : asSpaceId(parsed.data.spaceId),
+            }
+          : {}),
         ...(parsed.data.manufacturer !== undefined
           ? { manufacturer: parsed.data.manufacturer }
           : {}),
@@ -177,14 +185,6 @@ export async function handleAssetHttp(
         expectedVersion: parsed.data.expectedVersion,
         code: parsed.data.code,
         name: parsed.data.name,
-        ...(parsed.data.spaceId !== undefined
-          ? {
-              spaceId:
-                parsed.data.spaceId === null
-                  ? null
-                  : asSpaceId(parsed.data.spaceId),
-            }
-          : {}),
         ...(parsed.data.manufacturer !== undefined
           ? { manufacturer: parsed.data.manufacturer }
           : {}),
