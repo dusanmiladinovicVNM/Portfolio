@@ -1,0 +1,15 @@
+{
+  "name": "@portfolio/google-drive",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "pnpm --workspace-root exec tsc --noEmit -p integrations/google-drive/tsconfig.json",
+    "test": "pnpm --workspace-root exec vitest run integrations/google-drive/test"
+  },
+  "dependencies": {
+    "@portfolio/application": "workspace:*"
+  }
+}
