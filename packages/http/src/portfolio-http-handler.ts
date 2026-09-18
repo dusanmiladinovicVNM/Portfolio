@@ -89,7 +89,9 @@ function errorStatus(code: string): number {
     code === 'TENANCY_ACTUAL_OCCUPANCY_OVERLAP' ||
     code === 'TENANCY_TERM_EFFECTIVE_DATE_CONFLICT' ||
     code === 'LEASE_AGREEMENT_TERMS_ALREADY_EXIST' ||
-    code === 'LEASE_AMENDMENT_TERMS_ALREADY_EXIST'
+    code === 'LEASE_AMENDMENT_TERMS_ALREADY_EXIST' ||
+    code === 'ASSET_ALREADY_REPLACED' ||
+    code === 'ASSET_REPLACEMENT_ALREADY_LINKED'
   ) {
     return 409;
   }
