@@ -125,9 +125,27 @@ Small mechanical triggers may be considered later only when their behavior is ex
 No CQRS framework is required, but use cases are classified as:
 
 - **Query**: reads state and has no business side effects.
-- **Command**: changes state and owns a transaction boundary.
+- **Command**: changes state and owns the semantic transaction boundary.
 
-A command that changes multiple records must execute atomically.
+The application command decides what must succeed or fail as one business operation. Infrastructure decides how that atomicity is implemented.
+
+A repository operation may use its own database transaction when the complete mutation belongs to one repository/bounded-context port. This is the current pattern for operations such as signing a LeaseAgreement together with its term snapshot and predecessor supersession.
+
+Do not introduce a generic UnitOfWork merely to move transaction syntax upward.
+
+Introduce an application-level TransactionManager/UnitOfWork port only when a real command must atomically coordinate multiple independent repository ports and no single owning repository operation can represent that business mutation cleanly.
+
+A command that changes multiple records must execute atomically regardless of which adapter realizes the transaction.
+
+## HTTP contract boundary
+
+Domain/application objects are not serialized directly as public JSON.
+
+Each route maps returned domain state through an explicit response DTO mapper whose shape is defined by `packages/contracts`.
+
+This prevents an internal domain-field addition or refactor from silently changing the HTTP API.
+
+Route modules are split by bounded context. The root HTTP handler owns only cross-cutting transport concerns such as authentication, base-path routing, dispatch and error mapping.
 
 ## Frontend boundary
 
