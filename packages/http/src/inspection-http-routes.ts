@@ -1,8 +1,11 @@
 import {
+  addInspectionEvidenceCommand,
+  addInspectionSignatureCommand,
   cancelInspectionCommand,
   createInspectionCommand,
   createInspectionFindingCommand,
   createInspectionSchemaVersionCommand,
+  finalizeInspectionCommand,
   getInspectionBundleQuery,
   getInspectionSchemaVersionQuery,
   listInspectionSchemaVersionsQuery,
@@ -11,23 +14,32 @@ import {
   publishInspectionSchemaVersionCommand,
   saveInspectionSectionCommand,
   startInspectionCommand,
+  unlockInspectionCommand,
   type Actor,
   type ClockPort,
+  type DocumentRepository,
+  type FileStoragePort,
   type IdGenerator,
   type InspectionRepository,
+  type PartyRepository,
+  type PdfPort,
   type PortfolioRepository,
   type StaffDirectoryRepository,
   type TenancyRepository,
 } from '@portfolio/application';
 import {
+  addInspectionEvidenceRequestSchema,
+  addInspectionSignatureRequestSchema,
   createInspectionFindingRequestSchema,
   createInspectionRequestSchema,
   createInspectionSchemaVersionRequestSchema,
   entityIdSchema,
   expectedInspectionVersionRequestSchema,
   saveInspectionSectionRequestSchema,
+  unlockInspectionRequestSchema,
 } from '@portfolio/contracts';
 import {
+  asDocumentVersionId,
   asInspectionId,
   asInspectionSchemaSectionId,
   asInspectionSchemaVersionId,
@@ -37,14 +49,23 @@ import {
 } from '@portfolio/domain';
 import { json, requestJson, validationFailure } from './http-utils.js';
 import {
+  toDocumentVersionResponse,
+  toInspectionEvidenceResponse,
+  toInspectionFinalizationResponse,
   toInspectionFindingResponse,
   toInspectionItemResponse,
+  toInspectionSignatureResponse,
+  toInspectionUnlockEventResponse,
   toInspectionResponse,
   toInspectionSchemaVersionResponse,
 } from './response-mappers.js';
 
 export interface InspectionHttpDependencies {
   readonly inspectionRepository: InspectionRepository;
+  readonly documentRepository: DocumentRepository;
+  readonly fileStorage: FileStoragePort;
+  readonly pdfPort: PdfPort;
+  readonly partyRepository: PartyRepository;
   readonly portfolioRepository: PortfolioRepository;
   readonly tenancyRepository: TenancyRepository;
   readonly staffDirectoryRepository: StaffDirectoryRepository;
@@ -229,6 +250,13 @@ export async function handleInspectionHttp(
         })),
         responses: bundle.responses.map(toInspectionItemResponse),
         findings: bundle.findings.map(toInspectionFindingResponse),
+        evidence: bundle.evidence.map(toInspectionEvidenceResponse),
+        signatures: bundle.signatures.map(toInspectionSignatureResponse),
+        unlockEvents: bundle.unlockEvents.map(toInspectionUnlockEventResponse),
+        finalization:
+          bundle.finalization === null
+            ? null
+            : toInspectionFinalizationResponse(bundle.finalization),
       },
     });
   }
@@ -333,6 +361,140 @@ export async function handleInspectionHttp(
     );
 
     return json({ data: toInspectionFindingResponse(finding) }, 201);
+  }
+
+
+  const evidenceMatch = /^\/inspections\/([^/]+)\/evidence$/.exec(path);
+  if (method === 'POST' && evidenceMatch) {
+    const parsedId = entityIdSchema.safeParse(evidenceMatch[1]);
+    const parsed = addInspectionEvidenceRequestSchema.safeParse(
+      await requestJson(request),
+    );
+    if (!parsedId.success || !parsed.success) return validationFailure();
+
+    const evidence = await addInspectionEvidenceCommand(
+      {
+        inspectionRepository: deps.inspectionRepository,
+        documentRepository: deps.documentRepository,
+        idGenerator: deps.idGenerator,
+        clock: deps.clock,
+      },
+      actor,
+      asInspectionId(parsedId.data),
+      {
+        documentVersionId: asDocumentVersionId(parsed.data.documentVersionId),
+        evidenceType: parsed.data.evidenceType,
+        ...(parsed.data.sectionId !== undefined
+          ? { sectionId: parsed.data.sectionId }
+          : {}),
+        ...(parsed.data.itemId !== undefined
+          ? { itemId: parsed.data.itemId }
+          : {}),
+        ...(parsed.data.caption !== undefined
+          ? { caption: parsed.data.caption }
+          : {}),
+      },
+    );
+
+    return json({ data: toInspectionEvidenceResponse(evidence) }, 201);
+  }
+
+  const signatureMatch = /^\/inspections\/([^/]+)\/signatures$/.exec(path);
+  if (method === 'POST' && signatureMatch) {
+    const parsedId = entityIdSchema.safeParse(signatureMatch[1]);
+    const parsed = addInspectionSignatureRequestSchema.safeParse(
+      await requestJson(request),
+    );
+    if (!parsedId.success || !parsed.success) return validationFailure();
+
+    const signature = await addInspectionSignatureCommand(
+      {
+        inspectionRepository: deps.inspectionRepository,
+        documentRepository: deps.documentRepository,
+        tenancyRepository: deps.tenancyRepository,
+        partyRepository: deps.partyRepository,
+        staffDirectoryRepository: deps.staffDirectoryRepository,
+        idGenerator: deps.idGenerator,
+        clock: deps.clock,
+      },
+      actor,
+      asInspectionId(parsedId.data),
+      {
+        role: parsed.data.role,
+        signerType: parsed.data.signerType,
+        ...(parsed.data.signerUserId !== undefined
+          ? { signerUserId: parsed.data.signerUserId }
+          : {}),
+        ...(parsed.data.signerPartyId !== undefined
+          ? { signerPartyId: parsed.data.signerPartyId }
+          : {}),
+        ...(parsed.data.externalSignerName !== undefined
+          ? { externalSignerName: parsed.data.externalSignerName }
+          : {}),
+        signatureDocumentVersionId: asDocumentVersionId(
+          parsed.data.signatureDocumentVersionId,
+        ),
+        ...(parsed.data.signedAt !== undefined
+          ? { signedAt: parsed.data.signedAt }
+          : {}),
+      },
+    );
+
+    return json({ data: toInspectionSignatureResponse(signature) }, 201);
+  }
+
+  const unlockMatch = /^\/inspections\/([^/]+)\/unlock$/.exec(path);
+  if (method === 'POST' && unlockMatch) {
+    const parsedId = entityIdSchema.safeParse(unlockMatch[1]);
+    const parsed = unlockInspectionRequestSchema.safeParse(
+      await requestJson(request),
+    );
+    if (!parsedId.success || !parsed.success) return validationFailure();
+
+    const inspection = await unlockInspectionCommand(
+      {
+        inspectionRepository: deps.inspectionRepository,
+        idGenerator: deps.idGenerator,
+        clock: deps.clock,
+      },
+      actor,
+      asInspectionId(parsedId.data),
+      parsed.data.expectedVersion,
+      parsed.data.reason,
+    );
+
+    return json({ data: toInspectionResponse(inspection) });
+  }
+
+  const finalizeMatch = /^\/inspections\/([^/]+)\/finalize$/.exec(path);
+  if (method === 'POST' && finalizeMatch) {
+    const parsedId = entityIdSchema.safeParse(finalizeMatch[1]);
+    const parsed = expectedInspectionVersionRequestSchema.safeParse(
+      await requestJson(request),
+    );
+    if (!parsedId.success || !parsed.success) return validationFailure();
+
+    const result = await finalizeInspectionCommand(
+      {
+        inspectionRepository: deps.inspectionRepository,
+        documentRepository: deps.documentRepository,
+        fileStorage: deps.fileStorage,
+        pdfPort: deps.pdfPort,
+        idGenerator: deps.idGenerator,
+        clock: deps.clock,
+      },
+      actor,
+      asInspectionId(parsedId.data),
+      parsed.data.expectedVersion,
+    );
+
+    return json({
+      data: {
+        inspection: toInspectionResponse(result.inspection),
+        finalization: toInspectionFinalizationResponse(result.finalization),
+        finalReport: toDocumentVersionResponse(result.finalReport),
+      },
+    });
   }
 
   return null;
