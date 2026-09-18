@@ -394,6 +394,7 @@ export function toAssetResponse(asset: Asset): AssetResponse {
     id: asset.id,
     code: asset.code,
     name: asset.name,
+    propertyId: asset.propertyId,
     unitId: asset.unitId,
     spaceId: asset.spaceId,
     manufacturer: asset.manufacturer,
