@@ -238,6 +238,41 @@ before update on public.lease_amendments
 for each row
 execute function public.prevent_signed_lease_amendment_content_update();
 
+create or replace function public.validate_tenancy_term_version_source()
+returns trigger
+language plpgsql
+as $
+declare
+  source_tenancy_id uuid;
+begin
+  if new.source_type = 'agreement' then
+    select tenancy_id
+    into source_tenancy_id
+    from public.lease_agreements
+    where id = new.source_agreement_id;
+  else
+    select a.tenancy_id
+    into source_tenancy_id
+    from public.lease_amendments am
+    join public.lease_agreements a on a.id = am.agreement_id
+    where am.id = new.source_amendment_id;
+  end if;
+
+  if source_tenancy_id is null or source_tenancy_id <> new.tenancy_id then
+    raise exception 'Term source must belong to the same tenancy.'
+      using errcode = '23514',
+            constraint = 'tenancy_term_versions_source_tenancy_match';
+  end if;
+
+  return new;
+end;
+$;
+
+create trigger tenancy_term_versions_source_tenancy_match_trg
+before insert on public.tenancy_term_versions
+for each row
+execute function public.validate_tenancy_term_version_source();
+
 create or replace function public.prevent_tenancy_term_version_mutation()
 returns trigger
 language plpgsql
