@@ -321,12 +321,17 @@ begin
               constraint = 'inspection_response_type_match';
     end if;
   elsif expected_type = 'multiselect' then
+    if jsonb_typeof(new.value) <> 'array' then
+      raise exception 'Inspection multiselect answer must be an array.'
+        using errcode = '23514',
+              constraint = 'inspection_response_type_match';
+    end if;
+
     select count(*) <> count(distinct option_value)
       into has_duplicate_multiselect
       from jsonb_array_elements_text(new.value) as selected(option_value);
 
-    if jsonb_typeof(new.value) <> 'array'
-       or has_duplicate_multiselect
+    if has_duplicate_multiselect
        or exists (
          select 1
          from jsonb_array_elements(new.value) element
