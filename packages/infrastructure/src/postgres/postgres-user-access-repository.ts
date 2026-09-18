@@ -7,29 +7,13 @@ import {
   type UserAccessRepository,
   type VerifiedIdentity,
 } from '@portfolio/application';
-import { asUserId } from '@portfolio/domain';
+import { asUserId, type UserId } from '@portfolio/domain';
 
 type Sql = ReturnType<typeof postgres>;
 
 interface ActorRow {
   id: string;
   role: StaffRole;
-  async getActiveStaffById(
-    userId: import('@portfolio/domain').UserId,
-  ): Promise<StaffDirectoryEntry | null> {
-    const rows = await this.sql<ActorRow[]>`
-      select id, role
-      from public.app_users
-      where id = ${userId}
-        and status = 'active'
-      limit 1
-    `;
-
-    const row = rows[0];
-    return row
-      ? { userId: asUserId(row.id), role: row.role }
-      : null;
-  }
 }
 
 export class PostgresUserAccessRepository
@@ -54,5 +38,22 @@ export class PostgresUserAccessRepository
       userId: asUserId(row.id),
       role: row.role,
     };
+  }
+
+  async getActiveStaffById(
+    userId: UserId,
+  ): Promise<StaffDirectoryEntry | null> {
+    const rows = await this.sql<ActorRow[]>`
+      select id, role
+      from public.app_users
+      where id = ${userId}
+        and status = 'active'
+      limit 1
+    `;
+
+    const row = rows[0];
+    return row
+      ? { userId: asUserId(row.id), role: row.role }
+      : null;
   }
 }
