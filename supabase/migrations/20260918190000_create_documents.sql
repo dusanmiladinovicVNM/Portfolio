@@ -250,6 +250,32 @@ before insert or update on public.document_links
 for each row
 execute function public.validate_signed_original_document_link();
 
+create or replace function public.prevent_signed_original_document_link_mutation()
+returns trigger
+language plpgsql
+as $
+begin
+  if old.relation = 'signed_original'
+     or (tg_op = 'UPDATE' and new.relation = 'signed_original')
+  then
+    raise exception 'signed_original document links are immutable.'
+      using errcode = '23514',
+            constraint = 'document_links_signed_original_immutable';
+  end if;
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+
+  return new;
+end;
+$;
+
+create trigger document_links_signed_original_immutable_trg
+before update or delete on public.document_links
+for each row
+execute function public.prevent_signed_original_document_link_mutation();
+
 alter table public.documents enable row level security;
 alter table public.document_versions enable row level security;
 alter table public.document_links enable row level security;
