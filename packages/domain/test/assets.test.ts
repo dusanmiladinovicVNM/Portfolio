@@ -3,6 +3,7 @@ import {
   asAssetId,
   asAssetIdentifierId,
   asAssetReplacementId,
+  asPropertyId,
   asSpaceId,
   asUnitId,
   asUserId,
@@ -10,6 +11,7 @@ import {
   createAsset,
   createAssetReplacement,
   markAssetReplaced,
+  updateAssetMetadata,
 } from '../src/index.js';
 
 function asset(overrides: Partial<Parameters<typeof createAsset>[0]> = {}) {
@@ -17,6 +19,7 @@ function asset(overrides: Partial<Parameters<typeof createAsset>[0]> = {}) {
     id: asAssetId('c1000000-0000-4000-8000-000000000001'),
     code: 'ASSET-1',
     name: 'Heat pump',
+    propertyId: asPropertyId('c1000000-0000-4000-8000-000000000020'),
     unitId: asUnitId('c1000000-0000-4000-8000-000000000002'),
     spaceId: asSpaceId('c1000000-0000-4000-8000-000000000003'),
     manufacturer: 'Example',
@@ -85,6 +88,43 @@ describe('Asset Registry domain', () => {
     expect(() => changeAssetStatus(replaced, 'inactive')).toThrowError(/cannot transition/);
   });
 
+  it('allows correctable metadata without changing physical identity or placement', () => {
+    const created = asset();
+    const corrected = updateAssetMetadata(created, {
+      manufacturer: 'Bosch',
+      model: 'HP-2',
+      name: 'Corrected heat pump',
+    });
+
+    expect(corrected).toMatchObject({
+      id: created.id,
+      code: created.code,
+      propertyId: created.propertyId,
+      unitId: created.unitId,
+      spaceId: created.spaceId,
+      manufacturer: 'Bosch',
+      model: 'HP-2',
+      name: 'Corrected heat pump',
+      version: 2,
+    });
+  });
+
+  it('supports Property-only placement without a synthetic Unit', () => {
+    const buildingAsset = asset({
+      id: asAssetId('c1000000-0000-4000-8000-000000000030'),
+      code: 'ASSET-BUILDING',
+      unitId: null,
+      spaceId: null,
+      identifiers: [],
+    });
+
+    expect(buildingAsset).toMatchObject({
+      propertyId: asPropertyId('c1000000-0000-4000-8000-000000000020'),
+      unitId: null,
+      spaceId: null,
+    });
+  });
+
   it('represents replacement as two physical identities in one Unit', () => {
     const predecessor = asset();
     const successor = asset({
@@ -115,11 +155,12 @@ describe('Asset Registry domain', () => {
           id: asAssetId('c1000000-0000-4000-8000-000000000015'),
           code: 'ASSET-3',
           unitId: asUnitId('c1000000-0000-4000-8000-000000000016'),
+          spaceId: null,
           identifiers: [],
         }),
         replacedByUserId: asUserId('c1000000-0000-4000-8000-000000000013'),
         replacedAt: '2026-09-22T10:00:00.000Z',
       }),
-    ).toThrowError(/same Unit/);
+    ).toThrowError(/exact current placement/);
   });
 });
