@@ -1,11 +1,13 @@
 import type postgres from 'postgres';
 import {
   type Actor,
+  type StaffDirectoryEntry,
+  type StaffDirectoryRepository,
   type StaffRole,
   type UserAccessRepository,
   type VerifiedIdentity,
 } from '@portfolio/application';
-import { asUserId } from '@portfolio/domain';
+import { asUserId, type UserId } from '@portfolio/domain';
 
 type Sql = ReturnType<typeof postgres>;
 
@@ -14,7 +16,8 @@ interface ActorRow {
   role: StaffRole;
 }
 
-export class PostgresUserAccessRepository implements UserAccessRepository {
+export class PostgresUserAccessRepository
+  implements UserAccessRepository, StaffDirectoryRepository {
   constructor(private readonly sql: Sql) {}
 
   async findActorByIdentity(identity: VerifiedIdentity): Promise<Actor | null> {
@@ -35,5 +38,22 @@ export class PostgresUserAccessRepository implements UserAccessRepository {
       userId: asUserId(row.id),
       role: row.role,
     };
+  }
+
+  async getActiveStaffById(
+    userId: UserId,
+  ): Promise<StaffDirectoryEntry | null> {
+    const rows = await this.sql<ActorRow[]>`
+      select id, role
+      from public.app_users
+      where id = ${userId}
+        and status = 'active'
+      limit 1
+    `;
+
+    const row = rows[0];
+    return row
+      ? { userId: asUserId(row.id), role: row.role }
+      : null;
   }
 }

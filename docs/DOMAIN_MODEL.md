@@ -66,7 +66,34 @@ A legal agreement associated with a Tenancy. Signed versions are immutable. Chan
 
 ### Inspection
 
-A dated condition/handover event for a Unit and optionally a Tenancy. It references master data rather than owning copies of tenant/property identity.
+One dated condition/handover event for exactly one Unit and optionally one Tenancy from that same Unit.
+
+```text
+Inspection
+  ├─ schemaVersionId ──→ immutable InspectionSchemaVersion
+  ├─ SectionState[]       per-section optimistic revision
+  ├─ Response[]           one typed form answer per schema item
+  └─ Finding[]            observed issue/condition during this inspection
+```
+
+The Inspection lifecycle is currently:
+
+```text
+draft → in_progress → locked → finalized   (#12 completes finalization)
+   └──────────────→ cancelled
+```
+
+`Inspection.version` protects lifecycle/assignment state. It is deliberately **not** used for section autosave. Each section has its own revision so two field edits in different sections do not conflict unnecessarily and the later offline workflow can reconcile at the correct grain.
+
+An Inspection references one exact published schema version. Publishing freezes the schema version's sections/items/conditions. A later schema version never rewrites an existing Inspection.
+
+Responses are schema-driven evidence, not automatically canonical property facts. A meter value typed into a handover form remains an InspectionResponse until the Meters domain records the corresponding MeterReading. The same boundary applies to keys, assets and other operational facts.
+
+A Finding is an observed condition/problem. It is not yet an Issue or WorkOrder; PR #18 may promote/link a finding into maintenance workflow without changing the historical inspection evidence.
+
+The inspector assignment is explicit and separate from `createdByUserId`. An inspector may work only on inspections assigned to them; admin/manager roles have broader operational access.
+
+Photos, signatures, immutable final snapshot and generated PDF remain PR #12 scope.
 
 ### Asset
 

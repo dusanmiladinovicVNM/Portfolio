@@ -4,6 +4,7 @@ import type { FileStoragePort } from '@portfolio/application';
 import { createPortfolioHttpHandler } from '@portfolio/http';
 import {
   PostgresDocumentRepository,
+  PostgresInspectionRepository,
   PostgresLeaseRepository,
   PostgresOwnershipRepository,
   PostgresPartyRepository,
@@ -39,6 +40,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
   const tenancyRepository = new PostgresTenancyRepository(sql);
   const userAccessRepository = new PostgresUserAccessRepository(sql);
   const documentRepository = new PostgresDocumentRepository(sql);
+  const inspectionRepository = new PostgresInspectionRepository(sql);
 
   const applicationHandler = createPortfolioHttpHandler(
     {
@@ -48,6 +50,8 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
       tenancyRepository,
       leaseRepository,
       documentRepository,
+      inspectionRepository,
+      staffDirectoryRepository: userAccessRepository,
       fileStorage: config.fileStorage,
       clock: new SystemClock(),
       userAccessRepository,

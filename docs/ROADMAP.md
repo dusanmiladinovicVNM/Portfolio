@@ -17,11 +17,12 @@ The order is dependency-driven. A planned PR may be split if evidence shows that
 | #7 | Core Hardening A — Unit/Tenancy temporal truth | DONE |
 | #8 | Core Hardening B — lease successor chain + bounded term history | DONE |
 | #9 | Core Boundary Hardening — DTOs, routing, lockfile, transaction rule | DONE |
-| #10 | Documents foundation — versioned evidence + FileStoragePort | IN PROGRESS |
+| #10 | Documents foundation — versioned evidence + FileStoragePort | DONE |
+| #11 | Inspection domain backbone | IN PROGRESS |
 
 ## Evidence and operational domains
 
-### PR #10 — Documents foundation (IN PROGRESS)
+### PR #10 — Documents foundation (DONE)
 
 - Document
 - DocumentVersion
@@ -33,7 +34,7 @@ The order is dependency-driven. A planned PR may be split if evidence shows that
 
 Binary storage must not become business identity.
 
-### PR #11 — Inspection domain backbone
+### PR #11 — Inspection domain backbone (IN PROGRESS)
 
 Use HandoverApp as a feature bank only.
 

@@ -38,6 +38,10 @@ import {
   InMemoryDocumentRepository,
   MemoryFileStorage,
 } from './document-test-deps.js';
+import {
+  InMemoryInspectionRepository,
+  InMemoryStaffDirectoryRepository,
+} from './inspection-test-deps.js';
 
 const adminIdentity: VerifiedIdentity = {
   provider: 'supabase',
@@ -278,6 +282,8 @@ function buildHandler() {
     tenancyRepository,
     leaseRepository: new EmptyLeaseRepository(),
     documentRepository: new InMemoryDocumentRepository(),
+    inspectionRepository: new InMemoryInspectionRepository(),
+    staffDirectoryRepository: new InMemoryStaffDirectoryRepository(),
     fileStorage: new MemoryFileStorage(),
     clock: new FixedClock(),
     userAccessRepository: new InMemoryAccessRepository(),
