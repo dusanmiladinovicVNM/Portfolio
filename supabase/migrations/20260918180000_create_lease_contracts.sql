@@ -206,7 +206,7 @@ begin
 
   return new;
 end;
-$;
+$$;
 
 create trigger lease_agreement_parties_signed_immutable_trg
 before insert or update or delete on public.lease_agreement_parties
@@ -245,7 +245,7 @@ execute function public.prevent_signed_lease_amendment_content_update();
 create or replace function public.validate_tenancy_term_version_source()
 returns trigger
 language plpgsql
-as $
+as $$
 declare
   source_tenancy_id uuid;
 begin
@@ -270,7 +270,7 @@ begin
 
   return new;
 end;
-$;
+$$;
 
 create trigger tenancy_term_versions_source_tenancy_match_trg
 before insert on public.tenancy_term_versions
