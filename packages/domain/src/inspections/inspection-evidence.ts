@@ -272,7 +272,8 @@ export function createInspectionUnlockRecord(
 }
 
 export function createInspectionFinalSnapshot(
-  inspection: Inspection,
+  sourceInspection: Inspection,
+  finalizedInspection: Inspection,
   schema: InspectionSchemaVersion,
   responses: readonly InspectionResponse[],
   findings: readonly InspectionFinding[],
@@ -284,22 +285,33 @@ export function createInspectionFinalSnapshot(
     readonly createdAt: string;
   },
 ): InspectionFinalSnapshot {
-  if (inspection.status !== 'locked') {
+  if (sourceInspection.status !== 'locked') {
     throw new DomainError(
       'INSPECTION_FINALIZATION_STATE_INVALID',
       'Only a locked inspection can be snapshotted for finalization.',
+    );
+  }
+  if (
+    finalizedInspection.id !== sourceInspection.id ||
+    finalizedInspection.status !== 'finalized' ||
+    finalizedInspection.version !== sourceInspection.version + 1 ||
+    finalizedInspection.contentRevision !== sourceInspection.contentRevision
+  ) {
+    throw new DomainError(
+      'INSPECTION_FINAL_SNAPSHOT_HEADER_INVALID',
+      'Final snapshot must contain the finalized header derived from the locked source revision.',
     );
   }
   assertInspectionSignaturePolicySatisfied(schema, signatures);
 
   return {
     id: input.id,
-    inspectionId: inspection.id,
+    inspectionId: sourceInspection.id,
     snapshotVersion: 1,
-    inspectionVersion: inspection.version,
-    contentRevision: inspection.contentRevision,
+    inspectionVersion: sourceInspection.version,
+    contentRevision: sourceInspection.contentRevision,
     payload: {
-      inspection: { ...inspection },
+      inspection: { ...finalizedInspection },
       schema,
       responses: responses.map((response) => ({ ...response })),
       findings: findings.map((finding) => ({ ...finding })),

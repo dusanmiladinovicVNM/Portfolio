@@ -704,8 +704,10 @@ export async function finalizeInspectionCommand(
   ]);
 
   const now = deps.clock.now();
+  const updated = finalizeInspection(current, now);
   const snapshot = createInspectionFinalSnapshot(
     current,
+    updated,
     schema,
     responses,
     findings,
@@ -717,7 +719,6 @@ export async function finalizeInspectionCommand(
       createdAt: now,
     },
   );
-  const updated = finalizeInspection(current, now);
 
   await deps.inspectionRepository.finalizeInspection(
     current,

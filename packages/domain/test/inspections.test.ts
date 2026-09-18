@@ -177,6 +177,7 @@ describe('Inspection schema and lifecycle', () => {
     expect(() =>
       createInspectionFinalSnapshot(
         locked,
+        finalizeInspection(locked, '2026-09-18T21:10:00.000Z'),
         schema,
         [],
         [],
@@ -205,8 +206,13 @@ describe('Inspection schema and lifecycle', () => {
       signedAt: '2026-09-18T21:06:00.000Z',
     });
 
+    const finalizedHeader = finalizeInspection(
+      locked,
+      '2026-09-18T21:10:00.000Z',
+    );
     const snapshot = createInspectionFinalSnapshot(
       locked,
+      finalizedHeader,
       schema,
       [],
       [],
@@ -225,12 +231,9 @@ describe('Inspection schema and lifecycle', () => {
       'tenant',
     ]);
 
-    const finalized = finalizeInspection(
-      locked,
-      '2026-09-18T21:10:00.000Z',
-    );
-    expect(finalized).toMatchObject({
+    expect(snapshot.payload.inspection).toMatchObject({
       status: 'finalized',
+      finalizedAt: '2026-09-18T21:10:00.000Z',
       version: locked.version + 1,
     });
   });
