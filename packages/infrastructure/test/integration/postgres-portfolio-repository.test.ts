@@ -1742,6 +1742,8 @@ describe('PostgreSQL infrastructure', () => {
     const finalized = await finalizeInspectionCommand(
       {
         inspectionRepository,
+        documentRepository,
+        fileStorage: evidenceFileStorage,
         idGenerator: ids,
         clock: { now: () => '2026-09-21T08:50:00.000Z' },
       },
@@ -1751,9 +1753,31 @@ describe('PostgreSQL infrastructure', () => {
     );
     expect(finalized.inspection.status).toBe('finalized');
     expect(finalized.snapshot.payload.evidence).toHaveLength(1);
+    expect(finalized.snapshot.payload.evidence[0]).toMatchObject({
+      documentVersion: {
+        id: 'a3000000-0000-4000-8000-000000000001',
+        fileName: 'photo.jpg',
+        mimeType: 'image/jpeg',
+        byteSize: 10,
+        sha256: '1111111111111111111111111111111111111111111111111111111111111111',
+      },
+    });
     expect(
-      finalized.snapshot.payload.signatures.map((signature) => signature.signerRole),
-    ).toEqual(['landlord', 'tenant']);
+      finalized.snapshot.payload.signatures.map(
+        (item) => item.signature.signerRole,
+      ),
+    ).toEqual(['landlord', 'landlord', 'tenant']);
+    expect(
+      finalized.snapshot.payload.signatures.map(
+        (item) => item.signature.invalidatedAt !== null,
+      ),
+    ).toEqual([true, false, false]);
+    expect(finalized.snapshot.payload.unlockHistory).toHaveLength(1);
+    expect(finalized.snapshot.payload.unlockHistory[0]).toMatchObject({
+      reason: 'Correct handover details',
+      previousVersion: beforeUnlock.version,
+      newVersion: unlocked.version,
+    });
 
     await expect(
       sql`

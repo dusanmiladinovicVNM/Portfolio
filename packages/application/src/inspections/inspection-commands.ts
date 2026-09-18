@@ -764,7 +764,10 @@ export async function finalizeInspectionCommand(
   deps: Pick<
     InspectionDependencies,
     'inspectionRepository' | 'idGenerator' | 'clock'
-  >,
+  > & {
+    readonly documentRepository: DocumentRepository;
+    readonly fileStorage: FileStoragePort;
+  },
   actor: Actor,
   id: InspectionId,
   expectedVersion: number,
@@ -787,12 +790,54 @@ export async function finalizeInspectionCommand(
     current.schemaVersionId,
   );
 
-  const [responses, findings, evidence, signatures] = await Promise.all([
-    deps.inspectionRepository.listResponses(id),
-    deps.inspectionRepository.listFindings(id),
-    deps.inspectionRepository.listEvidence(id),
-    deps.inspectionRepository.listSignatures(id),
-  ]);
+  const [responses, findings, evidence, signatures, unlockHistory] =
+    await Promise.all([
+      deps.inspectionRepository.listResponses(id),
+      deps.inspectionRepository.listFindings(id),
+      deps.inspectionRepository.listEvidence(id),
+      deps.inspectionRepository.listSignatures(id),
+      deps.inspectionRepository.listUnlocks(id),
+    ]);
+
+  const canonicalEvidence = evidence.filter(
+    (item) => item.kind !== 'final_report',
+  );
+  const evidenceManifest = await Promise.all(
+    canonicalEvidence.map(async (item) => {
+      const version = await deps.documentRepository.getVersionById(
+        item.documentVersionId,
+      );
+      if (!version) {
+        throw new DomainError(
+          'DOCUMENT_VERSION_NOT_FOUND',
+          'Inspection evidence references a missing document version.',
+        );
+      }
+      await assertDocumentVersionStorageIntegrity(deps, version);
+      return { evidence: item, documentVersion: version };
+    }),
+  );
+  const signatureManifest = await Promise.all(
+    signatures.map(async (signature) => {
+      const version = await deps.documentRepository.getVersionById(
+        signature.signatureDocumentVersionId,
+      );
+      if (!version) {
+        throw new DomainError(
+          'DOCUMENT_VERSION_NOT_FOUND',
+          'Inspection signature references a missing document version.',
+        );
+      }
+      if (version.status !== 'final') {
+        throw new DomainError(
+          'INSPECTION_SIGNATURE_DOCUMENT_NOT_FINAL',
+          'Final snapshot requires final signature document versions.',
+        );
+      }
+      await assertDocumentVersionStorageIntegrity(deps, version);
+      return { signature, documentVersion: version };
+    }),
+  );
 
   const now = deps.clock.now();
   const updated = finalizeInspection(current, now);
@@ -802,8 +847,9 @@ export async function finalizeInspectionCommand(
     schema,
     responses,
     findings,
-    evidence.filter((item) => item.kind !== 'final_report'),
-    signatures,
+    evidenceManifest,
+    signatureManifest,
+    unlockHistory,
     {
       id: asInspectionFinalSnapshotId(deps.idGenerator.next()),
       createdByUserId: actor.userId,

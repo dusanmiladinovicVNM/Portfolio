@@ -11,6 +11,7 @@ import type {
   PartyId,
   UserId,
 } from '../shared/entity-id.js';
+import type { DocumentVersion } from '../documents/document.js';
 import type {
   Inspection,
   InspectionFinding,
@@ -68,13 +69,24 @@ export interface InspectionUnlockRecord {
   readonly newContentRevision: number;
 }
 
+export interface InspectionSnapshotEvidence {
+  readonly evidence: InspectionEvidence;
+  readonly documentVersion: DocumentVersion;
+}
+
+export interface InspectionSnapshotSignature {
+  readonly signature: InspectionSignature;
+  readonly documentVersion: DocumentVersion;
+}
+
 export interface InspectionFinalSnapshotPayload {
   readonly inspection: Inspection;
   readonly schema: InspectionSchemaVersion;
   readonly responses: readonly InspectionResponse[];
   readonly findings: readonly InspectionFinding[];
-  readonly evidence: readonly InspectionEvidence[];
-  readonly signatures: readonly InspectionSignature[];
+  readonly evidence: readonly InspectionSnapshotEvidence[];
+  readonly signatures: readonly InspectionSnapshotSignature[];
+  readonly unlockHistory: readonly InspectionUnlockRecord[];
 }
 
 export interface InspectionFinalSnapshot {
@@ -277,8 +289,9 @@ export function createInspectionFinalSnapshot(
   schema: InspectionSchemaVersion,
   responses: readonly InspectionResponse[],
   findings: readonly InspectionFinding[],
-  evidenceItems: readonly InspectionEvidence[],
-  signatures: readonly InspectionSignature[],
+  evidenceItems: readonly InspectionSnapshotEvidence[],
+  signatures: readonly InspectionSnapshotSignature[],
+  unlockHistory: readonly InspectionUnlockRecord[],
   input: {
     readonly id: InspectionFinalSnapshotId;
     readonly createdByUserId: UserId;
@@ -302,7 +315,10 @@ export function createInspectionFinalSnapshot(
       'Final snapshot must contain the finalized header derived from the locked source revision.',
     );
   }
-  assertInspectionSignaturePolicySatisfied(schema, signatures);
+  assertInspectionSignaturePolicySatisfied(
+    schema,
+    signatures.map((item) => item.signature),
+  );
 
   return {
     id: input.id,
@@ -315,10 +331,15 @@ export function createInspectionFinalSnapshot(
       schema,
       responses: responses.map((response) => ({ ...response })),
       findings: findings.map((finding) => ({ ...finding })),
-      evidence: evidenceItems.map((item) => ({ ...item })),
-      signatures: activeInspectionSignatures(signatures).map((signature) => ({
-        ...signature,
+      evidence: evidenceItems.map((item) => ({
+        evidence: { ...item.evidence },
+        documentVersion: { ...item.documentVersion },
       })),
+      signatures: signatures.map((item) => ({
+        signature: { ...item.signature },
+        documentVersion: { ...item.documentVersion },
+      })),
+      unlockHistory: unlockHistory.map((record) => ({ ...record })),
     },
     createdByUserId: input.createdByUserId,
     createdAt: instant(input.createdAt, 'createdAt'),

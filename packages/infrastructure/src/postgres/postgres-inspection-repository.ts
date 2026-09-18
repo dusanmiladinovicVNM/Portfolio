@@ -131,6 +131,19 @@ interface SignatureRow {
   invalidation_reason: string | null;
 }
 
+interface UnlockRow {
+  id: string;
+  inspection_id: string;
+  unlocked_by_user_id: string;
+  unlocked_at: string | Date;
+  reason: string;
+  previous_locked_at: string | Date;
+  previous_version: number;
+  previous_content_revision: number;
+  new_version: number;
+  new_content_revision: number;
+}
+
 interface SnapshotRow {
   id: string;
   inspection_id: string;
@@ -172,6 +185,30 @@ type MutableJson =
   | null
   | MutableJson[]
   | { [key: string]: MutableJson };
+
+function toMutableJson(value: unknown): MutableJson {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) =>
+      entry === undefined ? null : toMutableJson(entry),
+    );
+  }
+  if (typeof value === 'object') {
+    const result: { [key: string]: MutableJson } = {};
+    for (const [key, entry] of Object.entries(value)) {
+      if (entry !== undefined) result[key] = toMutableJson(entry);
+    }
+    return result;
+  }
+  throw new Error('Snapshot payload contains a non-JSON value.');
+}
 
 function answerToJson(value: InspectionAnswerValue): MutableJson {
   if (typeof value === 'string' || typeof value === 'boolean') return value;
@@ -283,6 +320,21 @@ function mapSignature(row: SignatureRow): InspectionSignature {
     signedAt: instant(row.signed_at)!,
     invalidatedAt: instant(row.invalidated_at),
     invalidationReason: row.invalidation_reason,
+  };
+}
+
+function mapUnlock(row: UnlockRow): InspectionUnlockRecord {
+  return {
+    id: asInspectionUnlockId(row.id),
+    inspectionId: asInspectionId(row.inspection_id),
+    unlockedByUserId: asUserId(row.unlocked_by_user_id),
+    unlockedAt: instant(row.unlocked_at)!,
+    reason: row.reason,
+    previousLockedAt: instant(row.previous_locked_at)!,
+    previousVersion: row.previous_version,
+    previousContentRevision: row.previous_content_revision,
+    newVersion: row.new_version,
+    newContentRevision: row.new_content_revision,
   };
 }
 
@@ -910,6 +962,21 @@ export class PostgresInspectionRepository implements InspectionRepository {
     return rows.map(mapSignature);
   }
 
+  async listUnlocks(
+    inspectionId: InspectionId,
+  ): Promise<readonly InspectionUnlockRecord[]> {
+    const rows = await this.sql<UnlockRow[]>`
+      select
+        id, inspection_id, unlocked_by_user_id, unlocked_at, reason,
+        previous_locked_at, previous_version, previous_content_revision,
+        new_version, new_content_revision
+      from public.inspection_unlocks
+      where inspection_id = ${inspectionId}
+      order by unlocked_at, id
+    `;
+    return rows.map(mapUnlock);
+  }
+
   async unlockInspection(
     current: Inspection,
     updated: Inspection,
@@ -991,7 +1058,7 @@ export class PostgresInspectionRepository implements InspectionRepository {
             ${snapshot.id}, ${snapshot.inspectionId},
             ${snapshot.snapshotVersion}, ${snapshot.inspectionVersion},
             ${snapshot.contentRevision},
-            ${this.sql.json(snapshot.payload as unknown as MutableJson)},
+            ${this.sql.json(toMutableJson(snapshot.payload))},
             ${snapshot.createdByUserId}, ${snapshot.createdAt}
           )
         `;

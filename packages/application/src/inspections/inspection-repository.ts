@@ -66,6 +66,9 @@ export interface InspectionRepository {
   listSignatures(
     inspectionId: InspectionId,
   ): Promise<readonly InspectionSignature[]>;
+  listUnlocks(
+    inspectionId: InspectionId,
+  ): Promise<readonly InspectionUnlockRecord[]>;
 
   unlockInspection(
     current: Inspection,

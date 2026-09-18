@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  asDocumentId,
   asDocumentVersionId,
   asInspectionFinalSnapshotId,
   asInspectionFindingId,
@@ -75,6 +76,21 @@ const schema = createInspectionSchemaVersion({
       ],
     },
   ],
+});
+
+const signatureVersion = (
+  id: ReturnType<typeof asDocumentVersionId>,
+  documentIdValue: string,
+) => ({
+  id,
+  documentId: asDocumentId(documentIdValue),
+  versionNumber: 1,
+  fileName: 'signature.png',
+  mimeType: 'image/png',
+  byteSize: 42,
+  sha256: 'a'.repeat(64),
+  status: 'final' as const,
+  finalizedAt: '2026-09-18T21:00:00.000Z',
 });
 
 const inspection = createInspection({
@@ -182,7 +198,14 @@ describe('Inspection schema and lifecycle', () => {
         [],
         [],
         [],
-        [landlord],
+        [{
+          signature: landlord,
+          documentVersion: signatureVersion(
+            landlord.signatureDocumentVersionId,
+            '73000000-0000-4000-8000-000000000012',
+          ),
+        }],
+        [],
         {
           id: asInspectionFinalSnapshotId(
             '73000000-0000-4000-8000-000000000003',
@@ -217,7 +240,16 @@ describe('Inspection schema and lifecycle', () => {
       [],
       [],
       [],
-      [landlord, tenant],
+      [landlord, tenant].map((signature, index) => ({
+        signature,
+        documentVersion: signatureVersion(
+          signature.signatureDocumentVersionId,
+          index === 0
+            ? '73000000-0000-4000-8000-000000000013'
+            : '73000000-0000-4000-8000-000000000014',
+        ),
+      })),
+      [],
       {
         id: asInspectionFinalSnapshotId(
           '73000000-0000-4000-8000-000000000006',
@@ -226,10 +258,13 @@ describe('Inspection schema and lifecycle', () => {
         createdAt: '2026-09-18T21:10:00.000Z',
       },
     );
-    expect(snapshot.payload.signatures.map((item) => item.signerRole)).toEqual([
-      'landlord',
-      'tenant',
-    ]);
+    expect(
+      snapshot.payload.signatures.map((item) => item.signature.signerRole),
+    ).toEqual(['landlord', 'tenant']);
+    expect(
+      snapshot.payload.signatures.map((item) => item.documentVersion.sha256),
+    ).toEqual(['a'.repeat(64), 'a'.repeat(64)]);
+    expect(snapshot.payload.unlockHistory).toEqual([]);
 
     expect(snapshot.payload.inspection).toMatchObject({
       status: 'finalized',

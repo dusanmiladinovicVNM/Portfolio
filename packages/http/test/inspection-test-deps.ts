@@ -285,6 +285,10 @@ export class InMemoryInspectionRepository implements InspectionRepository {
     this.inspections.set(current.id, updated);
   }
 
+  async listUnlocks(inspectionId: InspectionId) {
+    return this.unlocks.filter((record) => record.inspectionId === inspectionId);
+  }
+
   async getFinalSnapshot(inspectionId: InspectionId) {
     return this.snapshots.get(inspectionId) ?? null;
   }
