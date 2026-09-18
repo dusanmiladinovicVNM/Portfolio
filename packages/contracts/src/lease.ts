@@ -132,3 +132,6 @@ export const tenancyTermVersionResponseSchema = z.object({
 });
 
 export type LeaseTermsRequest = z.infer<typeof leaseTermsRequestSchema>;
+export type LeaseAgreementResponse = z.infer<typeof leaseAgreementResponseSchema>;
+export type LeaseAmendmentResponse = z.infer<typeof leaseAmendmentResponseSchema>;
+export type TenancyTermVersionResponse = z.infer<typeof tenancyTermVersionResponseSchema>;
