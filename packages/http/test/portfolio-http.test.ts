@@ -462,7 +462,6 @@ describe('Portfolio HTTP boundary', () => {
           expectedVersion: 2,
           code: 'ASSET-HTTP-002',
           name: 'Replacement refrigerator',
-          spaceId: space.id,
           manufacturer: 'Bosch',
           model: 'KGN49',
           identifiers: [
