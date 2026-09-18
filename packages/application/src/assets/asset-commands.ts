@@ -1,5 +1,6 @@
 import {
   DomainError,
+  GLOBALLY_UNIQUE_ASSET_IDENTIFIER_TYPES,
   asAssetId,
   asAssetIdentifierId,
   asAssetReplacementId,
@@ -7,11 +8,14 @@ import {
   createAsset,
   createAssetReplacement,
   markAssetReplaced,
+  updateAssetMetadata,
   type Asset,
   type AssetId,
   type AssetIdentifierType,
   type AssetReplacement,
+  type GloballyUniqueAssetIdentifierType,
   type MutableAssetStatus,
+  type PropertyId,
   type SpaceId,
   type UnitId,
 } from '@portfolio/domain';
@@ -30,18 +34,25 @@ export interface AssetIdentifierCommandInput {
 export interface CreateAssetCommandInput {
   readonly code: string;
   readonly name: string;
-  readonly unitId: UnitId;
+  readonly propertyId: PropertyId;
+  readonly unitId?: UnitId | null;
   readonly spaceId?: SpaceId | null;
   readonly manufacturer?: string | null;
   readonly model?: string | null;
   readonly identifiers?: readonly AssetIdentifierCommandInput[];
 }
 
+export interface UpdateAssetMetadataCommandInput {
+  readonly expectedVersion: number;
+  readonly name?: string;
+  readonly manufacturer?: string | null;
+  readonly model?: string | null;
+}
+
 export interface ReplaceAssetCommandInput {
   readonly expectedVersion: number;
   readonly code: string;
   readonly name: string;
-  readonly spaceId?: SpaceId | null;
   readonly manufacturer?: string | null;
   readonly model?: string | null;
   readonly identifiers?: readonly AssetIdentifierCommandInput[];
@@ -73,11 +84,33 @@ function assertExpectedVersion(asset: Asset, expectedVersion: number): void {
 
 async function assertPlacement(
   repository: PortfolioRepository,
-  unitId: UnitId,
+  propertyId: PropertyId,
+  unitId: UnitId | null | undefined,
   spaceId: SpaceId | null | undefined,
 ): Promise<void> {
-  if (!(await repository.getUnitById(unitId))) {
+  if (!(await repository.getPropertyById(propertyId))) {
+    throw new DomainError('PROPERTY_NOT_FOUND', 'Property not found.');
+  }
+
+  if (unitId === undefined || unitId === null) {
+    if (spaceId !== undefined && spaceId !== null) {
+      throw new DomainError(
+        'ASSET_SPACE_REQUIRES_UNIT',
+        'Asset Space placement requires a Unit placement.',
+      );
+    }
+    return;
+  }
+
+  const unit = await repository.getUnitById(unitId);
+  if (!unit) {
     throw new DomainError('UNIT_NOT_FOUND', 'Unit not found.');
+  }
+  if (unit.propertyId !== propertyId) {
+    throw new DomainError(
+      'ASSET_UNIT_PROPERTY_MISMATCH',
+      'Asset Unit must belong to the Asset Property.',
+    );
   }
 
   if (spaceId === undefined || spaceId === null) return;
@@ -89,7 +122,7 @@ async function assertPlacement(
   if (space.unitId !== unitId) {
     throw new DomainError(
       'ASSET_SPACE_UNIT_MISMATCH',
-      'Asset Space must belong to the same Unit as the Asset.',
+      'Asset Space must belong to the Asset Unit.',
     );
   }
 }
@@ -106,6 +139,34 @@ function identifierInputs(
   }));
 }
 
+function isGloballyUniqueIdentifierType(
+  value: AssetIdentifierType,
+): value is GloballyUniqueAssetIdentifierType {
+  return (GLOBALLY_UNIQUE_ASSET_IDENTIFIER_TYPES as readonly string[]).includes(
+    value,
+  );
+}
+
+async function assertGlobalIdentifiersAvailable(
+  repository: AssetRepository,
+  identifiers: readonly AssetIdentifierCommandInput[],
+): Promise<void> {
+  for (const identifier of identifiers) {
+    if (!isGloballyUniqueIdentifierType(identifier.identifierType)) continue;
+    if (
+      await repository.globallyUniqueIdentifierExists(
+        identifier.identifierType,
+        identifier.value.trim(),
+      )
+    ) {
+      throw new DomainError(
+        'ASSET_IDENTIFIER_GLOBAL_CONFLICT',
+        `${identifier.identifierType} '${identifier.value.trim()}' is already assigned to another Asset.`,
+      );
+    }
+  }
+}
+
 export async function createAssetCommand(
   deps: AssetDependencies,
   actor: Actor,
@@ -114,15 +175,21 @@ export async function createAssetCommand(
   requireCapability(actor, 'assets:write');
   await assertPlacement(
     deps.portfolioRepository,
+    input.propertyId,
     input.unitId,
     input.spaceId,
+  );
+  await assertGlobalIdentifiersAvailable(
+    deps.assetRepository,
+    input.identifiers ?? [],
   );
 
   const asset = createAsset({
     id: asAssetId(deps.idGenerator.next()),
     code: input.code,
     name: input.name,
-    unitId: input.unitId,
+    propertyId: input.propertyId,
+    ...(input.unitId !== undefined ? { unitId: input.unitId } : {}),
     ...(input.spaceId !== undefined ? { spaceId: input.spaceId } : {}),
     ...(input.manufacturer !== undefined
       ? { manufacturer: input.manufacturer }
@@ -143,6 +210,29 @@ export async function createAssetCommand(
 
   await deps.assetRepository.insert(asset);
   return asset;
+}
+
+export async function updateAssetMetadataCommand(
+  repository: AssetRepository,
+  actor: Actor,
+  assetId: AssetId,
+  input: UpdateAssetMetadataCommandInput,
+): Promise<Asset> {
+  requireCapability(actor, 'assets:write');
+  const current = await requireAsset(repository, assetId);
+  assertExpectedVersion(current, input.expectedVersion);
+
+  const updated = updateAssetMetadata(current, {
+    ...(input.name !== undefined ? { name: input.name } : {}),
+    ...(input.manufacturer !== undefined
+      ? { manufacturer: input.manufacturer }
+      : {}),
+    ...(input.model !== undefined ? { model: input.model } : {}),
+  });
+  if (updated === current) return current;
+
+  await repository.updateMetadata(updated, current.version);
+  return updated;
 }
 
 export async function changeAssetStatusCommand(
@@ -177,22 +267,18 @@ export async function replaceAssetCommand(
 
   const current = await requireAsset(deps.assetRepository, assetId);
   assertExpectedVersion(current, input.expectedVersion);
-
-  const replacementSpaceId =
-    input.spaceId === undefined ? current.spaceId : input.spaceId;
-
-  await assertPlacement(
-    deps.portfolioRepository,
-    current.unitId,
-    replacementSpaceId,
+  await assertGlobalIdentifiersAvailable(
+    deps.assetRepository,
+    input.identifiers ?? [],
   );
 
   const replacementAsset = createAsset({
     id: asAssetId(deps.idGenerator.next()),
     code: input.code,
     name: input.name,
+    propertyId: current.propertyId,
     unitId: current.unitId,
-    spaceId: replacementSpaceId,
+    spaceId: current.spaceId,
     ...(input.manufacturer !== undefined
       ? { manufacturer: input.manufacturer }
       : {}),
