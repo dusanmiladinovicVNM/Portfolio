@@ -130,7 +130,6 @@ describe('Asset Registry domain', () => {
     const successor = asset({
       id: asAssetId('c1000000-0000-4000-8000-000000000010'),
       code: 'ASSET-2',
-      spaceId: asSpaceId('c1000000-0000-4000-8000-000000000011'),
       identifiers: [],
     });
 
