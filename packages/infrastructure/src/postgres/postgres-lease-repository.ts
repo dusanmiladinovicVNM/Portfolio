@@ -1,6 +1,9 @@
 import type postgres from 'postgres';
 import type { TransactionSql } from 'postgres';
-import type { LeaseRepository } from '@portfolio/application';
+import type {
+  AgreementSupersession,
+  LeaseRepository,
+} from '@portfolio/application';
 import {
   DomainError,
   asCurrencyCode,
@@ -46,6 +49,7 @@ interface AgreementRow {
   tenancy_id: string;
   code: string;
   agreement_type: LeaseAgreementType;
+  predecessor_agreement_id: string | null;
   effective_from: string | Date;
   effective_to: string | Date | null;
   status: LeaseAgreementStatus;
@@ -91,6 +95,7 @@ const agreementSelect = `
     a.tenancy_id,
     a.code,
     a.agreement_type,
+    a.predecessor_agreement_id,
     a.effective_from,
     a.effective_to,
     a.status,
@@ -133,6 +138,10 @@ function mapAgreement(row: AgreementRow): LeaseAgreement {
     tenancyId: asTenancyId(row.tenancy_id),
     code: row.code,
     agreementType: row.agreement_type,
+    predecessorAgreementId:
+      row.predecessor_agreement_id === null
+        ? null
+        : asLeaseAgreementId(row.predecessor_agreement_id),
     effectiveFrom: dateString(row.effective_from),
     effectiveTo: nullableDate(row.effective_to),
     status: row.status,
@@ -198,6 +207,16 @@ function translateLeaseError(error: unknown): DomainError | null {
           'LEASE_AGREEMENT_CODE_ALREADY_EXISTS',
           'Lease agreement code already exists.',
         );
+      case 'lease_agreements_one_initial_per_tenancy_uq':
+        return new DomainError(
+          'LEASE_AGREEMENT_INITIAL_ALREADY_EXISTS',
+          'This tenancy already has a non-cancelled initial agreement.',
+        );
+      case 'lease_agreements_one_successor_per_predecessor_uq':
+        return new DomainError(
+          'LEASE_AGREEMENT_SUCCESSOR_ALREADY_EXISTS',
+          'The predecessor already has a non-cancelled successor agreement.',
+        );
       case 'lease_agreement_parties_role_uq':
         return new DomainError(
           'LEASE_AGREEMENT_PARTY_ALREADY_EXISTS',
@@ -228,13 +247,45 @@ function translateLeaseError(error: unknown): DomainError | null {
     }
   }
 
+  if (pg.code === '23514') {
+    switch (pg.constraint_name) {
+      case 'tenancy_term_versions_source_tenancy_match':
+        return new DomainError(
+          'TENANCY_TERM_SOURCE_MISMATCH',
+          'Term source does not belong to the same tenancy.',
+        );
+      case 'tenancy_term_versions_source_not_signed':
+        return new DomainError(
+          'TENANCY_TERM_SOURCE_NOT_SIGNED',
+          'Term versions may only be emitted by signed legal sources.',
+        );
+      case 'tenancy_term_versions_source_effective_from_match':
+        return new DomainError(
+          'TENANCY_TERM_SOURCE_DATE_MISMATCH',
+          'Term effective date must match its legal source.',
+        );
+      case 'lease_agreements_predecessor_signed':
+        return new DomainError(
+          'LEASE_AGREEMENT_PREDECESSOR_NOT_SIGNED',
+          'A successor agreement requires a currently signed predecessor.',
+        );
+      case 'lease_agreements_predecessor_period':
+        return new DomainError(
+          'LEASE_AGREEMENT_PREDECESSOR_PERIOD_INVALID',
+          'A successor agreement must become effective after its predecessor starts.',
+        );
+      default:
+        break;
+    }
+  }
+
   if (
-    pg.code === '23514' &&
-    pg.constraint_name === 'tenancy_term_versions_source_tenancy_match'
+    pg.code === '23503' &&
+    pg.constraint_name === 'lease_agreements_predecessor_same_tenancy_fk'
   ) {
     return new DomainError(
-      'TENANCY_TERM_SOURCE_MISMATCH',
-      'Term source does not belong to the same tenancy.',
+      'LEASE_AGREEMENT_PREDECESSOR_TENANCY_MISMATCH',
+      'A successor agreement must belong to the same tenancy as its predecessor.',
     );
   }
 
@@ -328,18 +379,33 @@ export class PostgresLeaseRepository implements LeaseRepository {
     return rows[0]?.exists ?? false;
   }
 
+  async successorExists(
+    predecessorAgreementId: LeaseAgreementId,
+  ): Promise<boolean> {
+    const rows = await this.sql<{ exists: boolean }[]>`
+      select exists(
+        select 1
+        from public.lease_agreements
+        where predecessor_agreement_id = ${predecessorAgreementId}
+          and status <> 'cancelled'
+      ) as exists
+    `;
+
+    return rows[0]?.exists ?? false;
+  }
+
   async insertAgreement(agreement: LeaseAgreement): Promise<void> {
     await withTranslatedErrors(async () => {
       await this.sql.begin(async (tx) => {
         await tx`
           insert into public.lease_agreements (
-            id, tenancy_id, code, agreement_type,
+            id, tenancy_id, code, agreement_type, predecessor_agreement_id,
             effective_from, effective_to, status, signed_at, version
           ) values (
             ${agreement.id}, ${agreement.tenancyId}, ${agreement.code},
-            ${agreement.agreementType}, ${agreement.effectiveFrom},
-            ${agreement.effectiveTo}, ${agreement.status},
-            ${agreement.signedAt}, ${agreement.version}
+            ${agreement.agreementType}, ${agreement.predecessorAgreementId},
+            ${agreement.effectiveFrom}, ${agreement.effectiveTo},
+            ${agreement.status}, ${agreement.signedAt}, ${agreement.version}
           )
         `;
 
@@ -360,6 +426,7 @@ export class PostgresLeaseRepository implements LeaseRepository {
     agreement: LeaseAgreement,
     expectedVersion: number,
     terms: TenancyTermVersion,
+    predecessorToSupersede?: AgreementSupersession,
   ): Promise<void> {
     await withTranslatedErrors(async () => {
       await this.sql.begin(async (tx) => {
@@ -381,6 +448,28 @@ export class PostgresLeaseRepository implements LeaseRepository {
             'LEASE_AGREEMENT_VERSION_CONFLICT',
             'Lease agreement was modified concurrently.',
           );
+        }
+
+        if (predecessorToSupersede) {
+          const predecessor = predecessorToSupersede.agreement;
+          const superseded = await tx<{ id: string }[]>`
+            update public.lease_agreements
+            set
+              status = ${predecessor.status},
+              version = ${predecessor.version},
+              updated_at = now()
+            where id = ${predecessor.id}
+              and status = 'signed'
+              and version = ${predecessorToSupersede.expectedVersion}
+            returning id
+          `;
+
+          if (superseded.length === 0) {
+            throw new DomainError(
+              'LEASE_AGREEMENT_PREDECESSOR_VERSION_CONFLICT',
+              'The predecessor agreement changed before successor signing completed.',
+            );
+          }
         }
 
         await insertTerms(tx, terms);
@@ -521,26 +610,44 @@ export class PostgresLeaseRepository implements LeaseRepository {
   ): Promise<TenancyTermVersion | null> {
     const rows = await this.sql<TermRow[]>`
       select
-        id,
-        tenancy_id,
-        source_type,
-        source_agreement_id,
-        source_amendment_id,
-        effective_from,
-        currency,
-        base_rent,
-        service_charge,
-        utilities_advance,
-        parking_rent,
-        other_recurring_charge,
-        deposit_required,
-        billing_frequency,
-        notice_period_tenant_days,
-        notice_period_landlord_days
-      from public.tenancy_term_versions
-      where tenancy_id = ${tenancyId}
-        and effective_from <= ${effectiveAt}
-      order by effective_from desc, created_at desc
+        tv.id,
+        tv.tenancy_id,
+        tv.source_type,
+        tv.source_agreement_id,
+        tv.source_amendment_id,
+        tv.effective_from,
+        tv.currency,
+        tv.base_rent,
+        tv.service_charge,
+        tv.utilities_advance,
+        tv.parking_rent,
+        tv.other_recurring_charge,
+        tv.deposit_required,
+        tv.billing_frequency,
+        tv.notice_period_tenant_days,
+        tv.notice_period_landlord_days
+      from public.tenancy_term_versions tv
+      left join public.lease_amendments am
+        on tv.source_type = 'amendment'
+       and am.id = tv.source_amendment_id
+      join public.lease_agreements governing
+        on governing.id = coalesce(tv.source_agreement_id, am.agreement_id)
+      left join public.lease_agreements successor
+        on successor.predecessor_agreement_id = governing.id
+       and successor.status in ('signed', 'superseded', 'terminated')
+      where tv.tenancy_id = ${tenancyId}
+        and tv.effective_from <= ${effectiveAt}
+        and governing.status in ('signed', 'superseded', 'terminated')
+        and governing.effective_from <= ${effectiveAt}
+        and (
+          governing.effective_to is null
+          or governing.effective_to >= ${effectiveAt}
+        )
+        and (
+          successor.id is null
+          or successor.effective_from > ${effectiveAt}
+        )
+      order by tv.effective_from desc, tv.created_at desc
       limit 1
     `;
 

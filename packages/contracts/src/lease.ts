@@ -29,6 +29,7 @@ export const leaseTermsRequestSchema = z.object({
 export const createLeaseAgreementRequestSchema = z.object({
   code: z.string().trim().min(1),
   agreementType: z.enum(LEASE_AGREEMENT_TYPES),
+  predecessorAgreementId: entityIdSchema.optional(),
   effectiveFrom: isoDateSchema,
   effectiveTo: isoDateSchema.nullable().optional(),
   parties: z.array(
@@ -37,6 +38,22 @@ export const createLeaseAgreementRequestSchema = z.object({
       role: z.enum(LEASE_AGREEMENT_PARTY_ROLES),
     }),
   ).min(2),
+}).superRefine((value, ctx) => {
+  if (value.agreementType === 'initial' && value.predecessorAgreementId !== undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['predecessorAgreementId'],
+      message: 'Initial agreements cannot have a predecessor.',
+    });
+  }
+
+  if (value.agreementType !== 'initial' && value.predecessorAgreementId === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['predecessorAgreementId'],
+      message: 'Renewal and replacement agreements require a predecessor.',
+    });
+  }
 });
 
 export const signLeaseAgreementRequestSchema = z.object({
@@ -67,6 +84,7 @@ export const leaseAgreementResponseSchema = z.object({
   tenancyId: entityIdSchema,
   code: z.string(),
   agreementType: z.enum(LEASE_AGREEMENT_TYPES),
+  predecessorAgreementId: entityIdSchema.nullable(),
   effectiveFrom: isoDateSchema,
   effectiveTo: isoDateSchema.nullable(),
   status: z.enum(LEASE_AGREEMENT_STATUSES),

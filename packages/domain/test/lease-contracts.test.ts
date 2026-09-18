@@ -11,6 +11,7 @@ import {
   createTenancyTermVersion,
   signLeaseAgreement,
   signLeaseAmendment,
+  supersedeLeaseAgreement,
 } from '../src/index.js';
 
 const tenancyId = asTenancyId('10000000-0000-4000-8000-000000000001');
@@ -44,6 +45,49 @@ describe('LeaseAgreement', () => {
     const signed = signLeaseAgreement(draftAgreement(), '2026-09-20');
     expect(signed.status).toBe('signed');
     expect(signed.version).toBe(2);
+  });
+
+  it('requires a predecessor for renewal/replacement and forbids one on initial', () => {
+    expect(() =>
+      createLeaseAgreement({
+        id: asLeaseAgreementId('10000000-0000-4000-8000-000000000010'),
+        tenancyId,
+        code: 'AGR-REPLACEMENT',
+        agreementType: 'replacement',
+        effectiveFrom: '2027-04-01',
+        parties: draftAgreement().parties.map((party) => ({
+          id: party.id,
+          partyId: party.partyId,
+          role: party.role,
+        })),
+      }),
+    ).toThrowError(/requires a predecessor/);
+
+    expect(() =>
+      createLeaseAgreement({
+        id: asLeaseAgreementId('10000000-0000-4000-8000-000000000011'),
+        tenancyId,
+        code: 'AGR-INITIAL-WITH-PREDECESSOR',
+        agreementType: 'initial',
+        predecessorAgreementId: agreementId,
+        effectiveFrom: '2027-04-01',
+        parties: draftAgreement().parties.map((party) => ({
+          id: party.id,
+          partyId: party.partyId,
+          role: party.role,
+        })),
+      }),
+    ).toThrowError(/cannot have a predecessor/);
+  });
+
+  it('supersedes only a signed predecessor without rewriting legal content', () => {
+    const signed = signLeaseAgreement(draftAgreement(), '2026-09-20');
+    const superseded = supersedeLeaseAgreement(signed);
+
+    expect(superseded.status).toBe('superseded');
+    expect(superseded.version).toBe(3);
+    expect(superseded.effectiveTo).toBe('2027-09-30');
+    expect(superseded.signedAt).toBe('2026-09-20');
   });
 
   it('rejects signing without required legal parties', () => {

@@ -11,6 +11,7 @@ import {
   createTenancyTermVersion,
   signLeaseAgreement,
   signLeaseAmendment,
+  supersedeLeaseAgreement,
   type LeaseAgreement,
   type LeaseAgreementId,
   type LeaseAgreementPartyRole,
@@ -26,7 +27,7 @@ import { requireCapability, type Actor } from '../security/access.js';
 import type { IdGenerator } from '../shared/id-generator.js';
 import type { PartyRepository } from '../parties/party-repository.js';
 import type { TenancyRepository } from '../tenancy/tenancy-repository.js';
-import type { LeaseRepository } from './lease-repository.js';
+import type { AgreementSupersession, LeaseRepository } from './lease-repository.js';
 
 export interface LeaseAgreementPartyCommandInput {
   partyId: PartyId;
@@ -37,6 +38,7 @@ export interface CreateLeaseAgreementCommandInput {
   tenancyId: TenancyId;
   code: string;
   agreementType: LeaseAgreementType;
+  predecessorAgreementId?: LeaseAgreementId | null;
   effectiveFrom: string;
   effectiveTo?: string | null;
   parties: readonly LeaseAgreementPartyCommandInput[];
@@ -159,6 +161,66 @@ async function validateAgreementParties(
   }
 }
 
+async function validateAgreementChain(
+  repository: LeaseRepository,
+  agreement: LeaseAgreement,
+): Promise<LeaseAgreement | null> {
+  if (agreement.predecessorAgreementId === null) {
+    const existingInitial = (await repository.listAgreementsByTenancy(
+      agreement.tenancyId,
+    )).some(
+      (candidate) =>
+        candidate.id !== agreement.id &&
+        candidate.agreementType === 'initial' &&
+        candidate.status !== 'cancelled',
+    );
+
+    if (existingInitial) {
+      throw new DomainError(
+        'LEASE_AGREEMENT_INITIAL_ALREADY_EXISTS',
+        'This tenancy already has a non-cancelled initial agreement.',
+      );
+    }
+
+    return null;
+  }
+
+  const predecessor = await requireAgreement(
+    repository,
+    agreement.predecessorAgreementId,
+  );
+
+  if (predecessor.tenancyId !== agreement.tenancyId) {
+    throw new DomainError(
+      'LEASE_AGREEMENT_PREDECESSOR_TENANCY_MISMATCH',
+      'A successor agreement must belong to the same tenancy as its predecessor.',
+    );
+  }
+
+  if (predecessor.status !== 'signed') {
+    throw new DomainError(
+      'LEASE_AGREEMENT_PREDECESSOR_NOT_SIGNED',
+      'A successor agreement requires a currently signed predecessor.',
+    );
+  }
+
+  if (predecessor.effectiveFrom >= agreement.effectiveFrom) {
+    throw new DomainError(
+      'LEASE_AGREEMENT_PREDECESSOR_PERIOD_INVALID',
+      'A successor agreement must become effective after its predecessor starts.',
+    );
+  }
+
+  if (await repository.successorExists(predecessor.id)) {
+    throw new DomainError(
+      'LEASE_AGREEMENT_SUCCESSOR_ALREADY_EXISTS',
+      'The predecessor already has a non-cancelled successor agreement.',
+    );
+  }
+
+  return predecessor;
+}
+
 export async function createLeaseAgreementCommand(
   deps: LeaseDependencies,
   actor: Actor,
@@ -181,6 +243,9 @@ export async function createLeaseAgreementCommand(
     tenancyId: input.tenancyId,
     code: input.code,
     agreementType: input.agreementType,
+    ...(input.predecessorAgreementId !== undefined
+      ? { predecessorAgreementId: input.predecessorAgreementId }
+      : {}),
     effectiveFrom: input.effectiveFrom,
     ...(input.effectiveTo !== undefined ? { effectiveTo: input.effectiveTo } : {}),
     parties: input.parties.map((party) => ({
@@ -189,6 +254,8 @@ export async function createLeaseAgreementCommand(
       role: party.role,
     })),
   });
+
+  await validateAgreementChain(deps.leaseRepository, agreement);
 
   if (await deps.leaseRepository.agreementCodeExists(agreement.code)) {
     throw new DomainError(
@@ -236,6 +303,29 @@ export async function signLeaseAgreementCommand(
     })),
   );
 
+  let predecessorToSupersede: AgreementSupersession | undefined;
+  if (agreement.predecessorAgreementId !== null) {
+    const predecessor = await requireAgreement(
+      deps.leaseRepository,
+      agreement.predecessorAgreementId,
+    );
+
+    if (
+      predecessor.tenancyId !== agreement.tenancyId ||
+      predecessor.status !== 'signed'
+    ) {
+      throw new DomainError(
+        'LEASE_AGREEMENT_PREDECESSOR_NOT_SIGNABLE',
+        'The predecessor must still be the signed agreement for the same tenancy.',
+      );
+    }
+
+    predecessorToSupersede = {
+      agreement: supersedeLeaseAgreement(predecessor),
+      expectedVersion: predecessor.version,
+    };
+  }
+
   const signed = signLeaseAgreement(agreement, signedAt);
   const termVersion = createTenancyTermVersion({
     id: asTenancyTermVersionId(deps.idGenerator.next()),
@@ -250,6 +340,7 @@ export async function signLeaseAgreementCommand(
     signed,
     agreement.version,
     termVersion,
+    predecessorToSupersede,
   );
 
   return signed;

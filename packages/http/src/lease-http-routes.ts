@@ -136,6 +136,9 @@ export async function handleLeaseHttp(
         tenancyId,
         code: parsed.data.code,
         agreementType: parsed.data.agreementType,
+        ...(parsed.data.predecessorAgreementId !== undefined
+          ? { predecessorAgreementId: asLeaseAgreementId(parsed.data.predecessorAgreementId) }
+          : {}),
         effectiveFrom: parsed.data.effectiveFrom,
         ...(parsed.data.effectiveTo !== undefined
           ? { effectiveTo: parsed.data.effectiveTo }

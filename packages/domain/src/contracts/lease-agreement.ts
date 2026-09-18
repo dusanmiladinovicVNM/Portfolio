@@ -39,6 +39,7 @@ export interface LeaseAgreement {
   readonly tenancyId: TenancyId;
   readonly code: string;
   readonly agreementType: LeaseAgreementType;
+  readonly predecessorAgreementId: LeaseAgreementId | null;
   readonly effectiveFrom: DateOnly;
   readonly effectiveTo: DateOnly | null;
   readonly status: LeaseAgreementStatus;
@@ -58,6 +59,7 @@ export interface CreateLeaseAgreementInput {
   tenancyId: TenancyId;
   code: string;
   agreementType: LeaseAgreementType;
+  predecessorAgreementId?: LeaseAgreementId | null;
   effectiveFrom: string;
   effectiveTo?: string | null;
   parties: readonly CreateLeaseAgreementPartyInput[];
@@ -104,6 +106,7 @@ export function createLeaseAgreement(
     input.effectiveTo === undefined || input.effectiveTo === null
       ? null
       : asDateOnly(input.effectiveTo);
+  const predecessorAgreementId = input.predecessorAgreementId ?? null;
 
   if (effectiveTo !== null && effectiveTo < effectiveFrom) {
     throw new DomainError(
@@ -112,11 +115,33 @@ export function createLeaseAgreement(
     );
   }
 
+  if (input.agreementType === 'initial' && predecessorAgreementId !== null) {
+    throw new DomainError(
+      'LEASE_AGREEMENT_INITIAL_PREDECESSOR_FORBIDDEN',
+      'An initial agreement cannot have a predecessor.',
+    );
+  }
+
+  if (input.agreementType !== 'initial' && predecessorAgreementId === null) {
+    throw new DomainError(
+      'LEASE_AGREEMENT_PREDECESSOR_REQUIRED',
+      'A renewal or replacement agreement requires a predecessor.',
+    );
+  }
+
+  if (predecessorAgreementId === input.id) {
+    throw new DomainError(
+      'LEASE_AGREEMENT_INVALID_PREDECESSOR',
+      'An agreement cannot be its own predecessor.',
+    );
+  }
+
   return {
     id: input.id,
     tenancyId: input.tenancyId,
     code: required(input.code, 'code'),
     agreementType: input.agreementType,
+    predecessorAgreementId,
     effectiveFrom,
     effectiveTo,
     status: 'draft',
@@ -153,6 +178,23 @@ export function signLeaseAgreement(
     ...agreement,
     status: 'signed',
     signedAt: asDateOnly(signedAtValue),
+    version: agreement.version + 1,
+  };
+}
+
+export function supersedeLeaseAgreement(
+  agreement: LeaseAgreement,
+): LeaseAgreement {
+  if (agreement.status !== 'signed') {
+    throw new DomainError(
+      'LEASE_AGREEMENT_INVALID_TRANSITION',
+      'Only a signed agreement can be superseded.',
+    );
+  }
+
+  return {
+    ...agreement,
+    status: 'superseded',
     version: agreement.version + 1,
   };
 }
