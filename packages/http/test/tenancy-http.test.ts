@@ -277,6 +277,7 @@ function buildHandler() {
   const tenancyRepository = new InMemoryTenancyRepository();
 
   const handler = createPortfolioHttpHandler({
+    assetRepository: new InMemoryAssetRepository(),
     portfolioRepository,
     partyRepository,
     ownershipRepository: new InMemoryOwnershipRepository(),
