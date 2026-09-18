@@ -3,8 +3,10 @@ import {
   createAssetCommand,
   getAssetQuery,
   getAssetReplacementLinksQuery,
+  listAssetsByPropertyQuery,
   listAssetsByUnitQuery,
   replaceAssetCommand,
+  updateAssetMetadataCommand,
   type Actor,
   type AssetRepository,
   type ClockPort,
@@ -16,9 +18,11 @@ import {
   createAssetRequestSchema,
   entityIdSchema,
   replaceAssetRequestSchema,
+  updateAssetMetadataRequestSchema,
 } from '@portfolio/contracts';
 import {
   asAssetId,
+  asPropertyId,
   asSpaceId,
   asUnitId,
 } from '@portfolio/domain';
@@ -53,13 +57,13 @@ export async function handleAssetHttp(
       {
         code: parsed.data.code,
         name: parsed.data.name,
-        unitId: asUnitId(parsed.data.unitId),
-        ...(parsed.data.spaceId !== undefined
+        propertyId: asPropertyId(parsed.data.propertyId),
+        ...(parsed.data.unitId !== undefined
           ? {
-              spaceId:
-                parsed.data.spaceId === null
+              unitId:
+                parsed.data.unitId === null
                   ? null
-                  : asSpaceId(parsed.data.spaceId),
+                  : asUnitId(parsed.data.unitId),
             }
           : {}),
         ...(parsed.data.manufacturer !== undefined
@@ -85,6 +89,21 @@ export async function handleAssetHttp(
     return json({ data: toAssetResponse(asset) }, 201);
   }
 
+  const propertyAssetsMatch = /^\/properties\/([^/]+)\/assets$/.exec(path);
+  if (method === 'GET' && propertyAssetsMatch) {
+    const parsedId = entityIdSchema.safeParse(propertyAssetsMatch[1]);
+    if (!parsedId.success) return validationFailure();
+
+    const assets = await listAssetsByPropertyQuery(
+      deps.assetRepository,
+      deps.portfolioRepository,
+      actor,
+      asPropertyId(parsedId.data),
+    );
+
+    return json({ data: { items: assets.map(toAssetResponse) } });
+  }
+
   const unitAssetsMatch = /^\/units\/([^/]+)\/assets$/.exec(path);
   if (method === 'GET' && unitAssetsMatch) {
     const parsedId = entityIdSchema.safeParse(unitAssetsMatch[1]);
@@ -98,6 +117,31 @@ export async function handleAssetHttp(
     );
 
     return json({ data: { items: assets.map(toAssetResponse) } });
+  }
+
+  const metadataMatch = /^\/assets\/([^/]+)\/metadata$/.exec(path);
+  if (method === 'PATCH' && metadataMatch) {
+    const parsedId = entityIdSchema.safeParse(metadataMatch[1]);
+    const parsed = updateAssetMetadataRequestSchema.safeParse(
+      await requestJson(request),
+    );
+    if (!parsedId.success || !parsed.success) return validationFailure();
+
+    const asset = await updateAssetMetadataCommand(
+      deps.assetRepository,
+      actor,
+      asAssetId(parsedId.data),
+      {
+        expectedVersion: parsed.data.expectedVersion,
+        ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
+        ...(parsed.data.manufacturer !== undefined
+          ? { manufacturer: parsed.data.manufacturer }
+          : {}),
+        ...(parsed.data.model !== undefined ? { model: parsed.data.model } : {}),
+      },
+    );
+
+    return json({ data: toAssetResponse(asset) });
   }
 
   const statusMatch = /^\/assets\/([^/]+)\/status$/.exec(path);
