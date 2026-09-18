@@ -210,6 +210,22 @@ describe('Portfolio HTTP boundary', () => {
     expect(response.status).toBe(400);
   });
 
+  it('returns 404 when a child collection is requested for a missing parent', async () => {
+    const handler = buildHandler();
+
+    const response = await handler(
+      new Request(
+        'https://portfolio.test/properties/11111111-1111-4111-8111-111111111111/units',
+      ),
+      adminIdentity,
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'PROPERTY_NOT_FOUND' },
+    });
+  });
+
   it('supports a configurable host base path without leaking provider details', async () => {
     const handler = createPortfolioHttpHandler(
       {
