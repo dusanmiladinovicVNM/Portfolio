@@ -12,6 +12,8 @@ import {
   type VerifiedIdentity,
 } from '@portfolio/application';
 import {
+  asDocumentId,
+  asDocumentVersionId,
   asUserId,
   type DateOnly,
   type LeaseAgreement,
@@ -200,6 +202,7 @@ class EmptyLeaseRepository implements LeaseRepository {
 function buildHandler() {
   const portfolioRepository = new PortfolioMemory();
   const inspectionRepository = new InMemoryInspectionRepository();
+  const documentRepository = new InMemoryDocumentRepository();
   const staffDirectoryRepository = new InMemoryStaffDirectoryRepository();
   staffDirectoryRepository.users.set(
     asUserId('dddddddd-dddd-4ddd-8ddd-dddddddddddd'),
@@ -215,7 +218,7 @@ function buildHandler() {
     ownershipRepository: new EmptyOwnershipRepository(),
     tenancyRepository: new EmptyTenancyRepository(),
     leaseRepository: new EmptyLeaseRepository(),
-    documentRepository: new InMemoryDocumentRepository(),
+    documentRepository,
     inspectionRepository,
     staffDirectoryRepository,
     fileStorage: new MemoryFileStorage(),
@@ -241,7 +244,7 @@ function buildHandler() {
     ]),
   });
 
-  return { handler, inspectionRepository };
+  return { handler, inspectionRepository, documentRepository };
 }
 
 describe('Inspection HTTP backbone', () => {
@@ -643,5 +646,320 @@ describe('Inspection HTTP backbone', () => {
     expect(await badAssignment.json()).toMatchObject({
       error: { code: 'INSPECTION_ASSIGNMENT_FORBIDDEN' },
     });
+
+  it('enforces evidence/signature permissions and returns final snapshot over HTTP', async () => {
+    const { handler, documentRepository } = buildHandler();
+
+    for (const [versionId, documentId, fileName] of [
+      [
+        '83000000-0000-4000-8000-000000000001',
+        '83000000-0000-4000-8000-000000000011',
+        'photo.jpg',
+      ],
+      [
+        '83000000-0000-4000-8000-000000000002',
+        '83000000-0000-4000-8000-000000000012',
+        'landlord.png',
+      ],
+      [
+        '83000000-0000-4000-8000-000000000003',
+        '83000000-0000-4000-8000-000000000013',
+        'tenant.png',
+      ],
+    ] as const) {
+      documentRepository.versions.set(asDocumentVersionId(versionId), {
+        id: asDocumentVersionId(versionId),
+        documentId: asDocumentId(documentId),
+        versionNumber: 1,
+        fileName,
+        mimeType: fileName.endsWith('.jpg') ? 'image/jpeg' : 'image/png',
+        byteSize: 10,
+        sha256: 'a'.repeat(64),
+        status: 'final',
+        finalizedAt: '2026-09-18T19:00:00.000Z',
+      });
+    }
+
+    const schemaResponse = await handler(
+      new Request('https://portfolio.test/inspection-schemas', {
+        method: 'POST',
+        body: JSON.stringify({
+          schemaCode: 'MOVE-IN-SIGNED',
+          inspectionType: 'move_in',
+          title: 'Signed move-in',
+          requiredSignatureRoles: ['landlord', 'tenant'],
+          sections: [{
+            key: 'general',
+            title: 'General',
+            sortOrder: 0,
+            items: [{
+              key: 'condition',
+              type: 'text',
+              label: 'Condition',
+              required: true,
+              sortOrder: 0,
+            }],
+          }],
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(schemaResponse.status).toBe(201);
+    const schema = (await schemaResponse.json()).data as {
+      id: string;
+      sections: Array<{ id: string; items: Array<{ id: string }> }>;
+    };
+    await handler(
+      new Request(
+        `https://portfolio.test/inspection-schemas/${schema.id}/publish`,
+        { method: 'POST' },
+      ),
+      adminIdentity,
+    );
+
+    const property = await handler(
+      new Request('https://portfolio.test/properties', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'PROP-SIGNED',
+          name: 'Signed Building',
+          propertyType: 'apartment_building',
+          street: 'Signed',
+          houseNumber: '1',
+          postalCode: '18000',
+          city: 'Niš',
+          countryCode: 'RS',
+        }),
+      }),
+      adminIdentity,
+    );
+    const propertyId = (await property.json()).data.id as string;
+    const unit = await handler(
+      new Request('https://portfolio.test/units', {
+        method: 'POST',
+        body: JSON.stringify({
+          propertyId,
+          code: 'UNIT-SIGNED',
+          unitNumber: 'S-1',
+          unitType: 'apartment',
+        }),
+      }),
+      adminIdentity,
+    );
+    const unitId = (await unit.json()).data.id as string;
+
+    const created = await handler(
+      new Request(`https://portfolio.test/units/${unitId}/inspections`, {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'INS-SIGNED',
+          inspectionType: 'move_in',
+          schemaVersionId: schema.id,
+          assignedToUserId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        }),
+      }),
+      adminIdentity,
+    );
+    const inspection = (await created.json()).data as {
+      id: string;
+      version: number;
+    };
+
+    await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}/start`, {
+        method: 'POST',
+        body: JSON.stringify({ expectedVersion: 1 }),
+      }),
+      inspectorIdentity,
+    );
+
+    const sectionId = schema.sections[0]!.id;
+    const itemId = schema.sections[0]!.items[0]!.id;
+    await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/sections/${sectionId}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            expectedRevision: 0,
+            set: [{ itemId, value: 'Good' }],
+          }),
+        },
+      ),
+      inspectorIdentity,
+    );
+
+    const evidence = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/evidence`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            documentVersionId: '83000000-0000-4000-8000-000000000001',
+            kind: 'photo',
+            sectionId,
+            itemId,
+          }),
+        },
+      ),
+      inspectorIdentity,
+    );
+    expect(evidence.status).toBe(201);
+
+    const currentBeforeLock = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      inspectorIdentity,
+    );
+    const lockVersion = (await currentBeforeLock.json()).data.inspection
+      .version as number;
+    await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}/lock`, {
+        method: 'POST',
+        body: JSON.stringify({ expectedVersion: lockVersion }),
+      }),
+      inspectorIdentity,
+    );
+
+    const landlordSignature = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/signatures`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            signerRole: 'landlord',
+            signerName: 'Landlord',
+            signatureDocumentVersionId:
+              '83000000-0000-4000-8000-000000000002',
+          }),
+        },
+      ),
+      inspectorIdentity,
+    );
+    expect(landlordSignature.status).toBe(201);
+
+    const inspectorFinalize = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/finalize`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ expectedVersion: 3 }),
+        },
+      ),
+      inspectorIdentity,
+    );
+    expect(inspectorFinalize.status).toBe(403);
+
+    const inspectorUnlock = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}/unlock`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 3,
+          reason: 'Correction',
+        }),
+      }),
+      inspectorIdentity,
+    );
+    expect(inspectorUnlock.status).toBe(403);
+
+    const unlocked = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}/unlock`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 3,
+          reason: 'Correction',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(unlocked.status).toBe(200);
+    expect(await unlocked.clone().json()).toMatchObject({
+      data: { status: 'in_progress', version: 4 },
+    });
+
+    const afterUnlock = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      adminIdentity,
+    );
+    expect(await afterUnlock.json()).toMatchObject({
+      data: {
+        signatures: [{
+          signerRole: 'landlord',
+          invalidationReason: 'Correction',
+        }],
+      },
+    });
+
+    await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}/lock`, {
+        method: 'POST',
+        body: JSON.stringify({ expectedVersion: 4 }),
+      }),
+      inspectorIdentity,
+    );
+
+    for (const [signerRole, signerName, signatureDocumentVersionId] of [
+      [
+        'landlord',
+        'Landlord',
+        '83000000-0000-4000-8000-000000000002',
+      ],
+      [
+        'tenant',
+        'Tenant',
+        '83000000-0000-4000-8000-000000000003',
+      ],
+    ] as const) {
+      const signed = await handler(
+        new Request(
+          `https://portfolio.test/inspections/${inspection.id}/signatures`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              signerRole,
+              signerName,
+              signatureDocumentVersionId,
+            }),
+          },
+        ),
+        inspectorIdentity,
+      );
+      expect(signed.status).toBe(201);
+    }
+
+    const finalized = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/finalize`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ expectedVersion: 5 }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(finalized.status).toBe(200);
+    expect(await finalized.clone().json()).toMatchObject({
+      data: {
+        inspection: { status: 'finalized', version: 6 },
+        snapshot: { snapshotVersion: 1 },
+      },
+    });
+
+    const bundle = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      adminIdentity,
+    );
+    expect(await bundle.json()).toMatchObject({
+      data: {
+        inspection: { status: 'finalized' },
+        finalSnapshot: { snapshotVersion: 1 },
+        evidence: [{ kind: 'photo' }],
+        signatures: [
+          { signerRole: 'landlord', invalidationReason: 'Correction' },
+          { signerRole: 'landlord', invalidatedAt: null },
+          { signerRole: 'tenant', invalidatedAt: null },
+        ],
+      },
+    });
+  });
   });
 });
