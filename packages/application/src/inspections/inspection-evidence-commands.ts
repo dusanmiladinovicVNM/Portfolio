@@ -22,6 +22,8 @@ import {
   type InspectionFinalSnapshot,
   type InspectionFinalization,
   type InspectionId,
+  type InspectionSchemaItemId,
+  type InspectionSchemaSectionId,
   type InspectionSignature,
   type InspectionSignerRole,
   type InspectionSignerType,
@@ -158,8 +160,8 @@ export async function addInspectionEvidenceCommand(
     throw new DomainError('INSPECTION_SCHEMA_NOT_FOUND', 'Inspection schema not found.');
   }
 
-  let sectionId = null;
-  let itemId = null;
+  let sectionId: InspectionSchemaSectionId | null = null;
+  let itemId: InspectionSchemaItemId | null = null;
   if (input.sectionId !== undefined && input.sectionId !== null) {
     sectionId = asInspectionSchemaSectionId(input.sectionId);
     const section = findInspectionSchemaSection(schema, sectionId);

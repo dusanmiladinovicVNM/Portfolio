@@ -47,6 +47,7 @@ class FailingDocumentRepository implements DocumentRepository {
   async insertVersion() { throw new Error('database unavailable'); }
   async finalizeVersion() {}
   async getStorageReference(): Promise<StorageObjectReference | null> { return null; }
+  async insertGeneratedFinal() { throw new Error('database unavailable'); }
   async insertLink(_link: DocumentLink) {}
   async listLinksByDocument(): Promise<readonly DocumentLink[]> { return []; }
 }
