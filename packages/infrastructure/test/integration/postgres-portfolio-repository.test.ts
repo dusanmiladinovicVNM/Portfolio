@@ -3386,6 +3386,63 @@ describe('PostgreSQL infrastructure', () => {
       constraint_name: 'asset_replacement_status_required',
     });
 
+    await expect(
+      sql.begin(async (tx) => {
+        await tx`
+          insert into public.assets (
+            id, code, name, unit_id, space_id, status, version
+          ) values
+          (
+            'b1f00000-0000-4000-8000-000000000004',
+            'ASSET-CYCLE-A',
+            'Cycle A',
+            ${unit.id},
+            ${kitchen.id},
+            'active',
+            1
+          ),
+          (
+            'b1f00000-0000-4000-8000-000000000005',
+            'ASSET-CYCLE-B',
+            'Cycle B',
+            ${unit.id},
+            ${kitchen.id},
+            'active',
+            1
+          )
+        `;
+
+        await tx`
+          insert into public.asset_replacements (
+            id, replaced_asset_id, replacement_asset_id,
+            replaced_by_user_id, replaced_at
+          ) values (
+            'b1f00000-0000-4000-8000-000000000006',
+            'b1f00000-0000-4000-8000-000000000004',
+            'b1f00000-0000-4000-8000-000000000005',
+            ${actor.userId},
+            '2026-09-22T09:06:00.000Z'
+          )
+        `;
+
+        await tx`
+          insert into public.asset_replacements (
+            id, replaced_asset_id, replacement_asset_id,
+            replaced_by_user_id, replaced_at
+          ) values (
+            'b1f00000-0000-4000-8000-000000000007',
+            'b1f00000-0000-4000-8000-000000000005',
+            'b1f00000-0000-4000-8000-000000000004',
+            ${actor.userId},
+            '2026-09-22T09:07:00.000Z'
+          )
+        `;
+      }),
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_replacement_cycle',
+    });
+
     const inactive = await changeAssetStatusCommand(
       assetRepository,
       actor,
