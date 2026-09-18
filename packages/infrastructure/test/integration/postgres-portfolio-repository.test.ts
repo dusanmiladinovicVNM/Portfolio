@@ -3,15 +3,19 @@ import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  activateTenancyCommand,
   createOwnershipPeriodCommand,
   createPartyCommand,
+  createTenancyCommand,
   createPropertyCommand,
   createSpaceCommand,
   createUnitCommand,
   listOwnershipPeriodsByUnitQuery,
   listPropertiesQuery,
   listSpacesByUnitQuery,
+  listTenanciesByUnitQuery,
   listUnitsByPropertyQuery,
+  planTenancyCommand,
   resolveActor,
   type IdGenerator,
   type VerifiedIdentity,
@@ -20,13 +24,19 @@ import {
   asOwnershipPeriodId,
   asPartyAddressId,
   asPartyId,
+  asTenancyId,
+  asTenancyPartyId,
+  cancelTenancy,
   createOwnershipPeriod,
+  createTenancy,
+  planTenancy,
   type Party,
 } from '@portfolio/domain';
 import {
   PostgresOwnershipRepository,
   PostgresPartyRepository,
   PostgresPortfolioRepository,
+  PostgresTenancyRepository,
   PostgresUserAccessRepository,
 } from '../../src/index.js';
 
@@ -39,6 +49,7 @@ const sql = postgres(connectionString, { max: 1 });
 const portfolioRepository = new PostgresPortfolioRepository(sql);
 const partyRepository = new PostgresPartyRepository(sql);
 const ownershipRepository = new PostgresOwnershipRepository(sql);
+const tenancyRepository = new PostgresTenancyRepository(sql);
 const accessRepository = new PostgresUserAccessRepository(sql);
 
 class SequenceIds implements IdGenerator {
@@ -57,6 +68,8 @@ class SequenceIds implements IdGenerator {
 async function resetAndMigrate(): Promise<void> {
   await sql.unsafe(
     `drop table if exists
+      public.tenancy_parties,
+      public.tenancies,
       public.unit_ownership_shares,
       public.unit_ownership_periods,
       public.party_addresses,
@@ -109,6 +122,8 @@ beforeAll(async () => {
 afterAll(async () => {
   await sql.unsafe(
     `drop table if exists
+      public.tenancy_parties,
+      public.tenancies,
       public.unit_ownership_shares,
       public.unit_ownership_periods,
       public.party_addresses,
@@ -396,6 +411,139 @@ describe('PostgreSQL infrastructure', () => {
     });
 
     expect(period.owners.map((owner) => owner.shareBasisPoints)).toEqual([5000, 5000]);
+  });
+
+  it('persists tenancy lifecycle, rejects stale writes and enforces overlap at DB level', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+
+    const ids = new SequenceIds([
+      '21000000-0000-4000-8000-000000000001',
+      '21000000-0000-4000-8000-000000000002',
+      '21000000-0000-4000-8000-000000000003',
+      '21000000-0000-4000-8000-000000000004',
+      '21000000-0000-4000-8000-000000000005',
+    ]);
+
+    const property = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-TEN-INT',
+        name: 'Tenancy Integration',
+        propertyType: 'apartment_building',
+        street: 'Tenancy Street',
+        houseNumber: '1',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+
+    const unit = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-TEN-INT',
+        unitNumber: 'T-1',
+        unitType: 'apartment',
+      },
+    );
+
+    const tenant = await createPartyCommand(
+      { partyRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PTY-TEN-INT',
+        partyType: 'person',
+        firstName: 'Integration',
+        lastName: 'Tenant',
+      },
+    );
+
+    const draft = await createTenancyCommand(
+      {
+        tenancyRepository,
+        portfolioRepository,
+        partyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        unitId: unit.id,
+        code: 'TEN-INT-1',
+        parties: [
+          {
+            partyId: tenant.id,
+            role: 'tenant',
+            isPrimary: true,
+          },
+        ],
+      },
+    );
+
+    const planned = await planTenancyCommand(
+      { tenancyRepository },
+      actor,
+      draft.id,
+      1,
+      '2026-10-01',
+      '2027-09-30',
+    );
+
+    expect(planned.version).toBe(2);
+    expect((await tenancyRepository.getById(draft.id))?.status).toBe('planned');
+
+    const staleCancelled = cancelTenancy(draft);
+    await expect(
+      tenancyRepository.updateLifecycle(staleCancelled, 1),
+    ).rejects.toMatchObject({ code: 'TENANCY_VERSION_CONFLICT' });
+
+    const overlappingDraft = createTenancy({
+      id: asTenancyId('22000000-0000-4000-8000-000000000001'),
+      code: 'TEN-INT-OVERLAP',
+      unitId: unit.id,
+      parties: [
+        {
+          id: asTenancyPartyId('22000000-0000-4000-8000-000000000002'),
+          partyId: tenant.id,
+          role: 'tenant',
+          isPrimary: true,
+        },
+      ],
+    });
+    const overlappingPlanned = planTenancy(
+      overlappingDraft,
+      '2027-01-01',
+      '2027-12-31',
+    );
+
+    await expect(
+      tenancyRepository.insert(overlappingPlanned),
+    ).rejects.toMatchObject({ code: 'TENANCY_PERIOD_OVERLAP' });
+
+    const active = await activateTenancyCommand(
+      { tenancyRepository },
+      actor,
+      draft.id,
+      2,
+      '2026-10-01',
+    );
+
+    expect(active.status).toBe('active');
+    expect(active.version).toBe(3);
+
+    const listed = await listTenanciesByUnitQuery(
+      { tenancyRepository, portfolioRepository },
+      actor,
+      unit.id,
+    );
+
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.parties[0]?.partyId).toBe(tenant.id);
   });
 
   it('enforces relational ownership independently of application code', async () => {

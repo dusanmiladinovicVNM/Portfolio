@@ -22,6 +22,7 @@ import {
   type OwnershipRepository,
   type PartyRepository,
   type PortfolioRepository,
+  type TenancyRepository,
   type UserAccessRepository,
   type VerifiedIdentity,
 } from '@portfolio/application';
@@ -33,6 +34,7 @@ import {
   createUnitRequestSchema,
   entityIdSchema,
 } from '@portfolio/contracts';
+import { handleTenancyHttp } from './tenancy-http-routes.js';
 import {
   DomainError,
   asPartyId,
@@ -45,6 +47,7 @@ export interface PortfolioHttpDependencies {
   readonly portfolioRepository: PortfolioRepository;
   readonly partyRepository: PartyRepository;
   readonly ownershipRepository: OwnershipRepository;
+  readonly tenancyRepository: TenancyRepository;
   readonly userAccessRepository: UserAccessRepository;
   readonly idGenerator: IdGenerator;
   readonly onUnexpectedError?: (error: unknown) => void;
@@ -105,7 +108,12 @@ function errorStatus(code: string): number {
   if (code === 'FORBIDDEN') return 403;
   if (code === 'INVALID_REQUEST') return 400;
   if (code.endsWith('_NOT_FOUND')) return 404;
-  if (code.endsWith('_ALREADY_EXISTS') || code === 'OWNERSHIP_PERIOD_OVERLAP') {
+  if (
+    code.endsWith('_ALREADY_EXISTS') ||
+    code === 'OWNERSHIP_PERIOD_OVERLAP' ||
+    code === 'TENANCY_PERIOD_OVERLAP' ||
+    code === 'TENANCY_VERSION_CONFLICT'
+  ) {
     return 409;
   }
   return 422;
@@ -419,6 +427,19 @@ export function createPortfolioHttpHandler(
           return json({ data: ownershipResponse(period) }, 201);
         }
       }
+
+      const tenancyResponse = await handleTenancyHttp(
+        {
+          tenancyRepository: deps.tenancyRepository,
+          portfolioRepository: deps.portfolioRepository,
+          partyRepository: deps.partyRepository,
+          idGenerator: deps.idGenerator,
+        },
+        actor,
+        request,
+        path,
+      );
+      if (tenancyResponse) return tenancyResponse;
 
       return errorResponse('NOT_FOUND', 'Route not found.', 404);
     } catch (error) {

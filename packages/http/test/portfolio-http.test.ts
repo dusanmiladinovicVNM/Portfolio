@@ -5,6 +5,7 @@ import {
   type OwnershipRepository,
   type PartyRepository,
   type PortfolioRepository,
+  type TenancyRepository,
   type UserAccessRepository,
   type VerifiedIdentity,
 } from '@portfolio/application';
@@ -18,6 +19,9 @@ import {
   type PropertyId,
   type Space,
   type SpaceId,
+  type Tenancy,
+  type TenancyId,
+  type TenancyParty,
   type Unit,
   type UnitId,
 } from '@portfolio/domain';
@@ -173,6 +177,24 @@ class InMemoryOwnershipRepository implements OwnershipRepository {
   }
 }
 
+
+class EmptyTenancyRepository implements TenancyRepository {
+  async getById(_id: TenancyId): Promise<Tenancy | null> { return null; }
+  async listByUnit(_unitId: UnitId): Promise<readonly Tenancy[]> { return []; }
+  async codeExists(_code: string): Promise<boolean> { return false; }
+  async hasEffectivePeriodOverlap() { return false; }
+  async insert(_tenancy: Tenancy): Promise<void> {}
+  async insertParty(
+    _tenancyParty: TenancyParty,
+    _expectedTenancyVersion: number,
+    _newTenancyVersion: number,
+  ): Promise<void> {}
+  async updateLifecycle(
+    _tenancy: Tenancy,
+    _expectedVersion: number,
+  ): Promise<void> {}
+}
+
 function buildHandler(
   ids: readonly string[] = [
     '6a644eaa-dae0-4c4a-9ae4-6e5a93ceef3f',
@@ -187,6 +209,7 @@ function buildHandler(
     portfolioRepository: new InMemoryPortfolioRepository(),
     partyRepository: new InMemoryPartyRepository(),
     ownershipRepository: new InMemoryOwnershipRepository(),
+    tenancyRepository: new EmptyTenancyRepository(),
     userAccessRepository: new InMemoryAccessRepository(),
     idGenerator: new FixedIds(ids),
   });
@@ -508,6 +531,7 @@ describe('Portfolio HTTP boundary', () => {
         portfolioRepository: new InMemoryPortfolioRepository(),
         partyRepository: new InMemoryPartyRepository(),
         ownershipRepository: new InMemoryOwnershipRepository(),
+        tenancyRepository: new EmptyTenancyRepository(),
         userAccessRepository: new InMemoryAccessRepository(),
         idGenerator: new FixedIds(['6a644eaa-dae0-4c4a-9ae4-6e5a93ceef3f']),
       },

@@ -6,3 +6,4 @@ export * from './portfolio/unit.js';
 export * from './portfolio/space.js';
 export * from './parties/party.js';
 export * from './ownership/ownership-period.js';
+export * from './tenancy/tenancy.js';
