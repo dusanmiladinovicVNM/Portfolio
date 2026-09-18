@@ -2,8 +2,12 @@ import type {
   DocumentLinkResponse,
   DocumentResponse,
   DocumentVersionResponse,
+  InspectionEvidenceResponse,
+  InspectionFinalizationResponse,
   InspectionFindingResponse,
   InspectionItemResponse,
+  InspectionSignatureResponse,
+  InspectionUnlockEventResponse,
   InspectionResponseDto,
   InspectionSchemaVersionResponse,
   LeaseAgreementResponse,
@@ -21,8 +25,12 @@ import type {
   DocumentLink,
   DocumentVersion,
   Inspection,
+  InspectionEvidence,
+  InspectionFinalization,
   InspectionFinding,
   InspectionResponse,
+  InspectionSignature,
+  InspectionUnlockEvent,
   InspectionSchemaVersion,
   LeaseAgreement,
   LeaseAmendment,
@@ -348,5 +356,38 @@ export function toInspectionFindingResponse(
     description: finding.description,
     createdByUserId: finding.createdByUserId,
     createdAt: finding.createdAt,
+  };
+}
+
+export function toInspectionEvidenceResponse(
+  evidence: InspectionEvidence,
+): InspectionEvidenceResponse {
+  return { ...evidence };
+}
+
+export function toInspectionSignatureResponse(
+  signature: InspectionSignature,
+): InspectionSignatureResponse {
+  return { ...signature };
+}
+
+export function toInspectionUnlockEventResponse(
+  event: InspectionUnlockEvent,
+): InspectionUnlockEventResponse {
+  return { ...event };
+}
+
+export function toInspectionFinalizationResponse(
+  finalization: InspectionFinalization,
+): InspectionFinalizationResponse {
+  return {
+    id: finalization.id,
+    inspectionId: finalization.inspectionId,
+    sourceVersion: finalization.sourceVersion,
+    sourceContentRevision: finalization.sourceContentRevision,
+    snapshot: finalization.snapshot,
+    finalReportDocumentVersionId: finalization.finalReportDocumentVersionId,
+    finalizedByUserId: finalization.finalizedByUserId,
+    finalizedAt: finalization.finalizedAt,
   };
 }

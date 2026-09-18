@@ -9,6 +9,7 @@ import {
   type LeaseRepository,
   type OwnershipRepository,
   type PartyRepository,
+  type PdfPort,
   type PortfolioRepository,
   type StaffDirectoryRepository,
   type TenancyRepository,
@@ -35,6 +36,7 @@ export interface PortfolioHttpDependencies {
   readonly inspectionRepository: InspectionRepository;
   readonly staffDirectoryRepository: StaffDirectoryRepository;
   readonly fileStorage: FileStoragePort;
+  readonly pdfPort: PdfPort;
   readonly clock: ClockPort;
   readonly userAccessRepository: UserAccessRepository;
   readonly idGenerator: IdGenerator;
@@ -119,6 +121,10 @@ export function createPortfolioHttpHandler(
           handleInspectionHttp(
             {
               inspectionRepository: deps.inspectionRepository,
+              documentRepository: deps.documentRepository,
+              fileStorage: deps.fileStorage,
+              pdfPort: deps.pdfPort,
+              partyRepository: deps.partyRepository,
               portfolioRepository: deps.portfolioRepository,
               tenancyRepository: deps.tenancyRepository,
               staffDirectoryRepository: deps.staffDirectoryRepository,

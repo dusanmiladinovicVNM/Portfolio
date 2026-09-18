@@ -1,10 +1,14 @@
 import {
   DomainError,
   type Inspection,
+  type InspectionEvidence,
+  type InspectionFinalization,
   type InspectionFinding,
   type InspectionId,
   type InspectionResponse,
   type InspectionSectionState,
+  type InspectionSignature,
+  type InspectionUnlockEvent,
   type InspectionSchemaVersion,
   type InspectionSchemaVersionId,
   type UnitId,
@@ -100,6 +104,10 @@ export interface InspectionBundle {
   readonly sectionStates: readonly InspectionSectionState[];
   readonly responses: readonly InspectionResponse[];
   readonly findings: readonly InspectionFinding[];
+  readonly evidence: readonly InspectionEvidence[];
+  readonly signatures: readonly InspectionSignature[];
+  readonly unlockEvents: readonly InspectionUnlockEvent[];
+  readonly finalization: InspectionFinalization | null;
 }
 
 export async function getInspectionBundleQuery(
@@ -118,11 +126,33 @@ export async function getInspectionBundleQuery(
     );
   }
 
-  const [sectionStates, responses, findings] = await Promise.all([
+  const [
+    sectionStates,
+    responses,
+    findings,
+    evidence,
+    signatures,
+    unlockEvents,
+    finalization,
+  ] = await Promise.all([
     repository.listSectionStates(id),
     repository.listResponses(id),
     repository.listFindings(id),
+    repository.listEvidence(id),
+    repository.listSignatures(id),
+    repository.listUnlockEvents(id),
+    repository.getFinalization(id),
   ]);
 
-  return { inspection, schema, sectionStates, responses, findings };
+  return {
+    inspection,
+    schema,
+    sectionStates,
+    responses,
+    findings,
+    evidence,
+    signatures,
+    unlockEvents,
+    finalization,
+  };
 }

@@ -3,6 +3,7 @@ import type {
   DocumentRepository,
   FileStoragePort,
   FileStoragePutInput,
+  PdfPort,
   StorageObjectReference,
   StoredFile,
 } from '@portfolio/application';
@@ -121,5 +122,21 @@ export class FixedClock implements ClockPort {
 
   now(): string {
     return this.value;
+  }
+}
+
+export class MemoryPdfPort implements PdfPort {
+  readonly snapshots: import('@portfolio/domain').InspectionFinalSnapshot[] = [];
+
+  async renderInspectionReport(
+    snapshot: import('@portfolio/domain').InspectionFinalSnapshot,
+  ): Promise<Uint8Array> {
+    this.snapshots.push(snapshot);
+    return new TextEncoder().encode(
+      JSON.stringify({
+        inspectionId: snapshot.inspection.id,
+        contentRevision: snapshot.inspection.contentRevision,
+      }),
+    );
   }
 }
