@@ -203,6 +203,7 @@ function buildHandler() {
   const portfolioRepository = new PortfolioMemory();
   const inspectionRepository = new InMemoryInspectionRepository();
   const documentRepository = new InMemoryDocumentRepository();
+  const fileStorage = new MemoryFileStorage();
   const staffDirectoryRepository = new InMemoryStaffDirectoryRepository();
   staffDirectoryRepository.users.set(
     asUserId('dddddddd-dddd-4ddd-8ddd-dddddddddddd'),
@@ -221,7 +222,7 @@ function buildHandler() {
     documentRepository,
     inspectionRepository,
     staffDirectoryRepository,
-    fileStorage: new MemoryFileStorage(),
+    fileStorage,
     clock: new FixedClock('2026-09-18T20:00:00.000Z'),
     userAccessRepository: new AccessRepository(),
     idGenerator: new FixedIds([
@@ -244,7 +245,7 @@ function buildHandler() {
     ]),
   });
 
-  return { handler, inspectionRepository, documentRepository };
+  return { handler, inspectionRepository, documentRepository, fileStorage };
 }
 
 describe('Inspection HTTP backbone', () => {
@@ -676,7 +677,7 @@ describe('Inspection HTTP backbone', () => {
   });
 
   it('enforces evidence/signature permissions and returns final snapshot over HTTP', async () => {
-    const { handler, documentRepository } = buildHandler();
+    const { handler, documentRepository, fileStorage } = buildHandler();
 
     for (const [versionId, documentId, fileName] of [
       [
@@ -695,16 +696,42 @@ describe('Inspection HTTP backbone', () => {
         'tenant.png',
       ],
     ] as const) {
-      documentRepository.versions.set(asDocumentVersionId(versionId), {
-        id: asDocumentVersionId(versionId),
-        documentId: asDocumentId(documentId),
+      const typedVersionId = asDocumentVersionId(versionId);
+      const typedDocumentId = asDocumentId(documentId);
+      const isPhoto = fileName.endsWith('.jpg');
+
+      documentRepository.documents.set(typedDocumentId, {
+        id: typedDocumentId,
+        code: `DOC-${documentId}`,
+        title: fileName,
+        category: isPhoto ? 'photo' : 'signature',
+        status: 'active',
+        latestVersionNumber: 1,
+        revision: 2,
+      });
+      documentRepository.versions.set(typedVersionId, {
+        id: typedVersionId,
+        documentId: typedDocumentId,
         versionNumber: 1,
         fileName,
-        mimeType: fileName.endsWith('.jpg') ? 'image/jpeg' : 'image/png',
+        mimeType: isPhoto ? 'image/jpeg' : 'image/png',
         byteSize: 10,
         sha256: 'a'.repeat(64),
         status: 'final',
         finalizedAt: '2026-09-18T19:00:00.000Z',
+      });
+
+      const reference = {
+        provider: 'memory',
+        objectId: `seed:${versionId}`,
+        objectKey: `seed:${versionId}`,
+      };
+      documentRepository.storage.set(typedVersionId, reference);
+      fileStorage.objects.set(reference.objectKey, {
+        ...reference,
+        byteSize: 10,
+        sha256: 'a'.repeat(64),
+        disposition: 'created',
       });
     }
 

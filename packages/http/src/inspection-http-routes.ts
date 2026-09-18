@@ -19,6 +19,7 @@ import {
   type ClockPort,
   type IdGenerator,
   type DocumentRepository,
+  type FileStoragePort,
   type InspectionRepository,
   type OwnershipRepository,
   type PartyRepository,
@@ -60,6 +61,7 @@ import {
 export interface InspectionHttpDependencies {
   readonly inspectionRepository: InspectionRepository;
   readonly documentRepository: DocumentRepository;
+  readonly fileStorage: FileStoragePort;
   readonly partyRepository: PartyRepository;
   readonly ownershipRepository: OwnershipRepository;
   readonly portfolioRepository: PortfolioRepository;
@@ -372,6 +374,7 @@ export async function handleInspectionHttp(
       {
         inspectionRepository: deps.inspectionRepository,
         documentRepository: deps.documentRepository,
+        fileStorage: deps.fileStorage,
         idGenerator: deps.idGenerator,
         clock: deps.clock,
       },
@@ -406,6 +409,7 @@ export async function handleInspectionHttp(
       {
         inspectionRepository: deps.inspectionRepository,
         documentRepository: deps.documentRepository,
+        fileStorage: deps.fileStorage,
         partyRepository: deps.partyRepository,
         ownershipRepository: deps.ownershipRepository,
         tenancyRepository: deps.tenancyRepository,

@@ -22,6 +22,17 @@ alter table public.inspection_schema_versions
 alter table public.inspection_schema_versions
   alter column required_signature_roles drop default;
 
+alter table public.documents
+  drop constraint documents_category_valid;
+
+alter table public.documents
+  add constraint documents_category_valid check (
+    category in (
+      'legal', 'financial', 'technical', 'inspection',
+      'identity', 'correspondence', 'photo', 'signature', 'other'
+    )
+  );
+
 create table public.inspection_evidence (
   id uuid primary key,
   inspection_id uuid not null,
@@ -275,6 +286,7 @@ declare
   inspection_unit_id uuid;
   inspection_locked_date date;
   version_status text;
+  document_category text;
 begin
   if tg_op = 'INSERT' then
     select
@@ -296,14 +308,22 @@ begin
               constraint = 'inspection_signature_state_invalid';
     end if;
 
-    select status into version_status
-    from public.document_versions
-    where id = new.signature_document_version_id;
+    select dv.status, d.category
+      into version_status, document_category
+    from public.document_versions dv
+    join public.documents d on d.id = dv.document_id
+    where dv.id = new.signature_document_version_id;
 
     if version_status <> 'final' then
       raise exception 'Inspection signature requires a final document version.'
         using errcode = '23514',
               constraint = 'inspection_signature_document_not_final';
+    end if;
+
+    if document_category <> 'signature' then
+      raise exception 'Inspection signature requires a signature document.'
+        using errcode = '23514',
+              constraint = 'inspection_signature_document_category_invalid';
     end if;
 
     if new.signer_role in ('landlord', 'tenant')

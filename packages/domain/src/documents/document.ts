@@ -19,6 +19,7 @@ export const DOCUMENT_CATEGORIES = [
   'identity',
   'correspondence',
   'photo',
+  'signature',
   'other',
 ] as const;
 

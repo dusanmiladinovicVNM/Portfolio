@@ -1408,9 +1408,9 @@ describe('PostgreSQL infrastructure', () => {
         id, code, title, category, status, latest_version_number, revision
       ) values
         ('a2000000-0000-4000-8000-000000000001', 'DOC-EVIDENCE-PHOTO', 'Photo', 'photo', 'active', 1, 2),
-        ('a2000000-0000-4000-8000-000000000002', 'DOC-EVIDENCE-LANDLORD-1', 'Landlord signature 1', 'inspection', 'active', 1, 2),
-        ('a2000000-0000-4000-8000-000000000003', 'DOC-EVIDENCE-LANDLORD-2', 'Landlord signature 2', 'inspection', 'active', 1, 2),
-        ('a2000000-0000-4000-8000-000000000004', 'DOC-EVIDENCE-TENANT', 'Tenant signature', 'inspection', 'active', 1, 2)
+        ('a2000000-0000-4000-8000-000000000002', 'DOC-EVIDENCE-LANDLORD-1', 'Landlord signature 1', 'signature', 'active', 1, 2),
+        ('a2000000-0000-4000-8000-000000000003', 'DOC-EVIDENCE-LANDLORD-2', 'Landlord signature 2', 'signature', 'active', 1, 2),
+        ('a2000000-0000-4000-8000-000000000004', 'DOC-EVIDENCE-TENANT', 'Tenant signature', 'signature', 'active', 1, 2)
     `;
     await sql`
       insert into public.document_versions (
@@ -1448,10 +1448,28 @@ describe('PostgreSQL infrastructure', () => {
         )
     `;
 
+    const evidenceBinaries = new Map([
+      ['photo-1', { byteSize: 10, sha256: '1111111111111111111111111111111111111111111111111111111111111111' }],
+      ['sig-landlord-1', { byteSize: 10, sha256: '2222222222222222222222222222222222222222222222222222222222222222' }],
+      ['sig-landlord-2', { byteSize: 10, sha256: '3333333333333333333333333333333333333333333333333333333333333333' }],
+      ['sig-tenant', { byteSize: 10, sha256: '4444444444444444444444444444444444444444444444444444444444444444' }],
+    ]);
+    const evidenceFileStorage = {
+      async put() {
+        throw new Error('not used by seeded inspection evidence');
+      },
+      async stat(reference: import('@portfolio/application').StorageObjectReference) {
+        const metadata = evidenceBinaries.get(reference.objectId);
+        return metadata ? { ...reference, ...metadata } : null;
+      },
+      async remove() {},
+    };
+
     const evidence = await attachInspectionEvidenceCommand(
       {
         inspectionRepository,
         documentRepository,
+        fileStorage: evidenceFileStorage,
         idGenerator: ids,
         clock: { now: () => '2026-09-21T08:15:00.000Z' },
       },
@@ -1485,6 +1503,7 @@ describe('PostgreSQL infrastructure', () => {
         {
           inspectionRepository,
           documentRepository,
+          fileStorage: evidenceFileStorage,
           idGenerator: ids,
           clock: { now: () => '2026-09-21T08:21:00.000Z' },
         },
@@ -1501,6 +1520,7 @@ describe('PostgreSQL infrastructure', () => {
       {
         inspectionRepository,
         documentRepository,
+        fileStorage: evidenceFileStorage,
         partyRepository,
         ownershipRepository,
         tenancyRepository,
@@ -1523,6 +1543,48 @@ describe('PostgreSQL infrastructure', () => {
         {
           inspectionRepository,
           documentRepository,
+          fileStorage: evidenceFileStorage,
+          partyRepository,
+          ownershipRepository,
+          tenancyRepository,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-21T08:25:10.000Z' },
+        },
+        actor,
+        inspection.id,
+        {
+          signerRole: 'witness',
+          signerName: 'Witness',
+          signatureDocumentVersionId: 'a3000000-0000-4000-8000-000000000001',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'INSPECTION_SIGNATURE_DOCUMENT_CATEGORY_INVALID',
+    });
+
+    await expect(
+      sql`
+        insert into public.inspection_signatures (
+          id, inspection_id, signer_role, signer_name,
+          signature_document_version_id, signed_by_user_id, signed_at
+        ) values (
+          'a6100000-0000-4000-8000-000000000002',
+          ${inspection.id}, 'witness', 'Witness',
+          'a3000000-0000-4000-8000-000000000001',
+          ${actor.userId}, '2026-09-21T08:25:20.000Z'
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_signature_document_category_invalid',
+    });
+
+    await expect(
+      addInspectionSignatureCommand(
+        {
+          inspectionRepository,
+          documentRepository,
+          fileStorage: evidenceFileStorage,
           partyRepository,
           ownershipRepository,
           tenancyRepository,
@@ -1626,6 +1688,7 @@ describe('PostgreSQL infrastructure', () => {
       {
         inspectionRepository,
         documentRepository,
+        fileStorage: evidenceFileStorage,
         partyRepository,
         ownershipRepository,
         tenancyRepository,
@@ -1645,6 +1708,7 @@ describe('PostgreSQL infrastructure', () => {
       {
         inspectionRepository,
         documentRepository,
+        fileStorage: evidenceFileStorage,
         partyRepository,
         ownershipRepository,
         tenancyRepository,

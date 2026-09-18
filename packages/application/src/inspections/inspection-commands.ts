@@ -57,7 +57,9 @@ import { requireCapability, type Actor } from '../security/access.js';
 import type { ClockPort } from '../shared/clock.js';
 import type { IdGenerator } from '../shared/id-generator.js';
 import type { PortfolioRepository } from '../portfolio/portfolio-repository.js';
+import { assertDocumentVersionStorageIntegrity } from '../documents/document-commands.js';
 import type { DocumentRepository } from '../documents/document-repository.js';
+import type { FileStoragePort } from '../documents/file-storage-port.js';
 import type { PartyRepository } from '../parties/party-repository.js';
 import type { OwnershipRepository } from '../ownership/ownership-repository.js';
 import type { TenancyRepository } from '../tenancy/tenancy-repository.js';
@@ -521,7 +523,10 @@ export async function attachInspectionEvidenceCommand(
   deps: Pick<
     InspectionDependencies,
     'inspectionRepository' | 'idGenerator' | 'clock'
-  > & { readonly documentRepository: DocumentRepository },
+  > & {
+    readonly documentRepository: DocumentRepository;
+    readonly fileStorage: FileStoragePort;
+  },
   actor: Actor,
   inspectionId: InspectionId,
   input: AttachInspectionEvidenceCommandInput,
@@ -539,6 +544,7 @@ export async function attachInspectionEvidenceCommand(
       'Evidence document version not found.',
     );
   }
+  await assertDocumentVersionStorageIntegrity(deps, version);
 
   const schema = await requireSchema(
     deps.inspectionRepository,
@@ -589,6 +595,7 @@ export async function addInspectionSignatureCommand(
     'inspectionRepository' | 'idGenerator' | 'clock'
   > & {
     readonly documentRepository: DocumentRepository;
+    readonly fileStorage: FileStoragePort;
     readonly partyRepository: PartyRepository;
     readonly ownershipRepository: OwnershipRepository;
     readonly tenancyRepository: TenancyRepository;
@@ -616,6 +623,23 @@ export async function addInspectionSignatureCommand(
       'Signature requires a final immutable document version.',
     );
   }
+
+  const signatureDocument = await deps.documentRepository.getDocumentById(
+    version.documentId,
+  );
+  if (!signatureDocument) {
+    throw new DomainError(
+      'DOCUMENT_NOT_FOUND',
+      'Signature parent document not found.',
+    );
+  }
+  if (signatureDocument.category !== 'signature') {
+    throw new DomainError(
+      'INSPECTION_SIGNATURE_DOCUMENT_CATEGORY_INVALID',
+      'Signature must reference a final DocumentVersion owned by a signature document.',
+    );
+  }
+  await assertDocumentVersionStorageIntegrity(deps, version);
 
   const partyRequired =
     input.signerRole === 'landlord' || input.signerRole === 'tenant';

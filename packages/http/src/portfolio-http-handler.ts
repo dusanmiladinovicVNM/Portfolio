@@ -122,6 +122,7 @@ export function createPortfolioHttpHandler(
             {
               inspectionRepository: deps.inspectionRepository,
               documentRepository: deps.documentRepository,
+              fileStorage: deps.fileStorage,
               partyRepository: deps.partyRepository,
               ownershipRepository: deps.ownershipRepository,
               portfolioRepository: deps.portfolioRepository,
