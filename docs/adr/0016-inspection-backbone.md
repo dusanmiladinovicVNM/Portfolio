@@ -1,6 +1,8 @@
 # ADR 0016: Inspection schema versions, section concurrency and form-fact boundary
 
-**Status:** Accepted
+**Status:** Accepted — amended by ADR 0017
+
+> Planning note: after PR #11 merged, the review hardening became PR #12 and inspection evidence/finalization moved to PR #13. ADR 0017 supersedes the concurrency/immutability details below where they differ.
 
 ## Context
 

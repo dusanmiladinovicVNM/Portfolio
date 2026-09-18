@@ -263,7 +263,7 @@ export async function handleInspectionHttp(
 
   const sectionMatch =
     /^\/inspections\/([^/]+)\/sections\/([^/]+)$/.exec(path);
-  if (method === 'PUT' && sectionMatch) {
+  if (method === 'PATCH' && sectionMatch) {
     const inspectionId = entityIdSchema.safeParse(sectionMatch[1]);
     const sectionId = entityIdSchema.safeParse(sectionMatch[2]);
     const parsed = saveInspectionSectionRequestSchema.safeParse(
@@ -283,17 +283,22 @@ export async function handleInspectionHttp(
       asInspectionId(inspectionId.data),
       asInspectionSchemaSectionId(sectionId.data),
       parsed.data.expectedRevision,
-      parsed.data.items.map((item) => ({
-        itemId: item.itemId,
-        value: Array.isArray(item.value) ? [...item.value] : item.value,
-        ...(item.comment !== undefined ? { comment: item.comment } : {}),
-      })),
+      {
+        set: parsed.data.set.map((item) => ({
+          itemId: item.itemId,
+          value: Array.isArray(item.value) ? [...item.value] : item.value,
+          ...(item.comment !== undefined ? { comment: item.comment } : {}),
+        })),
+        clearItemIds: [...parsed.data.clear],
+      },
     );
 
     return json({
       data: {
         revision: result.revision,
+        contentRevision: result.contentRevision,
         responses: result.responses.map(toInspectionItemResponse),
+        clearedItemIds: [...result.clearedItemIds],
       },
     });
   }

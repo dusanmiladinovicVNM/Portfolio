@@ -12,7 +12,9 @@ import type {
 
 export interface SaveInspectionSectionResult {
   readonly revision: number;
+  readonly contentRevision: number;
   readonly responses: readonly InspectionResponse[];
+  readonly clearedItemIds: readonly import('@portfolio/domain').InspectionSchemaItemId[];
 }
 
 export interface InspectionRepository {
@@ -26,6 +28,7 @@ export interface InspectionRepository {
   updateLifecycle(
     inspection: Inspection,
     expectedVersion: number,
+    expectedContentRevision?: number,
   ): Promise<void>;
 
   getSectionRevision(
@@ -40,12 +43,13 @@ export interface InspectionRepository {
     sectionId: InspectionSchemaSectionId,
     expectedRevision: number,
     responses: readonly InspectionResponse[],
+    clearItemIds: readonly import('@portfolio/domain').InspectionSchemaItemId[],
   ): Promise<SaveInspectionSectionResult>;
   listResponses(
     inspectionId: InspectionId,
   ): Promise<readonly InspectionResponse[]>;
 
-  insertFinding(finding: InspectionFinding): Promise<void>;
+  insertFinding(finding: InspectionFinding): Promise<number>;
   listFindings(
     inspectionId: InspectionId,
   ): Promise<readonly InspectionFinding[]>;

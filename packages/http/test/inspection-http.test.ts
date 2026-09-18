@@ -234,6 +234,10 @@ function buildHandler() {
       '81000000-0000-4000-8000-000000000010',
       '81000000-0000-4000-8000-000000000011',
       '81000000-0000-4000-8000-000000000012',
+      '81000000-0000-4000-8000-000000000013',
+      '81000000-0000-4000-8000-000000000014',
+      '81000000-0000-4000-8000-000000000015',
+      '81000000-0000-4000-8000-000000000016',
     ]),
   });
 
@@ -431,10 +435,10 @@ describe('Inspection HTTP backbone', () => {
       new Request(
         `https://portfolio.test/inspections/${inspection.id}/sections/${sectionId}`,
         {
-          method: 'PUT',
+          method: 'PATCH',
           body: JSON.stringify({
             expectedRevision: 0,
-            items: [
+            set: [
               { itemId: conditionItemId, value: 'damaged' },
             ],
           }),
@@ -444,17 +448,17 @@ describe('Inspection HTTP backbone', () => {
     );
     expect(firstSave.status).toBe(200);
     expect(await firstSave.clone().json()).toMatchObject({
-      data: { revision: 1 },
+      data: { revision: 1, contentRevision: 1 },
     });
 
     const staleSave = await handler(
       new Request(
         `https://portfolio.test/inspections/${inspection.id}/sections/${sectionId}`,
         {
-          method: 'PUT',
+          method: 'PATCH',
           body: JSON.stringify({
             expectedRevision: 0,
-            items: [
+            set: [
               { itemId: conditionItemId, value: 'good' },
             ],
           }),
@@ -486,14 +490,14 @@ describe('Inspection HTTP backbone', () => {
       new Request(
         `https://portfolio.test/inspections/${inspection.id}/sections/${sectionId}`,
         {
-          method: 'PUT',
+          method: 'PATCH',
           body: JSON.stringify({
             expectedRevision: 1,
-            items: [
+            set: [
               {
                 itemId: damageItemId,
                 value: 'Scratch on wall',
-                comment: 'Photo will be attached in PR12',
+                comment: 'Photo will be attached in PR13',
               },
             ],
           }),
@@ -503,7 +507,51 @@ describe('Inspection HTTP backbone', () => {
     );
     expect(secondSave.status).toBe(200);
     expect(await secondSave.clone().json()).toMatchObject({
-      data: { revision: 2 },
+      data: { revision: 2, contentRevision: 2 },
+    });
+
+    const cleared = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/sections/${sectionId}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            expectedRevision: 2,
+            set: [{ itemId: conditionItemId, value: 'good' }],
+            clear: [damageItemId],
+          }),
+        },
+      ),
+      inspectorIdentity,
+    );
+    expect(cleared.status).toBe(200);
+    expect(await cleared.clone().json()).toMatchObject({
+      data: {
+        revision: 3,
+        contentRevision: 3,
+        clearedItemIds: [damageItemId],
+      },
+    });
+
+    const restored = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/sections/${sectionId}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            expectedRevision: 3,
+            set: [
+              { itemId: conditionItemId, value: 'damaged' },
+              { itemId: damageItemId, value: 'Scratch on wall' },
+            ],
+          }),
+        },
+      ),
+      inspectorIdentity,
+    );
+    expect(restored.status).toBe(200);
+    expect(await restored.clone().json()).toMatchObject({
+      data: { revision: 4, contentRevision: 4 },
     });
 
     const finding = await handler(
@@ -543,10 +591,10 @@ describe('Inspection HTTP backbone', () => {
       new Request(
         `https://portfolio.test/inspections/${inspection.id}/sections/${sectionId}`,
         {
-          method: 'PUT',
+          method: 'PATCH',
           body: JSON.stringify({
             expectedRevision: 2,
-            items: [{ itemId: conditionItemId, value: 'good' }],
+            set: [{ itemId: conditionItemId, value: 'good' }],
           }),
         },
       ),
@@ -564,9 +612,13 @@ describe('Inspection HTTP backbone', () => {
     expect(bundle.status).toBe(200);
     expect(await bundle.json()).toMatchObject({
       data: {
-        inspection: { status: 'locked', version: 3 },
+        inspection: {
+          status: 'locked',
+          version: 3,
+          contentRevision: 5,
+        },
         schema: { id: schema.id, status: 'published' },
-        sectionStates: [{ sectionId, revision: 2 }],
+        sectionStates: [{ sectionId, revision: 4 }],
         responses: [
           { itemId: conditionItemId, value: 'damaged' },
           { itemId: damageItemId, value: 'Scratch on wall' },

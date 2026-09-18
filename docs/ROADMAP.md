@@ -18,7 +18,8 @@ The order is dependency-driven. A planned PR may be split if evidence shows that
 | #8 | Core Hardening B — lease successor chain + bounded term history | DONE |
 | #9 | Core Boundary Hardening — DTOs, routing, lockfile, transaction rule | DONE |
 | #10 | Documents foundation — versioned evidence + FileStoragePort | DONE |
-| #11 | Inspection domain backbone | IN PROGRESS |
+| #11 | Inspection domain backbone | DONE |
+| #12 | Inspection hardening — concurrency, immutability, PATCH semantics | IN PROGRESS |
 
 ## Evidence and operational domains
 
@@ -34,7 +35,7 @@ The order is dependency-driven. A planned PR may be split if evidence shows that
 
 Binary storage must not become business identity.
 
-### PR #11 — Inspection domain backbone (IN PROGRESS)
+### PR #11 — Inspection domain backbone (DONE)
 
 Use HandoverApp as a feature bank only.
 
@@ -45,15 +46,28 @@ Use HandoverApp as a feature bank only.
 - findings
 - Unit/Tenancy references
 
-### PR #12 — Inspection evidence and finalization
+### PR #12 — Inspection hardening (IN PROGRESS)
+
+- `Inspection.contentRevision` closing barrier
+- per-section revision remains local autosave concurrency
+- immutable Inspection historical identity
+- immutable schema child ownership
+- OLD/NEW parent protection for content rows
+- explicit DB lifecycle transition guard
+- `PATCH` section semantics with `set[]` / `clear[]`
+- DB/domain parity for multiselect duplicates
+- adversarial concurrency and direct-SQL sabotage tests
+
+### PR #13 — Inspection evidence and finalization
 
 - document/photo links
 - signatures
 - immutable final snapshot
 - generated final evidence/PDF boundary
 - finalization invariants
+- controlled unlock/signature invalidation policy
 
-### PR #13 — Asset Registry
+### PR #14 — Asset Registry
 
 - Asset
 - manufacturer/model/serial
@@ -62,14 +76,14 @@ Use HandoverApp as a feature bank only.
 - lifecycle/status
 - replacement relationships
 
-### PR #14 — Asset history + tenancy inventory
+### PR #15 — Asset history + tenancy inventory
 
 - AssetLocationHistory
 - condition assessments/history
 - TenancyAssetAssignment
 - move-in/move-out inventory truth
 
-### PR #15 — Warranty + Service
+### PR #16 — Warranty + Service
 
 - Warranty
 - WarrantyClaim
@@ -79,7 +93,7 @@ Use HandoverApp as a feature bank only.
 
 Service history must reference the exact physical Asset identity.
 
-### PR #16 — Improvements / Works
+### PR #17 — Improvements / Works
 
 - ImprovementProject
 - WorkItem
@@ -87,7 +101,7 @@ Service history must reference the exact physical Asset identity.
 - ProjectAsset
 - contractor/work history
 
-### PR #17 — Unified Cost Ledger
+### PR #18 — Unified Cost Ledger
 
 - normalized Cost
 - source links
@@ -97,7 +111,7 @@ Service history must reference the exact physical Asset identity.
 
 Cost is a financial projection/fact, not a substitute for its source business entity.
 
-### PR #18 — Maintenance
+### PR #19 — Maintenance
 
 - Issue
 - WorkOrder
@@ -105,7 +119,7 @@ Cost is a financial projection/fact, not a substitute for its source business en
 - Inspection finding → Issue linkage
 - Asset/Service/Cost links
 
-### PR #19 — Keys + Access
+### PR #20 — Keys + Access
 
 - keys
 - cards
@@ -114,7 +128,7 @@ Cost is a financial projection/fact, not a substitute for its source business en
 - Tenancy assignments
 - immutable access-item transactions
 
-### PR #20 — Meters + Utilities
+### PR #21 — Meters + Utilities
 
 - meter identity
 - Unit/Space placement
@@ -124,14 +138,14 @@ Cost is a financial projection/fact, not a substitute for its source business en
 
 ## Read models and product surface
 
-### PR #21 — Domain Events + Unit Timeline
+### PR #22 — Domain Events + Unit Timeline
 
 - business-event projection
 - Unit dossier timeline
 - cross-context chronology
 - technical audit remains separate from domain timeline
 
-### PR #22 — Reporting / Portfolio projections
+### PR #23 — Reporting / Portfolio projections
 
 - Unit overview
 - occupancy/tenancy status
@@ -141,7 +155,7 @@ Cost is a financial projection/fact, not a substitute for its source business en
 - asset/service summaries
 - portfolio dashboards
 
-### PR #23 — React/Vite PWA + Unit dossier
+### PR #24 — React/Vite PWA + Unit dossier
 
 - authenticated internal shell
 - navigation
@@ -150,7 +164,7 @@ Cost is a financial projection/fact, not a substitute for its source business en
 - Portfolio/Party/Tenancy/Contracts/Documents/Assets surfaces
 - no raw database business writes from React
 
-### PR #24 — Field workflow + offline
+### PR #25 — Field workflow + offline
 
 - inspection field UX
 - section autosave
@@ -160,7 +174,7 @@ Cost is a financial projection/fact, not a substitute for its source business en
 - photo/signature workflows
 - mobile/PWA behavior
 
-## PR #25 — Production hardening + MVP release
+## PR #26 — Production hardening + MVP release
 
 Final MVP gate:
 

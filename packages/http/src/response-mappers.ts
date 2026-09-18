@@ -280,6 +280,7 @@ export function toInspectionResponse(inspection: Inspection): InspectionResponse
     finalizedAt: inspection.finalizedAt,
     cancelledAt: inspection.cancelledAt,
     version: inspection.version,
+    contentRevision: inspection.contentRevision,
   };
 }
 

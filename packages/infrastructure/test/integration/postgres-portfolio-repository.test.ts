@@ -41,10 +41,12 @@ import {
 import {
   addStoredDocumentVersion,
   asDocumentVersionId,
+  asInspectionResponseId,
   asOwnershipPeriodId,
   asPartyAddressId,
   asPartyId,
   asTenancyId,
+  createInspectionResponse,
   createOwnershipPeriod,
   createTenancy,
   planTenancy,
@@ -1678,6 +1680,15 @@ describe('PostgreSQL infrastructure', () => {
       '91000000-0000-4000-8000-000000000014',
       '91000000-0000-4000-8000-000000000015',
       '91000000-0000-4000-8000-000000000016',
+      '91000000-0000-4000-8000-000000000017',
+      '91000000-0000-4000-8000-000000000018',
+      '91000000-0000-4000-8000-000000000019',
+      '91000000-0000-4000-8000-000000000020',
+      '91000000-0000-4000-8000-000000000021',
+      '91000000-0000-4000-8000-000000000022',
+      '91000000-0000-4000-8000-000000000023',
+      '91000000-0000-4000-8000-000000000024',
+      '91000000-0000-4000-8000-000000000025',
     ]);
 
     const schemaV1 = await createInspectionSchemaVersionCommand(
@@ -1726,6 +1737,16 @@ describe('PostgreSQL infrastructure', () => {
                 label: 'Meter reading',
                 sortOrder: 2,
               },
+              {
+                key: 'tags',
+                type: 'multiselect',
+                label: 'Tags',
+                sortOrder: 3,
+                options: [
+                  { value: 'a', label: 'A' },
+                  { value: 'b', label: 'B' },
+                ],
+              },
             ],
           },
         ],
@@ -1741,7 +1762,9 @@ describe('PostgreSQL infrastructure', () => {
 
     const section = publishedV1.sections[0]!;
     const conditionItem = section.items[0]!;
+    const damageItem = section.items[1]!;
     const meterItem = section.items[2]!;
+    const tagsItem = section.items[3]!;
 
     await expect(
       sql`
@@ -1883,9 +1906,13 @@ describe('PostgreSQL infrastructure', () => {
       inspection.id,
       section.id,
       0,
-      [{ itemId: conditionItem.id, value: 'good' }],
+      {
+        set: [{ itemId: conditionItem.id, value: 'good' }],
+        clearItemIds: [],
+      },
     );
     expect(saved.revision).toBe(1);
+    expect(saved.contentRevision).toBe(1);
 
     await expect(
       saveInspectionSectionCommand(
@@ -1898,7 +1925,10 @@ describe('PostgreSQL infrastructure', () => {
         inspection.id,
         section.id,
         0,
-        [{ itemId: conditionItem.id, value: 'damaged' }],
+        {
+          set: [{ itemId: conditionItem.id, value: 'damaged' }],
+          clearItemIds: [],
+        },
       ),
     ).rejects.toMatchObject({
       code: 'INSPECTION_SECTION_REVISION_CONFLICT',
@@ -1924,6 +1954,133 @@ describe('PostgreSQL infrastructure', () => {
       code: '23514',
       constraint_name: 'inspection_response_type_match',
     });
+
+    await expect(
+      sql`
+        insert into public.inspection_responses (
+          id, inspection_id, schema_version_id, section_id, item_id,
+          value, updated_by_user_id, updated_at
+        ) values (
+          '92000000-0000-4000-8000-000000000010',
+          ${inspection.id},
+          ${publishedV1.id},
+          ${section.id},
+          ${tagsItem.id},
+          '["a","a"]'::jsonb,
+          ${actor.userId},
+          '2026-09-20T08:07:30.000Z'
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_response_option_match',
+    });
+
+    let injectedAutosave = false;
+    const racingRepository = new Proxy(inspectionRepository, {
+      get(target, property, receiver) {
+        if (property === 'listResponses') {
+          return async (inspectionId: typeof inspection.id) => {
+            const snapshot = await target.listResponses(inspectionId);
+            if (!injectedAutosave && inspectionId === inspection.id) {
+              const revision = await target.getSectionRevision(
+                inspection.id,
+                section.id,
+              );
+              expect(revision).toBe(1);
+              const response = createInspectionResponse({
+                id: asInspectionResponseId(
+                  '92000000-0000-4000-8000-000000000011',
+                ),
+                inspectionId: inspection.id,
+                item: conditionItem,
+                value: 'damaged',
+                updatedByUserId: actor.userId,
+                updatedAt: '2026-09-20T08:08:00.000Z',
+              });
+              await target.saveSection(
+                inspection.id,
+                section.id,
+                revision!,
+                [response],
+                [],
+              );
+              injectedAutosave = true;
+            }
+            return snapshot;
+          };
+        }
+
+        const value = Reflect.get(target, property, receiver);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+
+    await expect(
+      lockInspectionCommand(
+        {
+          inspectionRepository: racingRepository,
+          clock: { now: () => '2026-09-20T08:09:00.000Z' },
+        },
+        actor,
+        inspection.id,
+        2,
+      ),
+    ).rejects.toMatchObject({
+      code: 'INSPECTION_CONTENT_REVISION_CONFLICT',
+    });
+
+    expect((await inspectionRepository.getById(inspection.id))?.status).toBe(
+      'in_progress',
+    );
+
+    const repaired = await saveInspectionSectionCommand(
+      {
+        inspectionRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-20T08:09:30.000Z' },
+      },
+      actor,
+      inspection.id,
+      section.id,
+      2,
+      {
+        set: [
+          {
+            itemId: damageItem.id,
+            value: 'Scratch documented after concurrent edit',
+          },
+          { itemId: meterItem.id, value: '123.45' },
+        ],
+        clearItemIds: [],
+      },
+    );
+    expect(repaired.revision).toBe(3);
+    expect(repaired.contentRevision).toBe(3);
+
+    const cleared = await saveInspectionSectionCommand(
+      {
+        inspectionRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-20T08:09:45.000Z' },
+      },
+      actor,
+      inspection.id,
+      section.id,
+      3,
+      {
+        set: [],
+        clearItemIds: [meterItem.id],
+      },
+    );
+    expect(cleared.revision).toBe(4);
+    expect(cleared.contentRevision).toBe(4);
+    expect(cleared.clearedItemIds).toEqual([meterItem.id]);
+    expect(
+      (await inspectionRepository.listResponses(inspection.id)).some(
+        (response) => response.itemId === meterItem.id,
+      ),
+    ).toBe(false);
 
     const finding = await createInspectionFindingCommand(
       {
@@ -1952,6 +2109,31 @@ describe('PostgreSQL infrastructure', () => {
       2,
     );
     expect(locked.status).toBe('locked');
+    expect(locked.contentRevision).toBe(5);
+
+    await expect(
+      sql`
+        delete from public.inspection_section_states
+        where inspection_id = ${inspection.id}
+          and section_id = ${section.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_content_locked',
+    });
+
+    await expect(
+      sql`
+        update public.inspections
+        set
+          unit_id = ${otherUnit.id},
+          tenancy_id = ${otherTenancy.id}
+        where id = ${inspection.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_header_identity_immutable',
+    });
 
     await expect(
       sql`
@@ -2038,6 +2220,19 @@ describe('PostgreSQL infrastructure', () => {
 
     await expect(
       sql`
+        update public.inspection_schema_items
+        set
+          schema_version_id = ${schemaV2Draft.id},
+          section_id = ${schemaV2Draft.sections[0]!.id}
+        where id = ${conditionItem.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_schema_structure_immutable',
+    });
+
+    await expect(
+      sql`
         insert into public.inspections (
           id, code, inspection_type, unit_id, schema_version_id,
           assigned_to_user_id, created_by_user_id, status, version
@@ -2056,6 +2251,109 @@ describe('PostgreSQL infrastructure', () => {
     ).rejects.toMatchObject({
       code: '23514',
       constraint_name: 'inspections_schema_published',
+    });
+
+    const editableInspection = await createInspectionCommand(
+      {
+        inspectionRepository,
+        portfolioRepository,
+        tenancyRepository,
+        staffDirectoryRepository: accessRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-20T09:05:00.000Z' },
+      },
+      actor,
+      {
+        code: 'INS-EDITABLE-TARGET',
+        inspectionType: 'move_in',
+        unitId: unit.id,
+        schemaVersionId: publishedV1.id,
+        assignedToUserId:
+          'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' as import('@portfolio/domain').UserId,
+      },
+    );
+
+    await startInspectionCommand(
+      {
+        inspectionRepository,
+        clock: { now: () => '2026-09-20T09:06:00.000Z' },
+      },
+      actor,
+      editableInspection.id,
+      1,
+    );
+
+    const lockedResponseRows = await sql<{ id: string }[]>`
+      select id
+      from public.inspection_responses
+      where inspection_id = ${inspection.id}
+        and item_id = ${conditionItem.id}
+      limit 1
+    `;
+    const lockedResponseId = lockedResponseRows[0]!.id;
+
+    await expect(
+      sql`
+        update public.inspection_responses
+        set inspection_id = ${editableInspection.id}
+        where id = ${lockedResponseId}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_content_locked',
+    });
+
+    await expect(
+      sql`
+        update public.inspection_findings
+        set inspection_id = ${editableInspection.id}
+        where id = ${finding.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_content_locked',
+    });
+
+    const draftLifecycleInspection = await createInspectionCommand(
+      {
+        inspectionRepository,
+        portfolioRepository,
+        tenancyRepository,
+        staffDirectoryRepository: accessRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-20T09:07:00.000Z' },
+      },
+      actor,
+      {
+        code: 'INS-DRAFT-LIFECYCLE',
+        inspectionType: 'move_in',
+        unitId: unit.id,
+        schemaVersionId: publishedV1.id,
+        assignedToUserId:
+          'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' as import('@portfolio/domain').UserId,
+      },
+    );
+
+    await expect(
+      sql`
+        update public.inspections
+        set status = 'locked', locked_at = '2026-09-20T09:08:00.000Z'
+        where id = ${draftLifecycleInspection.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_lifecycle_transition_invalid',
+    });
+
+    await expect(
+      sql`
+        update public.inspections
+        set status = 'finalized', finalized_at = '2026-09-20T09:08:00.000Z'
+        where id = ${draftLifecycleInspection.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_lifecycle_transition_invalid',
     });
 
     await publishInspectionSchemaVersionCommand(

@@ -88,6 +88,12 @@ describe('Inspection schema and lifecycle', () => {
     );
   });
 
+  it('requires draft → in_progress before lock', () => {
+    expect(() =>
+      lockInspection(inspection, '2026-09-18T20:00:00.000Z'),
+    ).toThrowError(/Only an in-progress inspection/);
+  });
+
   it('keeps lifecycle and content mutability separate', () => {
     const started = startInspection(inspection, '2026-09-18T20:00:00.000Z');
     expect(started).toMatchObject({ status: 'in_progress', version: 2 });
