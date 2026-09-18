@@ -1802,6 +1802,23 @@ describe('PostgreSQL infrastructure', () => {
       constraint_name: 'inspection_final_snapshot_immutable',
     });
 
+    await expect(
+      sql`
+        insert into public.inspection_evidence (
+          id, inspection_id, schema_version_id, document_version_id,
+          kind, created_by_user_id, created_at
+        ) values (
+          'a6200000-0000-4000-8000-000000000001',
+          ${inspection.id}, ${published.id},
+          'a3000000-0000-4000-8000-000000000001',
+          'final_report', ${actor.userId}, '2026-09-21T08:55:00.000Z'
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_final_report_document_category_invalid',
+    });
+
     let renderCalls = 0;
     let releaseRenderRace!: () => void;
     const bothRendered = new Promise<void>((resolve) => {

@@ -53,6 +53,11 @@ create table public.inspection_evidence (
     check (caption is null or btrim(caption) <> ''),
   constraint inspection_evidence_item_requires_section
     check (item_id is null or section_id is not null),
+  constraint inspection_final_report_scope
+    check (
+      kind <> 'final_report'
+      or (section_id is null and item_id is null)
+    ),
   constraint inspection_evidence_inspection_schema_fk
     foreign key (inspection_id, schema_version_id)
     references public.inspections(id, schema_version_id)
@@ -245,6 +250,8 @@ language plpgsql
 as $inspection_evidence_guard$
 declare
   inspection_status text;
+  version_status text;
+  document_category text;
 begin
   if tg_op <> 'INSERT' then
     raise exception 'Inspection evidence rows are immutable.'
@@ -261,6 +268,24 @@ begin
       raise exception 'Final report evidence requires a finalized inspection.'
         using errcode = '23514',
               constraint = 'inspection_final_report_requires_finalized';
+    end if;
+
+    select dv.status, d.category
+      into version_status, document_category
+    from public.document_versions dv
+    join public.documents d on d.id = dv.document_id
+    where dv.id = new.document_version_id;
+
+    if version_status <> 'final' then
+      raise exception 'Final report evidence requires a final document version.'
+        using errcode = '23514',
+              constraint = 'inspection_final_report_document_not_final';
+    end if;
+
+    if document_category <> 'inspection' then
+      raise exception 'Final report evidence requires an inspection document.'
+        using errcode = '23514',
+              constraint = 'inspection_final_report_document_category_invalid';
     end if;
   elsif inspection_status not in ('draft','in_progress') then
     raise exception 'Inspection evidence can only be attached before lock.'
