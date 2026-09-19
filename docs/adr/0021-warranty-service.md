@@ -38,7 +38,7 @@ It records a coverage type, coverage interval, optional provider Party, optional
 
 Warranty expiry is derived from the coverage interval. It is not a mutable lifecycle status.
 
-A WarrantyClaim belongs to exactly one Warranty. Its incident date must fall inside that Warranty's coverage interval even when the claim is submitted or resolved later.
+A WarrantyClaim belongs to exactly one Warranty. It preserves `recordedAt` and `recordedByUserId`; its incident date must fall inside that Warranty's coverage interval and cannot be later than the UTC calendar date of `recordedAt`, even when the claim is submitted or resolved later.
 
 Claim lifecycle is explicit and optimistic:
 
@@ -68,6 +68,8 @@ active|paused -> ended|cancelled
 
 Ended and cancelled plans are terminal.
 
+A new or reactivated active ServicePlan requires its Asset to be `active` or `inactive`. `retired` and `replaced` Assets are not operationally eligible for future service policy. Asset replacement does not mutate ServicePlan state across bounded contexts; operational applicability is derived from both the Plan status and current Asset lifecycle.
+
 No mutable "next due" fact is stored in this PR. Later reporting/reminder logic may derive due state from the plan plus ServiceEvents.
 
 ### ServiceEvent
@@ -90,7 +92,7 @@ If an installed component requires its own identifiers, placement, warranty, ser
 
 Warranty provider and service provider are optional Party references.
 
-Historical records require referenced Party existence, not current `active` status. An inactive/archived supplier must remain referencable by old or imported service history.
+Historical Warranty and ServiceEvent records require referenced Party existence, not current `active` status. An inactive/archived supplier must remain referencable by old or imported service history. A new or reactivated ServicePlan is different because it is future operational policy: its provider Party, when present, must be active.
 
 ## Deferred
 
@@ -110,6 +112,8 @@ Asset replacement creates a new physical identity. Prior Warranty/Service histor
 
 - coverage, claims, plans and completed work have separate grains;
 - service history remains valid across Asset movement because it references physical identity, not placement;
-- replacement cannot silently inherit predecessor service history;
+- replacement cannot silently inherit predecessor service history or keep that predecessor operationally due merely because its stored Plan remains `active`;
 - historical service entry has explicit occurrence time;
+- WarrantyClaim history has explicit recording provenance and cannot assert a future incident;
+- historical provider references and future operational provider eligibility remain distinct;
 - Maintenance and Cost remain downstream consumers instead of becoming hidden dependencies of this PR.
