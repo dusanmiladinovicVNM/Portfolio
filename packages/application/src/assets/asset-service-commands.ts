@@ -5,6 +5,7 @@ import {
   asServicePlanId,
   asWarrantyClaimId,
   asWarrantyId,
+  assertServicePlanAssetEligible,
   cancelWarrantyClaim,
   changeServicePlanStatus,
   closeWarrantyClaim,
@@ -45,10 +46,12 @@ export interface AssetServiceDependencies {
 async function requireAsset(
   repository: AssetRepository,
   assetId: AssetId,
-): Promise<void> {
-  if (!(await repository.getById(assetId))) {
+) {
+  const asset = await repository.getById(assetId);
+  if (!asset) {
     throw new DomainError('ASSET_NOT_FOUND', 'Asset not found.');
   }
+  return asset;
 }
 
 async function requireParty(
@@ -58,6 +61,23 @@ async function requireParty(
   if (partyId == null) return;
   if (!(await repository.getById(partyId))) {
     throw new DomainError('PARTY_NOT_FOUND', 'Party not found.');
+  }
+}
+
+async function requireActiveParty(
+  repository: PartyRepository,
+  partyId: PartyId | null | undefined,
+): Promise<void> {
+  if (partyId == null) return;
+  const party = await repository.getById(partyId);
+  if (!party) {
+    throw new DomainError('PARTY_NOT_FOUND', 'Party not found.');
+  }
+  if (party.status !== 'active') {
+    throw new DomainError(
+      'SERVICE_PLAN_PROVIDER_STATUS_INVALID',
+      'A ServicePlan provider must be an active Party.',
+    );
   }
 }
 
@@ -113,7 +133,7 @@ export async function createWarrantyCommand(
 export async function createWarrantyClaimCommand(
   deps: Pick<
     AssetServiceDependencies,
-    'assetServiceRepository' | 'idGenerator'
+    'assetServiceRepository' | 'idGenerator' | 'clock'
   >,
   actor: Actor,
   warrantyId: WarrantyId,
@@ -133,6 +153,8 @@ export async function createWarrantyClaimCommand(
     warranty,
     incidentOn: input.incidentOn,
     description: input.description,
+    recordedAt: deps.clock.now(),
+    recordedByUserId: actor.userId,
   });
   await deps.assetServiceRepository.insertWarrantyClaim(claim);
   return claim;
@@ -256,10 +278,11 @@ export async function createServicePlanCommand(
   },
 ) {
   requireCapability(actor, 'service:write');
-  await Promise.all([
+  const [asset] = await Promise.all([
     requireAsset(deps.assetRepository, assetId),
-    requireParty(deps.partyRepository, input.providerPartyId),
+    requireActiveParty(deps.partyRepository, input.providerPartyId),
   ]);
+  assertServicePlanAssetEligible(asset);
 
   const plan = createServicePlan({
     id: asServicePlanId(deps.idGenerator.next()),
@@ -283,14 +306,17 @@ export async function createServicePlanCommand(
 }
 
 export async function changeServicePlanStatusCommand(
-  repository: AssetServiceRepository,
+  deps: Pick<
+    AssetServiceDependencies,
+    'assetRepository' | 'assetServiceRepository' | 'partyRepository'
+  >,
   actor: Actor,
   planId: ServicePlanId,
   expectedVersion: number,
   status: ServicePlanStatus,
 ) {
   requireCapability(actor, 'service:write');
-  const plan = await repository.getServicePlanById(planId);
+  const plan = await deps.assetServiceRepository.getServicePlanById(planId);
   if (!plan) {
     throw new DomainError('SERVICE_PLAN_NOT_FOUND', 'ServicePlan not found.');
   }
@@ -301,9 +327,15 @@ export async function changeServicePlanStatusCommand(
     'ServicePlan has changed since the caller last read it.',
   );
 
+  if (status === 'active' && plan.status !== 'active') {
+    const asset = await requireAsset(deps.assetRepository, plan.assetId);
+    assertServicePlanAssetEligible(asset);
+    await requireActiveParty(deps.partyRepository, plan.providerPartyId);
+  }
+
   const changed = changeServicePlanStatus(plan, status);
   if (changed === plan) return plan;
-  await repository.updateServicePlan(changed, expectedVersion);
+  await deps.assetServiceRepository.updateServicePlan(changed, expectedVersion);
   return changed;
 }
 
