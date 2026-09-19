@@ -210,21 +210,42 @@ export async function handleAccessItemHttp(
   }
 
   const itemMatch = /^\/access-items\/([^/]+)$/.exec(path);
-  if (method === 'GET' && itemMatch) {
+  if (itemMatch) {
     const id = entityIdSchema.safeParse(itemMatch[1]);
     if (!id.success) return validationFailure();
-    const result = await getAccessItemQuery(
-      deps.accessItemRepository,
-      actor,
-      asAccessItemId(id.data),
-    );
+    const accessItemId = asAccessItemId(id.data);
 
-    return json({
-      data: {
-        ...entry(result),
-        transactions: result.transactions.map(toAccessItemTransactionResponse),
-      },
-    });
+    if (method === 'GET') {
+      const result = await getAccessItemQuery(
+        deps.accessItemRepository,
+        actor,
+        accessItemId,
+      );
+
+      return json({
+        data: {
+          ...entry(result),
+          transactions: result.transactions.map(toAccessItemTransactionResponse),
+        },
+      });
+    }
+
+    if (method === 'PATCH') {
+      const parsed = updateAccessItemRequestSchema.safeParse(
+        await requestJson(request),
+      );
+      if (!parsed.success) return validationFailure();
+
+      const item = await updateAccessItemLabelCommand(
+        deps,
+        actor,
+        accessItemId,
+        parsed.data.expectedVersion,
+        parsed.data.label,
+      );
+
+      return json({ data: toAccessItemResponse(item) });
+    }
   }
 
   return null;
