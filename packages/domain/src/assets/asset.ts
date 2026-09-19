@@ -138,6 +138,14 @@ function createIdentifiers(
 }
 
 export function createAsset(input: CreateAssetInput): Asset {
+  if (input.spaceId !== undefined && input.spaceId !== null &&
+      (input.unitId === undefined || input.unitId === null)) {
+    throw new DomainError(
+      'ASSET_SPACE_REQUIRES_UNIT',
+      'Asset Space placement requires a Unit placement.',
+    );
+  }
+
   return {
     id: input.id,
     code: required(input.code, 'code'),
