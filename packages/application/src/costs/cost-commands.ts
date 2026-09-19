@@ -12,6 +12,7 @@ import {
 import type { AssetRepository } from '../assets/asset-repository.js';
 import type { AssetServiceRepository } from '../assets/asset-service-repository.js';
 import type { ImprovementRepository } from '../improvements/improvement-repository.js';
+import type { MaintenanceRepository } from '../maintenance/maintenance-repository.js';
 import type { PartyRepository } from '../parties/party-repository.js';
 import type { PortfolioRepository } from '../portfolio/portfolio-repository.js';
 import {
@@ -29,6 +30,7 @@ export interface CostDependencies {
   readonly assetRepository: AssetRepository;
   readonly assetServiceRepository: AssetServiceRepository;
   readonly improvementRepository: ImprovementRepository;
+  readonly maintenanceRepository: MaintenanceRepository;
   readonly idGenerator: IdGenerator;
   readonly clock: ClockPort;
 }
@@ -61,6 +63,7 @@ async function requireCostSource(
     | 'assetRepository'
     | 'assetServiceRepository'
     | 'improvementRepository'
+    | 'maintenanceRepository'
   >,
   source: CostSource,
 ): Promise<void> {
@@ -117,6 +120,18 @@ async function requireCostSource(
       exists =
         (await deps.improvementRepository.getWorkMaterialById(
           source.workMaterialId,
+        )) !== null;
+      break;
+    case 'maintenance_issue':
+      exists =
+        (await deps.maintenanceRepository.getIssueById(
+          source.maintenanceIssueId,
+        )) !== null;
+      break;
+    case 'maintenance_work_order':
+      exists =
+        (await deps.maintenanceRepository.getWorkOrderById(
+          source.maintenanceWorkOrderId,
         )) !== null;
       break;
   }
