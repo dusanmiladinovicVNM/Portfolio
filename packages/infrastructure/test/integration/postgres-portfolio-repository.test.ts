@@ -3375,7 +3375,10 @@ describe('PostgreSQL infrastructure', () => {
     await expect(
       sql`
         update public.assets
-        set status = 'replaced',
+        set property_id = null,
+            unit_id = null,
+            space_id = null,
+            status = 'replaced',
             version = version + 1
         where id = ${asset.id}
       `,
@@ -3631,6 +3634,9 @@ describe('PostgreSQL infrastructure', () => {
       id: asset.id,
       status: 'replaced',
       version: 4,
+      propertyId: null,
+      unitId: null,
+      spaceId: null,
     });
     expect(replacementResult.replacementAsset).toMatchObject({
       status: 'active',
@@ -3643,6 +3649,28 @@ describe('PostgreSQL infrastructure', () => {
       replacementAssetId: replacementResult.replacementAsset.id,
       replacedByUserId: actor.userId,
     });
+
+    const predecessorHistory = await assetRepository.listLocationHistory(asset.id);
+    const successorHistory = await assetRepository.listLocationHistory(
+      replacementResult.replacementAsset.id,
+    );
+    expect(predecessorHistory).toHaveLength(1);
+    expect(predecessorHistory[0]).toMatchObject({
+      propertyId: property.id,
+      unitId: unit.id,
+      spaceId: kitchen.id,
+      validTo: '2026-09-22T09:10:00.000Z',
+    });
+    expect(successorHistory).toHaveLength(1);
+    expect(successorHistory[0]).toMatchObject({
+      propertyId: property.id,
+      unitId: unit.id,
+      spaceId: kitchen.id,
+      validFrom: '2026-09-22T09:10:00.000Z',
+      validTo: null,
+      changeType: 'replacement_created',
+    });
+    expect(await assetRepository.getCurrentLocation(asset.id)).toBeNull();
 
     await expect(
       sql`
@@ -3673,7 +3701,6 @@ describe('PostgreSQL infrastructure', () => {
       unit.id,
     );
     expect(assets.map((item) => item.code)).toEqual([
-      'ASSET-FRIDGE-001',
       'ASSET-FRIDGE-002',
     ]);
 
@@ -3681,7 +3708,12 @@ describe('PostgreSQL infrastructure', () => {
     const persistedReplacement = await assetRepository.getById(
       replacementResult.replacementAsset.id,
     );
-    expect(persistedOld?.status).toBe('replaced');
+    expect(persistedOld).toMatchObject({
+      status: 'replaced',
+      propertyId: null,
+      unitId: null,
+      spaceId: null,
+    });
     expect(persistedReplacement?.identifiers).toHaveLength(1);
 
     const propertyAssets = await listAssetsByPropertyQuery(
@@ -3692,7 +3724,6 @@ describe('PostgreSQL infrastructure', () => {
     );
     expect(propertyAssets.map((item) => item.code)).toEqual([
       'ASSET-BUILDING-LIFT',
-      'ASSET-FRIDGE-001',
       'ASSET-FRIDGE-002',
       'ASSET-OTHER-UNIT',
     ]);
