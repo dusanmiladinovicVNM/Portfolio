@@ -304,7 +304,21 @@ export async function handleAssetServiceHttp(
         ...(parsed.data.reference !== undefined
           ? { reference: parsed.data.reference }
           : {}),
-        ...(parsed.data.parts !== undefined ? { parts: parsed.data.parts } : {}),
+        ...(parsed.data.parts !== undefined
+          ? {
+              parts: parsed.data.parts.map((part) => ({
+                name: part.name,
+                ...(part.partNumber !== undefined
+                  ? { partNumber: part.partNumber }
+                  : {}),
+                ...(part.serialNumber !== undefined
+                  ? { serialNumber: part.serialNumber }
+                  : {}),
+                quantity: part.quantity,
+                ...(part.notes !== undefined ? { notes: part.notes } : {}),
+              })),
+            }
+          : {}),
       });
       return json({ data: toServiceEventResponse(event) }, 201);
     }
