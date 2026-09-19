@@ -131,13 +131,13 @@ Asset
 
 Valid current-placement shapes are therefore `Property only`, `Property + Unit`, or `Property + Unit + Space`. A building lift, central boiler or fire-control panel does not require a synthetic `COMMON` Unit.
 
-`Asset.id` is the immutable physical identity. `code` is stable business identity. `name`, `manufacturer` and `model` are correctable master metadata and may be corrected through an optimistic-CAS mutation without creating a new physical Asset.
+`Asset.id` is the immutable physical identity. `code` is stable business identity. `name`, `manufacturer` and `model` are correctable master metadata and may be corrected through an optimistic-CAS mutation without creating a new physical Asset. Dedicated metadata history is not introduced here; future AuditEvent/DomainEvent infrastructure should capture actor/time/delta for such corrections.
 
 PR #14 deliberately does not expose a move command. Current Property/Unit/Space placement is protected from mutation until canonical PR #15 introduces `AssetLocationHistory`; that history will make placement temporal without changing Asset identity. Replacement is also not a move: the successor inherits the predecessor's exact current placement.
 
 An Asset starts active and has an optimistic aggregate version. Supported metadata corrections and lifecycle transitions each advance that version exactly once. Normal lifecycle transitions may temporarily inactivate or permanently retire it. The `replaced` status is established only together with an append-only successor relationship, leaving the old physical identity intact.
 
-Serial, product, inventory and similar identifiers are first-class append-only child records rather than notes. Identifier values are canonicalized against surrounding whitespace at the DB boundary. `inventory_tag`, `imei` and `mac_address` are globally unique; serial/product/barcode remain intentionally weaker until their business scope is explicitly defined.
+Serial, product, inventory and similar identifiers are first-class append-only child records rather than notes. Identifier values are canonicalized against surrounding whitespace at the DB boundary. `inventory_tag`, `imei` and `mac_address` are globally unique; serial/product/barcode remain intentionally weaker until their business scope is explicitly defined. MAC/IMEI type-specific canonicalization is deferred rather than guessed prematurely.
 
 Service, warranty, condition history and tenancy inventory remain later bounded-context work.
 ### ImprovementProject
