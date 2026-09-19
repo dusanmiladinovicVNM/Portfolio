@@ -10,6 +10,8 @@ import type {
   CostId,
   CostReversalId,
   ImprovementProjectId,
+  MaintenanceIssueId,
+  MaintenanceWorkOrderId,
   PartyId,
   PropertyId,
   ServiceEventId,
@@ -55,6 +57,14 @@ export type CostSource =
   | {
       readonly kind: 'work_material';
       readonly workMaterialId: WorkMaterialId;
+    }
+  | {
+      readonly kind: 'maintenance_issue';
+      readonly maintenanceIssueId: MaintenanceIssueId;
+    }
+  | {
+      readonly kind: 'maintenance_work_order';
+      readonly maintenanceWorkOrderId: MaintenanceWorkOrderId;
     };
 
 export interface Cost {
