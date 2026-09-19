@@ -97,7 +97,7 @@ Use HandoverApp as a feature bank only.
 
 Service history must reference the exact physical Asset identity.
 
-### PR #17 — Improvements / Works (IN PROGRESS)
+### PR #17 — Improvements / Works (DONE)
 
 - ImprovementProject
 - WorkItem
@@ -105,7 +105,7 @@ Service history must reference the exact physical Asset identity.
 - ProjectAsset
 - contractor/work history
 
-### PR #18 — Unified Cost Ledger
+### PR #18 — Unified Cost Ledger (IN PROGRESS)
 
 - normalized Cost
 - source links
