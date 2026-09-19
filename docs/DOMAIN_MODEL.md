@@ -194,9 +194,9 @@ An ImprovementProject is one managed renovation/improvement initiative. It has i
 
 Project lifecycle is `draft -> planned -> in_progress -> completed`, with cancellation from non-terminal states. Project identity/scope remain stable; name, description and planned dates are correctable only before work begins. Completion requires every WorkItem to be terminal.
 
-WorkItem is expected/planned scope. It is not proof that the work happened. Its lifecycle is `planned -> in_progress -> completed` with cancellation from planned/in-progress. Starting/completing a WorkItem requires the parent Project to be in progress.
+WorkItem is expected/planned scope. It is not proof that the work happened. Its lifecycle is `planned -> in_progress -> completed` with cancellation from planned/in-progress. Title/description may be corrected optimistically while planned; definition freezes once the item starts. Starting/completing a WorkItem requires the parent Project to be in progress.
 
-WorkRecord is append-only historical work truth under one exact WorkItem. `performedAt` is when the work happened and `recordedAt` is when Portfolio recorded it, so historical entry remains honest. A WorkRecord may reference a contractor Party by stable identity even if that Party is now inactive.
+WorkRecord is append-only historical work truth under one exact WorkItem. `Project.startedAt` and `WorkItem.startedAt` are business occurrence boundaries. `performedAt` must fall at or after both starts, at or before the earliest Project/WorkItem terminal cutoff, and at or before `recordedAt`. Historical work can still be recorded later; importing work that predates the Portfolio record requires a future explicit import flow that reconstructs historical start timestamps rather than bypassing these bounds. A WorkRecord may reference a contractor Party by stable identity even if that Party is now inactive.
 
 Normal WorkRecord creation is one sealed transaction:
 
@@ -212,7 +212,7 @@ The database requires the parent WorkRecord to be sealed at commit and rejects l
 
 WorkMaterial records exact positive material/consumable quantity with decimal semantics. It contains no money and is not an Asset. If a component needs identifiers, placement, warranty, service history or replacement lineage, it belongs in Asset Registry instead.
 
-ProjectAsset records that an existing Asset was `affected`, `installed` or `removed` by a WorkRecord. It is evidence only: it does not move, retire, replace or otherwise mutate the Asset. Physical replacement stays in AssetReplacement; a project may record the predecessor as removed and successor as installed.
+ProjectAsset records that work `affected` an existing Asset or involved `installation_work` / `removal_work` on it. The latter labels intentionally describe contractor activity, not canonical Asset placement/lifecycle at `performedAt`. ProjectAsset is evidence only: it does not move, retire, replace or independently assert physical location. Canonical physical changes remain Asset-domain truth; physical replacement stays in AssetReplacement.
 
 Canonical #17 deliberately does not create Cost/invoice records, Maintenance Issue/WorkOrder, material stock/procurement or contractor billing. Those later contexts may link back to Project/WorkRecord without becoming their source of truth.
 
