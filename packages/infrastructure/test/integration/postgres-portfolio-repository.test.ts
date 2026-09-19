@@ -3363,7 +3363,8 @@ describe('PostgreSQL infrastructure', () => {
       sql`
         update public.assets
         set unit_id = ${otherUnit.id},
-            space_id = ${otherSpace.id}
+            space_id = ${otherSpace.id},
+            version = version + 1
         where id = ${asset.id}
       `,
     ).rejects.toMatchObject({
