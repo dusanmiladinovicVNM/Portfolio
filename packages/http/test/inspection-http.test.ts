@@ -217,6 +217,7 @@ function buildHandler() {
   const handler = createPortfolioHttpHandler({
     assetRepository: new InMemoryAssetRepository(),
     assetInventoryRepository: new InMemoryAssetInventoryRepository(),
+    assetServiceRepository: new InMemoryAssetServiceRepository(),
     portfolioRepository,
     partyRepository: new EmptyPartyRepository(),
     ownershipRepository: new EmptyOwnershipRepository(),
