@@ -1042,6 +1042,7 @@ describe('Portfolio HTTP boundary', () => {
         '2026-09-19T08:20:00.000Z',
         '2026-09-19T08:25:00.000Z',
         '2026-09-19T08:30:00.000Z',
+        '2026-09-19T08:35:00.000Z',
       ]),
     );
 
@@ -1140,7 +1141,11 @@ describe('Portfolio HTTP boundary', () => {
     );
     expect(claimResponse.status).toBe(201);
     const claim = (await claimResponse.json()).data;
-    expect(claim).toMatchObject({ status: 'draft', version: 1 });
+    expect(claim).toMatchObject({
+      status: 'draft',
+      recordedAt: '2026-09-19T08:10:00.000Z',
+      version: 1,
+    });
 
     const submitted = await handler(
       new Request(`https://portfolio.test/warranty-claims/${claim.id}/submit`, {
@@ -1254,7 +1259,7 @@ describe('Portfolio HTTP boundary', () => {
         warrantyClaimId: claim.id,
         eventType: 'warranty_service',
         performedAt: '2026-09-10T10:00:00.000Z',
-        recordedAt: '2026-09-19T08:30:00.000Z',
+        recordedAt: '2026-09-19T08:35:00.000Z',
         parts: [{ name: 'Compressor', quantity: 1 }],
       },
     });
