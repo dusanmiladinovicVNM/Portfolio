@@ -164,6 +164,10 @@ export class InMemoryInspectionRepository implements InspectionRepository {
     return contentRevision;
   }
 
+  async getFindingById(id: import('@portfolio/domain').InspectionFindingId) {
+    return this.findings.find((finding) => finding.id === id) ?? null;
+  }
+
   async listFindings(inspectionId: InspectionId) {
     return this.findings.filter(
       (finding) => finding.inspectionId === inspectionId,
