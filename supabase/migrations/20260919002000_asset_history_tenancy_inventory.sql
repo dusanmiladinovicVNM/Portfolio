@@ -2,6 +2,9 @@ begin;
 
 create extension if not exists btree_gist;
 
+alter table public.assets
+  alter column property_id drop not null;
+
 create table public.asset_location_history (
   id uuid primary key,
   asset_id uuid not null references public.assets(id) on delete restrict,
@@ -69,12 +72,46 @@ select
   a.property_id,
   a.unit_id,
   a.space_id,
-  a.created_at,
-  null,
-  'registry_bootstrap',
-  null,
-  'Backfilled from Asset Registry current placement'
-from public.assets a;
+  coalesce(incoming.replaced_at, a.created_at),
+  outgoing.replaced_at,
+  case
+    when incoming.id is not null then 'replacement_created'
+    else 'registry_bootstrap'
+  end,
+  incoming.replaced_by_user_id,
+  case
+    when incoming.id is not null
+      then 'Backfilled from existing Asset replacement'
+    else 'Backfilled from Asset Registry current placement'
+  end
+from public.assets a
+left join public.asset_replacements incoming
+  on incoming.replacement_asset_id = a.id
+left join public.asset_replacements outgoing
+  on outgoing.replaced_asset_id = a.id;
+
+update public.assets
+set
+  property_id = null,
+  unit_id = null,
+  space_id = null,
+  updated_at = now()
+where status = 'replaced';
+
+alter table public.assets
+  add constraint assets_current_placement_shape check (
+    (
+      status = 'replaced'
+      and property_id is null
+      and unit_id is null
+      and space_id is null
+    )
+    or
+    (
+      status <> 'replaced'
+      and property_id is not null
+    )
+  );
 
 create table public.asset_condition_assessments (
   id uuid primary key,
@@ -196,6 +233,7 @@ as $asset_location_history_insert_guard$
 declare
   has_history boolean;
   previous_valid_to timestamptz;
+  asset_status text;
 begin
   if new.valid_to is not null then
     raise exception 'New Asset location history must start as the open interval.'
@@ -213,6 +251,17 @@ begin
     raise exception 'Runtime Asset location history requires an actor.'
       using errcode = '23514',
             constraint = 'asset_location_history_actor_required';
+  end if;
+
+  select status
+    into asset_status
+  from public.assets
+  where id = new.asset_id;
+
+  if asset_status = 'replaced' then
+    raise exception 'A replaced Asset has no current managed placement.'
+      using errcode = '23514',
+            constraint = 'asset_location_replaced_asset_unlocated';
   end if;
 
   select exists(
@@ -471,12 +520,13 @@ declare
   asset_property_id uuid;
   asset_unit_id uuid;
   asset_space_id uuid;
+  asset_status text;
   location_property_id uuid;
   location_unit_id uuid;
   location_space_id uuid;
 begin
-  select property_id, unit_id, space_id
-    into asset_property_id, asset_unit_id, asset_space_id
+  select property_id, unit_id, space_id, status
+    into asset_property_id, asset_unit_id, asset_space_id, asset_status
   from public.assets
   where id = target_asset_id;
 
@@ -490,8 +540,17 @@ begin
   where asset_id = target_asset_id
     and valid_to is null;
 
+  if asset_status = 'replaced' then
+    if open_count <> 0 then
+      raise exception 'Replaced Asset cannot retain an open current location.'
+        using errcode = '23514',
+              constraint = 'asset_replaced_location_must_be_closed';
+    end if;
+    return;
+  end if;
+
   if open_count <> 1 then
-    raise exception 'Asset must have exactly one open location interval.'
+    raise exception 'Located Asset must have exactly one open location interval.'
       using errcode = '23514',
             constraint = 'asset_location_open_interval_required';
   end if;
@@ -585,6 +644,52 @@ begin
     or new.unit_id is distinct from old.unit_id
     or new.space_id is distinct from old.space_id;
 
+  if old.status in ('active', 'inactive') and new.status = 'replaced' then
+    if metadata_changed then
+      raise exception 'Asset replacement cannot also rewrite metadata.'
+        using errcode = '23514',
+              constraint = 'asset_mixed_mutation_forbidden';
+    end if;
+
+    if new.version <> old.version + 1 then
+      raise exception 'Asset replacement must advance version by one.'
+        using errcode = '23514',
+              constraint = 'asset_version_step';
+    end if;
+
+    if new.property_id is not null
+       or new.unit_id is not null
+       or new.space_id is not null
+    then
+      raise exception 'Replaced Asset must clear its current placement projection.'
+        using errcode = '23514',
+              constraint = 'asset_replaced_projection_must_be_empty';
+    end if;
+
+    if not exists (
+      select 1
+      from public.asset_replacements r
+      where r.replaced_asset_id = old.id
+    ) then
+      raise exception 'Asset can become replaced only with a replacement relationship.'
+        using errcode = '23514',
+              constraint = 'asset_replacement_required';
+    end if;
+
+    if exists (
+      select 1
+      from public.asset_location_history h
+      where h.asset_id = old.id
+        and h.valid_to is null
+    ) then
+      raise exception 'Asset replacement must close predecessor current location.'
+        using errcode = '23514',
+              constraint = 'asset_replaced_location_must_be_closed';
+    end if;
+
+    return new;
+  end if;
+
   if placement_changed then
     if metadata_changed or new.status is distinct from old.status then
       raise exception 'Asset movement is a separate aggregate mutation.'
@@ -646,19 +751,6 @@ begin
   end if;
 
   if old.status = 'inactive' and new.status in ('active', 'retired') then
-    return new;
-  end if;
-
-  if old.status in ('active', 'inactive') and new.status = 'replaced' then
-    if not exists (
-      select 1
-      from public.asset_replacements r
-      where r.replaced_asset_id = old.id
-    ) then
-      raise exception 'Asset can become replaced only with a replacement relationship.'
-        using errcode = '23514',
-              constraint = 'asset_replacement_required';
-    end if;
     return new;
   end if;
 
