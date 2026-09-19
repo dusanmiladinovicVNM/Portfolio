@@ -184,6 +184,11 @@ function translate(error: unknown): DomainError | null {
           'ASSET_LOCATION_PROJECTION_DIVERGED',
           'Asset current projection must match exactly one open location interval.',
         );
+      case 'maintenance_issue_asset_history_snapshot_conflict':
+        return new DomainError(
+          'ASSET_LOCATION_HISTORY_MAINTENANCE_CONFLICT',
+          'Asset location history cannot be changed so that an existing Maintenance Issue falls outside its captured occurrence interval.',
+        );
       case 'asset_location_history_delete_forbidden':
       case 'asset_location_history_closed_immutable':
       case 'asset_location_history_update_invalid':
@@ -447,6 +452,21 @@ export class PostgresAssetRepository implements AssetRepository {
       ${this.sql.unsafe(locationSelect)}
       where asset_id = ${assetId}
         and valid_to is null
+      limit 1
+    `;
+    return rows.length === 0 ? null : mapLocation(rows[0]!);
+  }
+
+  async getLocationAt(
+    assetId: AssetId,
+    at: string,
+  ): Promise<AssetLocationHistory | null> {
+    const rows = await this.sql<AssetLocationRow[]>`
+      ${this.sql.unsafe(locationSelect)}
+      where asset_id = ${assetId}
+        and valid_from <= ${at}
+        and (valid_to is null or ${at} < valid_to)
+      order by valid_from desc, id desc
       limit 1
     `;
     return rows.length === 0 ? null : mapLocation(rows[0]!);

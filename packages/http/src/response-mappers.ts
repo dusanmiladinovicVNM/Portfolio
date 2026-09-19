@@ -25,6 +25,8 @@ import type {
   InspectionSignatureResponse,
   LeaseAgreementResponse,
   LeaseAmendmentResponse,
+  MaintenanceIssueResponse,
+  MaintenanceWorkOrderResponse,
   OwnershipPeriodResponse,
   PartyResponse,
   PropertyResponse,
@@ -60,6 +62,8 @@ import type {
   InspectionSignature,
   LeaseAgreement,
   LeaseAmendment,
+  MaintenanceIssue,
+  MaintenanceWorkOrder,
   OwnershipPeriod,
   Party,
   Property,
@@ -686,5 +690,51 @@ export function toCostReversalResponse(
     reason: reversal.reason,
     recordedAt: reversal.recordedAt,
     recordedByUserId: reversal.recordedByUserId,
+  };
+}
+
+
+export function toMaintenanceIssueResponse(
+  issue: MaintenanceIssue,
+): MaintenanceIssueResponse {
+  return {
+    id: issue.id,
+    code: issue.code,
+    propertyId: issue.propertyId,
+    unitId: issue.unitId,
+    spaceId: issue.spaceId,
+    assetId: issue.assetId,
+    inspectionFindingId: issue.inspectionFindingId,
+    title: issue.title,
+    description: issue.description,
+    priority: issue.priority,
+    status: issue.status,
+    reportedAt: issue.reportedAt,
+    resolvedAt: issue.resolvedAt,
+    cancelledAt: issue.cancelledAt,
+    version: issue.version,
+    recordedAt: issue.recordedAt,
+    recordedByUserId: issue.recordedByUserId,
+  };
+}
+
+export function toMaintenanceWorkOrderResponse(
+  workOrder: MaintenanceWorkOrder,
+): MaintenanceWorkOrderResponse {
+  return {
+    id: workOrder.id,
+    issueId: workOrder.issueId,
+    code: workOrder.code,
+    title: workOrder.title,
+    description: workOrder.description,
+    assignee: workOrder.assignee,
+    status: workOrder.status,
+    assignedAt: workOrder.assignedAt,
+    startedAt: workOrder.startedAt,
+    completedAt: workOrder.completedAt,
+    cancelledAt: workOrder.cancelledAt,
+    version: workOrder.version,
+    createdAt: workOrder.createdAt,
+    createdByUserId: workOrder.createdByUserId,
   };
 }

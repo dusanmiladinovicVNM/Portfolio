@@ -49,6 +49,8 @@ export type WorkMaterialId = EntityId<'WorkMaterial'>;
 export type ProjectAssetId = EntityId<'ProjectAsset'>;
 export type CostId = EntityId<'Cost'>;
 export type CostReversalId = EntityId<'CostReversal'>;
+export type MaintenanceIssueId = EntityId<'MaintenanceIssue'>;
+export type MaintenanceWorkOrderId = EntityId<'MaintenanceWorkOrder'>;
 
 export const asUserId = (value: string): UserId => value as UserId;
 export const asPropertyId = (value: string): PropertyId => value as PropertyId;
@@ -95,3 +97,5 @@ export const asWorkMaterialId = (value: string): WorkMaterialId => value as Work
 export const asProjectAssetId = (value: string): ProjectAssetId => value as ProjectAssetId;
 export const asCostId = (value: string): CostId => value as CostId;
 export const asCostReversalId = (value: string): CostReversalId => value as CostReversalId;
+export const asMaintenanceIssueId = (value: string): MaintenanceIssueId => value as MaintenanceIssueId;
+export const asMaintenanceWorkOrderId = (value: string): MaintenanceWorkOrderId => value as MaintenanceWorkOrderId;

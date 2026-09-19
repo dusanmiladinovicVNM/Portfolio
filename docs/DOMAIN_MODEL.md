@@ -216,6 +216,31 @@ ProjectAsset records that work `affected` an existing Asset or involved `install
 
 Canonical #17 deliberately does not create Cost/invoice records, Maintenance Issue/WorkOrder, material stock/procurement or contractor billing. Those later contexts may link back to Project/WorkRecord without becoming their source of truth.
 
+### Maintenance
+
+Canonical #19 separates reported maintenance problems from the operational tasks used to address them.
+
+```text
+MaintenanceIssue
+  └─ MaintenanceWorkOrder[]
+       └─ ServiceEventLink[]
+
+InspectionFinding -> optional MaintenanceIssue origin
+Cost -> MaintenanceIssue | MaintenanceWorkOrder
+```
+
+MaintenanceIssue is one reported problem. It owns immutable physical scope (Property plus optional Unit, Space and Asset), optional originating InspectionFinding, occurrence/recording provenance, priority and the Issue lifecycle. Unit/Space hierarchy must be coherent. When an Asset is present, the Issue resolves the authoritative AssetLocationHistory interval at `reportedAt`; recording the Issue later must not substitute the Asset's current projection. Later Asset movement, retirement or replacement never rewrites the Issue's historical scope, and PostgreSQL rejects a later backdated location-history closure that would make an already-recorded Issue fall outside the interval it captured.
+
+An InspectionFinding may originate at most one MaintenanceIssue. The Finding remains Inspection truth, must belong to the same Unit, and must already exist when the Issue is reported: `Issue.reportedAt >= Finding.createdAt`. Maintenance never edits Inspection content; PostgreSQL only freezes the linked Finding's `createdAt` provenance needed to preserve this cross-context invariant.
+
+MaintenanceWorkOrder is one operational task under one exact Issue. One Issue may have several WorkOrders. WorkOrder lifecycle is `draft -> assigned -> in_progress -> completed` with cancellation from any non-terminal state. A WorkOrder cannot be created before its parent Issue was recorded: `WorkOrder.createdAt >= Issue.recordedAt`. Assignment may target one active internal User or active Party and may be changed before work starts. Task definition and assignment freeze after start.
+
+Issue resolution requires at least one completed WorkOrder and every WorkOrder terminal. Issue cancellation requires every existing WorkOrder cancelled. Parent/child writes share a PostgreSQL lock protocol: WorkOrder writes lock the parent Issue, so terminal Issue transitions serialize with concurrent child creation or lifecycle changes.
+
+ServiceEvent remains Asset/Service completed-work truth. Maintenance stores only an append-only relational link. A linked ServiceEvent must belong to the exact Issue Asset and its `performedAt` must lie inside the WorkOrder execution interval. WorkOrder completion cannot predate already-linked service work, and a WorkOrder with linked ServiceEvents cannot be cancelled. Link creation locks the WorkOrder so it serializes with cancellation/completion checks.
+
+Maintenance owns no money fields. Cost remains financial truth and may use MaintenanceIssue or MaintenanceWorkOrder as typed CostSource values.
+
 ### Cost
 
 Canonical #18 defines Cost as one append-only positive monetary allocation to exactly one typed business source. Cost is a financial fact/projection and never substitutes for the source entity's own state or lifecycle.
@@ -227,7 +252,7 @@ Cost
          └─ optional replacement Cost
 ```
 
-Supported source grains are Property, Unit, Space, Asset, WarrantyClaim, ServiceEvent, ImprovementProject, WorkItem, WorkRecord and WorkMaterial. The database uses typed foreign keys plus a discriminator and rejects ambiguous or mismatched source shapes.
+Supported source grains are Property, Unit, Space, Asset, WarrantyClaim, ServiceEvent, ImprovementProject, WorkItem, WorkRecord, WorkMaterial, MaintenanceIssue and MaintenanceWorkOrder. The database uses typed foreign keys plus a discriminator and rejects ambiguous or mismatched source shapes.
 
 Amount is exact two-decimal money. PostgreSQL stores the unrounded value as exact `numeric`, then independently rejects values with more than two decimal places and amounts outside the domain's 16-digit whole-part range; direct SQL therefore cannot silently turn `1.005` into a rounded ledger fact. Cost currencies are deliberately limited to the configured set `CHF|EUR|RSD`; this phase does not claim generic ISO 4217/minor-unit support. Unlike currencies are never implicitly summed.
 

@@ -25,3 +25,5 @@ export * from './assets/asset-service.js';
 export * from './improvements/improvement.js';
 
 export * from './costs/cost.js';
+
+export * from './maintenance/maintenance.js';

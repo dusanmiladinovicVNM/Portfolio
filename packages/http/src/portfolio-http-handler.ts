@@ -12,6 +12,7 @@ import {
   type ImprovementRepository,
   type InspectionRepository,
   type LeaseRepository,
+  type MaintenanceRepository,
   type OwnershipRepository,
   type PartyRepository,
   type PortfolioRepository,
@@ -29,6 +30,7 @@ import { errorResponse } from './http-utils.js';
 import { handleImprovementHttp } from './improvement-http-routes.js';
 import { handleInspectionHttp } from './inspection-http-routes.js';
 import { handleLeaseHttp } from './lease-http-routes.js';
+import { handleMaintenanceHttp } from './maintenance-http-routes.js';
 import { handleOwnershipHttp } from './ownership-http-routes.js';
 import { handlePartyHttp } from './party-http-routes.js';
 import { handlePortfolioHttp } from './portfolio-http-routes.js';
@@ -47,6 +49,7 @@ export interface PortfolioHttpDependencies {
   readonly inspectionRepository: InspectionRepository;
   readonly improvementRepository: ImprovementRepository;
   readonly costRepository: CostRepository;
+  readonly maintenanceRepository: MaintenanceRepository;
   readonly staffDirectoryRepository: StaffDirectoryRepository;
   readonly fileStorage: FileStoragePort;
   readonly clock: ClockPort;
@@ -109,7 +112,9 @@ function errorStatus(code: string): number {
     code === 'TENANCY_ASSET_ALREADY_ASSIGNED' ||
     code === 'COST_ALREADY_REVERSED' ||
     code === 'COST_REPLACEMENT_ALREADY_USED' ||
-    code === 'COST_REPLACEMENT_ALREADY_REVERSED'
+    code === 'COST_REPLACEMENT_ALREADY_REVERSED' ||
+    code === 'MAINTENANCE_FINDING_ALREADY_LINKED' ||
+    code === 'MAINTENANCE_SERVICE_EVENT_ALREADY_LINKED'
   ) {
     return 409;
   }
@@ -141,6 +146,23 @@ export function createPortfolioHttpHandler(
 
       const handlers = [
         () =>
+          handleMaintenanceHttp(
+            {
+              maintenanceRepository: deps.maintenanceRepository,
+              portfolioRepository: deps.portfolioRepository,
+              assetRepository: deps.assetRepository,
+              assetServiceRepository: deps.assetServiceRepository,
+              inspectionRepository: deps.inspectionRepository,
+              partyRepository: deps.partyRepository,
+              staffDirectoryRepository: deps.staffDirectoryRepository,
+              idGenerator: deps.idGenerator,
+              clock: deps.clock,
+            },
+            actor,
+            request,
+            path,
+          ),
+        () =>
           handleCostHttp(
             {
               costRepository: deps.costRepository,
@@ -149,6 +171,7 @@ export function createPortfolioHttpHandler(
               assetRepository: deps.assetRepository,
               assetServiceRepository: deps.assetServiceRepository,
               improvementRepository: deps.improvementRepository,
+              maintenanceRepository: deps.maintenanceRepository,
               idGenerator: deps.idGenerator,
               clock: deps.clock,
             },

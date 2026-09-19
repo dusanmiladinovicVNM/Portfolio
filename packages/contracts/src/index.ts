@@ -11,3 +11,5 @@ export * from './service.js';
 export * from './improvements.js';
 
 export * from './costs.js';
+
+export * from './maintenance.js';

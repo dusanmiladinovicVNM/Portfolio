@@ -48,3 +48,7 @@ export * from './improvements/improvement-queries.js';
 export * from './costs/cost-repository.js';
 export * from './costs/cost-commands.js';
 export * from './costs/cost-queries.js';
+
+export * from './maintenance/maintenance-repository.js';
+export * from './maintenance/maintenance-commands.js';
+export * from './maintenance/maintenance-queries.js';

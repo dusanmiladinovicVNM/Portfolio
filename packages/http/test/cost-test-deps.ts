@@ -45,6 +45,16 @@ function sameSource(left: CostSource, right: CostSource): boolean {
         right.kind === 'work_material' &&
         left.workMaterialId === right.workMaterialId
       );
+    case 'maintenance_issue':
+      return (
+        right.kind === 'maintenance_issue' &&
+        left.maintenanceIssueId === right.maintenanceIssueId
+      );
+    case 'maintenance_work_order':
+      return (
+        right.kind === 'maintenance_work_order' &&
+        left.maintenanceWorkOrderId === right.maintenanceWorkOrderId
+      );
   }
 }
 

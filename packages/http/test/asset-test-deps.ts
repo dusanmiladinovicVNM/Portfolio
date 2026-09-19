@@ -80,6 +80,19 @@ export class InMemoryAssetRepository implements AssetRepository {
   async getCurrentLocation(assetId: AssetId): Promise<AssetLocationHistory | null> {
     return this.locations.get(assetId)?.find((item) => item.validTo === null) ?? null;
   }
+  async getLocationAt(
+    assetId: AssetId,
+    at: string,
+  ): Promise<AssetLocationHistory | null> {
+    const target = Date.parse(at);
+    return (
+      this.locations.get(assetId)?.find(
+        (item) =>
+          Date.parse(item.validFrom) <= target &&
+          (item.validTo === null || target < Date.parse(item.validTo)),
+      ) ?? null
+    );
+  }
   async listLocationHistory(assetId: AssetId): Promise<readonly AssetLocationHistory[]> {
     return this.locations.get(assetId) ?? [];
   }
