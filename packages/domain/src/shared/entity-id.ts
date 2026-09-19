@@ -37,6 +37,11 @@ export type AssetReplacementId = EntityId<'AssetReplacement'>;
 export type AssetLocationHistoryId = EntityId<'AssetLocationHistory'>;
 export type AssetConditionAssessmentId = EntityId<'AssetConditionAssessment'>;
 export type TenancyAssetAssignmentId = EntityId<'TenancyAssetAssignment'>;
+export type WarrantyId = EntityId<'Warranty'>;
+export type WarrantyClaimId = EntityId<'WarrantyClaim'>;
+export type ServicePlanId = EntityId<'ServicePlan'>;
+export type ServiceEventId = EntityId<'ServiceEvent'>;
+export type ServicePartId = EntityId<'ServicePart'>;
 
 export const asUserId = (value: string): UserId => value as UserId;
 export const asPropertyId = (value: string): PropertyId => value as PropertyId;
@@ -71,3 +76,8 @@ export const asAssetReplacementId = (value: string): AssetReplacementId => value
 export const asAssetLocationHistoryId = (value: string): AssetLocationHistoryId => value as AssetLocationHistoryId;
 export const asAssetConditionAssessmentId = (value: string): AssetConditionAssessmentId => value as AssetConditionAssessmentId;
 export const asTenancyAssetAssignmentId = (value: string): TenancyAssetAssignmentId => value as TenancyAssetAssignmentId;
+export const asWarrantyId = (value: string): WarrantyId => value as WarrantyId;
+export const asWarrantyClaimId = (value: string): WarrantyClaimId => value as WarrantyClaimId;
+export const asServicePlanId = (value: string): ServicePlanId => value as ServicePlanId;
+export const asServiceEventId = (value: string): ServiceEventId => value as ServiceEventId;
+export const asServicePartId = (value: string): ServicePartId => value as ServicePartId;
