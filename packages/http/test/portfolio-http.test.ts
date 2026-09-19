@@ -43,6 +43,7 @@ import {
   InMemoryInspectionRepository,
   InMemoryStaffDirectoryRepository,
 } from './inspection-test-deps.js';
+import { InMemoryImprovementRepository } from './improvement-test-deps.js';
 
 const adminIdentity: VerifiedIdentity = {
   provider: 'supabase',
@@ -310,6 +311,7 @@ function buildHandler(
     assetRepository: new InMemoryAssetRepository(),
     assetInventoryRepository: new InMemoryAssetInventoryRepository(),
     assetServiceRepository: new InMemoryAssetServiceRepository(),
+    improvementRepository: new InMemoryImprovementRepository(),
     portfolioRepository: new InMemoryPortfolioRepository(),
     partyRepository: new InMemoryPartyRepository(),
     ownershipRepository: new InMemoryOwnershipRepository(),
