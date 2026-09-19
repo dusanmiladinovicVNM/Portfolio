@@ -15,3 +15,5 @@ export * from './postgres/postgres-improvement-repository.js';
 export * from './postgres/postgres-cost-repository.js';
 
 export * from './postgres/postgres-maintenance-repository.js';
+
+export * from './postgres/postgres-access-item-repository.js';
