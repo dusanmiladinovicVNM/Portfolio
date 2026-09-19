@@ -4,6 +4,8 @@ import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   activateTenancyCommand,
+  changeAssetStatusCommand,
+  createAssetCommand,
   addInspectionSignatureCommand,
   attachInspectionEvidenceCommand,
   cancelLeaseAgreementCommand,
@@ -30,9 +32,13 @@ import {
   listSpacesByUnitQuery,
   listTenanciesByUnitQuery,
   listUnitsByPropertyQuery,
+  listAssetsByPropertyQuery,
+  listAssetsByUnitQuery,
   lockInspectionCommand,
   planTenancyCommand,
   publishInspectionSchemaVersionCommand,
+  replaceAssetCommand,
+  updateAssetMetadataCommand,
   resolveActor,
   saveInspectionSectionCommand,
   startInspectionCommand,
@@ -58,6 +64,7 @@ import {
   type Party,
 } from '@portfolio/domain';
 import {
+  PostgresAssetRepository,
   PostgresDocumentRepository,
   PostgresInspectionRepository,
   PostgresLeaseRepository,
@@ -75,6 +82,7 @@ if (!connectionString) {
 
 const sql = postgres(connectionString, { max: 1 });
 const portfolioRepository = new PostgresPortfolioRepository(sql);
+const assetRepository = new PostgresAssetRepository(sql);
 const partyRepository = new PostgresPartyRepository(sql);
 const ownershipRepository = new PostgresOwnershipRepository(sql);
 const leaseRepository = new PostgresLeaseRepository(sql);
@@ -99,6 +107,9 @@ class SequenceIds implements IdGenerator {
 async function resetAndMigrate(): Promise<void> {
   await sql.unsafe(
     `drop table if exists
+      public.asset_replacements,
+      public.asset_identifiers,
+      public.assets,
       public.inspection_final_snapshots,
       public.inspection_unlocks,
       public.inspection_signatures,
@@ -182,6 +193,9 @@ beforeAll(async () => {
 afterAll(async () => {
   await sql.unsafe(
     `drop table if exists
+      public.asset_replacements,
+      public.asset_identifiers,
+      public.assets,
       public.inspection_final_snapshots,
       public.inspection_unlocks,
       public.inspection_signatures,
@@ -3158,6 +3172,475 @@ describe('PostgreSQL infrastructure', () => {
 
     const persistedInspection = await inspectionRepository.getById(inspection.id);
     expect(persistedInspection?.schemaVersionId).toBe(publishedV1.id);
+  });
+
+
+  it('persists Asset Registry identity, lifecycle and replacement invariants', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+
+    const ids = new SequenceIds([
+      'b1000000-0000-4000-8000-000000000001',
+      'b1000000-0000-4000-8000-000000000002',
+      'b1000000-0000-4000-8000-000000000003',
+      'b1000000-0000-4000-8000-000000000004',
+      'b1000000-0000-4000-8000-000000000005',
+      'b1000000-0000-4000-8000-000000000006',
+      'b1000000-0000-4000-8000-000000000007',
+      'b1000000-0000-4000-8000-000000000008',
+      'b1000000-0000-4000-8000-000000000009',
+      'b1000000-0000-4000-8000-000000000010',
+      'b1000000-0000-4000-8000-000000000011',
+      'b1000000-0000-4000-8000-000000000012',
+      'b1000000-0000-4000-8000-000000000013',
+      'b1000000-0000-4000-8000-000000000014',
+      'b1000000-0000-4000-8000-000000000015',
+    ]);
+
+    const property = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-ASSET-INT',
+        name: 'Asset Integration',
+        propertyType: 'apartment_building',
+        street: 'Asset Street',
+        houseNumber: '1',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+
+    const unit = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-ASSET-1',
+        unitNumber: 'A1',
+        unitType: 'apartment',
+      },
+    );
+    const kitchen = await createSpaceCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        unitId: unit.id,
+        code: 'KITCHEN',
+        name: 'Kitchen',
+        spaceType: 'kitchen',
+      },
+    );
+
+    const otherUnit = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-ASSET-2',
+        unitNumber: 'A2',
+        unitType: 'apartment',
+      },
+    );
+    const otherSpace = await createSpaceCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        unitId: otherUnit.id,
+        code: 'KITCHEN',
+        name: 'Other kitchen',
+        spaceType: 'kitchen',
+      },
+    );
+
+    const asset = await createAssetCommand(
+      { assetRepository, portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'ASSET-FRIDGE-001',
+        name: 'Kitchen refrigerator',
+        propertyId: property.id,
+        unitId: unit.id,
+        spaceId: kitchen.id,
+        manufacturer: 'Bosh',
+        model: 'KGN39',
+        identifiers: [
+          {
+            identifierType: 'serial_number',
+            value: 'SN-001',
+          },
+          {
+            identifierType: 'product_number',
+            value: 'PN-001',
+            label: 'E-Nr',
+          },
+          {
+            identifierType: 'inventory_tag',
+            value: 'INV-001',
+          },
+        ],
+      },
+    );
+
+    expect(asset).toMatchObject({
+      status: 'active',
+      version: 1,
+      propertyId: property.id,
+      unitId: unit.id,
+      spaceId: kitchen.id,
+      manufacturer: 'Bosh',
+      model: 'KGN39',
+    });
+    expect(asset.identifiers).toHaveLength(3);
+
+    await expect(
+      createAssetCommand(
+        { assetRepository, portfolioRepository, idGenerator: ids },
+        actor,
+        {
+          code: 'ASSET-BAD-SPACE',
+          name: 'Wrong placement',
+          propertyId: property.id,
+          unitId: unit.id,
+          spaceId: otherSpace.id,
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'ASSET_SPACE_UNIT_MISMATCH' });
+
+    const otherAsset = await createAssetCommand(
+      { assetRepository, portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'ASSET-OTHER-UNIT',
+        name: 'Other unit appliance',
+        propertyId: property.id,
+        unitId: otherUnit.id,
+        spaceId: otherSpace.id,
+      },
+    );
+
+    await expect(
+      sql`
+        update public.assets
+        set unit_id = ${otherUnit.id},
+            space_id = ${otherSpace.id}
+        where id = ${asset.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_identity_placement_immutable',
+    });
+
+    await expect(
+      sql`
+        update public.assets
+        set status = 'replaced',
+            version = version + 1
+        where id = ${asset.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_replacement_required',
+    });
+
+    await expect(
+      sql`
+        insert into public.asset_replacements (
+          id, replaced_asset_id, replacement_asset_id,
+          replaced_by_user_id, replaced_at
+        ) values (
+          'b1f00000-0000-4000-8000-000000000001',
+          ${asset.id}, ${otherAsset.id}, ${actor.userId},
+          '2026-09-22T09:00:00.000Z'
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_replacement_placement_mismatch',
+    });
+
+    await expect(
+      sql.begin(async (tx) => {
+        await tx`
+          insert into public.assets (
+            id, code, name, property_id, unit_id, space_id, status, version
+          ) values (
+            'b1f00000-0000-4000-8000-000000000002',
+            'ASSET-DANGLING-SUCCESSOR',
+            'Dangling successor',
+            ${property.id},
+            ${unit.id},
+            ${kitchen.id},
+            'active',
+            1
+          )
+        `;
+
+        await tx`
+          insert into public.asset_replacements (
+            id, replaced_asset_id, replacement_asset_id,
+            replaced_by_user_id, replaced_at
+          ) values (
+            'b1f00000-0000-4000-8000-000000000003',
+            ${asset.id},
+            'b1f00000-0000-4000-8000-000000000002',
+            ${actor.userId},
+            '2026-09-22T09:05:00.000Z'
+          )
+        `;
+      }),
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_replacement_status_required',
+    });
+
+    await expect(
+      sql.begin(async (tx) => {
+        await tx`
+          insert into public.assets (
+            id, code, name, property_id, unit_id, space_id, status, version
+          ) values
+          (
+            'b1f00000-0000-4000-8000-000000000004',
+            'ASSET-CYCLE-A',
+            'Cycle A',
+            ${property.id},
+            ${unit.id},
+            ${kitchen.id},
+            'active',
+            1
+          ),
+          (
+            'b1f00000-0000-4000-8000-000000000005',
+            'ASSET-CYCLE-B',
+            'Cycle B',
+            ${property.id},
+            ${unit.id},
+            ${kitchen.id},
+            'active',
+            1
+          )
+        `;
+
+        await tx`
+          insert into public.asset_replacements (
+            id, replaced_asset_id, replacement_asset_id,
+            replaced_by_user_id, replaced_at
+          ) values (
+            'b1f00000-0000-4000-8000-000000000006',
+            'b1f00000-0000-4000-8000-000000000004',
+            'b1f00000-0000-4000-8000-000000000005',
+            ${actor.userId},
+            '2026-09-22T09:06:00.000Z'
+          )
+        `;
+
+        await tx`
+          insert into public.asset_replacements (
+            id, replaced_asset_id, replacement_asset_id,
+            replaced_by_user_id, replaced_at
+          ) values (
+            'b1f00000-0000-4000-8000-000000000007',
+            'b1f00000-0000-4000-8000-000000000005',
+            'b1f00000-0000-4000-8000-000000000004',
+            ${actor.userId},
+            '2026-09-22T09:07:00.000Z'
+          )
+        `;
+      }),
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_replacement_cycle',
+    });
+
+    const buildingAsset = await createAssetCommand(
+      { assetRepository, portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'ASSET-BUILDING-LIFT',
+        name: 'Building lift controller',
+        propertyId: property.id,
+      },
+    );
+    expect(buildingAsset).toMatchObject({
+      propertyId: property.id,
+      unitId: null,
+      spaceId: null,
+    });
+
+    await expect(
+      createAssetCommand(
+        { assetRepository, portfolioRepository, idGenerator: ids },
+        actor,
+        {
+          code: 'ASSET-DUP-INVENTORY',
+          name: 'Duplicate inventory tag',
+          propertyId: property.id,
+          identifiers: [
+            {
+              identifierType: 'inventory_tag',
+              value: ' inv-001 ',
+            },
+          ],
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'ASSET_IDENTIFIER_GLOBAL_CONFLICT' });
+
+    await expect(
+      sql`
+        insert into public.asset_identifiers (
+          id, asset_id, identifier_type, value
+        ) values (
+          'b1f00000-0000-4000-8000-000000000008',
+          ${otherAsset.id},
+          'inventory_tag',
+          'inv-001'
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23505',
+      constraint_name: 'asset_identifiers_inventory_tag_uq',
+    });
+
+    await expect(
+      sql`
+        insert into public.asset_identifiers (
+          id, asset_id, identifier_type, value
+        ) values (
+          'b1f00000-0000-4000-8000-000000000009',
+          ${otherAsset.id},
+          'serial_number',
+          ' SN-DIRECT '
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_identifiers_value_canonical',
+    });
+
+    const corrected = await updateAssetMetadataCommand(
+      assetRepository,
+      actor,
+      asset.id,
+      {
+        expectedVersion: asset.version,
+        manufacturer: 'Bosch',
+      },
+    );
+    expect(corrected).toMatchObject({
+      id: asset.id,
+      manufacturer: 'Bosch',
+      version: 2,
+      propertyId: property.id,
+      unitId: unit.id,
+      spaceId: kitchen.id,
+    });
+
+    const inactive = await changeAssetStatusCommand(
+      assetRepository,
+      actor,
+      asset.id,
+      corrected.version,
+      'inactive',
+    );
+    expect(inactive).toMatchObject({ status: 'inactive', version: 3 });
+
+    const replacementResult = await replaceAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-22T09:10:00.000Z' },
+      },
+      actor,
+      asset.id,
+      {
+        expectedVersion: inactive.version,
+        code: 'ASSET-FRIDGE-002',
+        name: 'Replacement refrigerator',
+        manufacturer: 'Bosch',
+        model: 'KGN49',
+        identifiers: [
+          {
+            identifierType: 'serial_number',
+            value: 'SN-002',
+          },
+        ],
+      },
+    );
+
+    expect(replacementResult.replacedAsset).toMatchObject({
+      id: asset.id,
+      status: 'replaced',
+      version: 4,
+    });
+    expect(replacementResult.replacementAsset).toMatchObject({
+      status: 'active',
+      version: 1,
+      unitId: unit.id,
+      spaceId: kitchen.id,
+    });
+    expect(replacementResult.replacement).toMatchObject({
+      replacedAssetId: asset.id,
+      replacementAssetId: replacementResult.replacementAsset.id,
+      replacedByUserId: actor.userId,
+    });
+
+    await expect(
+      sql`
+        update public.asset_identifiers
+        set value = 'SN-REWRITTEN'
+        where asset_id = ${asset.id}
+          and identifier_type = 'serial_number'
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_identifier_immutable',
+    });
+
+    await expect(
+      changeAssetStatusCommand(
+        assetRepository,
+        actor,
+        asset.id,
+        replacementResult.replacedAsset.version,
+        'active',
+      ),
+    ).rejects.toMatchObject({ code: 'ASSET_TERMINAL' });
+
+    const assets = await listAssetsByUnitQuery(
+      assetRepository,
+      portfolioRepository,
+      actor,
+      unit.id,
+    );
+    expect(assets.map((item) => item.code)).toEqual([
+      'ASSET-FRIDGE-001',
+      'ASSET-FRIDGE-002',
+    ]);
+
+    const persistedOld = await assetRepository.getById(asset.id);
+    const persistedReplacement = await assetRepository.getById(
+      replacementResult.replacementAsset.id,
+    );
+    expect(persistedOld?.status).toBe('replaced');
+    expect(persistedReplacement?.identifiers).toHaveLength(1);
+
+    const propertyAssets = await listAssetsByPropertyQuery(
+      assetRepository,
+      portfolioRepository,
+      actor,
+      property.id,
+    );
+    expect(propertyAssets.map((item) => item.code)).toEqual([
+      'ASSET-BUILDING-LIFT',
+      'ASSET-FRIDGE-001',
+      'ASSET-FRIDGE-002',
+      'ASSET-OTHER-UNIT',
+    ]);
   });
 
 });

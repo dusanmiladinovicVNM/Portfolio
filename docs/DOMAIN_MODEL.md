@@ -4,17 +4,17 @@
 
 ```text
 Property
-  └─ Unit
-      ├─ Space
-      ├─ Ownership
-      ├─ Tenancy
-      │   ├─ TenancyParty
-      │   ├─ LeaseAgreement
-      │   └─ Inspection
-      ├─ Asset
-      ├─ ImprovementProject
-      ├─ Issue / WorkOrder
-      └─ Cost
+  ├─ Unit
+  │   ├─ Space
+  │   ├─ Ownership
+  │   └─ Tenancy
+  │       ├─ TenancyParty
+  │       ├─ LeaseAgreement
+  │       └─ Inspection
+  ├─ Asset
+  ├─ ImprovementProject
+  ├─ Issue / WorkOrder
+  └─ Cost
 ```
 
 Cross-cutting concepts:
@@ -79,7 +79,7 @@ Inspection
 The Inspection lifecycle is currently:
 
 ```text
-draft → in_progress → locked → finalized   (#12 completes finalization)
+draft → in_progress → locked → finalized   (#13 completed evidence/finalization)
    └──────────────→ cancelled
 ```
 
@@ -89,7 +89,7 @@ An Inspection references one exact published schema version. Publishing freezes 
 
 Responses are schema-driven evidence, not automatically canonical property facts. A meter value typed into a handover form remains an InspectionResponse until the Meters domain records the corresponding MeterReading. The same boundary applies to keys, assets and other operational facts.
 
-A Finding is an observed condition/problem. It is not yet an Issue or WorkOrder; PR #18 may promote/link a finding into maintenance workflow without changing the historical inspection evidence.
+A Finding is an observed condition/problem. It is not yet an Issue or WorkOrder; canonical PR #19 may promote/link a finding into maintenance workflow without changing the historical inspection evidence.
 
 The inspector assignment is explicit and separate from `createdByUserId`. An inspector may work only on inspections assigned to them; admin/manager roles have broader operational access.
 
@@ -105,18 +105,41 @@ Inspection
 
 Evidence can attach at Inspection, Section or Item grain. Binary identity remains owned by Documents/FileStorage.
 
-Signature requirements are part of the exact InspectionSchemaVersion through `requiredSignatureRoles`. A signature records an evidentiary signer role plus an optional Party reference and signer-name snapshot. The role is the role asserted for that signature event; PR #13 does not infer or independently prove landlord/tenant legal relationship from the Party reference.
+Signature requirements are part of the exact InspectionSchemaVersion through `requiredSignatureRoles`. A signature records an evidentiary signer role, signer-name snapshot and, where applicable, the Party holding that role. For `tenant`, the application verifies that the Party is a tenant/co-tenant of the Inspection's exact Tenancy. For `landlord`, it verifies that the Party is an owner of the inspected Unit on the Inspection lock date. Other signature roles do not currently infer additional legal relationships beyond Party existence.
 
 Unlocking a locked Inspection is an explicit admin/manager workflow. It returns the Inspection to `in_progress`, creates an append-only UnlockRecord, advances version/contentRevision and invalidates all active signatures. Prior signatures remain historical records.
 
-Finalization creates one immutable FinalSnapshot and transitions `locked → finalized` in one database transaction. Snapshot row metadata identifies the locked source revision that was CAS-validated; the snapshot payload contains the resulting finalized Inspection header plus exact schema, responses, findings, evidence references and active signatures.
+Finalization creates one immutable FinalSnapshot and transitions `locked → finalized` in one database transaction. Snapshot row metadata identifies the locked source revision that was CAS-validated. Finalization requires the schema-required **active** signature roles, while the immutable snapshot payload preserves the resulting finalized Inspection header plus exact schema, responses, findings, evidence references, the complete signature history (including invalidated signatures) and the complete controlled-unlock history.
 
 The final PDF is a derived projection of FinalSnapshot behind `PdfPort`. Rendering/storage is deliberately outside the atomic finalization transaction.
 
 ### Asset
 
-One physical identifiable item with stable identity across location changes, servicing and eventual retirement/replacement.
+One physical identifiable item with stable identity across placement changes, servicing and eventual retirement/replacement.
 
+PR #14 establishes the registry grain:
+
+```text
+Asset
+  ├─ Property                 required current placement context
+  ├─ optional Unit            must belong to Property
+  ├─ optional Space           requires Unit and must belong to it
+  ├─ correctable name/manufacturer/model
+  ├─ AssetIdentifier[]        structured append-only identifiers
+  └─ AssetReplacement         predecessor → successor physical identity
+```
+
+Valid current-placement shapes are therefore `Property only`, `Property + Unit`, or `Property + Unit + Space`. A building lift, central boiler or fire-control panel does not require a synthetic `COMMON` Unit.
+
+`Asset.id` is the immutable physical identity. `code` is stable business identity. `name`, `manufacturer` and `model` are correctable master metadata and may be corrected through an optimistic-CAS mutation without creating a new physical Asset. Dedicated metadata history is not introduced here; future AuditEvent/DomainEvent infrastructure should capture actor/time/delta for such corrections.
+
+PR #14 deliberately does not expose a move command. Current Property/Unit/Space placement is protected from mutation until canonical PR #15 introduces `AssetLocationHistory`; that history will make placement temporal without changing Asset identity. Replacement is also not a move: the successor inherits the predecessor's exact current placement.
+
+An Asset starts active and has an optimistic aggregate version. Supported metadata corrections and lifecycle transitions each advance that version exactly once. Normal lifecycle transitions may temporarily inactivate or permanently retire it. The `replaced` status is established only together with an append-only successor relationship, leaving the old physical identity intact.
+
+Serial, product, inventory and similar identifiers are first-class append-only child records rather than notes. Identifier values are canonicalized against surrounding whitespace at the DB boundary. `inventory_tag`, `imei` and `mac_address` are globally unique; serial/product/barcode remain intentionally weaker until their business scope is explicitly defined. MAC/IMEI type-specific canonicalization is deferred rather than guessed prematurely.
+
+Service, warranty, condition history and tenancy inventory remain later bounded-context work.
 ### ImprovementProject
 
 A body of work performed on a Property/Unit. It is not an Asset. A project may install, remove or replace assets.

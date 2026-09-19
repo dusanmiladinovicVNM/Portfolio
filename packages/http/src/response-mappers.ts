@@ -1,4 +1,6 @@
 import type {
+  AssetReplacementResponse,
+  AssetResponse,
   DocumentLinkResponse,
   DocumentResponse,
   DocumentVersionResponse,
@@ -20,6 +22,8 @@ import type {
   UnitResponse,
 } from '@portfolio/contracts';
 import type {
+  Asset,
+  AssetReplacement,
   Document,
   DocumentLink,
   DocumentVersion,
@@ -381,5 +385,40 @@ export function toInspectionFinalSnapshotResponse(
     contentRevision: snapshot.contentRevision,
     createdByUserId: snapshot.createdByUserId,
     createdAt: snapshot.createdAt,
+  };
+}
+
+
+export function toAssetResponse(asset: Asset): AssetResponse {
+  return {
+    id: asset.id,
+    code: asset.code,
+    name: asset.name,
+    propertyId: asset.propertyId,
+    unitId: asset.unitId,
+    spaceId: asset.spaceId,
+    manufacturer: asset.manufacturer,
+    model: asset.model,
+    status: asset.status,
+    version: asset.version,
+    identifiers: asset.identifiers.map((identifier) => ({
+      id: identifier.id,
+      assetId: identifier.assetId,
+      identifierType: identifier.identifierType,
+      value: identifier.value,
+      label: identifier.label,
+    })),
+  };
+}
+
+export function toAssetReplacementResponse(
+  replacement: AssetReplacement,
+): AssetReplacementResponse {
+  return {
+    id: replacement.id,
+    replacedAssetId: replacement.replacedAssetId,
+    replacementAssetId: replacement.replacementAssetId,
+    replacedByUserId: replacement.replacedByUserId,
+    replacedAt: replacement.replacedAt,
   };
 }

@@ -40,6 +40,7 @@ import {
   type UnitId,
 } from '@portfolio/domain';
 import { createPortfolioHttpHandler } from '../src/index.js';
+import { InMemoryAssetRepository } from './asset-test-deps.js';
 import {
   FixedClock,
   InMemoryDocumentRepository,
@@ -446,6 +447,7 @@ function buildHandler() {
   const leaseRepository = new InMemoryLeaseRepository();
 
   const handler = createPortfolioHttpHandler({
+    assetRepository: new InMemoryAssetRepository(),
     portfolioRepository: new EmptyPortfolioRepository(),
     partyRepository,
     ownershipRepository: new EmptyOwnershipRepository(),

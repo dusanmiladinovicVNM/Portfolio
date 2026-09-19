@@ -32,6 +32,7 @@ import {
   type UnitId,
 } from '@portfolio/domain';
 import { createPortfolioHttpHandler } from '../src/index.js';
+import { InMemoryAssetRepository } from './asset-test-deps.js';
 import {
   FixedClock,
   InMemoryDocumentRepository,
@@ -255,6 +256,7 @@ function buildHandler(
   ],
 ) {
   return createPortfolioHttpHandler({
+    assetRepository: new InMemoryAssetRepository(),
     portfolioRepository: new InMemoryPortfolioRepository(),
     partyRepository: new InMemoryPartyRepository(),
     ownershipRepository: new InMemoryOwnershipRepository(),
@@ -320,6 +322,256 @@ describe('Portfolio HTTP boundary', () => {
     expect(listed.status).toBe(200);
     expect(await listed.json()).toMatchObject({
       data: { items: [{ code: 'PROP-0001' }] },
+    });
+  });
+
+  it('runs Asset Registry create, lifecycle and replacement through HTTP', async () => {
+    const handler = buildHandler([
+      'd1000000-0000-4000-8000-000000000001',
+      'd1000000-0000-4000-8000-000000000002',
+      'd1000000-0000-4000-8000-000000000003',
+      'd1000000-0000-4000-8000-000000000004',
+      'd1000000-0000-4000-8000-000000000005',
+      'd1000000-0000-4000-8000-000000000006',
+      'd1000000-0000-4000-8000-000000000007',
+      'd1000000-0000-4000-8000-000000000008',
+      'd1000000-0000-4000-8000-000000000009',
+    ]);
+
+    const propertyResponse = await handler(
+      new Request('https://portfolio.test/properties', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ...propertyBody,
+          code: 'PROP-ASSET-HTTP',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(propertyResponse.status).toBe(201);
+    const property = (await propertyResponse.json()).data;
+
+    const unitResponse = await handler(
+      new Request('https://portfolio.test/units', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          propertyId: property.id,
+          code: 'UNIT-ASSET-HTTP',
+          unitNumber: 'A-HTTP',
+          unitType: 'apartment',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(unitResponse.status).toBe(201);
+    const unit = (await unitResponse.json()).data;
+
+    const spaceResponse = await handler(
+      new Request('https://portfolio.test/spaces', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          unitId: unit.id,
+          code: 'KITCHEN',
+          name: 'Kitchen',
+          spaceType: 'kitchen',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(spaceResponse.status).toBe(201);
+    const space = (await spaceResponse.json()).data;
+
+    const assetResponse = await handler(
+      new Request('https://portfolio.test/assets', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          code: 'ASSET-HTTP-001',
+          name: 'Refrigerator',
+          propertyId: property.id,
+          unitId: unit.id,
+          spaceId: space.id,
+          manufacturer: 'Bosh',
+          model: 'KGN39',
+          identifiers: [
+            {
+              identifierType: 'serial_number',
+              value: 'HTTP-SN-001',
+            },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(assetResponse.status).toBe(201);
+    const asset = (await assetResponse.json()).data;
+    expect(asset).toMatchObject({
+      status: 'active',
+      version: 1,
+      propertyId: property.id,
+      unitId: unit.id,
+      spaceId: space.id,
+      manufacturer: 'Bosh',
+      model: 'KGN39',
+    });
+    expect(asset.identifiers).toHaveLength(1);
+
+    const buildingAssetResponse = await handler(
+      new Request('https://portfolio.test/assets', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          code: 'ASSET-BUILDING-HTTP',
+          name: 'Lift controller',
+          propertyId: property.id,
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(buildingAssetResponse.status).toBe(201);
+    expect(await buildingAssetResponse.json()).toMatchObject({
+      data: {
+        code: 'ASSET-BUILDING-HTTP',
+        propertyId: property.id,
+        unitId: null,
+        spaceId: null,
+      },
+    });
+
+    const propertyAssetsResponse = await handler(
+      new Request(`https://portfolio.test/properties/${property.id}/assets`),
+      inspectorIdentity,
+    );
+    expect(propertyAssetsResponse.status).toBe(200);
+    expect(await propertyAssetsResponse.json()).toMatchObject({
+      data: {
+        items: [
+          { code: 'ASSET-BUILDING-HTTP', unitId: null },
+          { code: 'ASSET-HTTP-001', unitId: unit.id },
+        ],
+      },
+    });
+
+    const metadataResponse = await handler(
+      new Request(`https://portfolio.test/assets/${asset.id}/metadata`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          expectedVersion: 1,
+          manufacturer: 'Bosch',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(metadataResponse.status).toBe(200);
+    expect(await metadataResponse.json()).toMatchObject({
+      data: {
+        id: asset.id,
+        manufacturer: 'Bosch',
+        version: 2,
+        propertyId: property.id,
+        unitId: unit.id,
+        spaceId: space.id,
+      },
+    });
+
+    const inspectorList = await handler(
+      new Request(`https://portfolio.test/units/${unit.id}/assets`),
+      inspectorIdentity,
+    );
+    expect(inspectorList.status).toBe(200);
+    expect(await inspectorList.json()).toMatchObject({
+      data: { items: [{ id: asset.id, code: 'ASSET-HTTP-001' }] },
+    });
+
+    const inspectorWrite = await handler(
+      new Request(`https://portfolio.test/assets/${asset.id}/status`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          expectedVersion: 2,
+          status: 'inactive',
+        }),
+      }),
+      inspectorIdentity,
+    );
+    expect(inspectorWrite.status).toBe(403);
+
+    const inactiveResponse = await handler(
+      new Request(`https://portfolio.test/assets/${asset.id}/status`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          expectedVersion: 2,
+          status: 'inactive',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(inactiveResponse.status).toBe(200);
+    expect(await inactiveResponse.json()).toMatchObject({
+      data: { id: asset.id, status: 'inactive', version: 3 },
+    });
+
+    const replacementResponse = await handler(
+      new Request(`https://portfolio.test/assets/${asset.id}/replacement`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          expectedVersion: 3,
+          code: 'ASSET-HTTP-002',
+          name: 'Replacement refrigerator',
+          manufacturer: 'Bosch',
+          model: 'KGN49',
+          identifiers: [
+            {
+              identifierType: 'serial_number',
+              value: 'HTTP-SN-002',
+            },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(replacementResponse.status).toBe(201);
+    const replacementBody = await replacementResponse.json();
+    expect(replacementBody).toMatchObject({
+      data: {
+        replacedAsset: {
+          id: asset.id,
+          status: 'replaced',
+          version: 4,
+        },
+        replacementAsset: {
+          code: 'ASSET-HTTP-002',
+          status: 'active',
+          version: 1,
+          propertyId: property.id,
+          unitId: unit.id,
+          spaceId: space.id,
+        },
+        replacement: {
+          replacedAssetId: asset.id,
+        },
+      },
+    });
+
+    const lineageResponse = await handler(
+      new Request(`https://portfolio.test/assets/${asset.id}/replacements`),
+      adminIdentity,
+    );
+    expect(lineageResponse.status).toBe(200);
+    expect(await lineageResponse.json()).toMatchObject({
+      data: {
+        predecessor: null,
+        successor: {
+          replacedAssetId: asset.id,
+          replacementAssetId: replacementBody.data.replacementAsset.id,
+        },
+      },
     });
   });
 
@@ -626,6 +878,7 @@ describe('Portfolio HTTP boundary', () => {
   it('supports a configurable host base path without leaking provider details', async () => {
     const handler = createPortfolioHttpHandler(
       {
+        assetRepository: new InMemoryAssetRepository(),
         portfolioRepository: new InMemoryPortfolioRepository(),
         partyRepository: new InMemoryPartyRepository(),
         ownershipRepository: new InMemoryOwnershipRepository(),
