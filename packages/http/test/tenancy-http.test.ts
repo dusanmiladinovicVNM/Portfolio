@@ -431,7 +431,30 @@ describe('AccessItem HTTP custody lifecycle', () => {
       adminIdentity,
     );
     expect(createdItem.status).toBe(201);
-    const itemId = (await createdItem.json()).data.id as string;
+    const createdItemBody = await createdItem.json();
+    const itemId = createdItemBody.data.id as string;
+    expect(createdItemBody).toMatchObject({
+      data: { status: 'active', version: 1 },
+    });
+
+    const correctedLabel = await handler(
+      new Request(`https://portfolio.test/access-items/${itemId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          expectedVersion: 1,
+          label: 'Main entrance — left cylinder',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(correctedLabel.status).toBe(200);
+    expect(await correctedLabel.json()).toMatchObject({
+      data: {
+        label: 'Main entrance — left cylinder',
+        status: 'active',
+        version: 2,
+      },
+    });
 
     const issue = await handler(
       new Request(`https://portfolio.test/access-items/${itemId}/issue`, {
@@ -528,11 +551,65 @@ describe('AccessItem HTTP custody lifecycle', () => {
       data: {
         items: [
           {
-            item: { id: itemId, code: 'KEY-HTTP-1' },
+            item: {
+              id: itemId,
+              code: 'KEY-HTTP-1',
+              status: 'active',
+              version: 2,
+            },
             state: { kind: 'issued', tenancyId },
           },
         ],
       },
+    });
+
+    const retired = await handler(
+      new Request(`https://portfolio.test/access-items/${itemId}/retire`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 2,
+          retirementReason: 'Lock cylinder replaced',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(retired.status).toBe(200);
+    expect(await retired.json()).toMatchObject({
+      data: {
+        status: 'retired',
+        version: 3,
+        retirementReason: 'Lock cylinder replaced',
+      },
+    });
+
+    const returnedAfterRetirement = await handler(
+      new Request(`https://portfolio.test/access-items/${itemId}/return`, {
+        method: 'POST',
+        body: JSON.stringify({
+          occurredAt: '2026-09-18T20:00:00.000Z',
+          note: 'Returned after administrative retirement',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(returnedAfterRetirement.status).toBe(201);
+    expect(await returnedAfterRetirement.json()).toMatchObject({
+      data: { type: 'returned', sequence: 5, tenancyId },
+    });
+
+    const retiredReissue = await handler(
+      new Request(`https://portfolio.test/access-items/${itemId}/issue`, {
+        method: 'POST',
+        body: JSON.stringify({
+          tenancyId,
+          occurredAt: '2026-09-18T20:00:00.000Z',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(retiredReissue.status).toBe(409);
+    expect(await retiredReissue.json()).toMatchObject({
+      error: { code: 'ACCESS_ITEM_RETIRED' },
     });
   });
 });
