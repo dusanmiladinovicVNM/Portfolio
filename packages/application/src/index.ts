@@ -44,3 +44,7 @@ export * from './assets/asset-service-queries.js';
 export * from './improvements/improvement-repository.js';
 export * from './improvements/improvement-commands.js';
 export * from './improvements/improvement-queries.js';
+
+export * from './costs/cost-repository.js';
+export * from './costs/cost-commands.js';
+export * from './costs/cost-queries.js';
