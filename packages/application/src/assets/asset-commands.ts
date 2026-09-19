@@ -94,6 +94,31 @@ function assertExpectedVersion(asset: Asset, expectedVersion: number): void {
   }
 }
 
+async function requireCurrentLocation(
+  repository: AssetRepository,
+  asset: Asset,
+) {
+  const currentLocation = await repository.getCurrentLocation(asset.id);
+  if (!currentLocation) {
+    throw new DomainError(
+      'ASSET_CURRENT_LOCATION_MISSING',
+      'Asset has no open authoritative location interval.',
+    );
+  }
+  if (
+    asset.propertyId === null ||
+    currentLocation.propertyId !== asset.propertyId ||
+    currentLocation.unitId !== asset.unitId ||
+    currentLocation.spaceId !== asset.spaceId
+  ) {
+    throw new DomainError(
+      'ASSET_LOCATION_PROJECTION_DIVERGED',
+      'Asset current placement does not match its authoritative open location interval.',
+    );
+  }
+  return currentLocation;
+}
+
 async function assertPlacement(
   repository: PortfolioRepository,
   propertyId: PropertyId,
@@ -289,23 +314,10 @@ export async function moveAssetCommand(
     targetSpaceId,
   );
 
-  const currentLocation = await deps.assetRepository.getCurrentLocation(assetId);
-  if (!currentLocation) {
-    throw new DomainError(
-      'ASSET_CURRENT_LOCATION_MISSING',
-      'Asset has no open authoritative location interval.',
-    );
-  }
-  if (
-    currentLocation.propertyId !== current.propertyId ||
-    currentLocation.unitId !== current.unitId ||
-    currentLocation.spaceId !== current.spaceId
-  ) {
-    throw new DomainError(
-      'ASSET_LOCATION_PROJECTION_DIVERGED',
-      'Asset current placement does not match its authoritative open location interval.',
-    );
-  }
+  const currentLocation = await requireCurrentLocation(
+    deps.assetRepository,
+    current,
+  );
 
   const moved = moveAssetPlacement(current, {
     propertyId: input.propertyId,
@@ -358,13 +370,18 @@ export async function replaceAssetCommand(
     input.identifiers ?? [],
   );
 
+  const currentLocation = await requireCurrentLocation(
+    deps.assetRepository,
+    current,
+  );
+
   const replacementAsset = createAsset({
     id: asAssetId(deps.idGenerator.next()),
     code: input.code,
     name: input.name,
-    propertyId: current.propertyId,
-    unitId: current.unitId,
-    spaceId: current.spaceId,
+    propertyId: currentLocation.propertyId,
+    unitId: currentLocation.unitId,
+    spaceId: currentLocation.spaceId,
     ...(input.manufacturer !== undefined
       ? { manufacturer: input.manufacturer }
       : {}),
@@ -380,6 +397,12 @@ export async function replaceAssetCommand(
   }
 
   const replacedAt = deps.clock.now();
+  if (Date.parse(replacedAt) <= Date.parse(currentLocation.validFrom)) {
+    throw new DomainError(
+      'ASSET_LOCATION_INVALID_INTERVAL',
+      'Replacement must occur after the predecessor location interval began.',
+    );
+  }
   const replacedAsset = markAssetReplaced(current);
   const replacement = createAssetReplacement({
     id: asAssetReplacementId(deps.idGenerator.next()),
@@ -402,6 +425,7 @@ export async function replaceAssetCommand(
     replacedAsset,
     replacementAsset,
     replacement,
+    currentLocation,
     replacementLocation,
   );
 
