@@ -605,6 +605,9 @@ describe('Portfolio HTTP boundary', () => {
           id: asset.id,
           status: 'replaced',
           version: 4,
+          propertyId: null,
+          unitId: null,
+          spaceId: null,
         },
         replacementAsset: {
           code: 'ASSET-HTTP-002',
@@ -634,6 +637,16 @@ describe('Portfolio HTTP boundary', () => {
         },
       },
     });
+
+    const predecessorHistoryResponse = await handler(
+      new Request(`https://portfolio.test/assets/${asset.id}/location-history`),
+      inspectorIdentity,
+    );
+    expect(predecessorHistoryResponse.status).toBe(200);
+    const predecessorHistory =
+      (await predecessorHistoryResponse.json()).data.items;
+    expect(predecessorHistory).toHaveLength(1);
+    expect(predecessorHistory[0].validTo).not.toBeNull();
   });
 
   it('runs Asset history, movement, condition and tenancy inventory through HTTP', async () => {
@@ -654,6 +667,15 @@ describe('Portfolio HTTP boundary', () => {
         'e3000000-0000-4000-8000-000000000013',
         'e3000000-0000-4000-8000-000000000014',
         'e3000000-0000-4000-8000-000000000015',
+        'e3000000-0000-4000-8000-000000000016',
+        'e3000000-0000-4000-8000-000000000017',
+        'e3000000-0000-4000-8000-000000000018',
+        'e3000000-0000-4000-8000-000000000019',
+        'e3000000-0000-4000-8000-000000000020',
+        'e3000000-0000-4000-8000-000000000021',
+        'e3000000-0000-4000-8000-000000000022',
+        'e3000000-0000-4000-8000-000000000023',
+        'e3000000-0000-4000-8000-000000000024',
       ],
       new SequenceClock([
         '2026-09-19T08:00:00.000Z',
@@ -721,11 +743,36 @@ describe('Portfolio HTTP boundary', () => {
     const spaceA = await createSpace(unitA.id, 'KITCHEN-A', 'Kitchen A');
     const spaceB = await createSpace(unitB.id, 'KITCHEN-B', 'Kitchen B');
 
+    const tenantResponse = await handler(
+      new Request('https://portfolio.test/parties', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          code: 'PTY-HISTORY-HTTP',
+          partyType: 'person',
+          firstName: 'HTTP',
+          lastName: 'Tenant',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(tenantResponse.status).toBe(201);
+    const tenant = (await tenantResponse.json()).data;
+
     const tenancyResponse = await handler(
       new Request(`https://portfolio.test/units/${unitA.id}/tenancies`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ code: 'TEN-HISTORY-HTTP' }),
+        body: JSON.stringify({
+          code: 'TEN-HISTORY-HTTP',
+          parties: [
+            {
+              partyId: tenant.id,
+              role: 'tenant',
+              isPrimary: true,
+            },
+          ],
+        }),
       }),
       adminIdentity,
     );
@@ -797,6 +844,40 @@ describe('Portfolio HTTP boundary', () => {
     expect(assignmentResponse.status).toBe(201);
     const assignment = (await assignmentResponse.json()).data;
 
+    const draftMoveInResponse = await handler(
+      new Request(
+        `https://portfolio.test/tenancy-assets/${assignment.id}/inventory`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            expectedVersion: 1,
+            phase: 'move_in',
+            presence: 'present',
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(draftMoveInResponse.status).toBe(422);
+    expect(await draftMoveInResponse.json()).toMatchObject({
+      error: { code: 'TENANCY_ASSET_TENANCY_STATE_INVALID' },
+    });
+
+    const planResponse = await handler(
+      new Request(`https://portfolio.test/tenancies/${tenancy.id}/plan`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          expectedVersion: 1,
+          plannedStart: '2026-09-20',
+          plannedEnd: '2027-09-19',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(planResponse.status).toBe(200);
+
     const moveInResponse = await handler(
       new Request(
         `https://portfolio.test/tenancy-assets/${assignment.id}/inventory`,
@@ -818,6 +899,19 @@ describe('Portfolio HTTP boundary', () => {
     expect(await moveInResponse.json()).toMatchObject({
       data: { version: 2, moveIn: { presence: 'present' } },
     });
+
+    const activateResponse = await handler(
+      new Request(`https://portfolio.test/tenancies/${tenancy.id}/activate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          expectedVersion: 2,
+          actualStart: '2026-09-20',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(activateResponse.status).toBe(200);
 
     const movedResponse = await handler(
       new Request(`https://portfolio.test/assets/${asset.id}/move`, {
