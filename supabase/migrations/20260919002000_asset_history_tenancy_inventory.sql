@@ -189,6 +189,57 @@ create index tenancy_asset_assignments_tenancy_idx
 create index tenancy_asset_assignments_asset_idx
   on public.tenancy_asset_assignments (asset_id, assigned_at, id);
 
+create or replace function public.guard_asset_location_history_insert()
+returns trigger
+language plpgsql
+as $asset_location_history_insert_guard$
+declare
+  has_history boolean;
+begin
+  if new.valid_to is not null then
+    raise exception 'New Asset location history must start as the open interval.'
+      using errcode = '23514',
+            constraint = 'asset_location_history_insert_must_be_open';
+  end if;
+
+  if new.change_type = 'registry_bootstrap' then
+    raise exception 'registry_bootstrap is reserved for migration backfill.'
+      using errcode = '23514',
+            constraint = 'asset_location_history_bootstrap_reserved';
+  end if;
+
+  if new.changed_by_user_id is null then
+    raise exception 'Runtime Asset location history requires an actor.'
+      using errcode = '23514',
+            constraint = 'asset_location_history_actor_required';
+  end if;
+
+  select exists(
+    select 1
+    from public.asset_location_history
+    where asset_id = new.asset_id
+  ) into has_history;
+
+  if not has_history and new.change_type not in ('asset_created', 'replacement_created') then
+    raise exception 'Initial Asset location history must describe Asset creation.'
+      using errcode = '23514',
+            constraint = 'asset_location_history_change_type_invalid';
+  end if;
+
+  if has_history and new.change_type <> 'moved' then
+    raise exception 'Subsequent Asset location history must describe a move.'
+      using errcode = '23514',
+            constraint = 'asset_location_history_change_type_invalid';
+  end if;
+
+  return new;
+end;
+$asset_location_history_insert_guard$;
+
+create trigger asset_location_history_insert_guard_trg
+before insert on public.asset_location_history
+for each row execute function public.guard_asset_location_history_insert();
+
 create or replace function public.guard_asset_location_history_mutation()
 returns trigger
 language plpgsql
