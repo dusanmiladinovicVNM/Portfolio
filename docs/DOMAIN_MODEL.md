@@ -229,7 +229,7 @@ Cost
 
 Supported source grains are Property, Unit, Space, Asset, WarrantyClaim, ServiceEvent, ImprovementProject, WorkItem, WorkRecord and WorkMaterial. The database uses typed foreign keys plus a discriminator and rejects ambiguous or mismatched source shapes.
 
-Amount is exact two-decimal money and PostgreSQL stores `numeric(18,2)`. Cost currencies are deliberately limited to the configured set `CHF|EUR|RSD`; this phase does not claim generic ISO 4217/minor-unit support. Unlike currencies are never implicitly summed.
+Amount is exact two-decimal money. PostgreSQL stores the unrounded value as exact `numeric`, then independently rejects values with more than two decimal places and amounts outside the domain's 16-digit whole-part range; direct SQL therefore cannot silently turn `1.005` into a rounded ledger fact. Cost currencies are deliberately limited to the configured set `CHF|EUR|RSD`; this phase does not claim generic ISO 4217/minor-unit support. Unlike currencies are never implicitly summed.
 
 `incurredOn` records the business date and cannot be later than the UTC date of immutable `recordedAt`. Supplier is an optional Party identity reference and may remain valid after that Party becomes inactive. `invoiceReference` is only an external reference string; there is no Invoice/AP aggregate in canonical #18.
 
