@@ -24,6 +24,7 @@ import {
   resolveWarrantyClaimCommand,
   submitWarrantyClaimCommand,
   updateImprovementProjectPlanCommand,
+  updateWorkItemPlanCommand,
   listAssetLocationHistoryQuery,
   listAssetConditionAssessmentsQuery,
   listTenancyAssetAssignmentsQuery,
