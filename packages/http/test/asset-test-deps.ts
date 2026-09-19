@@ -1,6 +1,7 @@
 import type {
   AssetInventoryRepository,
   AssetRepository,
+  AssetServiceRepository,
 } from '@portfolio/application';
 import type {
   Asset,
@@ -9,12 +10,19 @@ import type {
   AssetLocationHistory,
   AssetReplacement,
   GloballyUniqueAssetIdentifierType,
+  ServiceEvent,
+  ServicePlan,
+  ServicePlanId,
   PropertyId,
   TenancyAssetAssignment,
   TenancyAssetAssignmentId,
   TenancyAssetPhase,
   TenancyId,
   UnitId,
+  Warranty,
+  WarrantyClaim,
+  WarrantyClaimId,
+  WarrantyId,
 } from '@portfolio/domain';
 
 export class InMemoryAssetRepository implements AssetRepository {
@@ -156,5 +164,93 @@ export class InMemoryAssetInventoryRepository
     if (!current || current.version !== expectedVersion) throw new Error('assignment version conflict');
     if (assessment) this.conditions.push(assessment);
     this.assignments.set(assignment.id, assignment);
+  }
+}
+
+
+export class InMemoryAssetServiceRepository
+  implements AssetServiceRepository
+{
+  readonly warranties = new Map<WarrantyId, Warranty>();
+  readonly claims = new Map<WarrantyClaimId, WarrantyClaim>();
+  readonly plans = new Map<ServicePlanId, ServicePlan>();
+  readonly events: ServiceEvent[] = [];
+
+  async getWarrantyById(id: WarrantyId): Promise<Warranty | null> {
+    return this.warranties.get(id) ?? null;
+  }
+
+  async listWarrantiesByAsset(assetId: AssetId): Promise<readonly Warranty[]> {
+    return [...this.warranties.values()].filter(
+      (warranty) => warranty.assetId === assetId,
+    );
+  }
+
+  async insertWarranty(warranty: Warranty): Promise<void> {
+    this.warranties.set(warranty.id, warranty);
+  }
+
+  async getWarrantyClaimById(
+    id: WarrantyClaimId,
+  ): Promise<WarrantyClaim | null> {
+    return this.claims.get(id) ?? null;
+  }
+
+  async listWarrantyClaimsByWarranty(
+    warrantyId: WarrantyId,
+  ): Promise<readonly WarrantyClaim[]> {
+    return [...this.claims.values()].filter(
+      (claim) => claim.warrantyId === warrantyId,
+    );
+  }
+
+  async insertWarrantyClaim(claim: WarrantyClaim): Promise<void> {
+    this.claims.set(claim.id, claim);
+  }
+
+  async updateWarrantyClaim(
+    claim: WarrantyClaim,
+    expectedVersion: number,
+  ): Promise<void> {
+    const current = this.claims.get(claim.id);
+    if (!current || current.version !== expectedVersion) {
+      throw new Error('claim version conflict');
+    }
+    this.claims.set(claim.id, claim);
+  }
+
+  async getServicePlanById(id: ServicePlanId): Promise<ServicePlan | null> {
+    return this.plans.get(id) ?? null;
+  }
+
+  async listServicePlansByAsset(
+    assetId: AssetId,
+  ): Promise<readonly ServicePlan[]> {
+    return [...this.plans.values()].filter((plan) => plan.assetId === assetId);
+  }
+
+  async insertServicePlan(plan: ServicePlan): Promise<void> {
+    this.plans.set(plan.id, plan);
+  }
+
+  async updateServicePlan(
+    plan: ServicePlan,
+    expectedVersion: number,
+  ): Promise<void> {
+    const current = this.plans.get(plan.id);
+    if (!current || current.version !== expectedVersion) {
+      throw new Error('service plan version conflict');
+    }
+    this.plans.set(plan.id, plan);
+  }
+
+  async listServiceEventsByAsset(
+    assetId: AssetId,
+  ): Promise<readonly ServiceEvent[]> {
+    return this.events.filter((event) => event.assetId === assetId);
+  }
+
+  async insertServiceEvent(event: ServiceEvent): Promise<void> {
+    this.events.push(event);
   }
 }
