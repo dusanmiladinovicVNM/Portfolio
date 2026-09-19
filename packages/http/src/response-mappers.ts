@@ -525,6 +525,8 @@ export function toWarrantyClaimResponse(
     resolvedAt: claim.resolvedAt,
     closedAt: claim.closedAt,
     cancelledAt: claim.cancelledAt,
+    recordedAt: claim.recordedAt,
+    recordedByUserId: claim.recordedByUserId,
     version: claim.version,
   };
 }
