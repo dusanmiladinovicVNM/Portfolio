@@ -96,6 +96,8 @@ export const warrantyClaimResponseSchema = z.object({
   resolvedAt: timestampSchema.nullable(),
   closedAt: timestampSchema.nullable(),
   cancelledAt: timestampSchema.nullable(),
+  recordedAt: timestampSchema,
+  recordedByUserId: entityIdSchema,
   version: z.number().int().positive(),
 });
 
