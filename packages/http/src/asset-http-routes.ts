@@ -164,6 +164,7 @@ export async function handleAssetHttp(
     if (method === 'GET') {
       const assignments = await listTenancyAssetAssignmentsQuery(
         deps.assetInventoryRepository,
+        deps.tenancyRepository,
         actor,
         tenancyId,
       );
