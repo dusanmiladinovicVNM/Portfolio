@@ -192,9 +192,9 @@ ImprovementProject
 
 An ImprovementProject is one managed renovation/improvement initiative. It has immutable physical scope at Property level with optional Unit and Space, using the same hierarchy rules as the rest of Portfolio. Property-only scope represents common/building works; this phase does not invent synthetic Units or a premature multi-scope model.
 
-Project lifecycle is `draft -> planned -> in_progress -> completed`, with cancellation from non-terminal states. Project identity/scope remain stable; name, description and planned dates are correctable only before work begins. Completion requires every WorkItem to be terminal.
+Project lifecycle is `draft -> planned -> in_progress -> completed`, with cancellation from non-terminal states. Project identity/scope remain stable; name, description and planned dates are correctable only before work begins. Completion requires every WorkItem to be terminal, cannot precede any child terminal timestamp, and Project completion/cancellation cannot be backdated behind existing WorkRecord occurrence history.
 
-WorkItem is expected/planned scope. It is not proof that the work happened. Its lifecycle is `planned -> in_progress -> completed` with cancellation from planned/in-progress. Title/description may be corrected optimistically while planned; definition freezes once the item starts. Starting/completing a WorkItem requires the parent Project to be in progress.
+WorkItem is expected/planned scope. It is not proof that the work happened. Its lifecycle is `planned -> in_progress -> completed` with cancellation from planned/in-progress. Title/description may be corrected optimistically while planned; definition freezes once the item starts. Starting/completing a WorkItem requires the parent Project to be in progress, and its completion/cancellation timestamp cannot be backdated behind existing WorkRecord occurrence history.
 
 WorkRecord is append-only historical work truth under one exact WorkItem. `Project.startedAt` and `WorkItem.startedAt` are business occurrence boundaries. `performedAt` must fall at or after both starts, at or before the earliest Project/WorkItem terminal cutoff, and at or before `recordedAt`. Historical work can still be recorded later; importing work that predates the Portfolio record requires a future explicit import flow that reconstructs historical start timestamps rather than bypassing these bounds. A WorkRecord may reference a contractor Party by stable identity even if that Party is now inactive.
 
@@ -208,7 +208,7 @@ WorkRecord
 = one commit
 ```
 
-The database requires the parent WorkRecord to be sealed at commit and rejects later mutation or child append.
+The database requires the parent WorkRecord to be sealed at commit and rejects later mutation or child append. Cross-table lifecycle invariants are concurrency-safe through row locking: WorkItem writes share-lock Project, WorkRecord writes share-lock WorkItem then Project, and evidence children share-lock the unsealed WorkRecord. Parent lifecycle UPDATEs therefore serialize with child creation and revalidate a committed state rather than depending on a racy check-then-write.
 
 WorkMaterial records exact positive material/consumable quantity with decimal semantics. It contains no money and is not an Asset. If a component needs identifiers, placement, warranty, service history or replacement lineage, it belongs in Asset Registry instead.
 
