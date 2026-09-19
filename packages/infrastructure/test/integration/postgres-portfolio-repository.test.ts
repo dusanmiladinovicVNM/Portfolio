@@ -6245,6 +6245,518 @@ describe('PostgreSQL infrastructure', () => {
 
 
 
+
+  it('anchors Maintenance scope at reportedAt and enforces originating Finding time', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+    const ids = new SequenceIds([
+      'ab000000-0000-4000-8000-000000000001',
+      'ab000000-0000-4000-8000-000000000002',
+      'ab000000-0000-4000-8000-000000000003',
+      'ab000000-0000-4000-8000-000000000004',
+      'ab000000-0000-4000-8000-000000000005',
+      'ab000000-0000-4000-8000-000000000006',
+      'ab000000-0000-4000-8000-000000000007',
+      'ab000000-0000-4000-8000-000000000008',
+      'ab000000-0000-4000-8000-000000000009',
+      'ab000000-0000-4000-8000-000000000010',
+      'ab000000-0000-4000-8000-000000000011',
+      'ab000000-0000-4000-8000-000000000012',
+      'ab000000-0000-4000-8000-000000000013',
+      'ab000000-0000-4000-8000-000000000014',
+      'ab000000-0000-4000-8000-000000000015',
+      'ab000000-0000-4000-8000-000000000016',
+      'ab000000-0000-4000-8000-000000000017',
+      'ab000000-0000-4000-8000-000000000018',
+      'ab000000-0000-4000-8000-000000000019',
+      'ab000000-0000-4000-8000-000000000020',
+    ]);
+    const inspectionIds = new SequenceIds([
+      'ab100000-0000-4000-8000-000000000001',
+      'ab100000-0000-4000-8000-000000000002',
+      'ab100000-0000-4000-8000-000000000003',
+      'ab100000-0000-4000-8000-000000000004',
+      'ab100000-0000-4000-8000-000000000005',
+      'ab100000-0000-4000-8000-000000000006',
+    ]);
+
+    const property = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-MAINT-HISTORY',
+        name: 'Maintenance history property',
+        propertyType: 'apartment_building',
+        street: 'History Street',
+        houseNumber: '20',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+    const unitA = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-MAINT-A',
+        unitNumber: 'A',
+        unitType: 'apartment',
+      },
+    );
+    const spaceA = await createSpaceCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        unitId: unitA.id,
+        code: 'ROOM-A',
+        name: 'Room A',
+        spaceType: 'storage',
+      },
+    );
+    const unitB = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-MAINT-B',
+        unitNumber: 'B',
+        unitType: 'apartment',
+      },
+    );
+    const spaceB = await createSpaceCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        unitId: unitB.id,
+        code: 'ROOM-B',
+        name: 'Room B',
+        spaceType: 'storage',
+      },
+    );
+
+    const asset = await createAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T10:00:00.000Z' },
+      },
+      actor,
+      {
+        code: 'ASSET-MAINT-HISTORY',
+        name: 'Movable maintenance asset',
+        propertyId: property.id,
+        unitId: unitA.id,
+        spaceId: spaceA.id,
+      },
+    );
+
+    const schema = await createInspectionSchemaVersionCommand(
+      { inspectionRepository, idGenerator: inspectionIds },
+      actor,
+      {
+        schemaCode: 'MAINT-ORIGIN',
+        inspectionType: 'periodic',
+        title: 'Maintenance origin inspection',
+        requiredSignatureRoles: [],
+        sections: [
+          {
+            key: 'general',
+            title: 'General',
+            sortOrder: 0,
+            items: [
+              {
+                key: 'condition',
+                type: 'text',
+                label: 'Condition',
+                sortOrder: 0,
+              },
+            ],
+          },
+        ],
+      },
+    );
+    const published = await publishInspectionSchemaVersionCommand(
+      inspectionRepository,
+      actor,
+      schema.id,
+    );
+    const inspection = await createInspectionCommand(
+      {
+        inspectionRepository,
+        portfolioRepository,
+        tenancyRepository,
+        staffDirectoryRepository: accessRepository,
+        idGenerator: inspectionIds,
+        clock: { now: () => '2026-09-19T10:10:00.000Z' },
+      },
+      actor,
+      {
+        code: 'INS-MAINT-ORIGIN',
+        inspectionType: 'periodic',
+        unitId: unitA.id,
+        schemaVersionId: published.id,
+        assignedToUserId:
+          'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' as import('@portfolio/domain').UserId,
+      },
+    );
+    await startInspectionCommand(
+      {
+        inspectionRepository,
+        clock: { now: () => '2026-09-19T10:15:00.000Z' },
+      },
+      actor,
+      inspection.id,
+      inspection.version,
+    );
+    const finding = await createInspectionFindingCommand(
+      {
+        inspectionRepository,
+        idGenerator: inspectionIds,
+        clock: { now: () => '2026-09-19T10:20:00.000Z' },
+      },
+      actor,
+      inspection.id,
+      {
+        sectionId: published.sections[0]!.id,
+        itemId: published.sections[0]!.items[0]!.id,
+        severity: 'major',
+        title: 'Historical maintenance finding',
+      },
+    );
+
+    const moved = await moveAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T12:00:00.000Z' },
+      },
+      actor,
+      asset.id,
+      {
+        expectedVersion: asset.version,
+        propertyId: property.id,
+        unitId: unitB.id,
+        spaceId: spaceB.id,
+        reason: 'Moved after the reported maintenance occurrence',
+      },
+    );
+    expect(moved).toMatchObject({
+      unitId: unitB.id,
+      spaceId: spaceB.id,
+      version: 2,
+    });
+    expect(await assetRepository.getLocationAt(asset.id, '2026-09-19T10:30:00.000Z'))
+      .toMatchObject({ unitId: unitA.id, spaceId: spaceA.id });
+    expect(await assetRepository.getLocationAt(asset.id, '2026-09-19T12:00:00.000Z'))
+      .toMatchObject({ unitId: unitB.id, spaceId: spaceB.id });
+
+    const maintenanceDeps = {
+      maintenanceRepository,
+      portfolioRepository,
+      assetRepository,
+      assetServiceRepository,
+      inspectionRepository,
+      partyRepository,
+      staffDirectoryRepository: accessRepository,
+      idGenerator: ids,
+      clock: { now: () => '2026-09-19T15:00:00.000Z' },
+    };
+
+    await expect(
+      createMaintenanceIssueCommand(
+        maintenanceDeps,
+        actor,
+        {
+          code: 'MI-BEFORE-FINDING-APP',
+          propertyId: property.id,
+          unitId: unitA.id,
+          inspectionFindingId: finding.id,
+          title: 'Impossible origin ordering',
+          priority: 'normal',
+          reportedAt: '2026-09-19T10:19:00.000Z',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'MAINTENANCE_FINDING_REPORTED_BEFORE_ORIGIN',
+    });
+
+    await expect(
+      sql`
+        insert into public.maintenance_issues (
+          id, code, property_id, unit_id, inspection_finding_id,
+          title, priority, status, reported_at, version,
+          recorded_at, recorded_by_user_id
+        ) values (
+          'abf00000-0000-4000-8000-000000000001',
+          'MI-BEFORE-FINDING-DB',
+          ${property.id},
+          ${unitA.id},
+          ${finding.id},
+          'Impossible origin ordering in SQL',
+          'normal',
+          'open',
+          '2026-09-19T10:19:00.000Z',
+          1,
+          '2026-09-19T15:00:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'maintenance_issue_finding_temporal_invalid',
+    });
+
+    const historicalIssue = await createMaintenanceIssueCommand(
+      maintenanceDeps,
+      actor,
+      {
+        code: 'MI-HISTORICAL-ASSET',
+        propertyId: property.id,
+        unitId: unitA.id,
+        spaceId: spaceA.id,
+        assetId: asset.id,
+        inspectionFindingId: finding.id,
+        title: 'Issue reported before Asset move',
+        priority: 'high',
+        reportedAt: '2026-09-19T10:30:00.000Z',
+      },
+    );
+    expect(historicalIssue).toMatchObject({
+      unitId: unitA.id,
+      spaceId: spaceA.id,
+      assetId: asset.id,
+      inspectionFindingId: finding.id,
+      reportedAt: '2026-09-19T10:30:00.000Z',
+      recordedAt: '2026-09-19T15:00:00.000Z',
+    });
+    expect((await assetRepository.getById(asset.id))?.unitId).toBe(unitB.id);
+
+    await expect(
+      createMaintenanceIssueCommand(
+        maintenanceDeps,
+        actor,
+        {
+          code: 'MI-WRONG-CURRENT-SCOPE',
+          propertyId: property.id,
+          unitId: unitB.id,
+          spaceId: spaceB.id,
+          assetId: asset.id,
+          title: 'Must not use current projection for historical occurrence',
+          priority: 'normal',
+          reportedAt: '2026-09-19T10:30:00.000Z',
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'MAINTENANCE_ASSET_SCOPE_MISMATCH' });
+
+    await expect(
+      createMaintenanceIssueCommand(
+        maintenanceDeps,
+        actor,
+        {
+          code: 'MI-BEFORE-ASSET-EXISTED',
+          propertyId: property.id,
+          unitId: unitA.id,
+          spaceId: spaceA.id,
+          assetId: asset.id,
+          title: 'Asset did not yet have a managed location',
+          priority: 'normal',
+          reportedAt: '2026-09-19T09:59:00.000Z',
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'MAINTENANCE_ASSET_LOCATION_NOT_FOUND' });
+
+    await expect(
+      sql`
+        insert into public.maintenance_issues (
+          id, code, property_id, unit_id, space_id, asset_id,
+          title, priority, status, reported_at, version,
+          recorded_at, recorded_by_user_id
+        ) values (
+          'abf00000-0000-4000-8000-000000000002',
+          'MI-WRONG-CURRENT-SCOPE-DB',
+          ${property.id},
+          ${unitB.id},
+          ${spaceB.id},
+          ${asset.id},
+          'Current projection must not replace historical scope',
+          'normal',
+          'open',
+          '2026-09-19T10:30:00.000Z',
+          1,
+          '2026-09-19T15:00:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'maintenance_issue_asset_scope_mismatch',
+    });
+
+    await expect(
+      sql`
+        insert into public.maintenance_issues (
+          id, code, property_id, unit_id, space_id, asset_id,
+          title, priority, status, reported_at, version,
+          recorded_at, recorded_by_user_id
+        ) values (
+          'abf00000-0000-4000-8000-000000000003',
+          'MI-NO-HISTORY-DB',
+          ${property.id},
+          ${unitA.id},
+          ${spaceA.id},
+          ${asset.id},
+          'No location existed yet',
+          'normal',
+          'open',
+          '2026-09-19T09:59:00.000Z',
+          1,
+          '2026-09-19T15:00:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'maintenance_issue_asset_location_missing',
+    });
+
+    await expect(
+      sql`
+        update public.inspection_findings
+        set created_at = '2026-09-19T10:31:00.000Z'
+        where id = ${finding.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'maintenance_origin_finding_created_at_immutable',
+    });
+
+    const currentLocation = await assetRepository.getCurrentLocation(asset.id);
+    expect(currentLocation).toMatchObject({
+      unitId: unitB.id,
+      spaceId: spaceB.id,
+      validFrom: '2026-09-19T12:00:00.000Z',
+      validTo: null,
+    });
+
+    const blocker = postgres(connectionString, { max: 1 });
+    const contender = postgres(connectionString, { max: 1 });
+    let releaseMove!: () => void;
+    const moveHeld = new Promise<void>((resolve) => {
+      releaseMove = resolve;
+    });
+    let moveLockedResolve!: () => void;
+    const moveLocked = new Promise<void>((resolve) => {
+      moveLockedResolve = resolve;
+    });
+
+    try {
+      const moving = blocker.begin(async (tx) => {
+        await tx`
+          update public.asset_location_history
+          set valid_to = '2026-09-19T14:00:00.000Z'
+          where id = ${currentLocation!.id}
+        `;
+        await tx`
+          insert into public.asset_location_history (
+            id, asset_id, property_id, unit_id, space_id,
+            valid_from, change_type, changed_by_user_id, reason
+          ) values (
+            'abf10000-0000-4000-8000-000000000001',
+            ${asset.id},
+            ${property.id},
+            ${unitA.id},
+            ${spaceA.id},
+            '2026-09-19T14:00:00.000Z',
+            'moved',
+            ${actor.userId},
+            'Concurrent move while historical Maintenance scope is inserted'
+          )
+        `;
+        await tx`
+          update public.assets
+          set property_id = ${property.id},
+              unit_id = ${unitA.id},
+              space_id = ${spaceA.id},
+              version = version + 1
+          where id = ${asset.id}
+        `;
+        moveLockedResolve();
+        await moveHeld;
+      });
+
+      await moveLocked;
+
+      await expect(
+        contender.begin(async (tx) => {
+          await tx.unsafe("set local lock_timeout = '250ms'");
+          await tx`
+            insert into public.maintenance_issues (
+              id, code, property_id, unit_id, space_id, asset_id,
+              title, priority, status, reported_at, version,
+              recorded_at, recorded_by_user_id
+            ) values (
+              'abf10000-0000-4000-8000-000000000002',
+              'MI-MOVE-RACE',
+              ${property.id},
+              ${unitB.id},
+              ${spaceB.id},
+              ${asset.id},
+              'Historical scope races with location interval closure',
+              'normal',
+              'open',
+              '2026-09-19T13:00:00.000Z',
+              1,
+              '2026-09-19T15:00:00.000Z',
+              ${actor.userId}
+            )
+          `;
+        }),
+      ).rejects.toMatchObject({ code: '55P03' });
+
+      releaseMove();
+      await moving;
+
+      await contender`
+        insert into public.maintenance_issues (
+          id, code, property_id, unit_id, space_id, asset_id,
+          title, priority, status, reported_at, version,
+          recorded_at, recorded_by_user_id
+        ) values (
+          'abf10000-0000-4000-8000-000000000002',
+          'MI-MOVE-RACE',
+          ${property.id},
+          ${unitB.id},
+          ${spaceB.id},
+          ${asset.id},
+          'Historical scope races with location interval closure',
+          'normal',
+          'open',
+          '2026-09-19T13:00:00.000Z',
+          1,
+          '2026-09-19T15:00:00.000Z',
+          ${actor.userId}
+        )
+      `;
+
+      expect(
+        await assetRepository.getLocationAt(asset.id, '2026-09-19T13:00:00.000Z'),
+      ).toMatchObject({
+        unitId: unitB.id,
+        spaceId: spaceB.id,
+        validTo: '2026-09-19T14:00:00.000Z',
+      });
+    } finally {
+      releaseMove();
+      await Promise.all([blocker.end(), contender.end()]);
+    }
+  });
+
+
   it('persists Maintenance workflow and rejects lifecycle, linkage and concurrency bypasses', async () => {
     const actor = await resolveActor(accessRepository, {
       provider: 'supabase',
