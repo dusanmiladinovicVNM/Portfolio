@@ -98,6 +98,7 @@ export class InMemoryAssetRepository implements AssetRepository {
     replaced: Asset,
     replacement: Asset,
     relation: AssetReplacement,
+    predecessorLocation: AssetLocationHistory,
     replacementLocation: AssetLocationHistory,
   ): Promise<void> {
     const persisted = this.assets.get(current.id);
@@ -105,6 +106,15 @@ export class InMemoryAssetRepository implements AssetRepository {
     this.assets.set(replacement.id, replacement);
     this.locations.set(replacement.id, [replacementLocation]);
     this.replacements.set(current.id, relation);
+    const history = this.locations.get(current.id) ?? [];
+    this.locations.set(
+      current.id,
+      history.map((item) =>
+        item.id === predecessorLocation.id
+          ? { ...item, validTo: relation.replacedAt }
+          : item,
+      ),
+    );
     this.assets.set(current.id, replaced);
   }
   async getReplacementByReplacedAssetId(assetId: AssetId): Promise<AssetReplacement | null> {
