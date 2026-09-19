@@ -53,7 +53,9 @@ draft -> planned -> in_progress -> completed
 
 Completed and cancelled projects are terminal.
 
-Project completion requires every WorkItem to be terminal (`completed|cancelled`), cannot predate any child terminal timestamp and cannot move behind existing WorkRecord history. Project cancellation likewise cannot move its terminal cutoff behind existing WorkRecord occurrence time. Cancellation does not rewrite child history; child operational applicability is derived from parent + child lifecycle.
+Project completion requires every WorkItem to be terminal (`completed|cancelled`), cannot predate any child terminal timestamp and cannot move behind existing WorkRecord history.
+
+Project cancellation has a deliberately asymmetric child-history rule: `cancelledAt` cannot predate any existing WorkItem `createdAt`, `startedAt` or `completedAt`, and cannot move behind existing WorkRecord occurrence time. It does **not** need to be after a child WorkItem `cancelledAt`, because planned/in-progress child items may be cleanup-cancelled after the parent Project was already cancelled. Cancellation does not rewrite child history; child operational applicability is derived from parent + child lifecycle.
 
 ### WorkItem
 
