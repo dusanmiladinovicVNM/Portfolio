@@ -97,17 +97,17 @@ describe('Warranty and Service domain', () => {
 
     const submitted = submitWarrantyClaim(
       claim,
-      '2026-09-02T09:00:00.000Z',
+      '2026-09-19T09:00:00.000Z',
       'PROVIDER-77',
     );
     const approved = resolveWarrantyClaim(
       submitted,
       'approved',
-      '2026-09-03T10:00:00.000Z',
+      '2026-09-19T10:00:00.000Z',
     );
     const closed = closeWarrantyClaim(
       approved,
-      '2026-09-05T12:00:00.000Z',
+      '2026-09-19T12:00:00.000Z',
     );
 
     expect(closed).toMatchObject({
@@ -116,8 +116,50 @@ describe('Warranty and Service domain', () => {
       version: 4,
     });
     expect(() =>
-      cancelWarrantyClaim(closed, '2026-09-06T12:00:00.000Z'),
+      cancelWarrantyClaim(closed, '2026-09-19T13:00:00.000Z'),
     ).toThrowError(/Cannot cancel/);
+  });
+
+  it('keeps WarrantyClaim lifecycle timestamps monotonic from recordedAt', () => {
+    const draft = createWarrantyClaim({
+      id: asWarrantyClaimId('d1000000-0000-4000-8000-000000000020'),
+      warranty: warranty(),
+      incidentOn: '2026-09-01',
+      description: 'Temporal ordering',
+      recordedAt: '2026-09-19T10:00:00.000Z',
+      recordedByUserId: userId,
+    });
+
+    expect(() =>
+      submitWarrantyClaim(draft, '2026-09-19T09:00:00.000Z'),
+    ).toThrowError(/submittedAt cannot be before recordedAt/);
+    expect(() =>
+      cancelWarrantyClaim(draft, '2026-09-19T09:00:00.000Z'),
+    ).toThrowError(/cancelledAt cannot be before recordedAt/);
+
+    const submitted = submitWarrantyClaim(
+      draft,
+      '2026-09-19T11:00:00.000Z',
+    );
+    expect(() =>
+      resolveWarrantyClaim(
+        submitted,
+        'approved',
+        '2026-09-19T10:30:00.000Z',
+      ),
+    ).toThrowError(/resolvedAt cannot be before submittedAt/);
+    expect(() =>
+      cancelWarrantyClaim(submitted, '2026-09-19T10:30:00.000Z'),
+    ).toThrowError(/cancelledAt cannot be before submittedAt/);
+
+    const approved = resolveWarrantyClaim(
+      submitted,
+      'approved',
+      '2026-09-19T12:00:00.000Z',
+    );
+    expect(() =>
+      closeWarrantyClaim(approved, '2026-09-19T11:30:00.000Z'),
+    ).toThrowError(/closedAt cannot be before resolvedAt/);
   });
 
   it('separates ServicePlan schedule shape from completed service truth', () => {
