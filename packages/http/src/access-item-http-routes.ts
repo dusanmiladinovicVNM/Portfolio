@@ -6,7 +6,9 @@ import {
   listAccessItemsByUnitQuery,
   listCurrentAccessItemsByTenancyQuery,
   reportAccessItemLostCommand,
+  retireAccessItemCommand,
   returnAccessItemCommand,
+  updateAccessItemLabelCommand,
   type AccessItemDependencies,
   type Actor,
 } from '@portfolio/application';
@@ -15,6 +17,8 @@ import {
   createAccessItemRequestSchema,
   entityIdSchema,
   issueAccessItemRequestSchema,
+  retireAccessItemRequestSchema,
+  updateAccessItemRequestSchema,
 } from '@portfolio/contracts';
 import {
   asAccessItemId,
@@ -184,6 +188,25 @@ export async function handleAccessItemHttp(
     );
 
     return json({ data: toAccessItemTransactionResponse(transaction) }, 201);
+  }
+
+  const retireMatch = /^\/access-items\/([^/]+)\/retire$/.exec(path);
+  if (method === 'POST' && retireMatch) {
+    const id = entityIdSchema.safeParse(retireMatch[1]);
+    const parsed = retireAccessItemRequestSchema.safeParse(
+      await requestJson(request),
+    );
+    if (!id.success || !parsed.success) return validationFailure();
+
+    const item = await retireAccessItemCommand(
+      deps,
+      actor,
+      asAccessItemId(id.data),
+      parsed.data.expectedVersion,
+      parsed.data.retirementReason,
+    );
+
+    return json({ data: toAccessItemResponse(item) });
   }
 
   const itemMatch = /^\/access-items\/([^/]+)$/.exec(path);
