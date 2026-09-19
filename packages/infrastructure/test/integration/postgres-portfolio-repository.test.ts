@@ -8352,6 +8352,108 @@ describe('PostgreSQL infrastructure', () => {
 
     expect(await accessItemRepository.listTransactions(raceKey.id)).toHaveLength(1);
 
+    const retireRaceKey = await createAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T12:10:00.000Z' },
+      },
+      actor,
+      {
+        code: 'KEY-ACCESS-RETIRE-RACE',
+        kind: 'key',
+        propertyId: property.id,
+        unitId: unitA.id,
+        label: 'Retirement serialization key',
+      },
+    );
+
+    const retireBlocker = postgres(connectionString, { max: 1 });
+    const retireContender = postgres(connectionString, { max: 1 });
+    let releaseRetirement!: () => void;
+    const holdRetirement = new Promise<void>((resolve) => {
+      releaseRetirement = resolve;
+    });
+    let retirementUpdatedResolve!: () => void;
+    const retirementUpdated = new Promise<void>((resolve) => {
+      retirementUpdatedResolve = resolve;
+    });
+
+    try {
+      const retirementWrite = retireBlocker.begin(async (tx) => {
+        await tx`
+          update public.access_items
+          set status = 'retired',
+              retired_at = '2026-09-19T12:11:00.000Z',
+              retired_by_user_id = ${actor.userId},
+              retirement_reason = 'Concurrent retirement',
+              version = version + 1
+          where id = ${retireRaceKey.id}
+        `;
+        retirementUpdatedResolve();
+        await holdRetirement;
+      });
+
+      await retirementUpdated;
+
+      await expect(
+        retireContender.begin(async (tx) => {
+          await tx.unsafe("set local lock_timeout = '250ms'");
+          await tx`
+            insert into public.access_item_transactions (
+              id, access_item_id, tenancy_id, type, sequence,
+              occurred_at, recorded_at, recorded_by_user_id
+            ) values (
+              'aef30000-0000-4000-8000-000000000001',
+              ${retireRaceKey.id},
+              ${activeA.id},
+              'issued',
+              1,
+              '2026-09-19T12:12:00.000Z',
+              '2026-09-19T12:12:00.000Z',
+              ${actor.userId}
+            )
+          `;
+        }),
+      ).rejects.toMatchObject({ code: '55P03' });
+
+      releaseRetirement();
+      await retirementWrite;
+
+      await expect(
+        retireContender`
+          insert into public.access_item_transactions (
+            id, access_item_id, tenancy_id, type, sequence,
+            occurred_at, recorded_at, recorded_by_user_id
+          ) values (
+            'aef30000-0000-4000-8000-000000000001',
+            ${retireRaceKey.id},
+            ${activeA.id},
+            'issued',
+            1,
+            '2026-09-19T12:12:00.000Z',
+            '2026-09-19T12:12:00.000Z',
+            ${actor.userId}
+          )
+        `,
+      ).rejects.toMatchObject({
+        code: '23514',
+        constraint_name: 'access_item_transaction_item_not_active',
+      });
+    } finally {
+      releaseRetirement();
+      await Promise.all([retireBlocker.end(), retireContender.end()]);
+    }
+
+    const retireRaceLoaded = await accessItemRepository.getItemById(retireRaceKey.id);
+    expect(retireRaceLoaded).toMatchObject({
+      status: 'retired',
+      version: 2,
+      retirementReason: 'Concurrent retirement',
+    });
+    expect(
+      await accessItemRepository.listTransactions(retireRaceKey.id),
+    ).toHaveLength(0);
+
     const endedA = await endTenancyCommand(
       { tenancyRepository },
       actor,
