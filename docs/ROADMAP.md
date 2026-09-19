@@ -22,7 +22,7 @@ The order is dependency-driven. A planned PR may be split if evidence shows that
 | #12 | Inspection hardening — concurrency, immutability, PATCH semantics | DONE |
 | #13 | Inspection evidence and finalization | DONE |
 | #14 | Asset Registry | DONE |
-| #15 | Asset history + tenancy inventory | IN PROGRESS |
+| #15 | Asset history + tenancy inventory | DONE |
 
 ## Evidence and operational domains
 
@@ -80,14 +80,14 @@ Use HandoverApp as a feature bank only.
 - lifecycle/status
 - replacement relationships
 
-### PR #15 — Asset history + tenancy inventory (IN PROGRESS)
+### PR #15 — Asset history + tenancy inventory (DONE)
 
 - AssetLocationHistory
 - condition assessments/history
 - TenancyAssetAssignment
 - move-in/move-out inventory truth
 
-### PR #16 — Warranty + Service
+### PR #16 — Warranty + Service (IN PROGRESS)
 
 - Warranty
 - WarrantyClaim
