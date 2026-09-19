@@ -117,7 +117,9 @@ function errorStatus(code: string): number {
     code === 'COST_REPLACEMENT_ALREADY_USED' ||
     code === 'COST_REPLACEMENT_ALREADY_REVERSED' ||
     code === 'MAINTENANCE_FINDING_ALREADY_LINKED' ||
-    code === 'MAINTENANCE_SERVICE_EVENT_ALREADY_LINKED'
+    code === 'MAINTENANCE_SERVICE_EVENT_ALREADY_LINKED' ||
+    code === 'ACCESS_ITEM_TRANSACTION_CONFLICT' ||
+    code === 'ACCESS_ITEM_NOT_AVAILABLE'
   ) {
     return 409;
   }
