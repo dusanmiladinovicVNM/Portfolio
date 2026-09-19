@@ -8,6 +8,7 @@ import {
   type TenancyId,
 } from '@portfolio/domain';
 import { requireCapability, type Actor } from '../security/access.js';
+import type { TenancyRepository } from '../tenancy/tenancy-repository.js';
 import type { AssetInventoryRepository } from './asset-inventory-repository.js';
 import type { AssetRepository } from './asset-repository.js';
 
@@ -52,11 +53,15 @@ export async function getTenancyAssetAssignmentQuery(
   return assignment;
 }
 
-export function listTenancyAssetAssignmentsQuery(
+export async function listTenancyAssetAssignmentsQuery(
   repository: AssetInventoryRepository,
+  tenancyRepository: TenancyRepository,
   actor: Actor,
   tenancyId: TenancyId,
 ): Promise<readonly TenancyAssetAssignment[]> {
   requireCapability(actor, 'assets:read');
+  if (!(await tenancyRepository.getById(tenancyId))) {
+    throw new DomainError('TENANCY_NOT_FOUND', 'Tenancy not found.');
+  }
   return repository.listTenancyAssetAssignments(tenancyId);
 }
