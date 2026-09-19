@@ -448,6 +448,7 @@ export function completeImprovementProject(
 
 export function cancelImprovementProject(
   project: ImprovementProject,
+  workItems: readonly WorkItem[],
   workRecords: readonly WorkRecord[],
   cancelledAtValue: string,
 ): ImprovementProject {
@@ -478,6 +479,23 @@ export function cancelImprovementProject(
     'IMPROVEMENT_PROJECT_TERMINAL_BEFORE_WORK_RECORD',
     'ImprovementProject cancellation cannot predate existing WorkRecord history.',
   );
+
+  const laterChildHistory = workItems.find((item) => {
+    if (item.projectId !== project.id) return false;
+    return (
+      Date.parse(item.createdAt) > Date.parse(cancelledAt) ||
+      (item.startedAt !== null &&
+        Date.parse(item.startedAt) > Date.parse(cancelledAt)) ||
+      (item.completedAt !== null &&
+        Date.parse(item.completedAt) > Date.parse(cancelledAt))
+    );
+  });
+  if (laterChildHistory) {
+    throw new DomainError(
+      'IMPROVEMENT_PROJECT_CANCELLED_BEFORE_WORK_ITEM_HISTORY',
+      'ImprovementProject cancellation cannot predate existing WorkItem creation, start or completion history.',
+    );
+  }
 
   return {
     ...project,
