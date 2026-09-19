@@ -107,25 +107,35 @@ These rules are architecture gates, not optional implementation notes.
 86. Optional ServiceEvent references to ServicePlan or WarrantyClaim must resolve to the same physical Asset. Warranty and ServiceEvent history may reference inactive/archived provider Parties because historical identity requires existence, while a new or reactivated ServicePlan requires its provider Party to be active.
 87. ServiceEvent plus its ServicePart children is one transaction. ServicePart is append-only service evidence, not a substitute for Asset identity; a component needing independent identifiers, placement, warranty or future service history must be modeled as another Asset.
 
-## Improvements and maintenance
+## Improvements / Works
 
-88. ImprovementProject is work; Asset is a physical item; Material is consumed input. They are not interchangeable.
-89. Issue and WorkOrder are different grains: a problem can exist before a work order and may require more than one work order.
-90. Cross-context workflows cannot bypass the owning domain to mutate its state.
+88. ImprovementProject is one managed body of planned work with immutable Property/optional Unit/Space scope. Unit must belong to Property and Space requires and belongs to Unit. Property-only scope represents building/common works in this phase.
+89. ImprovementProject lifecycle is optimistic: `draft -> planned -> in_progress -> completed`, with cancellation from any non-terminal state. Name/description/planned dates may be corrected only while draft/planned; identity and physical scope are immutable. Completion requires every WorkItem to be completed or cancelled.
+90. WorkItem is planned scope, not evidence that work occurred. It starts planned, may start/complete only while its parent Project is in progress, and may be cancelled from planned/in-progress. Completed/cancelled WorkItems are terminal.
+91. WorkRecord is one append-only historical occurrence under one exact WorkItem/Project. `performedAt` is occurrence time, `recordedAt` is recording time, performedAt cannot be later than recordedAt, and work cannot be asserted after the earliest Project/WorkItem terminal time.
+92. WorkRecord plus its WorkMaterial and ProjectAsset children is assembled and sealed in one transaction. At commit the WorkRecord must be sealed; after sealing neither the record nor its evidence children may be rewritten, deleted or appended to.
+93. WorkMaterial is exact positive material/consumable quantity stored with decimal/numeric semantics. It is neither Asset identity nor financial Cost; money, procurement and supplier invoices belong to later bounded contexts.
+94. ProjectAsset is append-only evidence that an existing Asset was `affected`, `installed` or `removed` by one WorkRecord. It never changes Asset placement/status/replacement/service truth. There is no ProjectAsset `replaced` action because physical replacement is owned by AssetReplacement.
+95. Historical contractor identity on WorkRecord requires Party existence, not current active status. Contractor billing and payables are not part of Improvements.
+96. Cross-context workflows cannot bypass the owning domain to mutate its state.
+
+## Maintenance
+
+97. Issue and WorkOrder are different grains: a problem can exist before a work order and may require more than one work order.
 
 ## Money and documents
 
-91. Monetary values use decimal/numeric semantics, never binary floating point.
-92. Each DocumentVersion represents one binary content identity; its file metadata, SHA-256 and storage locator are immutable after registration.
-93. A final DocumentVersion is append-only evidence and cannot return to a mutable/stored state.
-94. A `signed_original` link identifies one exact final DocumentVersion, may only target a signed LeaseAgreement/LeaseAmendment, and is immutable once created.
-95. Binary storage location is infrastructure data, not business identity; Google Drive file IDs must never become Document or DocumentVersion IDs.
-96. External binary storage and PostgreSQL cannot share one ACID transaction. Upload registration therefore uses an idempotent storage object key and compensating delete when DB registration fails.
-97. Financial corrections preserve prior history through correction/reversal records where material.
+98. Monetary values use decimal/numeric semantics, never binary floating point.
+99. Each DocumentVersion represents one binary content identity; its file metadata, SHA-256 and storage locator are immutable after registration.
+100. A final DocumentVersion is append-only evidence and cannot return to a mutable/stored state.
+101. A `signed_original` link identifies one exact final DocumentVersion, may only target a signed LeaseAgreement/LeaseAmendment, and is immutable once created.
+102. Binary storage location is infrastructure data, not business identity; Google Drive file IDs must never become Document or DocumentVersion IDs.
+103. External binary storage and PostgreSQL cannot share one ACID transaction. Upload registration therefore uses an idempotent storage object key and compensating delete when DB registration fails.
+104. Financial corrections preserve prior history through correction/reversal records where material.
 
 ## Architecture
 
-98. Domain code cannot import Supabase, React, Deno, Google APIs or future Fastify infrastructure.
-99. UI components cannot coordinate multi-table business transactions.
-100. Multi-record business commands have one explicit transactional boundary.
-101. Database constraints enforce invariants that can be stated relationally.
+105. Domain code cannot import Supabase, React, Deno, Google APIs or future Fastify infrastructure.
+106. UI components cannot coordinate multi-table business transactions.
+107. Multi-record business commands have one explicit transactional boundary.
+108. Database constraints enforce invariants that can be stated relationally.
