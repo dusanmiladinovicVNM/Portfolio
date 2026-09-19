@@ -1,6 +1,7 @@
 import {
   ApplicationError,
   resolveActor,
+  type AccessItemRepository,
   type AssetInventoryRepository,
   type AssetRepository,
   type AssetServiceRepository,
@@ -22,6 +23,7 @@ import {
   type VerifiedIdentity,
 } from '@portfolio/application';
 import { DomainError } from '@portfolio/domain';
+import { handleAccessItemHttp } from './access-item-http-routes.js';
 import { handleAssetHttp } from './asset-http-routes.js';
 import { handleAssetServiceHttp } from './asset-service-http-routes.js';
 import { handleCostHttp } from './cost-http-routes.js';
@@ -38,6 +40,7 @@ import { handleTenancyHttp } from './tenancy-http-routes.js';
 
 export interface PortfolioHttpDependencies {
   readonly portfolioRepository: PortfolioRepository;
+  readonly accessItemRepository: AccessItemRepository;
   readonly assetRepository: AssetRepository;
   readonly assetInventoryRepository: AssetInventoryRepository;
   readonly assetServiceRepository: AssetServiceRepository;
@@ -145,6 +148,19 @@ export function createPortfolioHttpHandler(
       const actor = await resolveActor(deps.userAccessRepository, identity);
 
       const handlers = [
+        () =>
+          handleAccessItemHttp(
+            {
+              accessItemRepository: deps.accessItemRepository,
+              portfolioRepository: deps.portfolioRepository,
+              tenancyRepository: deps.tenancyRepository,
+              idGenerator: deps.idGenerator,
+              clock: deps.clock,
+            },
+            actor,
+            request,
+            path,
+          ),
         () =>
           handleMaintenanceHttp(
             {
