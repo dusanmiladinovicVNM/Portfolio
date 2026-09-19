@@ -10,6 +10,8 @@ import {
   createAccessItem,
   createAccessItemTransaction,
   deriveAccessItemState,
+  retireAccessItem,
+  updateAccessItemLabel,
 } from '../src/index.js';
 
 const actor = asUserId('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
@@ -167,6 +169,109 @@ describe('AccessItem domain', () => {
       }),
     ).toThrowError(
       expect.objectContaining({ code: 'ACCESS_ITEM_NOT_AVAILABLE' }),
+    );
+  });
+
+  it('keeps lifecycle separate from custody and permits return after retirement', () => {
+    const issued = createAccessItemTransaction({
+      id: asAccessItemTransactionId(
+        '77777777-7777-4777-8777-777777777779',
+      ),
+      item: item(),
+      tenancyId: tenancyA,
+      type: 'issued',
+      previous: null,
+      occurredAt: '2026-09-19T10:05:00.000Z',
+      recordedAt: '2026-09-19T10:05:00.000Z',
+      recordedByUserId: actor,
+    });
+
+    const retired = retireAccessItem(item(), {
+      retiredAt: '2026-09-19T10:10:00.000Z',
+      retiredByUserId: actor,
+      retirementReason: 'Lock replaced',
+      lastTransaction: issued,
+    });
+
+    expect(retired).toMatchObject({
+      status: 'retired',
+      version: 2,
+      retirementReason: 'Lock replaced',
+    });
+
+    expect(() =>
+      createAccessItemTransaction({
+        id: asAccessItemTransactionId(
+          '77777777-7777-4777-8777-777777777780',
+        ),
+        item: retired,
+        tenancyId: tenancyA,
+        type: 'issued',
+        previous: issued,
+        occurredAt: '2026-09-19T10:11:00.000Z',
+        recordedAt: '2026-09-19T10:11:00.000Z',
+        recordedByUserId: actor,
+      }),
+    ).toThrowError(
+      expect.objectContaining({ code: 'ACCESS_ITEM_RETIRED' }),
+    );
+
+    const returned = createAccessItemTransaction({
+      id: asAccessItemTransactionId(
+        '77777777-7777-4777-8777-777777777781',
+      ),
+      item: retired,
+      tenancyId: tenancyA,
+      type: 'returned',
+      previous: issued,
+      occurredAt: '2026-09-19T10:12:00.000Z',
+      recordedAt: '2026-09-19T10:12:00.000Z',
+      recordedByUserId: actor,
+    });
+
+    expect(deriveAccessItemState(returned)).toMatchObject({
+      kind: 'available',
+      tenancyId: null,
+    });
+    expect(retired.status).toBe('retired');
+  });
+
+  it('treats label as correctable metadata with optimistic version', () => {
+    const corrected = updateAccessItemLabel(
+      item(),
+      'Main entrance — left cylinder',
+    );
+
+    expect(corrected).toMatchObject({
+      label: 'Main entrance — left cylinder',
+      version: 2,
+      status: 'active',
+    });
+  });
+
+  it('does not allow retirement to predate existing custody occurrence', () => {
+    const issued = createAccessItemTransaction({
+      id: asAccessItemTransactionId(
+        '77777777-7777-4777-8777-777777777782',
+      ),
+      item: item(),
+      tenancyId: tenancyA,
+      type: 'issued',
+      previous: null,
+      occurredAt: '2026-09-19T10:15:00.000Z',
+      recordedAt: '2026-09-19T10:15:00.000Z',
+      recordedByUserId: actor,
+    });
+
+    expect(() =>
+      retireAccessItem(item(), {
+        retiredAt: '2026-09-19T10:14:59.000Z',
+        retiredByUserId: actor,
+        retirementReason: 'Backdated retirement',
+        lastTransaction: issued,
+      }),
+    ).toThrowError(
+      expect.objectContaining({ code: 'ACCESS_ITEM_TIMESTAMP_ORDER_INVALID' }),
     );
   });
 
