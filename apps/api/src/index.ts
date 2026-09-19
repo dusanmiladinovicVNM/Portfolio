@@ -7,6 +7,7 @@ import {
   PostgresAssetRepository,
   PostgresAssetServiceRepository,
   PostgresDocumentRepository,
+  PostgresImprovementRepository,
   PostgresInspectionRepository,
   PostgresLeaseRepository,
   PostgresOwnershipRepository,
@@ -47,6 +48,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
   const userAccessRepository = new PostgresUserAccessRepository(sql);
   const documentRepository = new PostgresDocumentRepository(sql);
   const inspectionRepository = new PostgresInspectionRepository(sql);
+  const improvementRepository = new PostgresImprovementRepository(sql);
 
   const applicationHandler = createPortfolioHttpHandler(
     {
@@ -60,6 +62,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
       leaseRepository,
       documentRepository,
       inspectionRepository,
+      improvementRepository,
       staffDirectoryRepository: userAccessRepository,
       fileStorage: config.fileStorage,
       clock: new SystemClock(),
