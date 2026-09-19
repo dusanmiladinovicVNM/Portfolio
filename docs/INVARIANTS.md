@@ -121,29 +121,38 @@ These rules are architecture gates, not optional implementation notes.
 
 ## Maintenance
 
-97. Issue and WorkOrder are different grains: a problem can exist before a work order and may require more than one work order.
+97. MaintenanceIssue and MaintenanceWorkOrder are different grains: a reported problem can exist before work is commissioned and one Issue may require several WorkOrders.
+98. MaintenanceIssue has immutable Property/optional Unit/Space/Asset scope. Unit must belong to Property, Space requires and belongs to Unit, and an Asset-scoped Issue snapshots that Asset's exact current placement at creation; later Asset movement never rewrites Issue history.
+99. One InspectionFinding may originate at most one MaintenanceIssue. The Finding must belong to the same Unit, remains Inspection-owned truth, and is never mutated by Maintenance.
+100. MaintenanceIssue lifecycle is optimistic and terminal: `open -> resolved|cancelled`. Title/description/priority are correctable only while open; code, scope, origin and reported/recorded provenance are immutable.
+101. Resolving an Issue requires at least one completed WorkOrder and every child WorkOrder terminal. Cancelling an Issue requires every existing WorkOrder cancelled. An Issue terminal timestamp cannot predate its recording time or any child terminal timestamp.
+102. MaintenanceWorkOrder belongs to exactly one Issue and follows `draft -> assigned -> in_progress -> completed`, with cancellation from any non-terminal state. Definition and assignment freeze once work starts; reassignment before start cannot move `assignedAt` backwards.
+103. WorkOrder assignment targets exactly one active internal User or active Party at assignment time. Later deactivation does not rewrite historical assignment.
+104. ServiceEvent remains Asset/Service truth. A Maintenance link is append-only, one ServiceEvent belongs to at most one WorkOrder in this phase, the Issue must be Asset-scoped, Asset identities must match, and `ServiceEvent.performedAt` must lie within the WorkOrder execution interval. WorkOrder completion cannot predate linked service work and a WorkOrder with linked ServiceEvents cannot be cancelled.
+105. Maintenance stores no monetary amount, currency, invoice or payment truth. Cost remains the financial source of truth and may reference MaintenanceIssue or MaintenanceWorkOrder through the existing typed CostSource model.
+106. WorkOrder writes share-lock their parent Issue and ServiceEvent-link inserts share-lock their WorkOrder. Parent terminal transitions therefore serialize with concurrent child writes instead of relying on racy check-then-write validation.
 
 ## Money and documents
 
-98. Monetary values use decimal/numeric semantics, never binary floating point.
-99. Each DocumentVersion represents one binary content identity; its file metadata, SHA-256 and storage locator are immutable after registration.
-100. A final DocumentVersion is append-only evidence and cannot return to a mutable/stored state.
-101. A `signed_original` link identifies one exact final DocumentVersion, may only target a signed LeaseAgreement/LeaseAmendment, and is immutable once created.
-102. Binary storage location is infrastructure data, not business identity; Google Drive file IDs must never become Document or DocumentVersion IDs.
-103. External binary storage and PostgreSQL cannot share one ACID transaction. Upload registration therefore uses an idempotent storage object key and compensating delete when DB registration fails.
-104. Financial corrections preserve prior history through correction/reversal records where material.
-105. One Cost is one immutable positive exact monetary allocation to exactly one typed CostSource; source kind and target must agree.
-106. Cost amount uses the current two-decimal money model: at most two decimal places and at most 16 whole-part digits. PostgreSQL preserves the incoming exact numeric value until explicit scale/range checks run, so direct SQL cannot silently round an over-scale amount. Cost currency is restricted to the configured set `CHF|EUR|RSD`; canonical #18 does not claim generic ISO 4217 minor-unit support.
-107. `Cost.incurredOn` cannot be later than the UTC calendar date of immutable `recordedAt`.
-108. Cost supplier identity requires Party existence, not current active status; invoice reference is external metadata and never becomes Invoice/AP source of truth.
-109. One Cost may be reversed at most once and one replacement Cost may belong to at most one incoming correction.
-110. When a Cost reversal has a replacement, replacement and reversal share both `recordedAt` and `recordedByUserId`; normal application creation is one transaction and PostgreSQL enforces the same relational parity.
-111. Cost ledger reads expose both outgoing reversal and incoming correction lineage; the original and every replacement remain immutable historical facts.
-112. Costs in unlike currencies are never implicitly summed without an explicit future FX/conversion model.
+107. Monetary values use decimal/numeric semantics, never binary floating point.
+108. Each DocumentVersion represents one binary content identity; its file metadata, SHA-256 and storage locator are immutable after registration.
+109. A final DocumentVersion is append-only evidence and cannot return to a mutable/stored state.
+110. A `signed_original` link identifies one exact final DocumentVersion, may only target a signed LeaseAgreement/LeaseAmendment, and is immutable once created.
+111. Binary storage location is infrastructure data, not business identity; Google Drive file IDs must never become Document or DocumentVersion IDs.
+112. External binary storage and PostgreSQL cannot share one ACID transaction. Upload registration therefore uses an idempotent storage object key and compensating delete when DB registration fails.
+113. Financial corrections preserve prior history through correction/reversal records where material.
+114. One Cost is one immutable positive exact monetary allocation to exactly one typed CostSource; source kind and target must agree.
+115. Cost amount uses the current two-decimal money model: at most two decimal places and at most 16 whole-part digits. PostgreSQL preserves the incoming exact numeric value until explicit scale/range checks run, so direct SQL cannot silently round an over-scale amount. Cost currency is restricted to the configured set `CHF|EUR|RSD`; canonical #18 does not claim generic ISO 4217 minor-unit support.
+116. `Cost.incurredOn` cannot be later than the UTC calendar date of immutable `recordedAt`.
+117. Cost supplier identity requires Party existence, not current active status; invoice reference is external metadata and never becomes Invoice/AP source of truth.
+118. One Cost may be reversed at most once and one replacement Cost may belong to at most one incoming correction.
+119. When a Cost reversal has a replacement, replacement and reversal share both `recordedAt` and `recordedByUserId`; normal application creation is one transaction and PostgreSQL enforces the same relational parity.
+120. Cost ledger reads expose both outgoing reversal and incoming correction lineage; the original and every replacement remain immutable historical facts.
+121. Costs in unlike currencies are never implicitly summed without an explicit future FX/conversion model.
 
 ## Architecture
 
-113. Domain code cannot import Supabase, React, Deno, Google APIs or future Fastify infrastructure.
-114. UI components cannot coordinate multi-table business transactions.
-115. Multi-record business commands have one explicit transactional boundary.
-116. Database constraints enforce invariants that can be stated relationally.
+122. Domain code cannot import Supabase, React, Deno, Google APIs or future Fastify infrastructure.
+123. UI components cannot coordinate multi-table business transactions.
+124. Multi-record business commands have one explicit transactional boundary.
+125. Database constraints enforce invariants that can be stated relationally.
