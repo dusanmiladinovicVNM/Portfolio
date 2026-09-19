@@ -1662,6 +1662,23 @@ describe('Portfolio HTTP boundary', () => {
       recordedAt: '2026-09-19T10:00:00.000Z',
     });
 
+    const unsupportedCurrencyResponse = await handler(
+      new Request('https://portfolio.test/costs', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          source: { kind: 'property', propertyId: property.id },
+          description: 'Unsupported currency',
+          amount: '10',
+          currency: 'ZZZ',
+          incurredOn: '2026-09-18',
+          reportingClass: 'opex',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(unsupportedCurrencyResponse.status).toBe(400);
+
     const sourceList = await handler(
       new Request(
         `https://portfolio.test/costs?sourceKind=property&sourceId=${property.id}`,
@@ -1736,6 +1753,25 @@ describe('Portfolio HTTP boundary', () => {
       data: {
         cost: { id: original.id, amount: '1200.50' },
         reversal: {
+          replacementCostId: correction.replacement.id,
+        },
+        incomingCorrection: null,
+      },
+    });
+
+    const replacementHistory = await handler(
+      new Request(
+        `https://portfolio.test/costs/${correction.replacement.id}`,
+      ),
+      adminIdentity,
+    );
+    expect(replacementHistory.status).toBe(200);
+    expect(await replacementHistory.json()).toMatchObject({
+      data: {
+        cost: { id: correction.replacement.id, amount: '1150.00' },
+        reversal: null,
+        incomingCorrection: {
+          costId: original.id,
           replacementCostId: correction.replacement.id,
         },
       },
