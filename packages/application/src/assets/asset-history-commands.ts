@@ -169,6 +169,7 @@ export async function recordTenancyAssetInventoryCommand(
   await deps.assetInventoryRepository.updateTenancyAssetInventory(
     updated,
     assignment.version,
+    input.phase,
     assessment,
   );
 
