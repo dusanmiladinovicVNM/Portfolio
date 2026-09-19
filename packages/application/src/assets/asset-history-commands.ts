@@ -151,7 +151,11 @@ export async function assignAssetToTenancyCommand(
 export async function recordTenancyAssetInventoryCommand(
   deps: Pick<
     AssetHistoryDependencies,
-    'assetRepository' | 'assetInventoryRepository' | 'idGenerator' | 'clock'
+    | 'assetRepository'
+    | 'assetInventoryRepository'
+    | 'tenancyRepository'
+    | 'idGenerator'
+    | 'clock'
   >,
   actor: Actor,
   assignmentId: TenancyAssetAssignmentId,
