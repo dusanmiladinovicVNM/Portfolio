@@ -7705,6 +7705,83 @@ describe('PostgreSQL infrastructure', () => {
       clock: { now: () => '2026-09-19T10:00:00.000Z' },
     };
 
+    const tenancyStartBoundaryKey = await createAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-18T12:00:00.000Z' },
+      },
+      actor,
+      {
+        code: 'KEY-ACCESS-START-BOUNDARY',
+        kind: 'key',
+        propertyId: property.id,
+        unitId: unitA.id,
+        label: 'Tenancy start UTC boundary key',
+      },
+    );
+
+    await expect(
+      issueAccessItemCommand(
+        {
+          ...accessDeps,
+          clock: { now: () => '2026-09-19T00:05:00.000Z' },
+        },
+        actor,
+        tenancyStartBoundaryKey.id,
+        {
+          tenancyId: activeA.id,
+          occurredAt: '2026-09-18T23:59:59.000Z',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'ACCESS_ITEM_ISSUE_BEFORE_TENANCY_START',
+    });
+
+    await expect(
+      sql`
+        insert into public.access_item_transactions (
+          id, access_item_id, tenancy_id, type, sequence,
+          occurred_at, recorded_at, recorded_by_user_id
+        ) values (
+          'aef20000-0000-4000-8000-000000000001',
+          ${tenancyStartBoundaryKey.id},
+          ${activeA.id},
+          'issued',
+          1,
+          '2026-09-18T23:59:59.000Z',
+          '2026-09-19T00:05:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'access_item_transaction_before_tenancy_start',
+    });
+
+    await sql`
+      insert into public.access_item_transactions (
+        id, access_item_id, tenancy_id, type, sequence,
+        occurred_at, recorded_at, recorded_by_user_id
+      ) values (
+        'aef20000-0000-4000-8000-000000000002',
+        ${tenancyStartBoundaryKey.id},
+        ${activeA.id},
+        'issued',
+        1,
+        '2026-09-19T00:00:00.000Z',
+        '2026-09-19T00:00:00.000Z',
+        ${actor.userId}
+      )
+    `;
+
+    expect(
+      await accessItemRepository.getLastTransaction(tenancyStartBoundaryKey.id),
+    ).toMatchObject({
+      type: 'issued',
+      sequence: 1,
+      occurredAt: '2026-09-19T00:00:00.000Z',
+    });
+
     const unitKey = await createAccessItemCommand(
       accessDeps,
       actor,
