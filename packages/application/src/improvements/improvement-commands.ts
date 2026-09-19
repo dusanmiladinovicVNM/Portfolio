@@ -16,6 +16,7 @@ import {
   startImprovementProject,
   startWorkItem,
   updateImprovementProjectPlan,
+  updateWorkItemPlan,
   type AssetId,
   type ImprovementProjectId,
   type PartyId,
@@ -283,6 +284,31 @@ export async function createWorkItemCommand(
   return item;
 }
 
+export async function updateWorkItemPlanCommand(
+  repository: ImprovementRepository,
+  actor: Actor,
+  workItemId: WorkItemId,
+  expectedVersion: number,
+  input: {
+    readonly title?: string;
+    readonly description?: string | null;
+  },
+) {
+  requireCapability(actor, 'improvements:write');
+  const item = await requireWorkItem(repository, workItemId);
+  assertExpectedVersion(
+    item.version,
+    expectedVersion,
+    'WORK_ITEM_VERSION_CONFLICT',
+    'WorkItem has changed since the caller last read it.',
+  );
+
+  const updated = updateWorkItemPlan(item, input);
+  if (updated === item) return item;
+  await repository.updateWorkItemPlan(updated, expectedVersion);
+  return updated;
+}
+
 export async function changeWorkItemStatusCommand(
   deps: Pick<ImprovementDependencies, 'improvementRepository' | 'clock'>,
   actor: Actor,
@@ -311,7 +337,10 @@ export async function changeWorkItemStatusCommand(
         ? completeWorkItem(item, project, now)
         : cancelWorkItem(item, now);
 
-  await deps.improvementRepository.updateWorkItem(changed, expectedVersion);
+  await deps.improvementRepository.updateWorkItemLifecycle(
+    changed,
+    expectedVersion,
+  );
   return changed;
 }
 
