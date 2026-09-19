@@ -3757,6 +3757,18 @@ describe('PostgreSQL infrastructure', () => {
       'c2000000-0000-4000-8000-000000000018',
       'c2000000-0000-4000-8000-000000000019',
       'c2000000-0000-4000-8000-000000000020',
+      'c2000000-0000-4000-8000-000000000021',
+      'c2000000-0000-4000-8000-000000000022',
+      'c2000000-0000-4000-8000-000000000023',
+      'c2000000-0000-4000-8000-000000000024',
+      'c2000000-0000-4000-8000-000000000025',
+      'c2000000-0000-4000-8000-000000000026',
+      'c2000000-0000-4000-8000-000000000027',
+      'c2000000-0000-4000-8000-000000000028',
+      'c2000000-0000-4000-8000-000000000029',
+      'c2000000-0000-4000-8000-000000000030',
+      'c2000000-0000-4000-8000-000000000031',
+      'c2000000-0000-4000-8000-000000000032',
     ]);
 
     const property = await createPropertyCommand(
@@ -3814,6 +3826,17 @@ describe('PostgreSQL infrastructure', () => {
       },
     );
 
+    const tenant = await createPartyCommand(
+      { partyRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PTY-HISTORY-A',
+        partyType: 'person',
+        firstName: 'History',
+        lastName: 'Tenant',
+      },
+    );
+
     const tenancy = await createTenancyCommand(
       {
         tenancyRepository,
@@ -3825,6 +3848,13 @@ describe('PostgreSQL infrastructure', () => {
       {
         unitId: unitA.id,
         code: 'TEN-HISTORY-A',
+        parties: [
+          {
+            partyId: tenant.id,
+            role: 'tenant',
+            isPrimary: true,
+          },
+        ],
       },
     );
 
@@ -3884,10 +3914,57 @@ describe('PostgreSQL infrastructure', () => {
     );
     expect(assignment.version).toBe(1);
 
+    await expect(
+      recordTenancyAssetInventoryCommand(
+        {
+          assetRepository,
+          assetInventoryRepository,
+          tenancyRepository,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-19T08:25:00.000Z' },
+        },
+        actor,
+        assignment.id,
+        {
+          expectedVersion: 1,
+          phase: 'move_in',
+          presence: 'present',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'TENANCY_ASSET_TENANCY_STATE_INVALID',
+    });
+
+    await expect(
+      sql`
+        update public.tenancy_asset_assignments
+        set
+          move_in_presence = 'present',
+          move_in_recorded_at = '2026-09-19T08:25:00.000Z',
+          move_in_recorded_by_user_id = ${actor.userId},
+          version = version + 1
+        where id = ${assignment.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'tenancy_asset_assignment_move_in_tenancy_state',
+    });
+
+    const plannedTenancy = await planTenancyCommand(
+      { tenancyRepository },
+      actor,
+      tenancy.id,
+      1,
+      '2026-09-20',
+      '2027-09-19',
+    );
+    expect(plannedTenancy.status).toBe('planned');
+
     const moveIn = await recordTenancyAssetInventoryCommand(
       {
         assetRepository,
         assetInventoryRepository,
+        tenancyRepository,
         idGenerator: ids,
         clock: { now: () => '2026-09-19T08:30:00.000Z' },
       },
@@ -3905,6 +3982,15 @@ describe('PostgreSQL infrastructure', () => {
       version: 2,
       moveIn: { presence: 'present' },
     });
+
+    const activeTenancy = await activateTenancyCommand(
+      { tenancyRepository },
+      actor,
+      tenancy.id,
+      plannedTenancy.version,
+      '2026-09-20',
+    );
+    expect(activeTenancy.status).toBe('active');
 
     const moved = await moveAssetCommand(
       {
@@ -4035,6 +4121,7 @@ describe('PostgreSQL infrastructure', () => {
       {
         assetRepository,
         assetInventoryRepository,
+        tenancyRepository,
         idGenerator: ids,
         clock: { now: () => '2026-09-19T10:00:00.000Z' },
       },
