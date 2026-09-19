@@ -254,6 +254,9 @@ afterAll(async () => {
     `drop table if exists
       public.cost_reversals,
       public.costs,
+      public.maintenance_work_order_service_events,
+      public.maintenance_work_orders,
+      public.maintenance_issues,
       public.improvement_project_assets,
       public.improvement_work_materials,
       public.improvement_work_records,
