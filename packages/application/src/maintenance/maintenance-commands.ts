@@ -359,7 +359,10 @@ export async function assignMaintenanceWorkOrderCommand(
 }
 
 export async function changeMaintenanceWorkOrderStatusCommand(
-  deps: Pick<MaintenanceDependencies, 'maintenanceRepository' | 'clock'>,
+  deps: Pick<
+    MaintenanceDependencies,
+    'maintenanceRepository' | 'assetServiceRepository' | 'clock'
+  >,
   actor: Actor,
   id: MaintenanceWorkOrderId,
   expectedVersion: number,
@@ -373,7 +376,22 @@ export async function changeMaintenanceWorkOrderStatusCommand(
   if (action === 'start') {
     updated = startMaintenanceWorkOrder(current, now);
   } else if (action === 'complete') {
-    updated = completeMaintenanceWorkOrder(current, now);
+    const serviceEventIds =
+      await deps.maintenanceRepository.listServiceEventIdsByWorkOrder(id);
+    const serviceEvents = await Promise.all(
+      serviceEventIds.map(async (serviceEventId) => {
+        const event =
+          await deps.assetServiceRepository.getServiceEventById(serviceEventId);
+        if (!event) {
+          throw new DomainError(
+            'SERVICE_EVENT_NOT_FOUND',
+            'Linked ServiceEvent not found.',
+          );
+        }
+        return event;
+      }),
+    );
+    updated = completeMaintenanceWorkOrder(current, now, serviceEvents);
   } else {
     const serviceEvents =
       await deps.maintenanceRepository.listServiceEventIdsByWorkOrder(id);
