@@ -5560,6 +5560,75 @@ describe('PostgreSQL infrastructure', () => {
       constraint_name: 'improvement_work_record_must_be_sealed',
     });
 
+    await expect(
+      changeWorkItemStatusCommand(
+        {
+          improvementRepository,
+          clock: { now: () => '2026-10-02T12:00:00.000Z' },
+        },
+        actor,
+        item.id,
+        activeItem.version,
+        'complete',
+      ),
+    ).rejects.toMatchObject({
+      code: 'WORK_ITEM_TERMINAL_BEFORE_WORK_RECORD',
+    });
+
+    await expect(
+      sql`
+        update public.improvement_work_items
+        set status = 'completed',
+            completed_at = '2026-10-02T12:00:00.000Z',
+            version = version + 1
+        where id = ${item.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'improvement_work_item_terminal_before_work_record',
+    });
+
+    await expect(
+      sql`
+        update public.improvement_work_items
+        set status = 'cancelled',
+            cancelled_at = '2026-10-02T12:00:00.000Z',
+            version = version + 1
+        where id = ${item.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'improvement_work_item_terminal_before_work_record',
+    });
+
+    await expect(
+      changeImprovementProjectStatusCommand(
+        {
+          improvementRepository,
+          clock: { now: () => '2026-10-02T12:00:00.000Z' },
+        },
+        actor,
+        project.id,
+        started.version,
+        'cancel',
+      ),
+    ).rejects.toMatchObject({
+      code: 'IMPROVEMENT_PROJECT_TERMINAL_BEFORE_WORK_RECORD',
+    });
+
+    await expect(
+      sql`
+        update public.improvement_projects
+        set status = 'cancelled',
+            cancelled_at = '2026-10-02T12:00:00.000Z',
+            version = version + 1
+        where id = ${project.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'improvement_project_terminal_before_work_record',
+    });
+
     const completedItem = await changeWorkItemStatusCommand(
       {
         improvementRepository,
@@ -5570,6 +5639,34 @@ describe('PostgreSQL infrastructure', () => {
       activeItem.version,
       'complete',
     );
+
+    await expect(
+      changeImprovementProjectStatusCommand(
+        {
+          improvementRepository,
+          clock: { now: () => '2026-10-03T09:30:00.000Z' },
+        },
+        actor,
+        project.id,
+        started.version,
+        'complete',
+      ),
+    ).rejects.toMatchObject({
+      code: 'IMPROVEMENT_PROJECT_COMPLETED_BEFORE_WORK_ITEM_TERMINAL',
+    });
+
+    await expect(
+      sql`
+        update public.improvement_projects
+        set status = 'completed',
+            completed_at = '2026-10-03T09:30:00.000Z',
+            version = version + 1
+        where id = ${project.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'improvement_project_completed_before_work_item_terminal',
+    });
 
     const completedProject = await changeImprovementProjectStatusCommand(
       {
