@@ -289,7 +289,6 @@ as $improvement_project_guard$
 declare
   plan_changed boolean;
   lifecycle_timestamp_changed boolean;
-  definition_changed boolean;
 begin
   if tg_op = 'INSERT' then
     if new.status <> 'draft'
@@ -422,6 +421,7 @@ declare
   project_status text;
   project_started_at timestamptz;
   lifecycle_timestamp_changed boolean;
+  definition_changed boolean;
 begin
   select status, started_at
     into project_status, project_started_at
