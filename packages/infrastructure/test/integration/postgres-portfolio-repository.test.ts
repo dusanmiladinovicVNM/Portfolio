@@ -4,6 +4,10 @@ import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   activateTenancyCommand,
+  createAccessItemCommand,
+  issueAccessItemCommand,
+  reportAccessItemLostCommand,
+  returnAccessItemCommand,
   changeAssetStatusCommand,
   changeImprovementProjectStatusCommand,
   changeWorkItemStatusCommand,
@@ -101,6 +105,7 @@ import {
   type Party,
 } from '@portfolio/domain';
 import {
+  PostgresAccessItemRepository,
   PostgresAssetInventoryRepository,
   PostgresAssetRepository,
   PostgresAssetServiceRepository,
@@ -124,6 +129,7 @@ if (!connectionString) {
 
 const sql = postgres(connectionString, { max: 1 });
 const portfolioRepository = new PostgresPortfolioRepository(sql);
+const accessItemRepository = new PostgresAccessItemRepository(sql);
 const assetRepository = new PostgresAssetRepository(sql);
 const assetInventoryRepository = new PostgresAssetInventoryRepository(sql);
 const assetServiceRepository = new PostgresAssetServiceRepository(sql);
@@ -154,6 +160,8 @@ class SequenceIds implements IdGenerator {
 async function resetAndMigrate(): Promise<void> {
   await sql.unsafe(
     `drop table if exists
+      public.access_item_transactions,
+      public.access_items,
       public.cost_reversals,
       public.costs,
       public.maintenance_work_order_service_events,
@@ -258,6 +266,8 @@ beforeAll(async () => {
 afterAll(async () => {
   await sql.unsafe(
     `drop table if exists
+      public.access_item_transactions,
+      public.access_items,
       public.cost_reversals,
       public.costs,
       public.maintenance_work_order_service_events,
