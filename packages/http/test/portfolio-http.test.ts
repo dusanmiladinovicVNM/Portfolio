@@ -1016,6 +1016,271 @@ describe('Portfolio HTTP boundary', () => {
     expect((await conditionsResponse.json()).data.items).toHaveLength(2);
   });
 
+  it('runs Warranty, Claim, ServicePlan and ServiceEvent through HTTP', async () => {
+    const handler = buildHandler(
+      [
+        'fa000000-0000-4000-8000-000000000001',
+        'fa000000-0000-4000-8000-000000000002',
+        'fa000000-0000-4000-8000-000000000003',
+        'fa000000-0000-4000-8000-000000000004',
+        'fa000000-0000-4000-8000-000000000005',
+        'fa000000-0000-4000-8000-000000000006',
+        'fa000000-0000-4000-8000-000000000007',
+        'fa000000-0000-4000-8000-000000000008',
+        'fa000000-0000-4000-8000-000000000009',
+        'fa000000-0000-4000-8000-000000000010',
+        'fa000000-0000-4000-8000-000000000011',
+        'fa000000-0000-4000-8000-000000000012',
+        'fa000000-0000-4000-8000-000000000013',
+        'fa000000-0000-4000-8000-000000000014',
+      ],
+      new SequenceClock([
+        '2026-09-19T08:00:00.000Z',
+        '2026-09-19T08:05:00.000Z',
+        '2026-09-19T08:10:00.000Z',
+        '2026-09-19T08:15:00.000Z',
+        '2026-09-19T08:20:00.000Z',
+        '2026-09-19T08:25:00.000Z',
+        '2026-09-19T08:30:00.000Z',
+      ]),
+    );
+
+    const propertyResponse = await handler(
+      new Request('https://portfolio.test/properties', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...propertyBody,
+          code: 'PROP-SERVICE-HTTP',
+        }),
+      }),
+      adminIdentity,
+    );
+    const property = (await propertyResponse.json()).data;
+
+    const unitResponse = await handler(
+      new Request('https://portfolio.test/units', {
+        method: 'POST',
+        body: JSON.stringify({
+          propertyId: property.id,
+          code: 'UNIT-SERVICE-HTTP',
+          unitNumber: 'S1',
+          unitType: 'apartment',
+        }),
+      }),
+      adminIdentity,
+    );
+    const unit = (await unitResponse.json()).data;
+
+    const providerResponse = await handler(
+      new Request('https://portfolio.test/parties', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'PTY-SERVICE-PROVIDER',
+          partyType: 'company',
+          legalName: 'Service Provider d.o.o.',
+        }),
+      }),
+      adminIdentity,
+    );
+    const provider = (await providerResponse.json()).data;
+
+    const assetResponse = await handler(
+      new Request('https://portfolio.test/assets', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          code: 'ASSET-SERVICE-HTTP',
+          name: 'Heat pump',
+          propertyId: property.id,
+          unitId: unit.id,
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(assetResponse.status).toBe(201);
+    const asset = (await assetResponse.json()).data;
+
+    const warrantyResponse = await handler(
+      new Request(`https://portfolio.test/assets/${asset.id}/warranties`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          warrantyType: 'manufacturer',
+          providerPartyId: provider.id,
+          reference: 'WR-HTTP-1',
+          validFrom: '2026-01-01',
+          validTo: '2027-12-31',
+          terms: 'Compressor and electronics',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(warrantyResponse.status).toBe(201);
+    const warranty = (await warrantyResponse.json()).data;
+
+    const inspectorWarranties = await handler(
+      new Request(`https://portfolio.test/assets/${asset.id}/warranties`),
+      inspectorIdentity,
+    );
+    expect(inspectorWarranties.status).toBe(200);
+    expect(await inspectorWarranties.json()).toMatchObject({
+      data: { items: [{ id: warranty.id, assetId: asset.id }] },
+    });
+
+    const claimResponse = await handler(
+      new Request(`https://portfolio.test/warranties/${warranty.id}/claims`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          incidentOn: '2026-09-01',
+          description: 'Compressor stopped',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(claimResponse.status).toBe(201);
+    const claim = (await claimResponse.json()).data;
+    expect(claim).toMatchObject({ status: 'draft', version: 1 });
+
+    const submitted = await handler(
+      new Request(`https://portfolio.test/warranty-claims/${claim.id}/submit`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          expectedVersion: 1,
+          providerReference: 'CASE-HTTP-77',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(submitted.status).toBe(200);
+
+    const resolved = await handler(
+      new Request(`https://portfolio.test/warranty-claims/${claim.id}/resolve`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          expectedVersion: 2,
+          decision: 'approved',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(resolved.status).toBe(200);
+
+    const closed = await handler(
+      new Request(`https://portfolio.test/warranty-claims/${claim.id}/close`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ expectedVersion: 3 }),
+      }),
+      adminIdentity,
+    );
+    expect(closed.status).toBe(200);
+    expect(await closed.json()).toMatchObject({
+      data: {
+        status: 'closed',
+        version: 4,
+        providerReference: 'CASE-HTTP-77',
+      },
+    });
+
+    const planResponse = await handler(
+      new Request(`https://portfolio.test/assets/${asset.id}/service-plans`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Annual service',
+          scheduleKind: 'recurring',
+          firstDueOn: '2027-09-01',
+          intervalMonths: 12,
+          providerPartyId: provider.id,
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(planResponse.status).toBe(201);
+    const plan = (await planResponse.json()).data;
+
+    const paused = await handler(
+      new Request(`https://portfolio.test/service-plans/${plan.id}/status`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ expectedVersion: 1, status: 'paused' }),
+      }),
+      adminIdentity,
+    );
+    expect(paused.status).toBe(200);
+
+    const resumed = await handler(
+      new Request(`https://portfolio.test/service-plans/${plan.id}/status`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ expectedVersion: 2, status: 'active' }),
+      }),
+      adminIdentity,
+    );
+    expect(resumed.status).toBe(200);
+
+    const eventResponse = await handler(
+      new Request(`https://portfolio.test/assets/${asset.id}/service-events`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          servicePlanId: plan.id,
+          warrantyClaimId: claim.id,
+          eventType: 'warranty_service',
+          performedAt: '2026-09-10T10:00:00.000Z',
+          providerPartyId: provider.id,
+          description: 'Compressor replaced under warranty',
+          reference: 'SRV-HTTP-1',
+          parts: [
+            {
+              name: 'Compressor',
+              partNumber: 'CMP-9000',
+              serialNumber: 'CMP-SN-1',
+              quantity: 1,
+            },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(eventResponse.status).toBe(201);
+    expect(await eventResponse.json()).toMatchObject({
+      data: {
+        assetId: asset.id,
+        servicePlanId: plan.id,
+        warrantyClaimId: claim.id,
+        eventType: 'warranty_service',
+        performedAt: '2026-09-10T10:00:00.000Z',
+        recordedAt: '2026-09-19T08:30:00.000Z',
+        parts: [{ name: 'Compressor', quantity: 1 }],
+      },
+    });
+
+    const listedEvents = await handler(
+      new Request(`https://portfolio.test/assets/${asset.id}/service-events`),
+      inspectorIdentity,
+    );
+    expect(listedEvents.status).toBe(200);
+    expect((await listedEvents.json()).data.items).toHaveLength(1);
+
+    const inspectorWrite = await handler(
+      new Request(`https://portfolio.test/assets/${asset.id}/service-plans`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Forbidden plan',
+          scheduleKind: 'one_time',
+          firstDueOn: '2027-01-01',
+        }),
+      }),
+      inspectorIdentity,
+    );
+    expect(inspectorWrite.status).toBe(403);
+  });
+
   it('allows inspector reads but rejects master-data writes', async () => {
     const handler = buildHandler();
 
