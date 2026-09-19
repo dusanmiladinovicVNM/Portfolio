@@ -9,6 +9,7 @@ import {
   requireCapability,
   type Actor,
 } from '../security/access.js';
+import type { PortfolioRepository } from '../portfolio/portfolio-repository.js';
 import type { ImprovementRepository } from './improvement-repository.js';
 
 export async function getImprovementProjectQuery(
@@ -27,21 +28,29 @@ export async function getImprovementProjectQuery(
   return project;
 }
 
-export function listImprovementProjectsByPropertyQuery(
+export async function listImprovementProjectsByPropertyQuery(
   repository: ImprovementRepository,
+  portfolioRepository: PortfolioRepository,
   actor: Actor,
   propertyId: PropertyId,
 ) {
   requireCapability(actor, 'improvements:read');
+  if (!(await portfolioRepository.getPropertyById(propertyId))) {
+    throw new DomainError('PROPERTY_NOT_FOUND', 'Property not found.');
+  }
   return repository.listProjectsByProperty(propertyId);
 }
 
-export function listImprovementProjectsByUnitQuery(
+export async function listImprovementProjectsByUnitQuery(
   repository: ImprovementRepository,
+  portfolioRepository: PortfolioRepository,
   actor: Actor,
   unitId: UnitId,
 ) {
   requireCapability(actor, 'improvements:read');
+  if (!(await portfolioRepository.getUnitById(unitId))) {
+    throw new DomainError('UNIT_NOT_FOUND', 'Unit not found.');
+  }
   return repository.listProjectsByUnit(unitId);
 }
 
