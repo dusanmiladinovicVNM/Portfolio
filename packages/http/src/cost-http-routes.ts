@@ -13,6 +13,7 @@ import {
   type CostRepository,
   type IdGenerator,
   type ImprovementRepository,
+  type MaintenanceRepository,
   type PartyRepository,
   type PortfolioRepository,
 } from '@portfolio/application';
@@ -28,6 +29,8 @@ import {
   asAssetId,
   asCostId,
   asImprovementProjectId,
+  asMaintenanceIssueId,
+  asMaintenanceWorkOrderId,
   asPartyId,
   asPropertyId,
   asServiceEventId,
@@ -52,6 +55,7 @@ export interface CostRoutesDependencies {
   readonly assetRepository: AssetRepository;
   readonly assetServiceRepository: AssetServiceRepository;
   readonly improvementRepository: ImprovementRepository;
+  readonly maintenanceRepository: MaintenanceRepository;
   readonly idGenerator: IdGenerator;
   readonly clock: ClockPort;
 }
@@ -95,6 +99,18 @@ function sourceFromDto(source: CostSourceDto): CostSource {
         kind: 'work_material',
         workMaterialId: asWorkMaterialId(source.workMaterialId),
       };
+    case 'maintenance_issue':
+      return {
+        kind: 'maintenance_issue',
+        maintenanceIssueId: asMaintenanceIssueId(source.maintenanceIssueId),
+      };
+    case 'maintenance_work_order':
+      return {
+        kind: 'maintenance_work_order',
+        maintenanceWorkOrderId: asMaintenanceWorkOrderId(
+          source.maintenanceWorkOrderId,
+        ),
+      };
   }
 }
 
@@ -127,7 +143,11 @@ function sourceFromQuery(
                       ? { kind, workRecordId: parsedId.data }
                       : kind === 'work_material'
                         ? { kind, workMaterialId: parsedId.data }
-                        : null;
+                        : kind === 'maintenance_issue'
+                          ? { kind, maintenanceIssueId: parsedId.data }
+                          : kind === 'maintenance_work_order'
+                            ? { kind, maintenanceWorkOrderId: parsedId.data }
+                            : null;
 
   if (candidate === null) return null;
   const parsed = costSourceSchema.safeParse(candidate);
