@@ -145,6 +145,16 @@ function translate(error: unknown): DomainError | null {
           'TENANCY_ASSET_UNIT_MISMATCH',
           'Tenancy inventory Asset must belong to the Tenancy Unit.',
         );
+      case 'tenancy_asset_assignment_tenancy_cancelled':
+        return new DomainError(
+          'TENANCY_ASSET_TENANCY_CANCELLED',
+          'A cancelled Tenancy cannot receive inventory assignments.',
+        );
+      case 'tenancy_asset_assignment_asset_status_invalid':
+        return new DomainError(
+          'TENANCY_ASSET_STATUS_INVALID',
+          'A retired or replaced Asset cannot be newly assigned to Tenancy inventory.',
+        );
       case 'tenancy_asset_assignment_move_in_immutable':
       case 'tenancy_asset_assignment_move_out_immutable':
         return new DomainError(
