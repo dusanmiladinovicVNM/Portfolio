@@ -817,6 +817,20 @@ export class PostgresInspectionRepository implements InspectionRepository {
     );
   }
 
+  async getFindingById(
+    id: import('@portfolio/domain').InspectionFindingId,
+  ): Promise<InspectionFinding | null> {
+    const rows = await this.sql<FindingRow[]>`
+      select
+        id, inspection_id, section_id, item_id, severity,
+        title, description, created_by_user_id, created_at
+      from public.inspection_findings
+      where id = ${id}
+      limit 1
+    `;
+    return rows.length === 0 ? null : mapFinding(rows[0]!);
+  }
+
   async listFindings(
     inspectionId: InspectionId,
   ): Promise<readonly InspectionFinding[]> {
