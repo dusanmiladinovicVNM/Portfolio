@@ -185,6 +185,10 @@ function translate(error: unknown): DomainError | null {
       case 'asset_location_history_delete_forbidden':
       case 'asset_location_history_closed_immutable':
       case 'asset_location_history_update_invalid':
+      case 'asset_location_history_insert_must_be_open':
+      case 'asset_location_history_bootstrap_reserved':
+      case 'asset_location_history_actor_required':
+      case 'asset_location_history_change_type_invalid':
         return new DomainError(
           'ASSET_LOCATION_HISTORY_IMMUTABLE',
           'Asset location history is append-only except for closing the current interval.',
