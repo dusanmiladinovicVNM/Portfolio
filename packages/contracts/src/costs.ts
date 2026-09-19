@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { COST_REPORTING_CLASSES } from '@portfolio/domain';
+import { COST_REPORTING_CLASSES, COST_SUPPORTED_CURRENCIES } from '@portfolio/domain';
 import { entityIdSchema } from './portfolio.js';
 
 const dateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -8,7 +8,11 @@ const moneySchema = z
   .string()
   .trim()
   .regex(/^(0|[1-9]\d{0,15})(?:\.\d{1,2})?$/);
-const currencySchema = z.string().trim().regex(/^[A-Za-z]{3}$/);
+const currencySchema = z
+  .string()
+  .trim()
+  .transform((value) => value.toUpperCase())
+  .pipe(z.enum(COST_SUPPORTED_CURRENCIES));
 
 export const costSourceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('property'), propertyId: entityIdSchema }),
@@ -60,7 +64,7 @@ export const costResponseSchema = z.object({
   source: costSourceSchema,
   description: z.string(),
   amount: z.string(),
-  currency: z.string(),
+  currency: z.enum(COST_SUPPORTED_CURRENCIES),
   incurredOn: dateOnlySchema,
   reportingClass: z.enum(COST_REPORTING_CLASSES),
   supplierPartyId: entityIdSchema.nullable(),
