@@ -101,7 +101,7 @@ Partial corrections are represented as full reversal + corrected replacement Cos
 
 ### Currency
 
-Canonical #18 deliberately uses a two-decimal money model: domain values have at most two decimal places and PostgreSQL stores `numeric(18,2)`.
+Canonical #18 deliberately uses a two-decimal money model: domain values have at most two decimal places. PostgreSQL stores Cost amount as exact unconstrained `numeric` and independently enforces both `scale(amount) <= 2` and the same 16-digit whole-part range. The database therefore inspects the unrounded numeric value instead of relying on a fixed-scale column that could coerce `1.005` before a CHECK sees it.
 
 Cost therefore does **not** claim generic ISO 4217 support. The configured Cost currencies are currently:
 
