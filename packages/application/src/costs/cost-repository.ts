@@ -14,6 +14,9 @@ export interface CostRepository {
     invoiceReference: string,
   ): Promise<readonly Cost[]>;
   getReversalByCostId(costId: CostId): Promise<CostReversal | null>;
+  getReversalByReplacementCostId(
+    costId: CostId,
+  ): Promise<CostReversal | null>;
   insertCost(cost: Cost): Promise<void>;
   insertReversal(reversal: CostReversal): Promise<void>;
   insertCorrection(
