@@ -4996,6 +4996,50 @@ describe('PostgreSQL infrastructure', () => {
     );
     expect(replacement.replacedAsset.status).toBe('replaced');
 
+    await expect(
+      createServicePlanCommand(
+        {
+          assetRepository,
+          assetServiceRepository,
+          partyRepository,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-19T09:05:00.000Z' },
+        },
+        actor,
+        asset.id,
+        {
+          name: 'Impossible successor-era plan',
+          scheduleKind: 'one_time',
+          firstDueOn: '2027-10-01',
+          providerPartyId: provider.id,
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'SERVICE_PLAN_ASSET_STATUS_INVALID',
+    });
+
+    await expect(
+      sql`
+        insert into public.asset_service_plans (
+          id, asset_id, name, schedule_kind, first_due_on,
+          status, version, created_at, created_by_user_id
+        ) values (
+          'fbf00000-0000-4000-8000-000000000006',
+          ${asset.id},
+          'Impossible successor-era plan',
+          'one_time',
+          '2027-10-01',
+          'active',
+          1,
+          '2026-09-19T09:05:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_service_plan_asset_status_invalid',
+    });
+
     const pausedAfterReplacement = await changeServicePlanStatusCommand(
       { assetRepository, assetServiceRepository, partyRepository },
       actor,
