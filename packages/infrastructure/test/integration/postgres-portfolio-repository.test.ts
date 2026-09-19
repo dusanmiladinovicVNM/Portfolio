@@ -3418,6 +3418,23 @@ describe('PostgreSQL infrastructure', () => {
         `;
 
         await tx`
+          insert into public.asset_location_history (
+            id, asset_id, property_id, unit_id, space_id,
+            valid_from, change_type, changed_by_user_id, reason
+          ) values (
+            'b1f00000-0000-4000-8000-000000000010',
+            'b1f00000-0000-4000-8000-000000000002',
+            ${property.id},
+            ${unit.id},
+            ${kitchen.id},
+            '2026-09-22T09:04:00.000Z',
+            'asset_created',
+            ${actor.userId},
+            'Sabotage successor setup'
+          )
+        `;
+
+        await tx`
           insert into public.asset_replacements (
             id, replaced_asset_id, replacement_asset_id,
             replaced_by_user_id, replaced_at
