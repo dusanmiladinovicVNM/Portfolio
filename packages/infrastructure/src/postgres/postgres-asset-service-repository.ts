@@ -14,6 +14,7 @@ import {
   type AssetId,
   type DateOnly,
   type ServiceEvent,
+  type ServiceEventId,
   type ServiceEventType,
   type ServicePart,
   type ServicePlan,
@@ -488,6 +489,42 @@ export class PostgresAssetServiceRepository implements AssetServiceRepository {
       order by id
     `;
     return rows.map(mapServicePart);
+  }
+
+  async getServiceEventById(
+    id: ServiceEventId,
+  ): Promise<ServiceEvent | null> {
+    const rows = await this.sql<ServiceEventRow[]>`
+      ${this.sql.unsafe(eventSelect)}
+      where id = ${id}
+      limit 1
+    `;
+    if (rows.length === 0) return null;
+    const row = rows[0]!;
+    const eventId = asServiceEventId(row.id);
+    return {
+      id: eventId,
+      assetId: asAssetId(row.asset_id),
+      servicePlanId:
+        row.service_plan_id === null
+          ? null
+          : asServicePlanId(row.service_plan_id),
+      warrantyClaimId:
+        row.warranty_claim_id === null
+          ? null
+          : asWarrantyClaimId(row.warranty_claim_id),
+      eventType: row.event_type,
+      performedAt: instant(row.performed_at),
+      providerPartyId:
+        row.provider_party_id === null
+          ? null
+          : asPartyId(row.provider_party_id),
+      description: row.description,
+      reference: row.reference,
+      parts: await this.partsFor(eventId),
+      recordedAt: instant(row.recorded_at),
+      recordedByUserId: asUserId(row.recorded_by_user_id),
+    };
   }
 
   async listServiceEventsByAsset(
