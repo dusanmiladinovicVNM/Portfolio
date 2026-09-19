@@ -85,6 +85,7 @@ export const costReversalResponseSchema = z.object({
 export const costLedgerEntryResponseSchema = z.object({
   cost: costResponseSchema,
   reversal: costReversalResponseSchema.nullable(),
+  incomingCorrection: costReversalResponseSchema.nullable(),
 });
 
 export type CostSourceDto = z.infer<typeof costSourceSchema>;
