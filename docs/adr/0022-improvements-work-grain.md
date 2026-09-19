@@ -69,7 +69,7 @@ planned -> in_progress -> completed
     \--------------> cancelled
 ```
 
-Starting or completing a WorkItem requires its ImprovementProject to be `in_progress`. WorkItems may still be cancelled after parent cancellation to clean up planned scope without rewriting prior facts.
+Starting or completing a WorkItem requires its ImprovementProject to be `in_progress`. While a WorkItem remains `planned`, its title/description are correctable through optimistic CAS; once it starts, its definition is frozen. WorkItems may still be cancelled after parent cancellation to clean up planned scope without rewriting prior facts.
 
 ### WorkRecord
 
@@ -78,7 +78,7 @@ One append-only historical occurrence of work under one WorkItem.
 `performedAt` is when the work happened.
 `recordedAt` is when Portfolio recorded it.
 
-Historical entry is therefore explicit and does not depend on current Project/WorkItem status.
+`Project.startedAt` and `WorkItem.startedAt` are business occurrence boundaries, not merely UI transition timestamps. A WorkRecord must therefore occur at or after both starts, at or before the earliest Project/WorkItem terminal timestamp, and never after `recordedAt`. Historical entry is still supported by recording the work later, but this PR does not let a newly-created Project retroactively claim work from before its own historical start. A future import workflow must reconstruct historical start timestamps explicitly.
 
 A WorkRecord may reference one contractor Party. Historical work requires Party identity existence, not current active status.
 
@@ -97,14 +97,12 @@ If an installed component needs stable identity, identifiers, placement, warrant
 ProjectAsset is append-only evidence that one existing Asset participated in one WorkRecord with one action:
 
 - `affected`
-- `installed`
-- `removed`
+- `installation_work`
+- `removal_work`
 
-ProjectAsset never changes Asset status, placement, replacement lineage or service state.
+These values deliberately describe the contractor/work activity, not the Asset's canonical physical placement or lifecycle at that timestamp. ProjectAsset never changes or independently asserts Asset status, placement, replacement lineage or service state.
 
-Those mutations remain owned by the Asset bounded context. An `installed` or `removed` project link records project history; it is not a second source of Asset lifecycle truth.
-
-There is deliberately no `replaced` ProjectAsset action. Physical replacement is represented by the AssetReplacement domain; a project may separately record the predecessor as removed and successor as installed.
+Those truths remain owned by the Asset bounded context. When Portfolio later models a physical install/remove workflow, that owner context must record the canonical Asset transition separately. There is deliberately no `replaced` ProjectAsset action; physical replacement remains AssetReplacement truth.
 
 ### Contractor boundary
 
