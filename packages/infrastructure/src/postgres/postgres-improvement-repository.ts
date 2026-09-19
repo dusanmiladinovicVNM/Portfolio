@@ -196,13 +196,13 @@ function translate(error: unknown): DomainError | null {
   if (pg.code === '23505') {
     if (pg.constraint_name === 'improvement_projects_code_uq') {
       return new DomainError(
-        'IMPROVEMENT_PROJECT_CODE_EXISTS',
+        'IMPROVEMENT_PROJECT_CODE_ALREADY_EXISTS',
         'ImprovementProject code already exists.',
       );
     }
     if (pg.constraint_name === 'improvement_work_items_code_uq') {
       return new DomainError(
-        'WORK_ITEM_CODE_EXISTS',
+        'WORK_ITEM_CODE_ALREADY_EXISTS',
         'WorkItem code already exists inside ImprovementProject.',
       );
     }
