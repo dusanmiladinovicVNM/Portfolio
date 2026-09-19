@@ -3969,6 +3969,37 @@ describe('PostgreSQL infrastructure', () => {
       constraint_name: 'asset_location_open_interval_required',
     });
 
+    await expect(
+      sql.begin(async (tx) => {
+        await tx`
+          update public.asset_location_history
+          set valid_to = '2026-09-19T10:00:00.000Z'
+          where asset_id = ${asset.id}
+            and valid_to is null
+        `;
+
+        await tx`
+          insert into public.asset_location_history (
+            id, asset_id, property_id, unit_id, space_id,
+            valid_from, change_type, changed_by_user_id, reason
+          ) values (
+            'c2f00000-0000-4000-8000-000000000003',
+            ${asset.id},
+            ${property.id},
+            ${unitA.id},
+            ${spaceA.id},
+            '2026-09-19T11:00:00.000Z',
+            'moved',
+            ${actor.userId},
+            'Attempted move with a one-hour history gap'
+          )
+        `;
+      }),
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_location_history_not_contiguous',
+    });
+
     const moveOut = await recordTenancyAssetInventoryCommand(
       {
         assetRepository,
