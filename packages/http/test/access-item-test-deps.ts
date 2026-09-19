@@ -59,6 +59,17 @@ export class InMemoryAccessItemRepository implements AccessItemRepository {
     this.items.set(item.id, item);
   }
 
+  async updateItem(item: AccessItem, expectedVersion: number) {
+    const current = this.items.get(item.id);
+    if (!current || current.version !== expectedVersion) {
+      throw new DomainError(
+        'ACCESS_ITEM_VERSION_CONFLICT',
+        'AccessItem was modified concurrently.',
+      );
+    }
+    this.items.set(item.id, item);
+  }
+
   async getLastTransaction(accessItemId: AccessItemId) {
     return (
       this.transactions
