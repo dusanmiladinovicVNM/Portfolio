@@ -164,15 +164,25 @@ function translate(error: unknown): DomainError | null {
   if (pg.code !== '23514') return null;
 
   switch (pg.constraint_name) {
+    case 'maintenance_issue_asset_location_missing':
+      return new DomainError(
+        'MAINTENANCE_ASSET_LOCATION_NOT_FOUND',
+        'Asset has no managed location at Maintenance Issue reportedAt.',
+      );
     case 'maintenance_issue_asset_scope_mismatch':
       return new DomainError(
         'MAINTENANCE_ASSET_SCOPE_MISMATCH',
-        'Maintenance Issue must capture the Asset exact current placement.',
+        'Maintenance Issue scope must match the Asset placement at reportedAt.',
       );
     case 'maintenance_issue_finding_scope_mismatch':
       return new DomainError(
         'MAINTENANCE_FINDING_SCOPE_MISMATCH',
         'Inspection Finding must belong to the Maintenance Issue Unit.',
+      );
+    case 'maintenance_issue_finding_temporal_invalid':
+      return new DomainError(
+        'MAINTENANCE_FINDING_REPORTED_BEFORE_ORIGIN',
+        'Maintenance Issue reportedAt cannot predate its originating Inspection Finding.',
       );
     case 'maintenance_issue_initial_state':
     case 'maintenance_issue_invalid_transition':
