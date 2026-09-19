@@ -1,6 +1,9 @@
 import type {
+  AssetConditionAssessmentResponse,
+  AssetLocationHistoryResponse,
   AssetReplacementResponse,
   AssetResponse,
+  TenancyAssetAssignmentResponse,
   DocumentLinkResponse,
   DocumentResponse,
   DocumentVersionResponse,
@@ -23,7 +26,10 @@ import type {
 } from '@portfolio/contracts';
 import type {
   Asset,
+  AssetConditionAssessment,
+  AssetLocationHistory,
   AssetReplacement,
+  TenancyAssetAssignment,
   Document,
   DocumentLink,
   DocumentVersion,
@@ -420,5 +426,63 @@ export function toAssetReplacementResponse(
     replacementAssetId: replacement.replacementAssetId,
     replacedByUserId: replacement.replacedByUserId,
     replacedAt: replacement.replacedAt,
+  };
+}
+
+
+export function toAssetLocationHistoryResponse(
+  location: AssetLocationHistory,
+): AssetLocationHistoryResponse {
+  return {
+    id: location.id,
+    assetId: location.assetId,
+    propertyId: location.propertyId,
+    unitId: location.unitId,
+    spaceId: location.spaceId,
+    validFrom: location.validFrom,
+    validTo: location.validTo,
+    changeType: location.changeType,
+    changedByUserId: location.changedByUserId,
+    reason: location.reason,
+  };
+}
+
+export function toAssetConditionAssessmentResponse(
+  assessment: AssetConditionAssessment,
+): AssetConditionAssessmentResponse {
+  return {
+    id: assessment.id,
+    assetId: assessment.assetId,
+    condition: assessment.condition,
+    assessedAt: assessment.assessedAt,
+    assessedByUserId: assessment.assessedByUserId,
+    notes: assessment.notes,
+  };
+}
+
+export function toTenancyAssetAssignmentResponse(
+  assignment: TenancyAssetAssignment,
+): TenancyAssetAssignmentResponse {
+  const snapshot = (value: TenancyAssetAssignment['moveIn']) =>
+    value === null
+      ? null
+      : {
+          phase: value.phase,
+          presence: value.presence,
+          conditionAssessmentId: value.conditionAssessmentId,
+          recordedAt: value.recordedAt,
+          recordedByUserId: value.recordedByUserId,
+          notes: value.notes,
+        };
+
+  return {
+    id: assignment.id,
+    tenancyId: assignment.tenancyId,
+    assetId: assignment.assetId,
+    assignedAt: assignment.assignedAt,
+    assignedByUserId: assignment.assignedByUserId,
+    version: assignment.version,
+    moveIn: snapshot(assignment.moveIn),
+    moveOut: snapshot(assignment.moveOut),
   };
 }
