@@ -1460,11 +1460,32 @@ describe('Portfolio HTTP boundary', () => {
     expect(itemResponse.status).toBe(201);
     const item = (await itemResponse.json()).data;
 
+    const correctItemResponse = await handler(
+      new Request(`https://portfolio.test/work-items/${item.id}/plan`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          expectedVersion: 1,
+          title: 'Install cabinetry',
+          description: 'Corrected planned scope',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(correctItemResponse.status).toBe(200);
+    expect(await correctItemResponse.json()).toMatchObject({
+      data: {
+        title: 'Install cabinetry',
+        description: 'Corrected planned scope',
+        version: 2,
+      },
+    });
+
     const startItemResponse = await handler(
       new Request(`https://portfolio.test/work-items/${item.id}/status`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ expectedVersion: 1, action: 'start' }),
+        body: JSON.stringify({ expectedVersion: 2, action: 'start' }),
       }),
       adminIdentity,
     );
@@ -1517,7 +1538,7 @@ describe('Portfolio HTTP boundary', () => {
       new Request(`https://portfolio.test/work-items/${item.id}/status`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ expectedVersion: 2, action: 'complete' }),
+        body: JSON.stringify({ expectedVersion: 3, action: 'complete' }),
       }),
       adminIdentity,
     );
