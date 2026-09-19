@@ -66,7 +66,7 @@ draft -> assigned -> in_progress -> completed
     \--------\-------------> cancelled
 ```
 
-A WorkOrder may be assigned to exactly one active internal User or active Party. Reassignment is allowed before work starts. Assignment and task definition freeze once work starts.
+A WorkOrder may be assigned to exactly one active internal User or active Party. Reassignment is allowed before work starts. Assignment and task definition freeze once work starts. WorkOrder creation is operational system history, so `WorkOrder.createdAt >= Issue.recordedAt`; a child cannot exist before its parent Issue was recorded.
 
 WorkOrder completion is operational closure of the task. It does not copy detailed Asset service evidence or money.
 
