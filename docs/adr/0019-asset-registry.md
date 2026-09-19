@@ -27,7 +27,7 @@ Each Asset has:
 - explicit lifecycle status + optimistic aggregate version;
 - structured append-only `AssetIdentifier[]`.
 
-Changing name/manufacturer/model corrects master metadata; it does not create a new physical Asset. Corrections use optimistic concurrency and advance `Asset.version`.
+Changing name/manufacturer/model corrects master metadata; it does not create a new physical Asset. Corrections use optimistic concurrency and advance `Asset.version`. The registry does not add a dedicated metadata-history table; future cross-cutting AuditEvent/DomainEvent infrastructure should record who changed which metadata and when.
 
 ### Placement boundary
 
@@ -58,6 +58,8 @@ Uniqueness semantics are intentionally type-specific:
 - `other` — no cross-Asset uniqueness.
 
 Every Asset still rejects the same `(identifierType, normalized value)` twice within itself.
+
+MAC and IMEI currently normalize only surrounding whitespace and case for uniqueness. Type-specific canonicalization (for example MAC separator removal or IMEI digits-only normalization) is intentionally deferred until those identifier semantics are specified explicitly.
 
 This keeps the grain strong without pretending that all identifier types have the same business meaning.
 
