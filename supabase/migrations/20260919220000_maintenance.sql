@@ -203,6 +203,7 @@ declare
   asset_unit_id uuid;
   asset_space_id uuid;
   finding_unit_id uuid;
+  finding_created_at timestamptz;
 begin
   if new.status <> 'open'
      or new.version <> 1
@@ -217,27 +218,37 @@ begin
   if new.asset_id is not null then
     select property_id, unit_id, space_id
       into asset_property_id, asset_unit_id, asset_space_id
-    from public.assets
-    where id = new.asset_id
+    from public.asset_location_history
+    where asset_id = new.asset_id
+      and valid_from <= new.reported_at
+      and (valid_to is null or new.reported_at < valid_to)
+    order by valid_from desc, id desc
+    limit 1
     for share;
 
-    if not found
-       or asset_property_id is distinct from new.property_id
+    if not found then
+      raise exception 'Asset has no managed location at Maintenance Issue reportedAt.'
+        using errcode = '23514',
+              constraint = 'maintenance_issue_asset_location_missing';
+    end if;
+
+    if asset_property_id is distinct from new.property_id
        or asset_unit_id is distinct from new.unit_id
        or asset_space_id is distinct from new.space_id
     then
-      raise exception 'Maintenance Issue must capture the Asset exact current placement.'
+      raise exception 'Maintenance Issue scope must match Asset placement at reportedAt.'
         using errcode = '23514',
               constraint = 'maintenance_issue_asset_scope_mismatch';
     end if;
   end if;
 
   if new.inspection_finding_id is not null then
-    select i.unit_id
-      into finding_unit_id
+    select i.unit_id, f.created_at
+      into finding_unit_id, finding_created_at
     from public.inspection_findings f
     join public.inspections i on i.id = f.inspection_id
-    where f.id = new.inspection_finding_id;
+    where f.id = new.inspection_finding_id
+    for share of f;
 
     if not found
        or new.unit_id is null
@@ -246,6 +257,12 @@ begin
       raise exception 'Inspection Finding must belong to the Maintenance Issue Unit.'
         using errcode = '23514',
               constraint = 'maintenance_issue_finding_scope_mismatch';
+    end if;
+
+    if new.reported_at < finding_created_at then
+      raise exception 'Maintenance Issue cannot be reported before its originating Inspection Finding.'
+        using errcode = '23514',
+              constraint = 'maintenance_issue_finding_temporal_invalid';
     end if;
   end if;
 
@@ -256,6 +273,32 @@ $maintenance_issue_insert_guard$;
 create trigger maintenance_issue_insert_guard_trg
 before insert on public.maintenance_issues
 for each row execute function public.guard_maintenance_issue_insert();
+
+
+create or replace function public.guard_maintenance_origin_finding_mutation()
+returns trigger
+language plpgsql
+as $maintenance_origin_finding_guard$
+begin
+  if new.created_at is distinct from old.created_at
+     and exists (
+       select 1
+       from public.maintenance_issues
+       where inspection_finding_id = old.id
+     )
+  then
+    raise exception 'Originating Inspection Finding createdAt is immutable once linked to Maintenance.'
+      using errcode = '23514',
+            constraint = 'maintenance_origin_finding_created_at_immutable';
+  end if;
+
+  return new;
+end;
+$maintenance_origin_finding_guard$;
+
+create trigger maintenance_origin_finding_guard_trg
+before update on public.inspection_findings
+for each row execute function public.guard_maintenance_origin_finding_mutation();
 
 create or replace function public.guard_maintenance_work_order()
 returns trigger
