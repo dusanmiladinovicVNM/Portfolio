@@ -399,16 +399,8 @@ begin
     return;
   end if;
 
-  select
-    count(*)::integer,
-    max(property_id),
-    max(unit_id),
-    max(space_id)
-  into
-    open_count,
-    location_property_id,
-    location_unit_id,
-    location_space_id
+  select count(*)::integer
+  into open_count
   from public.asset_location_history
   where asset_id = target_asset_id
     and valid_to is null;
@@ -418,6 +410,13 @@ begin
       using errcode = '23514',
             constraint = 'asset_location_open_interval_required';
   end if;
+
+  select property_id, unit_id, space_id
+  into location_property_id, location_unit_id, location_space_id
+  from public.asset_location_history
+  where asset_id = target_asset_id
+    and valid_to is null
+  limit 1;
 
   if asset_property_id is distinct from location_property_id
      or asset_unit_id is distinct from location_unit_id
