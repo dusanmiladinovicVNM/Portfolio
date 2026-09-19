@@ -5921,6 +5921,7 @@ describe('PostgreSQL infrastructure', () => {
       'ff100000-0000-4000-8000-000000000002',
       'ff100000-0000-4000-8000-000000000003',
       'ff100000-0000-4000-8000-000000000004',
+      'ff100000-0000-4000-8000-000000000005',
     ]);
 
     const property = await createPropertyCommand(
@@ -5993,6 +5994,12 @@ describe('PostgreSQL infrastructure', () => {
       '2026-10-11T08:00:00.000Z',
       '2026-10-11T08:05:00.000Z',
       '2026-10-11T09:00:00.000Z',
+    );
+    const projectForReverseRace = await createStartedProject(
+      'IMP-CONCURRENCY-REVERSE',
+      '2026-10-12T08:00:00.000Z',
+      '2026-10-12T08:05:00.000Z',
+      '2026-10-12T09:00:00.000Z',
     );
     const itemForRecordRace = await createWorkItemCommand(
       {
@@ -6150,6 +6157,59 @@ describe('PostgreSQL infrastructure', () => {
       ).rejects.toMatchObject({
         code: '23514',
         constraint_name: 'improvement_work_record_after_terminal_time',
+      });
+
+      const childLockedProject = deferred();
+      const releaseChild = deferred();
+      const insertingChild = blocker.begin(async (tx) => {
+        await tx`
+          insert into public.improvement_work_items (
+            id, project_id, code, title, status, version,
+            created_at, created_by_user_id
+          ) values (
+            'ff1f0000-0000-4000-8000-000000000003',
+            ${projectForReverseRace.id},
+            'WI-REVERSE-RACE',
+            'Child gets shared lock first',
+            'planned',
+            1,
+            '2026-10-12T10:00:00.000Z',
+            ${actor.userId}
+          )
+        `;
+        childLockedProject.resolve();
+        await releaseChild.promise;
+      });
+
+      await childLockedProject.promise;
+
+      await expect(
+        contender.begin(async (tx) => {
+          await tx.unsafe("set local lock_timeout = '250ms'");
+          await tx`
+            update public.improvement_projects
+            set status = 'completed',
+                completed_at = '2026-10-12T12:00:00.000Z',
+                version = version + 1
+            where id = ${projectForReverseRace.id}
+          `;
+        }),
+      ).rejects.toMatchObject({ code: '55P03' });
+
+      releaseChild.resolve();
+      await insertingChild;
+
+      await expect(
+        contender`
+          update public.improvement_projects
+          set status = 'completed',
+              completed_at = '2026-10-12T12:00:00.000Z',
+              version = version + 1
+          where id = ${projectForReverseRace.id}
+        `,
+      ).rejects.toMatchObject({
+        code: '23514',
+        constraint_name: 'improvement_project_open_work_items',
       });
     } finally {
       await Promise.all([blocker.end(), contender.end()]);
