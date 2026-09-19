@@ -42,6 +42,11 @@ export type WarrantyClaimId = EntityId<'WarrantyClaim'>;
 export type ServicePlanId = EntityId<'ServicePlan'>;
 export type ServiceEventId = EntityId<'ServiceEvent'>;
 export type ServicePartId = EntityId<'ServicePart'>;
+export type ImprovementProjectId = EntityId<'ImprovementProject'>;
+export type WorkItemId = EntityId<'WorkItem'>;
+export type WorkRecordId = EntityId<'WorkRecord'>;
+export type WorkMaterialId = EntityId<'WorkMaterial'>;
+export type ProjectAssetId = EntityId<'ProjectAsset'>;
 
 export const asUserId = (value: string): UserId => value as UserId;
 export const asPropertyId = (value: string): PropertyId => value as PropertyId;
@@ -81,3 +86,8 @@ export const asWarrantyClaimId = (value: string): WarrantyClaimId => value as Wa
 export const asServicePlanId = (value: string): ServicePlanId => value as ServicePlanId;
 export const asServiceEventId = (value: string): ServiceEventId => value as ServiceEventId;
 export const asServicePartId = (value: string): ServicePartId => value as ServicePartId;
+export const asImprovementProjectId = (value: string): ImprovementProjectId => value as ImprovementProjectId;
+export const asWorkItemId = (value: string): WorkItemId => value as WorkItemId;
+export const asWorkRecordId = (value: string): WorkRecordId => value as WorkRecordId;
+export const asWorkMaterialId = (value: string): WorkMaterialId => value as WorkMaterialId;
+export const asProjectAssetId = (value: string): ProjectAssetId => value as ProjectAssetId;

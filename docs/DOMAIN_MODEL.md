@@ -180,7 +180,41 @@ Provider Party rules distinguish history from future operations. Warranty and Se
 Asset replacement does not transfer predecessor Warranty/Service history to the successor. Existing predecessor ServicePlans remain historical records but cease to be operationally applicable once that Asset is `replaced`; they may be ended/cancelled but not reactivated, and no new active plan may be created for that predecessor. Cost, Improvement material flows and Maintenance Issue/WorkOrder creation remain downstream canonical phases.
 ### ImprovementProject
 
-A body of work performed on a Property/Unit. It is not an Asset. A project may install, remove or replace assets.
+Canonical PR #17 separates planned work from completed-work evidence:
+
+```text
+ImprovementProject
+  └─ WorkItem[]
+       └─ WorkRecord[]
+            ├─ WorkMaterial[]
+            └─ ProjectAsset[]
+```
+
+An ImprovementProject is one managed renovation/improvement initiative. It has immutable physical scope at Property level with optional Unit and Space, using the same hierarchy rules as the rest of Portfolio. Property-only scope represents common/building works; this phase does not invent synthetic Units or a premature multi-scope model.
+
+Project lifecycle is `draft -> planned -> in_progress -> completed`, with cancellation from non-terminal states. Project identity/scope remain stable; name, description and planned dates are correctable only before work begins. Completion requires every WorkItem to be terminal, cannot precede any child terminal timestamp, and Project completion/cancellation cannot be backdated behind existing WorkRecord occurrence history. Project cancellation also cannot predate child WorkItem creation/start/completion history, while a later WorkItem cancellation remains legal as cleanup after the parent has already been cancelled.
+
+WorkItem is expected/planned scope. It is not proof that the work happened. Its lifecycle is `planned -> in_progress -> completed` with cancellation from planned/in-progress. Title/description may be corrected optimistically while planned; definition freezes once the item starts. Starting/completing a WorkItem requires the parent Project to be in progress, and its completion/cancellation timestamp cannot be backdated behind existing WorkRecord occurrence history.
+
+WorkRecord is append-only historical work truth under one exact WorkItem. `Project.startedAt` and `WorkItem.startedAt` are business occurrence boundaries. `performedAt` must fall at or after both starts, at or before the earliest Project/WorkItem terminal cutoff, and at or before `recordedAt`. Historical work can still be recorded later; importing work that predates the Portfolio record requires a future explicit import flow that reconstructs historical start timestamps rather than bypassing these bounds. A WorkRecord may reference a contractor Party by stable identity even if that Party is now inactive.
+
+Normal WorkRecord creation is one sealed transaction:
+
+```text
+WorkRecord
++ WorkMaterial[]
++ ProjectAsset[]
++ seal
+= one commit
+```
+
+The database requires the parent WorkRecord to be sealed at commit and rejects later mutation or child append. Cross-table lifecycle invariants are concurrency-safe through row locking: WorkItem writes share-lock Project, WorkRecord writes share-lock WorkItem then Project, and evidence children share-lock the unsealed WorkRecord. Parent lifecycle UPDATEs therefore serialize with child creation and revalidate a committed state rather than depending on a racy check-then-write.
+
+WorkMaterial records exact positive material/consumable quantity with decimal semantics. It contains no money and is not an Asset. If a component needs identifiers, placement, warranty, service history or replacement lineage, it belongs in Asset Registry instead.
+
+ProjectAsset records that work `affected` an existing Asset or involved `installation_work` / `removal_work` on it. The latter labels intentionally describe contractor activity, not canonical Asset placement/lifecycle at `performedAt`. ProjectAsset is evidence only: it does not move, retire, replace or independently assert physical location. Canonical physical changes remain Asset-domain truth; physical replacement stays in AssetReplacement.
+
+Canonical #17 deliberately does not create Cost/invoice records, Maintenance Issue/WorkOrder, material stock/procurement or contractor billing. Those later contexts may link back to Project/WorkRecord without becoming their source of truth.
 
 ### Cost
 

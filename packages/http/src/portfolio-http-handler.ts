@@ -8,6 +8,7 @@ import {
   type DocumentRepository,
   type FileStoragePort,
   type IdGenerator,
+  type ImprovementRepository,
   type InspectionRepository,
   type LeaseRepository,
   type OwnershipRepository,
@@ -23,6 +24,7 @@ import { handleAssetHttp } from './asset-http-routes.js';
 import { handleAssetServiceHttp } from './asset-service-http-routes.js';
 import { handleDocumentHttp } from './document-http-routes.js';
 import { errorResponse } from './http-utils.js';
+import { handleImprovementHttp } from './improvement-http-routes.js';
 import { handleInspectionHttp } from './inspection-http-routes.js';
 import { handleLeaseHttp } from './lease-http-routes.js';
 import { handleOwnershipHttp } from './ownership-http-routes.js';
@@ -41,6 +43,7 @@ export interface PortfolioHttpDependencies {
   readonly leaseRepository: LeaseRepository;
   readonly documentRepository: DocumentRepository;
   readonly inspectionRepository: InspectionRepository;
+  readonly improvementRepository: ImprovementRepository;
   readonly staffDirectoryRepository: StaffDirectoryRepository;
   readonly fileStorage: FileStoragePort;
   readonly clock: ClockPort;
@@ -131,6 +134,20 @@ export function createPortfolioHttpHandler(
       const actor = await resolveActor(deps.userAccessRepository, identity);
 
       const handlers = [
+        () =>
+          handleImprovementHttp(
+            {
+              improvementRepository: deps.improvementRepository,
+              portfolioRepository: deps.portfolioRepository,
+              partyRepository: deps.partyRepository,
+              assetRepository: deps.assetRepository,
+              idGenerator: deps.idGenerator,
+              clock: deps.clock,
+            },
+            actor,
+            request,
+            path,
+          ),
         () =>
           handleAssetServiceHttp(
             {

@@ -40,3 +40,7 @@ export * from './assets/asset-history-queries.js';
 export * from './assets/asset-service-repository.js';
 export * from './assets/asset-service-commands.js';
 export * from './assets/asset-service-queries.js';
+
+export * from './improvements/improvement-repository.js';
+export * from './improvements/improvement-commands.js';
+export * from './improvements/improvement-queries.js';
