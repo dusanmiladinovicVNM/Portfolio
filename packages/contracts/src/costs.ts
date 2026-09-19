@@ -37,6 +37,14 @@ export const costSourceSchema = z.discriminatedUnion('kind', [
     kind: z.literal('work_material'),
     workMaterialId: entityIdSchema,
   }),
+  z.object({
+    kind: z.literal('maintenance_issue'),
+    maintenanceIssueId: entityIdSchema,
+  }),
+  z.object({
+    kind: z.literal('maintenance_work_order'),
+    maintenanceWorkOrderId: entityIdSchema,
+  }),
 ]);
 
 export const createCostRequestSchema = z.object({
