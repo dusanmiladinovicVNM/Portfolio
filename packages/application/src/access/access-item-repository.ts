@@ -14,6 +14,7 @@ export interface AccessItemRepository {
   listCurrentItemsByTenancy(tenancyId: TenancyId): Promise<readonly AccessItem[]>;
   codeExists(code: string): Promise<boolean>;
   insertItem(item: AccessItem): Promise<void>;
+  updateItem(item: AccessItem, expectedVersion: number): Promise<void>;
 
   getLastTransaction(
     accessItemId: AccessItemId,
