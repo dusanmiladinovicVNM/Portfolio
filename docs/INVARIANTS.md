@@ -132,10 +132,18 @@ These rules are architecture gates, not optional implementation notes.
 102. Binary storage location is infrastructure data, not business identity; Google Drive file IDs must never become Document or DocumentVersion IDs.
 103. External binary storage and PostgreSQL cannot share one ACID transaction. Upload registration therefore uses an idempotent storage object key and compensating delete when DB registration fails.
 104. Financial corrections preserve prior history through correction/reversal records where material.
+105. One Cost is one immutable positive exact monetary allocation to exactly one typed CostSource; source kind and target must agree.
+106. Cost amount uses the current two-decimal money model and Cost currency is restricted to the configured set `CHF|EUR|RSD`; canonical #18 does not claim generic ISO 4217 minor-unit support.
+107. `Cost.incurredOn` cannot be later than the UTC calendar date of immutable `recordedAt`.
+108. Cost supplier identity requires Party existence, not current active status; invoice reference is external metadata and never becomes Invoice/AP source of truth.
+109. One Cost may be reversed at most once and one replacement Cost may belong to at most one incoming correction.
+110. When a Cost reversal has a replacement, replacement and reversal share both `recordedAt` and `recordedByUserId`; normal application creation is one transaction and PostgreSQL enforces the same relational parity.
+111. Cost ledger reads expose both outgoing reversal and incoming correction lineage; the original and every replacement remain immutable historical facts.
+112. Costs in unlike currencies are never implicitly summed without an explicit future FX/conversion model.
 
 ## Architecture
 
-105. Domain code cannot import Supabase, React, Deno, Google APIs or future Fastify infrastructure.
-106. UI components cannot coordinate multi-table business transactions.
-107. Multi-record business commands have one explicit transactional boundary.
-108. Database constraints enforce invariants that can be stated relationally.
+113. Domain code cannot import Supabase, React, Deno, Google APIs or future Fastify infrastructure.
+114. UI components cannot coordinate multi-table business transactions.
+115. Multi-record business commands have one explicit transactional boundary.
+116. Database constraints enforce invariants that can be stated relationally.
