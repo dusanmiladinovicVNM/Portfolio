@@ -197,14 +197,13 @@ export async function issueAccessItemCommand(
   const tenancy = await requireTenancy(deps.tenancyRepository, input.tenancyId);
 
   if (
-    tenancy.status !== 'planned' &&
     tenancy.status !== 'active' &&
     tenancy.status !== 'notice_given' &&
     tenancy.status !== 'move_out_pending'
   ) {
     throw new DomainError(
       'ACCESS_ITEM_TENANCY_NOT_ELIGIBLE',
-      'AccessItem can only be issued to a planned or current Tenancy.',
+      'AccessItem can only be issued to a current Tenancy.',
     );
   }
 
