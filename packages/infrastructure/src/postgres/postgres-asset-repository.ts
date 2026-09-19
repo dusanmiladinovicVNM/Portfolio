@@ -178,6 +178,8 @@ function translate(error: unknown): DomainError | null {
       case 'asset_move_location_required':
       case 'asset_location_projection_mismatch':
       case 'asset_location_open_interval_required':
+      case 'asset_replaced_location_must_be_closed':
+      case 'asset_replaced_projection_must_be_empty':
         return new DomainError(
           'ASSET_LOCATION_PROJECTION_DIVERGED',
           'Asset current projection must match exactly one open location interval.',
@@ -190,6 +192,7 @@ function translate(error: unknown): DomainError | null {
       case 'asset_location_history_actor_required':
       case 'asset_location_history_change_type_invalid':
       case 'asset_location_history_not_contiguous':
+      case 'asset_location_replaced_asset_unlocated':
         return new DomainError(
           'ASSET_LOCATION_HISTORY_IMMUTABLE',
           'Asset location history is append-only, contiguous and may only close the current interval.',
