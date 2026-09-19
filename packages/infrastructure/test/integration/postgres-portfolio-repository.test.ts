@@ -5138,4 +5138,410 @@ describe('PostgreSQL infrastructure', () => {
     });
   });
 
+
+  it('persists Improvements work truth and rejects direct history bypasses', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+
+    const ids = new SequenceIds([
+      'fe000000-0000-4000-8000-000000000001',
+      'fe000000-0000-4000-8000-000000000002',
+      'fe000000-0000-4000-8000-000000000003',
+      'fe000000-0000-4000-8000-000000000004',
+      'fe000000-0000-4000-8000-000000000005',
+      'fe000000-0000-4000-8000-000000000006',
+      'fe000000-0000-4000-8000-000000000007',
+      'fe000000-0000-4000-8000-000000000008',
+      'fe000000-0000-4000-8000-000000000009',
+      'fe000000-0000-4000-8000-000000000010',
+      'fe000000-0000-4000-8000-000000000011',
+      'fe000000-0000-4000-8000-000000000012',
+      'fe000000-0000-4000-8000-000000000013',
+      'fe000000-0000-4000-8000-000000000014',
+      'fe000000-0000-4000-8000-000000000015',
+    ]);
+
+    const property = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-IMPROVEMENT-INT',
+        name: 'Improvement Integration',
+        propertyType: 'apartment_building',
+        street: 'Works Street',
+        houseNumber: '1',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+    const unit = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-IMPROVEMENT-INT',
+        unitNumber: 'I1',
+        unitType: 'apartment',
+      },
+    );
+    const space = await createSpaceCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        unitId: unit.id,
+        code: 'KITCHEN-IMPROVEMENT-INT',
+        name: 'Kitchen',
+        spaceType: 'kitchen',
+      },
+    );
+    const contractor = await createPartyCommand(
+      { partyRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PTY-IMPROVEMENT-INT',
+        partyType: 'company',
+        legalName: 'Historic Renovation Contractor d.o.o.',
+      },
+    );
+    const asset = await createAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T10:00:00.000Z' },
+      },
+      actor,
+      {
+        code: 'ASSET-IMPROVEMENT-INT',
+        name: 'Built-in oven',
+        propertyId: property.id,
+        unitId: unit.id,
+        spaceId: space.id,
+      },
+    );
+
+    const project = await createImprovementProjectCommand(
+      {
+        improvementRepository,
+        portfolioRepository,
+        partyRepository,
+        assetRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T10:05:00.000Z' },
+      },
+      actor,
+      {
+        code: 'IMP-INT-001',
+        name: 'Kitchen renovation',
+        propertyId: property.id,
+        unitId: unit.id,
+        spaceId: space.id,
+        plannedStartOn: '2026-10-01',
+        plannedEndOn: '2026-10-31',
+      },
+    );
+
+    const corrected = await updateImprovementProjectPlanCommand(
+      improvementRepository,
+      actor,
+      project.id,
+      1,
+      {
+        name: 'Kitchen renovation phase 1',
+        plannedEndOn: '2026-11-05',
+      },
+    );
+    expect(corrected.version).toBe(2);
+
+    const planned = await changeImprovementProjectStatusCommand(
+      {
+        improvementRepository,
+        clock: { now: () => '2026-09-20T08:00:00.000Z' },
+      },
+      actor,
+      project.id,
+      corrected.version,
+      'plan',
+    );
+    const started = await changeImprovementProjectStatusCommand(
+      {
+        improvementRepository,
+        clock: { now: () => '2026-10-01T08:00:00.000Z' },
+      },
+      actor,
+      project.id,
+      planned.version,
+      'start',
+    );
+
+    await expect(
+      updateImprovementProjectPlanCommand(
+        improvementRepository,
+        actor,
+        project.id,
+        started.version,
+        { name: 'Illegal rewrite after start' },
+      ),
+    ).rejects.toMatchObject({
+      code: 'IMPROVEMENT_PROJECT_PLAN_FROZEN',
+    });
+
+    await expect(
+      sql`
+        update public.improvement_projects
+        set name = 'Illegal direct rewrite',
+            version = version + 1
+        where id = ${project.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'improvement_project_plan_frozen',
+    });
+
+    const item = await createWorkItemCommand(
+      {
+        improvementRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-10-01T08:05:00.000Z' },
+      },
+      actor,
+      project.id,
+      {
+        code: 'WI-INT-01',
+        title: 'Install cabinetry',
+      },
+    );
+
+    await expect(
+      changeImprovementProjectStatusCommand(
+        {
+          improvementRepository,
+          clock: { now: () => '2026-10-01T08:10:00.000Z' },
+        },
+        actor,
+        project.id,
+        started.version,
+        'complete',
+      ),
+    ).rejects.toMatchObject({
+      code: 'IMPROVEMENT_PROJECT_OPEN_WORK_ITEMS',
+    });
+
+    await expect(
+      sql`
+        update public.improvement_projects
+        set status = 'completed',
+            completed_at = '2026-10-01T08:10:00.000Z',
+            version = version + 1
+        where id = ${project.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'improvement_project_open_work_items',
+    });
+
+    const activeItem = await changeWorkItemStatusCommand(
+      {
+        improvementRepository,
+        clock: { now: () => '2026-10-01T09:00:00.000Z' },
+      },
+      actor,
+      item.id,
+      1,
+      'start',
+    );
+
+    await sql`
+      update public.parties
+      set status = 'inactive'
+      where id = ${contractor.id}
+    `;
+
+    const record = await recordWorkCommand(
+      {
+        improvementRepository,
+        portfolioRepository,
+        partyRepository,
+        assetRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-10-03T09:00:00.000Z' },
+      },
+      actor,
+      item.id,
+      {
+        performedAt: '2026-10-02T14:00:00.000Z',
+        contractorPartyId: contractor.id,
+        description: 'Installed cabinet carcasses and adjusted oven surround',
+        reference: 'SITE-DIARY-INT-17',
+        materials: [
+          {
+            name: 'Moisture-resistant board',
+            quantity: '12.500000',
+            unit: 'm2',
+          },
+        ],
+        assets: [
+          {
+            assetId: asset.id,
+            action: 'affected',
+          },
+        ],
+      },
+    );
+
+    const persistedRecords =
+      await improvementRepository.listWorkRecordsByProject(project.id);
+    expect(persistedRecords).toHaveLength(1);
+    expect(persistedRecords[0]).toMatchObject({
+      id: record.id,
+      contractorPartyId: contractor.id,
+      performedAt: '2026-10-02T14:00:00.000Z',
+      recordedAt: '2026-10-03T09:00:00.000Z',
+    });
+    expect(persistedRecords[0]?.materials[0]).toMatchObject({
+      quantity: '12.5',
+      unit: 'm2',
+    });
+    expect(persistedRecords[0]?.assets[0]).toMatchObject({
+      assetId: asset.id,
+      action: 'affected',
+    });
+
+    const persistedAsset = await assetRepository.getById(asset.id);
+    expect(persistedAsset).toMatchObject({
+      id: asset.id,
+      status: 'active',
+      propertyId: property.id,
+      unitId: unit.id,
+      spaceId: space.id,
+    });
+
+    await expect(
+      sql`
+        update public.improvement_work_records
+        set description = 'Rewritten work history'
+        where id = ${record.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'improvement_work_record_immutable',
+    });
+
+    await expect(
+      sql`
+        insert into public.improvement_work_materials (
+          id, work_record_id, name, quantity, unit
+        ) values (
+          'fef00000-0000-4000-8000-000000000001',
+          ${record.id},
+          'Late material',
+          1,
+          'piece'
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'improvement_work_record_child_after_seal',
+    });
+
+    await expect(
+      sql.begin(async (tx) => {
+        await tx`
+          insert into public.improvement_work_records (
+            id, project_id, work_item_id, performed_at,
+            description, recorded_at, recorded_by_user_id, sealed
+          ) values (
+            'fef00000-0000-4000-8000-000000000002',
+            ${project.id},
+            ${item.id},
+            '2026-10-02T15:00:00.000Z',
+            'Unsealed sabotage record',
+            '2026-10-03T09:30:00.000Z',
+            ${actor.userId},
+            false
+          )
+        `;
+      }),
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'improvement_work_record_must_be_sealed',
+    });
+
+    const completedItem = await changeWorkItemStatusCommand(
+      {
+        improvementRepository,
+        clock: { now: () => '2026-10-03T10:00:00.000Z' },
+      },
+      actor,
+      item.id,
+      activeItem.version,
+      'complete',
+    );
+
+    const completedProject = await changeImprovementProjectStatusCommand(
+      {
+        improvementRepository,
+        clock: { now: () => '2026-10-03T11:00:00.000Z' },
+      },
+      actor,
+      project.id,
+      started.version,
+      'complete',
+    );
+    expect(completedProject.status).toBe('completed');
+    expect(completedItem.status).toBe('completed');
+
+    await expect(
+      recordWorkCommand(
+        {
+          improvementRepository,
+          portfolioRepository,
+          partyRepository,
+          assetRepository,
+          idGenerator: ids,
+          clock: { now: () => '2026-10-04T13:00:00.000Z' },
+        },
+        actor,
+        item.id,
+        {
+          performedAt: '2026-10-04T12:00:00.000Z',
+          description: 'Impossible post-completion work',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'WORK_RECORD_AFTER_TERMINAL_TIME',
+    });
+
+    await expect(
+      sql.begin(async (tx) => {
+        await tx`
+          insert into public.improvement_work_records (
+            id, project_id, work_item_id, performed_at,
+            description, recorded_at, recorded_by_user_id, sealed
+          ) values (
+            'fef00000-0000-4000-8000-000000000003',
+            ${project.id},
+            ${item.id},
+            '2026-10-04T12:00:00.000Z',
+            'Impossible direct post-completion work',
+            '2026-10-04T13:00:00.000Z',
+            ${actor.userId},
+            false
+          )
+        `;
+        await tx`
+          update public.improvement_work_records
+          set sealed = true
+          where id = 'fef00000-0000-4000-8000-000000000003'
+        `;
+      }),
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'improvement_work_record_after_terminal_time',
+    });
+  });
+
 });
