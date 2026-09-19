@@ -354,6 +354,7 @@ describe('Improvements and Works domain', () => {
     expect(() =>
       cancelImprovementProject(
         startedProject,
+        [activeItem],
         [record],
         '2026-10-02T12:00:00.000Z',
       ),
@@ -373,6 +374,83 @@ describe('Improvements and Works domain', () => {
         '2026-10-02T14:30:00.000Z',
       ),
     ).toThrowError(/cannot predate a WorkItem terminal timestamp/);
+  });
+
+  it('bounds Project cancellation by child history but permits later child cleanup cancellation', () => {
+    const plannedProject = planImprovementProject(
+      project(),
+      '2026-09-20T08:00:00.000Z',
+    );
+    const startedProject = startImprovementProject(
+      plannedProject,
+      '2026-10-01T08:00:00.000Z',
+    );
+
+    const lateItem = createWorkItem({
+      id: asWorkItemId('fc000000-0000-4000-8000-000000000026'),
+      project: startedProject,
+      code: 'W-LATE-CHILD',
+      title: 'Late child history',
+      createdAt: '2026-10-01T13:00:00.000Z',
+      createdByUserId: userId,
+    });
+    const lateActive = startWorkItem(
+      lateItem,
+      startedProject,
+      '2026-10-01T14:00:00.000Z',
+    );
+    const lateCompleted = completeWorkItem(
+      lateActive,
+      startedProject,
+      [],
+      '2026-10-01T16:00:00.000Z',
+    );
+
+    expect(() =>
+      cancelImprovementProject(
+        startedProject,
+        [lateCompleted],
+        [],
+        '2026-10-01T12:00:00.000Z',
+      ),
+    ).toThrowError(/cannot predate existing WorkItem creation, start or completion history/);
+
+    expect(() =>
+      cancelImprovementProject(
+        startedProject,
+        [lateCompleted],
+        [],
+        '2026-10-01T15:00:00.000Z',
+      ),
+    ).toThrowError(/cannot predate existing WorkItem creation, start or completion history/);
+
+    const cleanupItem = createWorkItem({
+      id: asWorkItemId('fc000000-0000-4000-8000-000000000027'),
+      project: startedProject,
+      code: 'W-CLEANUP',
+      title: 'Cleanup after parent cancellation',
+      createdAt: '2026-10-01T09:00:00.000Z',
+      createdByUserId: userId,
+    });
+    const cleanupActive = startWorkItem(
+      cleanupItem,
+      startedProject,
+      '2026-10-01T10:00:00.000Z',
+    );
+    const cancelledProject = cancelImprovementProject(
+      startedProject,
+      [cleanupActive],
+      [],
+      '2026-10-01T12:00:00.000Z',
+    );
+    expect(cancelledProject.cancelledAt).toBe('2026-10-01T12:00:00.000Z');
+
+    const cleanedUpItem = cancelWorkItem(
+      cleanupActive,
+      [],
+      '2026-10-01T13:00:00.000Z',
+    );
+    expect(cleanedUpItem.cancelledAt).toBe('2026-10-01T13:00:00.000Z');
   });
 
   it('keeps ProjectAsset actions as work semantics instead of Asset truth', () => {
