@@ -6298,7 +6298,7 @@ describe('PostgreSQL infrastructure', () => {
         unitId: unit.id,
         code: 'UTILITY-MAINT-INT',
         name: 'Utility room',
-        spaceType: 'utility',
+        spaceType: 'storage',
       },
     );
     const asset = await createAssetCommand(
