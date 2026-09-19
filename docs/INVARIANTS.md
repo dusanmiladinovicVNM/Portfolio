@@ -81,7 +81,7 @@ These rules are architecture gates, not optional implementation notes.
 ## Assets
 
 65. Asset represents one physical identity. Its current placement always identifies one Property; Unit is optional, and Space is optional only when Unit is present. Any Unit must belong to that Property and any Space must belong to that Unit.
-66. Moving an Asset does not create a new Asset. Until AssetLocationHistory exists in canonical PR #15, Property/Unit/Space placement is protected from mutation rather than silently overwriting location truth.
+66. Moving an Asset does not create a new Asset. Movement is represented by AssetLocationHistory while Property/Unit/Space on Asset remain only the current projection.
 67. Replacing an Asset does create a new Asset; the old one remains in history and becomes `replaced` only in the same transaction that appends one predecessor→successor relationship.
 68. Replacement is not a movement workflow: successor and predecessor have the exact same current Property/Unit/Space placement, and replacement lineage is acyclic.
 69. Asset identifiers are structured append-only records with canonical trimmed values. `inventory_tag`, `imei` and `mac_address` are globally unique; serial/product/barcode have no stronger cross-Asset uniqueness until their business scope is explicitly defined.
@@ -94,23 +94,23 @@ These rules are architecture gates, not optional implementation notes.
 
 ## Improvements and maintenance
 
-71. ImprovementProject is work; Asset is a physical item; Material is consumed input. They are not interchangeable.
-72. Issue and WorkOrder are different grains: a problem can exist before a work order and may require more than one work order.
-73. Cross-context workflows cannot bypass the owning domain to mutate its state.
+76. ImprovementProject is work; Asset is a physical item; Material is consumed input. They are not interchangeable.
+77. Issue and WorkOrder are different grains: a problem can exist before a work order and may require more than one work order.
+78. Cross-context workflows cannot bypass the owning domain to mutate its state.
 
 ## Money and documents
 
-74. Monetary values use decimal/numeric semantics, never binary floating point.
-75. Each DocumentVersion represents one binary content identity; its file metadata, SHA-256 and storage locator are immutable after registration.
-76. A final DocumentVersion is append-only evidence and cannot return to a mutable/stored state.
-77. A `signed_original` link identifies one exact final DocumentVersion, may only target a signed LeaseAgreement/LeaseAmendment, and is immutable once created.
-78. Binary storage location is infrastructure data, not business identity; Google Drive file IDs must never become Document or DocumentVersion IDs.
-79. External binary storage and PostgreSQL cannot share one ACID transaction. Upload registration therefore uses an idempotent storage object key and compensating delete when DB registration fails.
-80. Financial corrections preserve prior history through correction/reversal records where material.
+79. Monetary values use decimal/numeric semantics, never binary floating point.
+80. Each DocumentVersion represents one binary content identity; its file metadata, SHA-256 and storage locator are immutable after registration.
+81. A final DocumentVersion is append-only evidence and cannot return to a mutable/stored state.
+82. A `signed_original` link identifies one exact final DocumentVersion, may only target a signed LeaseAgreement/LeaseAmendment, and is immutable once created.
+83. Binary storage location is infrastructure data, not business identity; Google Drive file IDs must never become Document or DocumentVersion IDs.
+84. External binary storage and PostgreSQL cannot share one ACID transaction. Upload registration therefore uses an idempotent storage object key and compensating delete when DB registration fails.
+85. Financial corrections preserve prior history through correction/reversal records where material.
 
 ## Architecture
 
-81. Domain code cannot import Supabase, React, Deno, Google APIs or future Fastify infrastructure.
-82. UI components cannot coordinate multi-table business transactions.
-83. Multi-record business commands have one explicit transactional boundary.
-84. Database constraints enforce invariants that can be stated relationally.
+86. Domain code cannot import Supabase, React, Deno, Google APIs or future Fastify infrastructure.
+87. UI components cannot coordinate multi-table business transactions.
+88. Multi-record business commands have one explicit transactional boundary.
+89. Database constraints enforce invariants that can be stated relationally.
