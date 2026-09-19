@@ -2,19 +2,24 @@ import { describe, expect, it } from 'vitest';
 import {
   asAssetId,
   asPartyId,
+  asPropertyId,
   asServiceEventId,
   asServicePartId,
   asServicePlanId,
   asUserId,
   asWarrantyClaimId,
   asWarrantyId,
+  assertServicePlanAssetEligible,
   cancelWarrantyClaim,
   changeServicePlanStatus,
   closeWarrantyClaim,
+  createAsset,
   createServiceEvent,
   createServicePlan,
   createWarranty,
   createWarrantyClaim,
+  isServicePlanOperationallyApplicable,
+  markAssetReplaced,
   resolveWarrantyClaim,
   submitWarrantyClaim,
 } from '../src/index.js';
@@ -45,6 +50,8 @@ describe('Warranty and Service domain', () => {
       warranty: coverage,
       incidentOn: '2026-09-01',
       description: 'Compressor stopped',
+      recordedAt: '2026-09-19T08:00:00.000Z',
+      recordedByUserId: userId,
     });
 
     expect(claim).toMatchObject({
@@ -59,8 +66,23 @@ describe('Warranty and Service domain', () => {
         warranty: coverage,
         incidentOn: '2028-01-01',
         description: 'Too late',
+        recordedAt: '2026-09-19T08:00:00.000Z',
+        recordedByUserId: userId,
       }),
     ).toThrowError(/coverage interval/);
+  });
+
+  it('rejects a WarrantyClaim incident after its recording date', () => {
+    expect(() =>
+      createWarrantyClaim({
+        id: asWarrantyClaimId('d1000000-0000-4000-8000-000000000017'),
+        warranty: warranty(),
+        incidentOn: '2027-03-01',
+        description: 'Impossible future incident',
+        recordedAt: '2026-09-19T08:00:00.000Z',
+        recordedByUserId: userId,
+      }),
+    ).toThrowError(/recording date/);
   });
 
   it('uses an explicit optimistic WarrantyClaim lifecycle', () => {
@@ -69,6 +91,8 @@ describe('Warranty and Service domain', () => {
       warranty: warranty(),
       incidentOn: '2026-09-01',
       description: 'Control board failure',
+      recordedAt: '2026-09-19T08:00:00.000Z',
+      recordedByUserId: userId,
     });
 
     const submitted = submitWarrantyClaim(
@@ -128,6 +152,39 @@ describe('Warranty and Service domain', () => {
         createdByUserId: userId,
       }),
     ).toThrowError(/cannot have intervalMonths/);
+  });
+
+  it('derives ServicePlan operational applicability from Asset lifecycle', () => {
+    const asset = createAsset({
+      id: assetId,
+      code: 'ASSET-SERVICE-DOMAIN',
+      name: 'Heat pump',
+      propertyId: asPropertyId('d1000000-0000-4000-8000-000000000018'),
+    });
+    const plan = createServicePlan({
+      id: asServicePlanId('d1000000-0000-4000-8000-000000000019'),
+      assetId,
+      name: 'Annual service',
+      scheduleKind: 'recurring',
+      firstDueOn: '2027-01-15',
+      intervalMonths: 12,
+      createdAt: '2026-09-19T08:00:00.000Z',
+      createdByUserId: userId,
+    });
+
+    expect(isServicePlanOperationallyApplicable(plan, asset)).toBe(true);
+
+    const replaced = markAssetReplaced(asset);
+    expect(isServicePlanOperationallyApplicable(plan, replaced)).toBe(false);
+    expect(() => assertServicePlanAssetEligible(replaced)).toThrowError(
+      /retired or replaced/,
+    );
+
+    const retired = { ...asset, status: 'retired' as const };
+    expect(isServicePlanOperationallyApplicable(plan, retired)).toBe(false);
+    expect(() => assertServicePlanAssetEligible(retired)).toThrowError(
+      /retired or replaced/,
+    );
   });
 
   it('records immutable service occurrence time separately from record time', () => {
