@@ -44,9 +44,9 @@ It owns:
 - lifecycle `open -> resolved|cancelled`;
 - optimistic version.
 
-The physical hierarchy must be coherent. Space requires Unit. Unit belongs to Property. Space belongs to Unit. When Asset is present, the Issue captures that Asset's exact current Property/Unit/Space placement at creation. Later Asset movement does not rewrite historical Issue scope.
+The physical hierarchy must be coherent. Space requires Unit. Unit belongs to Property. Space belongs to Unit. When Asset is present, the Issue captures the authoritative AssetLocationHistory interval that contains `reportedAt` using half-open semantics `validFrom <= reportedAt < validTo` (or an open-ended interval). It does **not** copy the Asset's current projection at recording time. Later Asset movement, retirement or replacement does not rewrite historical Issue scope.
 
-An originating InspectionFinding is provenance, not mutable maintenance state. Its Inspection Unit must equal the Issue Unit. One finding can originate at most one Issue.
+An originating InspectionFinding is provenance, not mutable maintenance state. Its Inspection Unit must equal the Issue Unit, one finding can originate at most one Issue, and `Issue.reportedAt >= Finding.createdAt`. Under this canonical meaning, the Finding is the event that originated the Maintenance Issue; a future "related finding" concept would be modeled separately rather than weakening this temporal rule.
 
 Priority belongs to Issue in this phase. WorkOrders do not carry a competing priority field.
 
@@ -106,6 +106,10 @@ The optional origin link is unique and relationally protected. The Issue copies 
 ### Concurrency and database parity
 
 PostgreSQL independently enforces static shape, lifecycle and cross-row rules.
+
+Asset-scoped Issue creation resolves scope from `asset_location_history` at `reportedAt` and takes `FOR SHARE` on the matching interval row. Closed intervals are immutable; if the matching interval is currently open, the shared lock conflicts with the Asset move that closes `valid_to`. Issue insertion therefore cannot observe a half-applied location transition. The current `assets.property_id/unit_id/space_id` projection is not the historical authority.
+
+Originating InspectionFinding lookup takes `FOR SHARE` on the Finding row. Once referenced by a MaintenanceIssue, its `created_at` cannot be rewritten, so later Inspection edits cannot retroactively invalidate the origin-time relationship.
 
 WorkOrder inserts/updates take a shared lock on the parent Issue. Issue terminal transitions serialize against those child writes and re-check child terminal state under the lock.
 
