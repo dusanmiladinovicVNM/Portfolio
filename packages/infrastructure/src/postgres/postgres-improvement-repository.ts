@@ -245,6 +245,11 @@ function translate(error: unknown): DomainError | null {
         'WORK_ITEM_VERSION_CONFLICT',
         'WorkItem mutation version is invalid.',
       );
+    case 'improvement_work_item_plan_frozen':
+      return new DomainError(
+        'WORK_ITEM_PLAN_FROZEN',
+        'WorkItem plan is frozen after work starts.',
+      );
     case 'improvement_work_item_project_terminal':
       return new DomainError(
         'WORK_ITEM_PROJECT_TERMINAL',
@@ -483,7 +488,28 @@ export class PostgresImprovementRepository implements ImprovementRepository {
     `);
   }
 
-  async updateWorkItem(
+  async updateWorkItemPlan(
+    item: WorkItem,
+    expectedVersion: number,
+  ): Promise<void> {
+    const rows = await translated(() => this.sql<{ id: string }[]>`
+      update public.improvement_work_items
+      set title = ${item.title},
+          description = ${item.description},
+          version = ${item.version}
+      where id = ${item.id}
+        and version = ${expectedVersion}
+      returning id
+    `);
+    if (rows.length === 0) {
+      throw new DomainError(
+        'WORK_ITEM_VERSION_CONFLICT',
+        'WorkItem changed before the plan correction completed.',
+      );
+    }
+  }
+
+  async updateWorkItemLifecycle(
     item: WorkItem,
     expectedVersion: number,
   ): Promise<void> {
