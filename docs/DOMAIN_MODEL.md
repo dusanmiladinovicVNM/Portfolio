@@ -154,7 +154,7 @@ Asset
 
 A move is one transaction: close the old interval, append the new interval, update the projection and CAS `Asset.version`. Replacement closes the predecessor interval at `replacedAt`, opens the successor at the same placement/timestamp and clears the predecessor projection. Tenancy inventory is independent of movement: assignment records inventory scope, not ownership, location or exclusive possession.
 
-Condition assessments are append-only. Move-in/move-out snapshots may reference exact condition assessments and preserve missing/present truth without overwriting a global condition field. Assignment is allowed only before Tenancy becomes terminal; move-in is limited to planned/active and move-out to active/notice-given/move-out-pending. Historical backfill will require a later explicit occurrence-time model.
+Condition assessments are append-only. Move-in/move-out snapshots may reference exact condition assessments and preserve missing/present truth without overwriting a global condition field. New inventory assignment is limited to draft/planned/active Tenancies; move-in is limited to planned/active and move-out to active/notice-given/move-out-pending. A `present` snapshot additionally requires the Asset's current Unit to equal the Tenancy Unit at recording time, while `missing` remains valid after the Asset has moved elsewhere. Historical backfill will require a later explicit occurrence-time model.
 
 Canonical PR #16 adds Warranty and Service as separate operational grains around the same stable physical Asset identity:
 
@@ -167,17 +167,17 @@ Asset
        └─ ServicePart[]
 ```
 
-A Warranty is one append-only coverage record with a coverage interval and optional provider Party. Warranty expiry is derived from dates. A WarrantyClaim is a separate optimistic workflow under that exact coverage record; its incident date must be inside coverage even when the claim is submitted or resolved later.
+A Warranty is one append-only coverage record with a coverage interval and optional provider Party. Warranty expiry is derived from dates. A WarrantyClaim is a separate optimistic workflow under that exact coverage record and preserves `recordedAt` plus `recordedByUserId`. Its incident date must be inside coverage and cannot be later than the UTC calendar date of `recordedAt`; later submission or resolution does not rewrite when the incident happened.
 
-A ServicePlan records expected service policy/schedule, not completed work and not a WorkOrder. One-time plans have one due date; recurring plans add a positive month cadence. No mutable next-due projection is introduced yet.
+A ServicePlan records expected future service policy/schedule, not completed work and not a WorkOrder. One-time plans have one due date; recurring plans add a positive month cadence. A new or reactivated active plan requires an `active` or `inactive` Asset; `retired` and `replaced` Assets are not operationally eligible. Replacement does not reach across bounded contexts to end the predecessor's plan automatically: effective applicability is derived from `plan.status === active` together with an operationally eligible Asset. No mutable next-due projection is introduced yet.
 
 A ServiceEvent is append-only completed-work history. It preserves `performedAt` separately from `recordedAt` so historical imports do not falsify occurrence time. Optional ServicePlan and WarrantyClaim links must resolve back to the same Asset. ServiceEvent and ServicePart rows commit atomically.
 
 ServicePart is intentionally a service-line component/consumable, not an Asset hierarchy. If an installed component needs independent identity, placement, warranty or future service history, it is modeled as another Asset.
 
-Provider Party references require identity existence but not current active status; historical service must remain capable of referencing an inactive or archived supplier.
+Provider Party rules distinguish history from future operations. Warranty and ServiceEvent history require Party identity existence but may reference an inactive or archived supplier. A new or reactivated ServicePlan, by contrast, requires its provider Party (when present) to be active.
 
-Asset replacement does not transfer predecessor Warranty/Service history to the successor. Cost, Improvement material flows and Maintenance Issue/WorkOrder creation remain downstream canonical phases.
+Asset replacement does not transfer predecessor Warranty/Service history to the successor. Existing predecessor ServicePlans remain historical records but cease to be operationally applicable once that Asset is `replaced`; they may be ended/cancelled but not reactivated, and no new active plan may be created for that predecessor. Cost, Improvement material flows and Maintenance Issue/WorkOrder creation remain downstream canonical phases.
 ### ImprovementProject
 
 A body of work performed on a Property/Unit. It is not an Asset. A project may install, remove or replace assets.
