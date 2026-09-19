@@ -5,6 +5,7 @@ import { createPortfolioHttpHandler } from '@portfolio/http';
 import {
   PostgresAssetInventoryRepository,
   PostgresAssetRepository,
+  PostgresAssetServiceRepository,
   PostgresDocumentRepository,
   PostgresInspectionRepository,
   PostgresLeaseRepository,
@@ -38,6 +39,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
   const portfolioRepository = new PostgresPortfolioRepository(sql);
   const assetRepository = new PostgresAssetRepository(sql);
   const assetInventoryRepository = new PostgresAssetInventoryRepository(sql);
+  const assetServiceRepository = new PostgresAssetServiceRepository(sql);
   const partyRepository = new PostgresPartyRepository(sql);
   const ownershipRepository = new PostgresOwnershipRepository(sql);
   const leaseRepository = new PostgresLeaseRepository(sql);
@@ -50,6 +52,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
     {
       assetRepository,
       assetInventoryRepository,
+      assetServiceRepository,
       portfolioRepository,
       partyRepository,
       ownershipRepository,
