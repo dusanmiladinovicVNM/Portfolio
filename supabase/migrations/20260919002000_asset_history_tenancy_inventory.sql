@@ -399,10 +399,10 @@ begin
               constraint = 'tenancy_asset_assignment_unit_mismatch';
     end if;
 
-    if tenancy_status = 'cancelled' then
-      raise exception 'Cancelled Tenancy cannot receive Asset inventory assignments.'
+    if tenancy_status in ('ended', 'cancelled') then
+      raise exception 'Terminal Tenancy cannot receive Asset inventory assignments.'
         using errcode = '23514',
-              constraint = 'tenancy_asset_assignment_tenancy_cancelled';
+              constraint = 'tenancy_asset_assignment_tenancy_state_invalid';
     end if;
 
     if asset_status in ('retired', 'replaced') then
@@ -434,6 +434,11 @@ begin
             constraint = 'tenancy_asset_assignment_identity_immutable';
   end if;
 
+  select status
+    into tenancy_status
+  from public.tenancies
+  where id = new.tenancy_id;
+
   move_in_changed :=
     new.move_in_presence is distinct from old.move_in_presence
     or new.move_in_condition_assessment_id is distinct from old.move_in_condition_assessment_id
@@ -452,6 +457,22 @@ begin
     raise exception 'Exactly one inventory phase may be appended per mutation.'
       using errcode = '23514',
             constraint = 'tenancy_asset_assignment_phase_mutation_invalid';
+  end if;
+
+  if move_in_changed
+     and tenancy_status not in ('planned', 'active')
+  then
+    raise exception 'Move-in inventory requires planned or active Tenancy.'
+      using errcode = '23514',
+            constraint = 'tenancy_asset_assignment_move_in_tenancy_state';
+  end if;
+
+  if move_out_changed
+     and tenancy_status not in ('active', 'notice_given', 'move_out_pending')
+  then
+    raise exception 'Move-out inventory requires an operational move-out Tenancy state.'
+      using errcode = '23514',
+            constraint = 'tenancy_asset_assignment_move_out_tenancy_state';
   end if;
 
   if new.version <> old.version + 1 then
