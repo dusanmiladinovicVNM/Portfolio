@@ -45,6 +45,7 @@ import {
 } from './inspection-test-deps.js';
 import { InMemoryImprovementRepository } from './improvement-test-deps.js';
 import { InMemoryCostRepository } from './cost-test-deps.js';
+import { InMemoryMaintenanceRepository } from './maintenance-test-deps.js';
 
 const adminIdentity: VerifiedIdentity = {
   provider: 'supabase',
@@ -314,6 +315,7 @@ function buildHandler(
     assetServiceRepository: new InMemoryAssetServiceRepository(),
     improvementRepository: new InMemoryImprovementRepository(),
     costRepository: new InMemoryCostRepository(),
+    maintenanceRepository: new InMemoryMaintenanceRepository(),
     portfolioRepository: new InMemoryPortfolioRepository(),
     partyRepository: new InMemoryPartyRepository(),
     ownershipRepository: new InMemoryOwnershipRepository(),
@@ -2109,6 +2111,7 @@ describe('Portfolio HTTP boundary', () => {
         assetServiceRepository: new InMemoryAssetServiceRepository(),
         improvementRepository: new InMemoryImprovementRepository(),
     costRepository: new InMemoryCostRepository(),
+        maintenanceRepository: new InMemoryMaintenanceRepository(),
         portfolioRepository: new InMemoryPortfolioRepository(),
         partyRepository: new InMemoryPartyRepository(),
         ownershipRepository: new InMemoryOwnershipRepository(),
