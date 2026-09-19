@@ -33,8 +33,6 @@ const TENANCY_ASSET_ASSIGNMENT_STATUSES: readonly TenancyStatus[] = [
   'draft',
   'planned',
   'active',
-  'notice_given',
-  'move_out_pending',
 ];
 
 const TENANCY_ASSET_MOVE_IN_STATUSES: readonly TenancyStatus[] = [
@@ -192,6 +190,13 @@ export async function recordTenancyAssetInventoryCommand(
   }
 
   assertTenancyInventoryPhaseAllowed(tenancy.status, input.phase);
+
+  if (input.presence === 'present' && asset.unitId !== tenancy.unitId) {
+    throw new DomainError(
+      'TENANCY_ASSET_PRESENT_UNIT_MISMATCH',
+      'A present inventory snapshot requires the Asset to be currently located in the Tenancy Unit.',
+    );
+  }
 
   const recordedAt = deps.clock.now();
   const assessment =
