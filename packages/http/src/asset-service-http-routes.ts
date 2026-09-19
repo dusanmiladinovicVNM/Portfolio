@@ -252,7 +252,7 @@ export async function handleAssetServiceHttp(
     if (!parsedId.success || !parsed.success) return validationFailure();
 
     const plan = await changeServicePlanStatusCommand(
-      deps.assetServiceRepository,
+      deps,
       actor,
       asServicePlanId(parsedId.data),
       parsed.data.expectedVersion,
