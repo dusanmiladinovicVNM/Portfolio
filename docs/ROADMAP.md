@@ -87,7 +87,7 @@ Use HandoverApp as a feature bank only.
 - TenancyAssetAssignment
 - move-in/move-out inventory truth
 
-### PR #16 — Warranty + Service (IN PROGRESS)
+### PR #16 — Warranty + Service (DONE)
 
 - Warranty
 - WarrantyClaim
@@ -97,7 +97,7 @@ Use HandoverApp as a feature bank only.
 
 Service history must reference the exact physical Asset identity.
 
-### PR #17 — Improvements / Works
+### PR #17 — Improvements / Works (IN PROGRESS)
 
 - ImprovementProject
 - WorkItem
