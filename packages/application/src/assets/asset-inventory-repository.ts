@@ -4,6 +4,7 @@ import type {
   TenancyAssetAssignment,
   TenancyAssetAssignmentId,
   TenancyId,
+  TenancyAssetPhase,
 } from '@portfolio/domain';
 
 export interface AssetInventoryRepository {
@@ -26,6 +27,7 @@ export interface AssetInventoryRepository {
   updateTenancyAssetInventory(
     assignment: TenancyAssetAssignment,
     expectedVersion: number,
+    phase: TenancyAssetPhase,
     assessment: AssetConditionAssessment | null,
   ): Promise<void>;
 }
