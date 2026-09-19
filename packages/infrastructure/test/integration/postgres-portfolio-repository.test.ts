@@ -6,6 +6,13 @@ import {
   activateTenancyCommand,
   changeAssetStatusCommand,
   createAssetCommand,
+  moveAssetCommand,
+  assessAssetConditionCommand,
+  assignAssetToTenancyCommand,
+  recordTenancyAssetInventoryCommand,
+  listAssetLocationHistoryQuery,
+  listAssetConditionAssessmentsQuery,
+  listTenancyAssetAssignmentsQuery,
   addInspectionSignatureCommand,
   attachInspectionEvidenceCommand,
   cancelLeaseAgreementCommand,
@@ -64,6 +71,7 @@ import {
   type Party,
 } from '@portfolio/domain';
 import {
+  PostgresAssetInventoryRepository,
   PostgresAssetRepository,
   PostgresDocumentRepository,
   PostgresInspectionRepository,
@@ -83,6 +91,7 @@ if (!connectionString) {
 const sql = postgres(connectionString, { max: 1 });
 const portfolioRepository = new PostgresPortfolioRepository(sql);
 const assetRepository = new PostgresAssetRepository(sql);
+const assetInventoryRepository = new PostgresAssetInventoryRepository(sql);
 const partyRepository = new PostgresPartyRepository(sql);
 const ownershipRepository = new PostgresOwnershipRepository(sql);
 const leaseRepository = new PostgresLeaseRepository(sql);
@@ -107,6 +116,9 @@ class SequenceIds implements IdGenerator {
 async function resetAndMigrate(): Promise<void> {
   await sql.unsafe(
     `drop table if exists
+      public.tenancy_asset_assignments,
+      public.asset_condition_assessments,
+      public.asset_location_history,
       public.asset_replacements,
       public.asset_identifiers,
       public.assets,
@@ -3257,7 +3269,7 @@ describe('PostgreSQL infrastructure', () => {
     );
 
     const asset = await createAssetCommand(
-      { assetRepository, portfolioRepository, idGenerator: ids },
+      { assetRepository, portfolioRepository, idGenerator: ids, clock: { now: () => '2026-09-22T08:00:00.000Z' } },
       actor,
       {
         code: 'ASSET-FRIDGE-001',
@@ -3298,7 +3310,7 @@ describe('PostgreSQL infrastructure', () => {
 
     await expect(
       createAssetCommand(
-        { assetRepository, portfolioRepository, idGenerator: ids },
+        { assetRepository, portfolioRepository, idGenerator: ids, clock: { now: () => '2026-09-22T08:00:00.000Z' } },
         actor,
         {
           code: 'ASSET-BAD-SPACE',
@@ -3311,7 +3323,7 @@ describe('PostgreSQL infrastructure', () => {
     ).rejects.toMatchObject({ code: 'ASSET_SPACE_UNIT_MISMATCH' });
 
     const otherAsset = await createAssetCommand(
-      { assetRepository, portfolioRepository, idGenerator: ids },
+      { assetRepository, portfolioRepository, idGenerator: ids, clock: { now: () => '2026-09-22T08:00:00.000Z' } },
       actor,
       {
         code: 'ASSET-OTHER-UNIT',
@@ -3457,7 +3469,7 @@ describe('PostgreSQL infrastructure', () => {
     });
 
     const buildingAsset = await createAssetCommand(
-      { assetRepository, portfolioRepository, idGenerator: ids },
+      { assetRepository, portfolioRepository, idGenerator: ids, clock: { now: () => '2026-09-22T08:00:00.000Z' } },
       actor,
       {
         code: 'ASSET-BUILDING-LIFT',
@@ -3473,7 +3485,7 @@ describe('PostgreSQL infrastructure', () => {
 
     await expect(
       createAssetCommand(
-        { assetRepository, portfolioRepository, idGenerator: ids },
+        { assetRepository, portfolioRepository, idGenerator: ids, clock: { now: () => '2026-09-22T08:00:00.000Z' } },
         actor,
         {
           code: 'ASSET-DUP-INVENTORY',
