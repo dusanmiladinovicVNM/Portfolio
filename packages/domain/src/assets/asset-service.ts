@@ -1,5 +1,6 @@
 import { asDateOnly, type DateOnly } from '../shared/date-only.js';
 import { DomainError } from '../shared/domain-error.js';
+import type { Asset } from './asset.js';
 import type {
   AssetId,
   PartyId,
@@ -73,6 +74,8 @@ export interface WarrantyClaim {
   readonly resolvedAt: string | null;
   readonly closedAt: string | null;
   readonly cancelledAt: string | null;
+  readonly recordedAt: string;
+  readonly recordedByUserId: UserId;
   readonly version: number;
 }
 
@@ -155,6 +158,31 @@ function assertWarrantyCoverage(
   }
 }
 
+function utcDateOfInstant(value: string): DateOnly {
+  return asDateOnly(new Date(value).toISOString().slice(0, 10));
+}
+
+export function assertServicePlanAssetEligible(asset: Asset): void {
+  if (asset.status === 'retired' || asset.status === 'replaced') {
+    throw new DomainError(
+      'SERVICE_PLAN_ASSET_STATUS_INVALID',
+      'A retired or replaced Asset cannot start or resume an active ServicePlan.',
+    );
+  }
+}
+
+export function isServicePlanOperationallyApplicable(
+  plan: ServicePlan,
+  asset: Asset,
+): boolean {
+  return (
+    plan.assetId === asset.id &&
+    plan.status === 'active' &&
+    asset.status !== 'retired' &&
+    asset.status !== 'replaced'
+  );
+}
+
 export function createWarranty(input: {
   readonly id: WarrantyId;
   readonly assetId: AssetId;
@@ -199,9 +227,19 @@ export function createWarrantyClaim(input: {
   readonly warranty: Warranty;
   readonly incidentOn: string;
   readonly description: string;
+  readonly recordedAt: string;
+  readonly recordedByUserId: UserId;
 }): WarrantyClaim {
   const incidentOn = asDateOnly(input.incidentOn);
+  const recordedAt = instant(input.recordedAt, 'recordedAt');
   assertWarrantyCoverage(input.warranty, incidentOn);
+
+  if (incidentOn > utcDateOfInstant(recordedAt)) {
+    throw new DomainError(
+      'WARRANTY_CLAIM_INCIDENT_IN_FUTURE',
+      'Warranty claim incident date cannot be after its recording date.',
+    );
+  }
 
   return {
     id: input.id,
@@ -214,6 +252,8 @@ export function createWarrantyClaim(input: {
     resolvedAt: null,
     closedAt: null,
     cancelledAt: null,
+    recordedAt,
+    recordedByUserId: input.recordedByUserId,
     version: 1,
   };
 }
