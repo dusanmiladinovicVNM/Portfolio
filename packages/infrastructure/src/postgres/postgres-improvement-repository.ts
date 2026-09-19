@@ -273,6 +273,16 @@ function translate(error: unknown): DomainError | null {
         'WORK_ITEM_IMMUTABLE',
         'WorkItem definition/history cannot be rewritten.',
       );
+    case 'improvement_work_record_start_time_missing':
+      return new DomainError(
+        'WORK_RECORD_START_TIME_MISSING',
+        'WorkRecord requires started Project and WorkItem occurrence boundaries.',
+      );
+    case 'improvement_work_record_before_start_time':
+      return new DomainError(
+        'WORK_RECORD_BEFORE_START_TIME',
+        'WorkRecord cannot occur before Project/WorkItem startedAt.',
+      );
     case 'improvement_work_record_after_terminal_time':
       return new DomainError(
         'WORK_RECORD_AFTER_TERMINAL_TIME',
