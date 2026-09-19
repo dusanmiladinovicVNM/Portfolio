@@ -97,7 +97,18 @@ export class InMemoryImprovementRepository implements ImprovementRepository {
     this.workItems.set(item.id, item);
   }
 
-  async updateWorkItem(
+  async updateWorkItemPlan(
+    item: WorkItem,
+    expectedVersion: number,
+  ): Promise<void> {
+    const current = this.workItems.get(item.id);
+    if (!current || current.version !== expectedVersion) {
+      throw new Error('work item version conflict');
+    }
+    this.workItems.set(item.id, item);
+  }
+
+  async updateWorkItemLifecycle(
     item: WorkItem,
     expectedVersion: number,
   ): Promise<void> {
