@@ -109,12 +109,12 @@ create table public.asset_warranty_claims (
     )
   ),
   constraint asset_warranty_claims_timestamp_order check (
-    (resolved_at is null or submitted_at is null or resolved_at >= submitted_at)
+    (submitted_at is null or submitted_at >= recorded_at)
+    and (resolved_at is null or submitted_at is null or resolved_at >= submitted_at)
     and (closed_at is null or resolved_at is null or closed_at >= resolved_at)
     and (
       cancelled_at is null
-      or submitted_at is null
-      or cancelled_at >= submitted_at
+      or cancelled_at >= coalesce(submitted_at, recorded_at)
     )
   )
 );
