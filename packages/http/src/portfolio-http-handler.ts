@@ -112,7 +112,9 @@ function errorStatus(code: string): number {
     code === 'TENANCY_ASSET_ALREADY_ASSIGNED' ||
     code === 'COST_ALREADY_REVERSED' ||
     code === 'COST_REPLACEMENT_ALREADY_USED' ||
-    code === 'COST_REPLACEMENT_ALREADY_REVERSED'
+    code === 'COST_REPLACEMENT_ALREADY_REVERSED' ||
+    code === 'MAINTENANCE_FINDING_ALREADY_LINKED' ||
+    code === 'MAINTENANCE_SERVICE_EVENT_ALREADY_LINKED'
   ) {
     return 409;
   }
