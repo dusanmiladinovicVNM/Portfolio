@@ -236,6 +236,11 @@ function translate(error: unknown): DomainError | null {
         'MAINTENANCE_WORK_ORDER_DEFINITION_FROZEN',
         'Maintenance WorkOrder cannot be changed in this state.',
       );
+    case 'maintenance_work_order_before_issue_recorded':
+      return new DomainError(
+        'MAINTENANCE_TIMESTAMP_ORDER_INVALID',
+        'WorkOrder createdAt cannot predate its parent Issue recordedAt.',
+      );
     case 'maintenance_work_order_assignment_time_order':
       return new DomainError(
         'MAINTENANCE_TIMESTAMP_ORDER_INVALID',
