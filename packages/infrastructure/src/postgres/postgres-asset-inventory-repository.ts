@@ -145,6 +145,11 @@ function translate(error: unknown): DomainError | null {
           'TENANCY_ASSET_UNIT_MISMATCH',
           'Tenancy inventory Asset must belong to the Tenancy Unit.',
         );
+      case 'tenancy_asset_assignment_present_unit_mismatch':
+        return new DomainError(
+          'TENANCY_ASSET_PRESENT_UNIT_MISMATCH',
+          'A present inventory snapshot requires the Asset to be currently located in the Tenancy Unit.',
+        );
       case 'tenancy_asset_assignment_tenancy_state_invalid':
       case 'tenancy_asset_assignment_move_in_tenancy_state':
       case 'tenancy_asset_assignment_move_out_tenancy_state':
