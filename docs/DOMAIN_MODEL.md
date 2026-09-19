@@ -139,7 +139,24 @@ An Asset starts active and has an optimistic aggregate version. Supported metada
 
 Serial, product, inventory and similar identifiers are first-class append-only child records rather than notes. Identifier values are canonicalized against surrounding whitespace at the DB boundary. `inventory_tag`, `imei` and `mac_address` are globally unique; serial/product/barcode remain intentionally weaker until their business scope is explicitly defined. MAC/IMEI type-specific canonicalization is deferred rather than guessed prematurely.
 
-Service, warranty, condition history and tenancy inventory remain later bounded-context work.
+Canonical PR #15 adds temporal and tenancy history around the stable physical Asset identity:
+
+```text
+Asset
+  ├─ AssetLocationHistory[]        authoritative temporal placement
+  ├─ AssetConditionAssessment[]    append-only condition facts
+  └─ TenancyAssetAssignment[]      tenancy inventory membership
+       ├─ moveIn snapshot
+       └─ moveOut snapshot
+```
+
+`assets.property_id/unit_id/space_id` remain a current projection for efficient reads, but are not an independent source of truth. At every commit they must equal the single open AssetLocationHistory interval.
+
+A move is one transaction: close the old interval, append the new interval, update the projection and CAS `Asset.version`. Tenancy inventory is independent of movement: assigning an Asset to a Tenancy records inventory membership, not ownership or location.
+
+Condition assessments are append-only. Move-in/move-out snapshots may reference exact condition assessments and preserve missing/present truth without overwriting a global condition field.
+
+Warranty, Service and Maintenance remain later bounded-context work.
 ### ImprovementProject
 
 A body of work performed on a Property/Unit. It is not an Asset. A project may install, remove or replace assets.
