@@ -200,7 +200,7 @@ function translate(error: unknown): DomainError | null {
         'WARRANTY_CLAIM_OUTSIDE_COVERAGE',
         'WarrantyClaim incident is outside Warranty coverage.',
       );
-    case 'asset_warranty_claim_incident_in_future':
+    case 'asset_warranty_claim_incident_not_future':
       return new DomainError(
         'WARRANTY_CLAIM_INCIDENT_IN_FUTURE',
         'WarrantyClaim incident cannot be after its recording date.',
