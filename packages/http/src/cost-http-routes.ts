@@ -137,6 +137,9 @@ function sourceFromQuery(
 function ledgerEntry(value: {
   readonly cost: Parameters<typeof toCostResponse>[0];
   readonly reversal: Parameters<typeof toCostReversalResponse>[0] | null;
+  readonly incomingCorrection:
+    | Parameters<typeof toCostReversalResponse>[0]
+    | null;
 }) {
   return {
     cost: toCostResponse(value.cost),
@@ -144,6 +147,10 @@ function ledgerEntry(value: {
       value.reversal === null
         ? null
         : toCostReversalResponse(value.reversal),
+    incomingCorrection:
+      value.incomingCorrection === null
+        ? null
+        : toCostReversalResponse(value.incomingCorrection),
   };
 }
 
