@@ -221,6 +221,16 @@ function translate(error: unknown): DomainError | null {
         'IMPROVEMENT_PROJECT_OPEN_WORK_ITEMS',
         'ImprovementProject cannot complete while WorkItems remain operational.',
       );
+    case 'improvement_project_terminal_before_work_record':
+      return new DomainError(
+        'IMPROVEMENT_PROJECT_TERMINAL_BEFORE_WORK_RECORD',
+        'ImprovementProject terminal time cannot predate existing WorkRecord history.',
+      );
+    case 'improvement_project_completed_before_work_item_terminal':
+      return new DomainError(
+        'IMPROVEMENT_PROJECT_COMPLETED_BEFORE_WORK_ITEM_TERMINAL',
+        'ImprovementProject completion cannot predate a WorkItem terminal timestamp.',
+      );
     case 'improvement_project_plan_frozen':
       return new DomainError(
         'IMPROVEMENT_PROJECT_PLAN_FROZEN',
@@ -239,6 +249,11 @@ function translate(error: unknown): DomainError | null {
       return new DomainError(
         'IMPROVEMENT_PROJECT_IMMUTABLE',
         'ImprovementProject identity/scope cannot be rewritten.',
+      );
+    case 'improvement_work_item_terminal_before_work_record':
+      return new DomainError(
+        'WORK_ITEM_TERMINAL_BEFORE_WORK_RECORD',
+        'WorkItem terminal time cannot predate existing WorkRecord history.',
       );
     case 'improvement_work_item_version_step':
       return new DomainError(
