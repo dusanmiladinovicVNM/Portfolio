@@ -195,6 +195,7 @@ language plpgsql
 as $asset_location_history_insert_guard$
 declare
   has_history boolean;
+  previous_valid_to timestamptz;
 begin
   if new.valid_to is not null then
     raise exception 'New Asset location history must start as the open interval.'
@@ -230,6 +231,23 @@ begin
     raise exception 'Subsequent Asset location history must describe a move.'
       using errcode = '23514',
             constraint = 'asset_location_history_change_type_invalid';
+  end if;
+
+  if has_history then
+    select valid_to
+      into previous_valid_to
+    from public.asset_location_history
+    where asset_id = new.asset_id
+    order by valid_from desc, id desc
+    limit 1;
+
+    if previous_valid_to is null
+       or previous_valid_to is distinct from new.valid_from
+    then
+      raise exception 'Asset location intervals must be contiguous.'
+        using errcode = '23514',
+              constraint = 'asset_location_history_not_contiguous';
+    end if;
   end if;
 
   return new;
