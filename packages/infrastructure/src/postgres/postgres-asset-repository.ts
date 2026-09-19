@@ -189,9 +189,10 @@ function translate(error: unknown): DomainError | null {
       case 'asset_location_history_bootstrap_reserved':
       case 'asset_location_history_actor_required':
       case 'asset_location_history_change_type_invalid':
+      case 'asset_location_history_not_contiguous':
         return new DomainError(
           'ASSET_LOCATION_HISTORY_IMMUTABLE',
-          'Asset location history is append-only except for closing the current interval.',
+          'Asset location history is append-only, contiguous and may only close the current interval.',
         );
       case 'asset_move_mixed_mutation_forbidden':
         return new DomainError(
