@@ -197,21 +197,6 @@ const assignmentSelect = `
   from public.tenancy_asset_assignments
 `;
 
-async function insertAssessment(
-  sql: Sql,
-  assessment: AssetConditionAssessment,
-): Promise<void> {
-  await sql`
-    insert into public.asset_condition_assessments (
-      id, asset_id, condition, assessed_at, assessed_by_user_id, notes
-    ) values (
-      ${assessment.id}, ${assessment.assetId}, ${assessment.condition},
-      ${assessment.assessedAt}, ${assessment.assessedByUserId},
-      ${assessment.notes}
-    )
-  `;
-}
-
 export class PostgresAssetInventoryRepository
   implements AssetInventoryRepository
 {
@@ -220,7 +205,15 @@ export class PostgresAssetInventoryRepository
   async insertConditionAssessment(
     assessment: AssetConditionAssessment,
   ): Promise<void> {
-    await translated(() => insertAssessment(this.sql, assessment));
+    await translated(() => this.sql`
+      insert into public.asset_condition_assessments (
+        id, asset_id, condition, assessed_at, assessed_by_user_id, notes
+      ) values (
+        ${assessment.id}, ${assessment.assetId}, ${assessment.condition},
+        ${assessment.assessedAt}, ${assessment.assessedByUserId},
+        ${assessment.notes}
+      )
+    `);
   }
 
   async listConditionAssessments(
@@ -283,7 +276,15 @@ export class PostgresAssetInventoryRepository
     await translated(async () => {
       await this.sql.begin(async (tx) => {
         if (assessment !== null) {
-          await insertAssessment(tx as Sql, assessment);
+          await tx`
+            insert into public.asset_condition_assessments (
+              id, asset_id, condition, assessed_at, assessed_by_user_id, notes
+            ) values (
+              ${assessment.id}, ${assessment.assetId}, ${assessment.condition},
+              ${assessment.assessedAt}, ${assessment.assessedByUserId},
+              ${assessment.notes}
+            )
+          `;
         }
 
         const snapshot =
