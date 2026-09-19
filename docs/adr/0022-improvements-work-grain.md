@@ -53,7 +53,7 @@ draft -> planned -> in_progress -> completed
 
 Completed and cancelled projects are terminal.
 
-Project completion requires every WorkItem to be terminal (`completed|cancelled`). Cancellation does not rewrite child history; child operational applicability is derived from parent + child lifecycle.
+Project completion requires every WorkItem to be terminal (`completed|cancelled`), cannot predate any child terminal timestamp and cannot move behind existing WorkRecord history. Project cancellation likewise cannot move its terminal cutoff behind existing WorkRecord occurrence time. Cancellation does not rewrite child history; child operational applicability is derived from parent + child lifecycle.
 
 ### WorkItem
 
@@ -69,7 +69,7 @@ planned -> in_progress -> completed
     \--------------> cancelled
 ```
 
-Starting or completing a WorkItem requires its ImprovementProject to be `in_progress`. While a WorkItem remains `planned`, its title/description are correctable through optimistic CAS; once it starts, its definition is frozen. WorkItems may still be cancelled after parent cancellation to clean up planned scope without rewriting prior facts.
+Starting or completing a WorkItem requires its ImprovementProject to be `in_progress`. While a WorkItem remains `planned`, its title/description are correctable through optimistic CAS; once it starts, its definition is frozen. WorkItem completion/cancellation cannot place a terminal cutoff before any already-recorded work occurrence. WorkItems may still be cancelled after parent cancellation to clean up planned scope without rewriting prior facts.
 
 ### WorkRecord
 
@@ -122,6 +122,15 @@ WorkRecord
 ```
 
 The record and children are append-only historical facts.
+
+Cross-table invariants use a common PostgreSQL row-lock protocol rather than an application mutex:
+
+- WorkItem insert/update takes a shared row lock on its parent ImprovementProject during validation;
+- WorkRecord insert takes shared row locks in deterministic order: WorkItem first, then ImprovementProject;
+- WorkMaterial/ProjectAsset insert takes a shared lock on the unsealed WorkRecord;
+- Project/WorkItem lifecycle UPDATE already owns the conflicting row-update lock.
+
+This serializes parent terminal transitions with concurrent child inserts. A child that starts first completes under the old parent state and is visible to the parent transition; a parent transition that starts first makes the child wait and revalidate against the committed terminal state.
 
 ## Deferred
 
