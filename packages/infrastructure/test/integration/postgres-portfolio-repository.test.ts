@@ -4140,6 +4140,49 @@ describe('PostgreSQL infrastructure', () => {
       moveOut: { presence: 'missing', conditionAssessmentId: null },
     });
 
+    const retiredAsset = await createAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T11:00:00.000Z' },
+      },
+      actor,
+      {
+        code: 'ASSET-HISTORY-RETIRED',
+        name: 'Retired inventory candidate',
+        propertyId: property.id,
+        unitId: unitA.id,
+        spaceId: spaceA.id,
+      },
+    );
+    await changeAssetStatusCommand(
+      assetRepository,
+      actor,
+      retiredAsset.id,
+      1,
+      'retired',
+    );
+
+    await expect(
+      sql`
+        insert into public.tenancy_asset_assignments (
+          id, tenancy_id, asset_id,
+          assigned_at, assigned_by_user_id, version
+        ) values (
+          'c2f00000-0000-4000-8000-000000000002',
+          ${tenancy.id},
+          ${retiredAsset.id},
+          '2026-09-19T11:10:00.000Z',
+          ${actor.userId},
+          1
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'tenancy_asset_assignment_asset_status_invalid',
+    });
+
     const endedTenancy = await endTenancyCommand(
       { tenancyRepository },
       actor,
@@ -4235,48 +4278,6 @@ describe('PostgreSQL infrastructure', () => {
       constraint_name: 'asset_condition_assessment_immutable',
     });
 
-    const retiredAsset = await createAssetCommand(
-      {
-        assetRepository,
-        portfolioRepository,
-        idGenerator: ids,
-        clock: { now: () => '2026-09-19T11:00:00.000Z' },
-      },
-      actor,
-      {
-        code: 'ASSET-HISTORY-RETIRED',
-        name: 'Retired inventory candidate',
-        propertyId: property.id,
-        unitId: unitA.id,
-        spaceId: spaceA.id,
-      },
-    );
-    await changeAssetStatusCommand(
-      assetRepository,
-      actor,
-      retiredAsset.id,
-      1,
-      'retired',
-    );
-
-    await expect(
-      sql`
-        insert into public.tenancy_asset_assignments (
-          id, tenancy_id, asset_id,
-          assigned_at, assigned_by_user_id, version
-        ) values (
-          'c2f00000-0000-4000-8000-000000000002',
-          ${tenancy.id},
-          ${retiredAsset.id},
-          '2026-09-19T11:10:00.000Z',
-          ${actor.userId},
-          1
-        )
-      `,
-    ).rejects.toMatchObject({
-      code: '23514',
-      constraint_name: 'tenancy_asset_assignment_asset_status_invalid',
-    });
   });
 
 });
