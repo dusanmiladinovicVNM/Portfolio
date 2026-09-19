@@ -611,6 +611,30 @@ export class PostgresImprovementRepository implements ImprovementRepository {
     };
   }
 
+  async getWorkRecordById(
+    id: ReturnType<typeof asWorkRecordId>,
+  ): Promise<WorkRecord | null> {
+    const rows = await this.sql<WorkRecordRow[]>`
+      ${this.sql.unsafe(workRecordSelect)}
+        and id = ${id}
+      limit 1
+    `;
+    return rows.length === 0 ? null : this.mapWorkRecord(rows[0]!);
+  }
+
+  async getWorkMaterialById(
+    id: ReturnType<typeof asWorkMaterialId>,
+  ): Promise<WorkMaterial | null> {
+    const rows = await this.sql<WorkMaterialRow[]>`
+      select
+        id, work_record_id, name, reference, quantity, unit, notes
+      from public.improvement_work_materials
+      where id = ${id}
+      limit 1
+    `;
+    return rows.length === 0 ? null : mapMaterial(rows[0]!);
+  }
+
   async listWorkRecordsByProject(
     projectId: ImprovementProjectId,
   ): Promise<readonly WorkRecord[]> {

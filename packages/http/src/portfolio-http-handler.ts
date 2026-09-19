@@ -5,6 +5,7 @@ import {
   type AssetRepository,
   type AssetServiceRepository,
   type ClockPort,
+  type CostRepository,
   type DocumentRepository,
   type FileStoragePort,
   type IdGenerator,
@@ -22,6 +23,7 @@ import {
 import { DomainError } from '@portfolio/domain';
 import { handleAssetHttp } from './asset-http-routes.js';
 import { handleAssetServiceHttp } from './asset-service-http-routes.js';
+import { handleCostHttp } from './cost-http-routes.js';
 import { handleDocumentHttp } from './document-http-routes.js';
 import { errorResponse } from './http-utils.js';
 import { handleImprovementHttp } from './improvement-http-routes.js';
@@ -44,6 +46,7 @@ export interface PortfolioHttpDependencies {
   readonly documentRepository: DocumentRepository;
   readonly inspectionRepository: InspectionRepository;
   readonly improvementRepository: ImprovementRepository;
+  readonly costRepository: CostRepository;
   readonly staffDirectoryRepository: StaffDirectoryRepository;
   readonly fileStorage: FileStoragePort;
   readonly clock: ClockPort;
@@ -103,7 +106,10 @@ function errorStatus(code: string): number {
     code === 'ASSET_IDENTIFIER_GLOBAL_CONFLICT' ||
     code === 'ASSET_LOCATION_OPEN_INTERVAL_CONFLICT' ||
     code === 'ASSET_LOCATION_OVERLAP' ||
-    code === 'TENANCY_ASSET_ALREADY_ASSIGNED'
+    code === 'TENANCY_ASSET_ALREADY_ASSIGNED' ||
+    code === 'COST_ALREADY_REVERSED' ||
+    code === 'COST_REPLACEMENT_ALREADY_USED' ||
+    code === 'COST_REPLACEMENT_ALREADY_REVERSED'
   ) {
     return 409;
   }
@@ -134,6 +140,22 @@ export function createPortfolioHttpHandler(
       const actor = await resolveActor(deps.userAccessRepository, identity);
 
       const handlers = [
+        () =>
+          handleCostHttp(
+            {
+              costRepository: deps.costRepository,
+              portfolioRepository: deps.portfolioRepository,
+              partyRepository: deps.partyRepository,
+              assetRepository: deps.assetRepository,
+              assetServiceRepository: deps.assetServiceRepository,
+              improvementRepository: deps.improvementRepository,
+              idGenerator: deps.idGenerator,
+              clock: deps.clock,
+            },
+            actor,
+            request,
+            path,
+          ),
         () =>
           handleImprovementHttp(
             {

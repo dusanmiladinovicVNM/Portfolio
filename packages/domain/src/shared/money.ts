@@ -34,7 +34,7 @@ export function asCurrencyCode(value: string): CurrencyCode {
   if (!CURRENCY_PATTERN.test(normalized)) {
     throw new DomainError(
       'INVALID_CURRENCY_CODE',
-      'Currency must be a three-letter ISO 4217 code.',
+      'Currency must be a three-letter currency code.',
     );
   }
 

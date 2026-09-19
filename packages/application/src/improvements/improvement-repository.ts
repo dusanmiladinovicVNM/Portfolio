@@ -6,6 +6,9 @@ import type {
   WorkItem,
   WorkItemId,
   WorkRecord,
+  WorkRecordId,
+  WorkMaterial,
+  WorkMaterialId,
 } from '@portfolio/domain';
 
 export interface ImprovementRepository {
@@ -40,6 +43,8 @@ export interface ImprovementRepository {
     expectedVersion: number,
   ): Promise<void>;
 
+  getWorkRecordById(id: WorkRecordId): Promise<WorkRecord | null>;
+  getWorkMaterialById(id: WorkMaterialId): Promise<WorkMaterial | null>;
   listWorkRecordsByProject(
     projectId: ImprovementProjectId,
   ): Promise<readonly WorkRecord[]>;

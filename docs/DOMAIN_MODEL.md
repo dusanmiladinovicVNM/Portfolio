@@ -218,7 +218,22 @@ Canonical #17 deliberately does not create Cost/invoice records, Maintenance Iss
 
 ### Cost
 
-A normalized financial fact linked to a source business event. Cost is not a substitute for the source entity.
+Canonical #18 defines Cost as one append-only positive monetary allocation to exactly one typed business source. Cost is a financial fact/projection and never substitutes for the source entity's own state or lifecycle.
+
+```text
+Cost
+  ├─ exactly one CostSource
+  └─ optional outgoing CostReversal
+         └─ optional replacement Cost
+```
+
+Supported source grains are Property, Unit, Space, Asset, WarrantyClaim, ServiceEvent, ImprovementProject, WorkItem, WorkRecord and WorkMaterial. The database uses typed foreign keys plus a discriminator and rejects ambiguous or mismatched source shapes.
+
+Amount is exact two-decimal money. PostgreSQL stores the unrounded value as exact `numeric`, then independently rejects values with more than two decimal places and amounts outside the domain's 16-digit whole-part range; direct SQL therefore cannot silently turn `1.005` into a rounded ledger fact. Cost currencies are deliberately limited to the configured set `CHF|EUR|RSD`; this phase does not claim generic ISO 4217/minor-unit support. Unlike currencies are never implicitly summed.
+
+`incurredOn` records the business date and cannot be later than the UTC date of immutable `recordedAt`. Supplier is an optional Party identity reference and may remain valid after that Party becomes inactive. `invoiceReference` is only an external reference string; there is no Invoice/AP aggregate in canonical #18.
+
+Cost rows are immutable. Corrections use full reversal plus an optional replacement Cost. A Cost can have at most one outgoing reversal, and one replacement Cost can belong to at most one incoming correction. Replacement and reversal are created atomically by the application and share both `recordedAt` and `recordedByUserId`; PostgreSQL enforces the same parity. Ledger reads expose both the outgoing reversal and the incoming correction so predecessor/successor history can be traversed without inventing a separate full-chain endpoint.
 
 ### Document
 
