@@ -3,7 +3,11 @@ import type {
   AssetLocationHistoryResponse,
   AssetReplacementResponse,
   AssetResponse,
+  ServiceEventResponse,
+  ServicePlanResponse,
   TenancyAssetAssignmentResponse,
+  WarrantyClaimResponse,
+  WarrantyResponse,
   DocumentLinkResponse,
   DocumentResponse,
   DocumentVersionResponse,
@@ -29,7 +33,11 @@ import type {
   AssetConditionAssessment,
   AssetLocationHistory,
   AssetReplacement,
+  ServiceEvent,
+  ServicePlan,
   TenancyAssetAssignment,
+  Warranty,
+  WarrantyClaim,
   Document,
   DocumentLink,
   DocumentVersion,
@@ -484,5 +492,85 @@ export function toTenancyAssetAssignmentResponse(
     version: assignment.version,
     moveIn: snapshot(assignment.moveIn),
     moveOut: snapshot(assignment.moveOut),
+  };
+}
+
+
+export function toWarrantyResponse(warranty: Warranty): WarrantyResponse {
+  return {
+    id: warranty.id,
+    assetId: warranty.assetId,
+    warrantyType: warranty.warrantyType,
+    providerPartyId: warranty.providerPartyId,
+    reference: warranty.reference,
+    validFrom: warranty.validFrom,
+    validTo: warranty.validTo,
+    terms: warranty.terms,
+    recordedAt: warranty.recordedAt,
+    recordedByUserId: warranty.recordedByUserId,
+  };
+}
+
+export function toWarrantyClaimResponse(
+  claim: WarrantyClaim,
+): WarrantyClaimResponse {
+  return {
+    id: claim.id,
+    warrantyId: claim.warrantyId,
+    incidentOn: claim.incidentOn,
+    description: claim.description,
+    status: claim.status,
+    providerReference: claim.providerReference,
+    submittedAt: claim.submittedAt,
+    resolvedAt: claim.resolvedAt,
+    closedAt: claim.closedAt,
+    cancelledAt: claim.cancelledAt,
+    version: claim.version,
+  };
+}
+
+export function toServicePlanResponse(
+  plan: ServicePlan,
+): ServicePlanResponse {
+  return {
+    id: plan.id,
+    assetId: plan.assetId,
+    name: plan.name,
+    scheduleKind: plan.scheduleKind,
+    firstDueOn: plan.firstDueOn,
+    intervalMonths: plan.intervalMonths,
+    providerPartyId: plan.providerPartyId,
+    notes: plan.notes,
+    status: plan.status,
+    version: plan.version,
+    createdAt: plan.createdAt,
+    createdByUserId: plan.createdByUserId,
+  };
+}
+
+export function toServiceEventResponse(
+  event: ServiceEvent,
+): ServiceEventResponse {
+  return {
+    id: event.id,
+    assetId: event.assetId,
+    servicePlanId: event.servicePlanId,
+    warrantyClaimId: event.warrantyClaimId,
+    eventType: event.eventType,
+    performedAt: event.performedAt,
+    providerPartyId: event.providerPartyId,
+    description: event.description,
+    reference: event.reference,
+    parts: event.parts.map((part) => ({
+      id: part.id,
+      serviceEventId: part.serviceEventId,
+      name: part.name,
+      partNumber: part.partNumber,
+      serialNumber: part.serialNumber,
+      quantity: part.quantity,
+      notes: part.notes,
+    })),
+    recordedAt: event.recordedAt,
+    recordedByUserId: event.recordedByUserId,
   };
 }
