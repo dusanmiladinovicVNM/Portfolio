@@ -109,6 +109,8 @@ PostgreSQL independently enforces static shape, lifecycle and cross-row rules.
 
 Asset-scoped Issue creation resolves scope from `asset_location_history` at `reportedAt` and takes `FOR SHARE` on the matching interval row. Closed intervals are immutable; if the matching interval is currently open, the shared lock conflicts with the Asset move that closes `valid_to`. Issue insertion therefore cannot observe a half-applied location transition. The current `assets.property_id/unit_id/space_id` projection is not the historical authority.
 
+The relationship is protected in the reverse direction too. Once an Asset-scoped MaintenanceIssue exists, a later closure of the location interval is rejected if the proposed `valid_to` would move that Issue's `reportedAt` outside the interval it captured. A later backdated move or replacement may close the interval only after all protected Issue occurrence timestamps that depend on it.
+
 Originating InspectionFinding lookup takes `FOR SHARE` on the Finding row. Once referenced by a MaintenanceIssue, its `created_at` cannot be rewritten, so later Inspection edits cannot retroactively invalidate the origin-time relationship.
 
 WorkOrder inserts/updates take a shared lock on the parent Issue. Issue terminal transitions serialize against those child writes and re-check child terminal state under the lock.
