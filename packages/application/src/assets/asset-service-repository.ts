@@ -1,6 +1,7 @@
 import type {
   AssetId,
   ServiceEvent,
+  ServiceEventId,
   ServicePlan,
   ServicePlanId,
   Warranty,
@@ -29,6 +30,7 @@ export interface AssetServiceRepository {
   insertServicePlan(plan: ServicePlan): Promise<void>;
   updateServicePlan(plan: ServicePlan, expectedVersion: number): Promise<void>;
 
+  getServiceEventById(id: ServiceEventId): Promise<ServiceEvent | null>;
   listServiceEventsByAsset(assetId: AssetId): Promise<readonly ServiceEvent[]>;
   insertServiceEvent(event: ServiceEvent): Promise<void>;
 }
