@@ -229,7 +229,7 @@ InspectionFinding -> optional MaintenanceIssue origin
 Cost -> MaintenanceIssue | MaintenanceWorkOrder
 ```
 
-MaintenanceIssue is one reported problem. It owns immutable physical scope (Property plus optional Unit, Space and Asset), optional originating InspectionFinding, occurrence/recording provenance, priority and the Issue lifecycle. Unit/Space hierarchy must be coherent. When an Asset is present, the Issue resolves the authoritative AssetLocationHistory interval at `reportedAt`; recording the Issue later must not substitute the Asset's current projection. Later Asset movement, retirement or replacement never rewrites the Issue's historical scope.
+MaintenanceIssue is one reported problem. It owns immutable physical scope (Property plus optional Unit, Space and Asset), optional originating InspectionFinding, occurrence/recording provenance, priority and the Issue lifecycle. Unit/Space hierarchy must be coherent. When an Asset is present, the Issue resolves the authoritative AssetLocationHistory interval at `reportedAt`; recording the Issue later must not substitute the Asset's current projection. Later Asset movement, retirement or replacement never rewrites the Issue's historical scope, and PostgreSQL rejects a later backdated location-history closure that would make an already-recorded Issue fall outside the interval it captured.
 
 An InspectionFinding may originate at most one MaintenanceIssue. The Finding remains Inspection truth, must belong to the same Unit, and must already exist when the Issue is reported: `Issue.reportedAt >= Finding.createdAt`. Maintenance never edits Inspection content; PostgreSQL only freezes the linked Finding's `createdAt` provenance needed to preserve this cross-context invariant.
 
