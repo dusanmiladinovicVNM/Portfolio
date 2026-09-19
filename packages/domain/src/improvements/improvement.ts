@@ -622,11 +622,14 @@ export function createWorkRecord(input: {
     );
   }
 
-  const terminalCutoff =
-    input.workItem.cancelledAt ??
-    input.workItem.completedAt ??
-    input.project.cancelledAt ??
-    input.project.completedAt;
+  const terminalCutoff = [
+    input.workItem.cancelledAt,
+    input.workItem.completedAt,
+    input.project.cancelledAt,
+    input.project.completedAt,
+  ]
+    .filter((value): value is string => value !== null)
+    .sort((left, right) => Date.parse(left) - Date.parse(right))[0] ?? null;
   if (
     terminalCutoff !== null &&
     Date.parse(performedAt) > Date.parse(terminalCutoff)
