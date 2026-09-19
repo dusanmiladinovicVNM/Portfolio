@@ -452,6 +452,21 @@ export class PostgresAssetRepository implements AssetRepository {
     return rows.length === 0 ? null : mapLocation(rows[0]!);
   }
 
+  async getLocationAt(
+    assetId: AssetId,
+    at: string,
+  ): Promise<AssetLocationHistory | null> {
+    const rows = await this.sql<AssetLocationRow[]>`
+      ${this.sql.unsafe(locationSelect)}
+      where asset_id = ${assetId}
+        and valid_from <= ${at}
+        and (valid_to is null or ${at} < valid_to)
+      order by valid_from desc, id desc
+      limit 1
+    `;
+    return rows.length === 0 ? null : mapLocation(rows[0]!);
+  }
+
   async listLocationHistory(
     assetId: AssetId,
   ): Promise<readonly AssetLocationHistory[]> {
