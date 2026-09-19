@@ -109,6 +109,15 @@ describe('Asset Registry domain', () => {
     });
   });
 
+  it('rejects impossible Space-without-Unit placement in the domain', () => {
+    expect(() =>
+      asset({
+        unitId: null,
+        spaceId: asSpaceId('c1000000-0000-4000-8000-000000000031'),
+      }),
+    ).toThrowError(/requires a Unit placement/);
+  });
+
   it('supports Property-only placement without a synthetic Unit', () => {
     const buildingAsset = asset({
       id: asAssetId('c1000000-0000-4000-8000-000000000030'),
