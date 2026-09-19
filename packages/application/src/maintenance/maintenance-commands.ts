@@ -86,6 +86,7 @@ async function assertIssueScope(
     readonly spaceId?: SpaceId | null;
     readonly assetId?: AssetId | null;
     readonly inspectionFindingId?: InspectionFindingId | null;
+    readonly reportedAt: string;
   },
 ): Promise<void> {
   const property = await deps.portfolioRepository.getPropertyById(input.propertyId);
@@ -122,14 +123,25 @@ async function assertIssueScope(
   if (input.assetId != null) {
     const asset = await deps.assetRepository.getById(input.assetId);
     if (!asset) throw new DomainError('ASSET_NOT_FOUND', 'Asset not found.');
+
+    const location = await deps.assetRepository.getLocationAt(
+      input.assetId,
+      input.reportedAt,
+    );
+    if (!location) {
+      throw new DomainError(
+        'MAINTENANCE_ASSET_LOCATION_NOT_FOUND',
+        'Asset has no managed location at Maintenance Issue reportedAt.',
+      );
+    }
     if (
-      asset.propertyId !== input.propertyId ||
-      asset.unitId !== (input.unitId ?? null) ||
-      asset.spaceId !== (input.spaceId ?? null)
+      location.propertyId !== input.propertyId ||
+      location.unitId !== (input.unitId ?? null) ||
+      location.spaceId !== (input.spaceId ?? null)
     ) {
       throw new DomainError(
         'MAINTENANCE_ASSET_SCOPE_MISMATCH',
-        'Maintenance Issue must capture the Asset exact current placement.',
+        'Maintenance Issue scope must match the Asset placement at reportedAt.',
       );
     }
   }
@@ -154,6 +166,12 @@ async function assertIssueScope(
       throw new DomainError(
         'MAINTENANCE_FINDING_SCOPE_MISMATCH',
         'Originating Inspection Finding must belong to the Maintenance Issue Unit.',
+      );
+    }
+    if (Date.parse(input.reportedAt) < Date.parse(finding.createdAt)) {
+      throw new DomainError(
+        'MAINTENANCE_FINDING_REPORTED_BEFORE_ORIGIN',
+        'Maintenance Issue reportedAt cannot predate its originating Inspection Finding.',
       );
     }
   }
@@ -190,25 +208,6 @@ export async function createMaintenanceIssueCommand(
   },
 ) {
   requireCapability(actor, 'maintenance:write');
-  await assertIssueScope(deps, input);
-
-  if (await deps.maintenanceRepository.issueCodeExists(input.code.trim())) {
-    throw new DomainError(
-      'MAINTENANCE_ISSUE_ALREADY_EXISTS',
-      'Maintenance Issue code already exists.',
-    );
-  }
-  if (
-    input.inspectionFindingId != null &&
-    (await deps.maintenanceRepository.getIssueByInspectionFindingId(
-      input.inspectionFindingId,
-    )) !== null
-  ) {
-    throw new DomainError(
-      'MAINTENANCE_FINDING_ALREADY_LINKED',
-      'Inspection Finding already originated a Maintenance Issue.',
-    );
-  }
 
   const recordedAt = deps.clock.now();
   const issue = createMaintenanceIssue({
@@ -228,6 +227,27 @@ export async function createMaintenanceIssueCommand(
     recordedAt,
     recordedByUserId: actor.userId,
   });
+
+  await assertIssueScope(deps, issue);
+
+  if (await deps.maintenanceRepository.issueCodeExists(input.code.trim())) {
+    throw new DomainError(
+      'MAINTENANCE_ISSUE_ALREADY_EXISTS',
+      'Maintenance Issue code already exists.',
+    );
+  }
+  if (
+    input.inspectionFindingId != null &&
+    (await deps.maintenanceRepository.getIssueByInspectionFindingId(
+      input.inspectionFindingId,
+    )) !== null
+  ) {
+    throw new DomainError(
+      'MAINTENANCE_FINDING_ALREADY_LINKED',
+      'Inspection Finding already originated a Maintenance Issue.',
+    );
+  }
+
   await deps.maintenanceRepository.insertIssue(issue);
   return issue;
 }
