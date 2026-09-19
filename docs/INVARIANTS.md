@@ -85,7 +85,12 @@ These rules are architecture gates, not optional implementation notes.
 67. Replacing an Asset does create a new Asset; the old one remains in history and becomes `replaced` only in the same transaction that appends one predecessor→successor relationship.
 68. Replacement is not a movement workflow: successor and predecessor have the exact same current Property/Unit/Space placement, and replacement lineage is acyclic.
 69. Asset identifiers are structured append-only records with canonical trimmed values. `inventory_tag`, `imei` and `mac_address` are globally unique; serial/product/barcode have no stronger cross-Asset uniqueness until their business scope is explicitly defined.
-70. `Asset.id` is immutable physical identity and `code` is stable business identity. Name/manufacturer/model are correctable metadata. Supported metadata corrections and lifecycle changes use optimistic concurrency; retired/replaced lifecycle states are terminal. Service events are append-only history and Asset condition assessments preserve history rather than overwriting a single condition field.
+70. `Asset.id` is immutable physical identity and `code` is stable business identity. Name/manufacturer/model are correctable metadata. Supported metadata corrections, moves and lifecycle changes use optimistic concurrency; retired/replaced lifecycle states are terminal.
+71. AssetLocationHistory is the authoritative temporal placement truth. Every Asset has exactly one open location interval; `assets.property_id/unit_id/space_id` are only the current projection and must match that open interval at commit.
+72. An Asset move closes the current location interval, appends the next interval, updates the current placement projection and advances Asset.version in one transaction. Location intervals never overlap and closed history is immutable.
+73. AssetConditionAssessment is append-only condition history; there is no mutable `asset.condition` master field.
+74. TenancyAssetAssignment links one physical Asset to one Tenancy inventory. The Asset must belong to that Tenancy's Unit when assigned; assignment does not itself change Asset location or ownership.
+75. Move-in and move-out inventory snapshots are append-once facts. Move-out requires move-in, cannot predate it, and a missing Asset cannot carry a condition assessment.
 
 ## Improvements and maintenance
 
