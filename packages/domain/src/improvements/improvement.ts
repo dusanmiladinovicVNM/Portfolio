@@ -362,9 +362,27 @@ export function startImprovementProject(
   };
 }
 
+function assertNoWorkRecordAfter(
+  records: readonly WorkRecord[],
+  cutoff: string,
+  predicate: (record: WorkRecord) => boolean,
+  code: string,
+  message: string,
+): void {
+  if (
+    records.some(
+      (record) =>
+        predicate(record) && Date.parse(record.performedAt) > Date.parse(cutoff),
+    )
+  ) {
+    throw new DomainError(code, message);
+  }
+}
+
 export function completeImprovementProject(
   project: ImprovementProject,
   workItems: readonly WorkItem[],
+  workRecords: readonly WorkRecord[],
   completedAtValue: string,
 ): ImprovementProject {
   if (project.status !== 'in_progress') {
@@ -400,6 +418,26 @@ export function completeImprovementProject(
     'completedAt',
     'startedAt',
   );
+  assertNoWorkRecordAfter(
+    workRecords,
+    completedAt,
+    (record) => record.projectId === project.id,
+    'IMPROVEMENT_PROJECT_TERMINAL_BEFORE_WORK_RECORD',
+    'ImprovementProject completion cannot predate existing WorkRecord history.',
+  );
+
+  const laterChildTerminal = workItems.find((item) => {
+    if (item.projectId !== project.id) return false;
+    const terminalAt = item.completedAt ?? item.cancelledAt;
+    return terminalAt !== null && Date.parse(terminalAt) > Date.parse(completedAt);
+  });
+  if (laterChildTerminal) {
+    throw new DomainError(
+      'IMPROVEMENT_PROJECT_COMPLETED_BEFORE_WORK_ITEM_TERMINAL',
+      'ImprovementProject completion cannot predate a WorkItem terminal timestamp.',
+    );
+  }
+
   return {
     ...project,
     status: 'completed',
@@ -410,6 +448,7 @@ export function completeImprovementProject(
 
 export function cancelImprovementProject(
   project: ImprovementProject,
+  workRecords: readonly WorkRecord[],
   cancelledAtValue: string,
 ): ImprovementProject {
   if (project.status === 'completed' || project.status === 'cancelled') {
@@ -431,6 +470,13 @@ export function cancelImprovementProject(
       : project.plannedAt !== null
         ? 'plannedAt'
         : 'createdAt',
+  );
+  assertNoWorkRecordAfter(
+    workRecords,
+    cancelledAt,
+    (record) => record.projectId === project.id,
+    'IMPROVEMENT_PROJECT_TERMINAL_BEFORE_WORK_RECORD',
+    'ImprovementProject cancellation cannot predate existing WorkRecord history.',
   );
 
   return {
@@ -552,6 +598,7 @@ export function startWorkItem(
 export function completeWorkItem(
   item: WorkItem,
   project: ImprovementProject,
+  workRecords: readonly WorkRecord[],
   completedAtValue: string,
 ): WorkItem {
   if (item.projectId !== project.id) {
@@ -580,6 +627,14 @@ export function completeWorkItem(
     'completedAt',
     'startedAt',
   );
+  assertNoWorkRecordAfter(
+    workRecords,
+    completedAt,
+    (record) => record.workItemId === item.id,
+    'WORK_ITEM_TERMINAL_BEFORE_WORK_RECORD',
+    'WorkItem completion cannot predate existing WorkRecord history.',
+  );
+
   return {
     ...item,
     status: 'completed',
@@ -590,6 +645,7 @@ export function completeWorkItem(
 
 export function cancelWorkItem(
   item: WorkItem,
+  workRecords: readonly WorkRecord[],
   cancelledAtValue: string,
 ): WorkItem {
   if (item.status === 'completed' || item.status === 'cancelled') {
@@ -606,6 +662,14 @@ export function cancelWorkItem(
     'cancelledAt',
     item.startedAt === null ? 'createdAt' : 'startedAt',
   );
+  assertNoWorkRecordAfter(
+    workRecords,
+    cancelledAt,
+    (record) => record.workItemId === item.id,
+    'WORK_ITEM_TERMINAL_BEFORE_WORK_RECORD',
+    'WorkItem cancellation cannot predate existing WorkRecord history.',
+  );
+
   return {
     ...item,
     status: 'cancelled',
