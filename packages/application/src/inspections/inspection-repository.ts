@@ -54,6 +54,7 @@ export interface InspectionRepository {
   ): Promise<readonly InspectionResponse[]>;
 
   insertFinding(finding: InspectionFinding): Promise<number>;
+  getFindingById(id: import('@portfolio/domain').InspectionFindingId): Promise<InspectionFinding | null>;
   listFindings(
     inspectionId: InspectionId,
   ): Promise<readonly InspectionFinding[]>;
