@@ -4000,6 +4000,7 @@ describe('PostgreSQL infrastructure', () => {
 
     const assignments = await listTenancyAssetAssignmentsQuery(
       assetInventoryRepository,
+      tenancyRepository,
       actor,
       tenancy.id,
     );
