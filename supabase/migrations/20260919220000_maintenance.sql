@@ -619,7 +619,7 @@ begin
   from public.maintenance_work_orders w
   join public.maintenance_issues i on i.id = w.issue_id
   where w.id = new.work_order_id
-  for key share of w;
+  for share of w;
 
   if work_order_status not in ('in_progress', 'completed')
      or work_order_started_at is null
