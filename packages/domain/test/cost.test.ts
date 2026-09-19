@@ -85,6 +85,27 @@ describe('Unified Cost Ledger domain', () => {
     ).toThrowError(/UTC recording date/);
   });
 
+  it('rejects unsupported three-letter currency codes', () => {
+    expect(() =>
+      createCost({
+        id: asCostId('ab000000-0000-4000-8000-000000000016'),
+        source: {
+          kind: 'property',
+          propertyId: asPropertyId(
+            'ab000000-0000-4000-8000-000000000017',
+          ),
+        },
+        description: 'Unsupported currency',
+        amount: '10',
+        currency: 'ZZZ',
+        incurredOn: '2026-09-18',
+        reportingClass: 'opex',
+        recordedAt: '2026-09-19T10:00:00.000Z',
+        recordedByUserId: userId,
+      }),
+    ).toThrowError(/Cost currency must be one of/);
+  });
+
   it('preserves correction history as reversal plus replacement', () => {
     const original = createCost({
       id: asCostId('ab000000-0000-4000-8000-000000000009'),
@@ -127,6 +148,32 @@ describe('Unified Cost Ledger domain', () => {
       costId: original.id,
       replacementCostId: replacement.id,
     });
+
+    const otherUserId = asUserId(
+      'ab000000-0000-4000-8000-000000000018',
+    );
+    const replacementByOtherUser = createCost({
+      id: asCostId('ab000000-0000-4000-8000-000000000019'),
+      source: original.source,
+      description: 'Different recorder',
+      amount: '925',
+      currency: 'CHF',
+      incurredOn: '2026-09-10',
+      reportingClass: 'opex',
+      recordedAt: '2026-09-19T12:00:00.000Z',
+      recordedByUserId: otherUserId,
+    });
+
+    expect(() =>
+      createCostReversal({
+        id: asCostReversalId('ab000000-0000-4000-8000-000000000020'),
+        cost: replacement,
+        replacementCost: replacementByOtherUser,
+        reason: 'Recorder mismatch',
+        recordedAt: '2026-09-19T12:00:00.000Z',
+        recordedByUserId: userId,
+      }),
+    ).toThrowError(/same recordedByUserId/);
   });
 
   it('rejects reversal before original recording time', () => {
