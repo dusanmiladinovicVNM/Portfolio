@@ -9,6 +9,7 @@ import {
   changeWorkItemStatusCommand,
   changeServicePlanStatusCommand,
   closeWarrantyClaimCommand,
+  correctCostCommand,
   createAssetCommand,
   createImprovementProjectCommand,
   createWorkItemCommand,
@@ -31,6 +32,7 @@ import {
   addInspectionSignatureCommand,
   attachInspectionEvidenceCommand,
   cancelLeaseAgreementCommand,
+  createCostCommand,
   createDocumentCommand,
   createInspectionCommand,
   createInspectionFindingCommand,
@@ -62,6 +64,7 @@ import {
   planTenancyCommand,
   publishInspectionSchemaVersionCommand,
   replaceAssetCommand,
+  reverseCostCommand,
   updateAssetMetadataCommand,
   resolveActor,
   saveInspectionSectionCommand,
@@ -75,12 +78,16 @@ import {
 } from '@portfolio/application';
 import {
   addStoredDocumentVersion,
+  asCostId,
+  asCostReversalId,
   asDocumentVersionId,
   asInspectionResponseId,
   asOwnershipPeriodId,
   asPartyAddressId,
   asPartyId,
   asTenancyId,
+  createCost,
+  createCostReversal,
   createInspectionResponse,
   createOwnershipPeriod,
   createTenancy,
@@ -91,6 +98,7 @@ import {
   PostgresAssetInventoryRepository,
   PostgresAssetRepository,
   PostgresAssetServiceRepository,
+  PostgresCostRepository,
   PostgresDocumentRepository,
   PostgresImprovementRepository,
   PostgresInspectionRepository,
@@ -118,6 +126,7 @@ const leaseRepository = new PostgresLeaseRepository(sql);
 const tenancyRepository = new PostgresTenancyRepository(sql);
 const accessRepository = new PostgresUserAccessRepository(sql);
 const documentRepository = new PostgresDocumentRepository(sql);
+const costRepository = new PostgresCostRepository(sql);
 const inspectionRepository = new PostgresInspectionRepository(sql);
 const improvementRepository = new PostgresImprovementRepository(sql);
 
@@ -137,6 +146,8 @@ class SequenceIds implements IdGenerator {
 async function resetAndMigrate(): Promise<void> {
   await sql.unsafe(
     `drop table if exists
+      public.cost_reversals,
+      public.costs,
       public.improvement_project_assets,
       public.improvement_work_materials,
       public.improvement_work_records,
@@ -236,6 +247,8 @@ beforeAll(async () => {
 afterAll(async () => {
   await sql.unsafe(
     `drop table if exists
+      public.cost_reversals,
+      public.costs,
       public.improvement_project_assets,
       public.improvement_work_materials,
       public.improvement_work_records,
