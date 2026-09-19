@@ -127,6 +127,7 @@ describe('Improvements and Works domain', () => {
       completeImprovementProject(
         started,
         [item],
+        [],
         '2026-10-02T17:00:00.000Z',
       ),
     ).toThrowError(/WorkItems remain operational/);
@@ -139,11 +140,13 @@ describe('Improvements and Works domain', () => {
     const completedItem = completeWorkItem(
       activeItem,
       started,
+      [],
       '2026-10-01T17:00:00.000Z',
     );
     const completed = completeImprovementProject(
       started,
       [completedItem],
+      [],
       '2026-10-02T17:00:00.000Z',
     );
     expect(completed).toMatchObject({ status: 'completed', version: 4 });
@@ -264,11 +267,13 @@ describe('Improvements and Works domain', () => {
     const completedItem = completeWorkItem(
       activeItem,
       startedProject,
+      [],
       '2026-10-01T17:00:00.000Z',
     );
     const completedProject = completeImprovementProject(
       startedProject,
       [completedItem],
+      [],
       '2026-10-02T17:00:00.000Z',
     );
 
@@ -295,6 +300,79 @@ describe('Improvements and Works domain', () => {
         recordedByUserId: userId,
       }),
     ).toThrowError(/cannot be after recordedAt/);
+  });
+
+  it('prevents terminal timestamps from moving behind existing WorkRecord truth', () => {
+    const plannedProject = planImprovementProject(
+      project(),
+      '2026-09-20T08:00:00.000Z',
+    );
+    const startedProject = startImprovementProject(
+      plannedProject,
+      '2026-10-01T08:00:00.000Z',
+    );
+    const item = createWorkItem({
+      id: asWorkItemId('fc000000-0000-4000-8000-000000000024'),
+      project: startedProject,
+      code: 'W-CUTOFF',
+      title: 'Temporal cutoff work',
+      createdAt: '2026-10-01T08:05:00.000Z',
+      createdByUserId: userId,
+    });
+    const activeItem = startWorkItem(
+      item,
+      startedProject,
+      '2026-10-01T09:00:00.000Z',
+    );
+    const record = createWorkRecord({
+      id: asWorkRecordId('fc000000-0000-4000-8000-000000000025'),
+      project: startedProject,
+      workItem: activeItem,
+      performedAt: '2026-10-02T14:00:00.000Z',
+      description: 'Completed physical work',
+      recordedAt: '2026-10-03T09:00:00.000Z',
+      recordedByUserId: userId,
+    });
+
+    expect(() =>
+      completeWorkItem(
+        activeItem,
+        startedProject,
+        [record],
+        '2026-10-02T12:00:00.000Z',
+      ),
+    ).toThrowError(/cannot predate existing WorkRecord history/);
+
+    expect(() =>
+      cancelWorkItem(
+        activeItem,
+        [record],
+        '2026-10-02T12:00:00.000Z',
+      ),
+    ).toThrowError(/cannot predate existing WorkRecord history/);
+
+    expect(() =>
+      cancelImprovementProject(
+        startedProject,
+        [record],
+        '2026-10-02T12:00:00.000Z',
+      ),
+    ).toThrowError(/cannot predate existing WorkRecord history/);
+
+    const completedItem = completeWorkItem(
+      activeItem,
+      startedProject,
+      [record],
+      '2026-10-02T15:00:00.000Z',
+    );
+    expect(() =>
+      completeImprovementProject(
+        startedProject,
+        [completedItem],
+        [record],
+        '2026-10-02T14:30:00.000Z',
+      ),
+    ).toThrowError(/cannot predate a WorkItem terminal timestamp/);
   });
 
   it('keeps ProjectAsset actions as work semantics instead of Asset truth', () => {
@@ -355,10 +433,14 @@ describe('Improvements and Works domain', () => {
       createdAt: '2026-09-19T11:00:00.000Z',
       createdByUserId: userId,
     });
-    const cancelled = cancelWorkItem(item, '2026-09-19T12:00:00.000Z');
+    const cancelled = cancelWorkItem(
+      item,
+      [],
+      '2026-09-19T12:00:00.000Z',
+    );
     expect(cancelled.status).toBe('cancelled');
     expect(() =>
-      cancelWorkItem(cancelled, '2026-09-19T13:00:00.000Z'),
+      cancelWorkItem(cancelled, [], '2026-09-19T13:00:00.000Z'),
     ).toThrowError(/cannot transition/);
   });
 });
