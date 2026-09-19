@@ -5311,9 +5311,25 @@ describe('PostgreSQL infrastructure', () => {
       project.id,
       {
         code: 'WI-INT-01',
-        title: 'Install cabinetry',
+        title: 'Install cabniets',
       },
     );
+
+    const correctedItem = await updateWorkItemPlanCommand(
+      improvementRepository,
+      actor,
+      item.id,
+      1,
+      {
+        title: 'Install cabinetry',
+        description: 'Corrected planned scope',
+      },
+    );
+    expect(correctedItem).toMatchObject({
+      title: 'Install cabinetry',
+      description: 'Corrected planned scope',
+      version: 2,
+    });
 
     await expect(
       changeImprovementProjectStatusCommand(
@@ -5350,9 +5366,82 @@ describe('PostgreSQL infrastructure', () => {
       },
       actor,
       item.id,
-      1,
+      correctedItem.version,
       'start',
     );
+
+    await expect(
+      updateWorkItemPlanCommand(
+        improvementRepository,
+        actor,
+        item.id,
+        activeItem.version,
+        { title: 'Illegal rewrite after start' },
+      ),
+    ).rejects.toMatchObject({
+      code: 'WORK_ITEM_PLAN_FROZEN',
+    });
+
+    await expect(
+      sql`
+        update public.improvement_work_items
+        set title = 'Illegal direct rewrite',
+            version = version + 1
+        where id = ${item.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'improvement_work_item_plan_frozen',
+    });
+
+    await expect(
+      recordWorkCommand(
+        {
+          improvementRepository,
+          portfolioRepository,
+          partyRepository,
+          assetRepository,
+          idGenerator: ids,
+          clock: { now: () => '2026-10-01T10:00:00.000Z' },
+        },
+        actor,
+        item.id,
+        {
+          performedAt: '2026-10-01T08:30:00.000Z',
+          description: 'Impossible work before WorkItem started',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'WORK_RECORD_BEFORE_START_TIME',
+    });
+
+    await expect(
+      sql.begin(async (tx) => {
+        await tx`
+          insert into public.improvement_work_records (
+            id, project_id, work_item_id, performed_at,
+            description, recorded_at, recorded_by_user_id, sealed
+          ) values (
+            'fef00000-0000-4000-8000-000000000004',
+            ${project.id},
+            ${item.id},
+            '2026-10-01T08:30:00.000Z',
+            'Impossible direct pre-start work',
+            '2026-10-01T10:00:00.000Z',
+            ${actor.userId},
+            false
+          )
+        `;
+        await tx`
+          update public.improvement_work_records
+          set sealed = true
+          where id = 'fef00000-0000-4000-8000-000000000004'
+        `;
+      }),
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'improvement_work_record_before_start_time',
+    });
 
     await sql`
       update public.parties
