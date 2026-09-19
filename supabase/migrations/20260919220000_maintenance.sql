@@ -219,7 +219,7 @@ begin
       into asset_property_id, asset_unit_id, asset_space_id
     from public.assets
     where id = new.asset_id
-    for key share;
+    for share;
 
     if not found
        or asset_property_id is distinct from new.property_id
@@ -267,11 +267,17 @@ declare
   linked_service_events integer;
   latest_service_performed_at timestamptz;
 begin
+  if tg_op = 'DELETE' then
+    raise exception 'Maintenance WorkOrder history cannot be deleted.'
+      using errcode = '23514',
+            constraint = 'maintenance_work_order_immutable';
+  end if;
+
   select status
     into issue_status
   from public.maintenance_issues
   where id = new.issue_id
-  for key share;
+  for share;
 
   if issue_status is distinct from 'open' then
     raise exception 'Maintenance WorkOrder requires an open Issue.'
@@ -398,7 +404,8 @@ begin
     if new.assignee_kind = 'user' then
       select status into assignee_status
       from public.app_users
-      where id = new.assigned_user_id;
+      where id = new.assigned_user_id
+      for share;
 
       if assignee_status is distinct from 'active' then
         raise exception 'Assigned internal User must be active.'
@@ -408,7 +415,8 @@ begin
     elsif new.assignee_kind = 'party' then
       select status into assignee_status
       from public.parties
-      where id = new.assigned_party_id;
+      where id = new.assigned_party_id
+      for share;
 
       if assignee_status is distinct from 'active' then
         raise exception 'Assigned Party must be active.'
@@ -452,7 +460,7 @@ end;
 $maintenance_work_order_guard$;
 
 create trigger maintenance_work_order_guard_trg
-before insert or update on public.maintenance_work_orders
+before insert or update or delete on public.maintenance_work_orders
 for each row execute function public.guard_maintenance_work_order();
 
 create or replace function public.guard_maintenance_issue_update()
