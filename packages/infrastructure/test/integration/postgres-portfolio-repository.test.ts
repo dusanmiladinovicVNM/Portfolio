@@ -103,6 +103,7 @@ import {
   PostgresImprovementRepository,
   PostgresInspectionRepository,
   PostgresLeaseRepository,
+  PostgresMaintenanceRepository,
   PostgresOwnershipRepository,
   PostgresPartyRepository,
   PostgresPortfolioRepository,
@@ -129,6 +130,7 @@ const documentRepository = new PostgresDocumentRepository(sql);
 const costRepository = new PostgresCostRepository(sql);
 const inspectionRepository = new PostgresInspectionRepository(sql);
 const improvementRepository = new PostgresImprovementRepository(sql);
+const maintenanceRepository = new PostgresMaintenanceRepository(sql);
 
 class SequenceIds implements IdGenerator {
   private index = 0;
@@ -148,6 +150,9 @@ async function resetAndMigrate(): Promise<void> {
     `drop table if exists
       public.cost_reversals,
       public.costs,
+      public.maintenance_work_order_service_events,
+      public.maintenance_work_orders,
+      public.maintenance_issues,
       public.improvement_project_assets,
       public.improvement_work_materials,
       public.improvement_work_records,
@@ -6293,6 +6298,7 @@ describe('PostgreSQL infrastructure', () => {
       assetRepository,
       assetServiceRepository,
       improvementRepository,
+      maintenanceRepository,
       idGenerator: ids,
       clock: { now: () => '2026-09-19T10:00:00.000Z' },
     };
