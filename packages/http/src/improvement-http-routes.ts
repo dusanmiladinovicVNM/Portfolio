@@ -11,6 +11,7 @@ import {
   listWorkRecordsByProjectQuery,
   recordWorkCommand,
   updateImprovementProjectPlanCommand,
+  updateWorkItemPlanCommand,
   type Actor,
   type AssetRepository,
   type ClockPort,
@@ -27,6 +28,7 @@ import {
   entityIdSchema,
   recordWorkRequestSchema,
   updateImprovementProjectPlanRequestSchema,
+  updateWorkItemPlanRequestSchema,
 } from '@portfolio/contracts';
 import {
   asAssetId,
@@ -228,6 +230,31 @@ export async function handleImprovementHttp(
       asImprovementProjectId(parsedId.data),
     );
     return json({ data: { items: records.map(toWorkRecordResponse) } });
+  }
+
+  const workItemPlanMatch = /^\/work-items\/([^/]+)\/plan$/.exec(path);
+  if (method === 'PATCH' && workItemPlanMatch) {
+    const parsedId = entityIdSchema.safeParse(workItemPlanMatch[1]);
+    const parsed = updateWorkItemPlanRequestSchema.safeParse(
+      await requestJson(request),
+    );
+    if (!parsedId.success || !parsed.success) return validationFailure();
+
+    const item = await updateWorkItemPlanCommand(
+      deps.improvementRepository,
+      actor,
+      asWorkItemId(parsedId.data),
+      parsed.data.expectedVersion,
+      {
+        ...(parsed.data.title !== undefined
+          ? { title: parsed.data.title }
+          : {}),
+        ...(parsed.data.description !== undefined
+          ? { description: parsed.data.description }
+          : {}),
+      },
+    );
+    return json({ data: toWorkItemResponse(item) });
   }
 
   const workItemStatusMatch = /^\/work-items\/([^/]+)\/status$/.exec(path);
