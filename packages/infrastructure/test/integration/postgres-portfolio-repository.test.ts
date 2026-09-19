@@ -8117,6 +8117,49 @@ describe('PostgreSQL infrastructure', () => {
     }
 
     expect(await accessItemRepository.listTransactions(raceKey.id)).toHaveLength(1);
+
+    const endedA = await endTenancyCommand(
+      { tenancyRepository },
+      actor,
+      activeA.id,
+      activeA.version,
+      '2026-09-19',
+    );
+    expect(endedA.status).toBe('ended');
+
+    const returnedAfterTenancyEnd = await returnAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T13:00:00.000Z' },
+      },
+      actor,
+      holderCard.id,
+      {
+        occurredAt: '2026-09-19T13:00:00.000Z',
+        note: 'Returned during final post-tenancy reconciliation',
+      },
+    );
+    expect(returnedAfterTenancyEnd).toMatchObject({
+      type: 'returned',
+      tenancyId: activeA.id,
+    });
+
+    await expect(
+      issueAccessItemCommand(
+        {
+          ...accessDeps,
+          clock: { now: () => '2026-09-19T13:05:00.000Z' },
+        },
+        actor,
+        emptyKey.id,
+        {
+          tenancyId: endedA.id,
+          occurredAt: '2026-09-19T13:05:00.000Z',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'ACCESS_ITEM_TENANCY_NOT_ELIGIBLE',
+    });
   });
 
 
