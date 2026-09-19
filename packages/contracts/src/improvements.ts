@@ -45,6 +45,12 @@ export const createWorkItemRequestSchema = z.object({
   description: z.string().trim().min(1).nullable().optional(),
 });
 
+export const updateWorkItemPlanRequestSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+  title: z.string().trim().min(1).optional(),
+  description: z.string().trim().min(1).nullable().optional(),
+});
+
 export const changeWorkItemStatusRequestSchema = z.object({
   expectedVersion: z.number().int().positive(),
   action: z.enum(['start', 'complete', 'cancel']),
@@ -150,6 +156,9 @@ export type ChangeImprovementProjectStatusRequest = z.infer<
   typeof changeImprovementProjectStatusRequestSchema
 >;
 export type CreateWorkItemRequest = z.infer<typeof createWorkItemRequestSchema>;
+export type UpdateWorkItemPlanRequest = z.infer<
+  typeof updateWorkItemPlanRequestSchema
+>;
 export type ChangeWorkItemStatusRequest = z.infer<
   typeof changeWorkItemStatusRequestSchema
 >;
