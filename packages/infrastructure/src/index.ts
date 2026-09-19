@@ -11,3 +11,4 @@ export * from './postgres/postgres-inspection-repository.js';
 export * from './postgres/postgres-asset-repository.js';
 export * from './postgres/postgres-asset-inventory-repository.js';
 export * from './postgres/postgres-asset-service-repository.js';
+export * from './postgres/postgres-improvement-repository.js';
