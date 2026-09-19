@@ -32,7 +32,7 @@ One Cost is one positive monetary allocation to one exact business source.
 It records:
 
 - positive exact decimal amount;
-- ISO 4217 currency;
+- currency from the explicit supported two-decimal set `CHF|EUR|RSD`;
 - `incurredOn` business date;
 - reporting class `capex|opex|unclassified`;
 - optional supplier Party;
@@ -93,15 +93,27 @@ The replacement is itself a normal immutable Cost and may later be reversed agai
 
 A reversal without a replacement is a void/cancellation of the original financial fact.
 
-Reversal time cannot predate the original Cost's `recordedAt`. When a replacement exists, it is created in the same application transaction as the reversal.
+Reversal time cannot predate the original Cost's `recordedAt`. When a replacement exists, it is created in the same application transaction as the reversal. Domain and PostgreSQL additionally require replacement and reversal to share both `recordedAt` and `recordedByUserId`; this is the current relational parity for one correction operation without introducing a separate correction-transaction entity.
+
+Ledger reads expose both directions locally: the outgoing reversal of a Cost, if any, and the incoming correction that created the Cost as a replacement, if any. A full chain endpoint is not required in this phase.
 
 Partial corrections are represented as full reversal + corrected replacement Cost in this phase. Supplier credit-note/AP settlement semantics are deliberately not invented here.
 
 ### Currency
 
-Each Cost retains its own currency.
+Canonical #18 deliberately uses a two-decimal money model: domain values have at most two decimal places and PostgreSQL stores `numeric(18,2)`.
+
+Cost therefore does **not** claim generic ISO 4217 support. The configured Cost currencies are currently:
+
+- CHF
+- EUR
+- RSD
+
+All three fit the two-decimal representation used by this system. A syntactically valid three-letter code outside this set is rejected.
 
 Portfolio must never sum unlike currencies into one amount without an explicit future FX/conversion model. Reporting before that model groups/totals by currency.
+
+If Portfolio later needs generic ISO 4217 coverage, that change requires an explicit currency definition/minor-unit model rather than widening the code regex while retaining a fixed two-decimal amount.
 
 ## Boundaries
 
