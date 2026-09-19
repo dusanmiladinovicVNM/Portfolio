@@ -8,6 +8,8 @@ import {
   asCostCurrency,
   asDateOnly,
   asImprovementProjectId,
+  asMaintenanceIssueId,
+  asMaintenanceWorkOrderId,
   asMoneyAmount,
   asPartyId,
   asPropertyId,
@@ -47,6 +49,8 @@ interface CostRow {
   work_item_id: string | null;
   work_record_id: string | null;
   work_material_id: string | null;
+  maintenance_issue_id: string | null;
+  maintenance_work_order_id: string | null;
   description: string;
   amount: string | number;
   currency: string;
@@ -122,6 +126,18 @@ function sourceFromRow(row: CostRow): CostSource {
         kind: 'work_material',
         workMaterialId: asWorkMaterialId(row.work_material_id!),
       };
+    case 'maintenance_issue':
+      return {
+        kind: 'maintenance_issue',
+        maintenanceIssueId: asMaintenanceIssueId(row.maintenance_issue_id!),
+      };
+    case 'maintenance_work_order':
+      return {
+        kind: 'maintenance_work_order',
+        maintenanceWorkOrderId: asMaintenanceWorkOrderId(
+          row.maintenance_work_order_id!,
+        ),
+      };
   }
 }
 
@@ -136,6 +152,8 @@ function sourceColumns(source: CostSource): {
   workItemId: string | null;
   workRecordId: string | null;
   workMaterialId: string | null;
+  maintenanceIssueId: string | null;
+  maintenanceWorkOrderId: string | null;
 } {
   return {
     propertyId: source.kind === 'property' ? source.propertyId : null,
@@ -154,6 +172,12 @@ function sourceColumns(source: CostSource): {
     workRecordId: source.kind === 'work_record' ? source.workRecordId : null,
     workMaterialId:
       source.kind === 'work_material' ? source.workMaterialId : null,
+    maintenanceIssueId:
+      source.kind === 'maintenance_issue' ? source.maintenanceIssueId : null,
+    maintenanceWorkOrderId:
+      source.kind === 'maintenance_work_order'
+        ? source.maintenanceWorkOrderId
+        : null,
   };
 }
 
@@ -282,6 +306,7 @@ const costSelect = `
     id, source_kind, property_id, unit_id, space_id, asset_id,
     warranty_claim_id, service_event_id, improvement_project_id,
     work_item_id, work_record_id, work_material_id,
+    maintenance_issue_id, maintenance_work_order_id,
     description, amount, currency, incurred_on, reporting_class,
     supplier_party_id, invoice_reference, recorded_at, recorded_by_user_id
   from public.costs
@@ -295,6 +320,7 @@ async function insertCostRow(sql: Sql, cost: Cost): Promise<void> {
       property_id, unit_id, space_id, asset_id,
       warranty_claim_id, service_event_id, improvement_project_id,
       work_item_id, work_record_id, work_material_id,
+      maintenance_issue_id, maintenance_work_order_id,
       description, amount, currency, incurred_on, reporting_class,
       supplier_party_id, invoice_reference, recorded_at, recorded_by_user_id
     ) values (
@@ -303,6 +329,7 @@ async function insertCostRow(sql: Sql, cost: Cost): Promise<void> {
       ${source.assetId}, ${source.warrantyClaimId}, ${source.serviceEventId},
       ${source.improvementProjectId}, ${source.workItemId},
       ${source.workRecordId}, ${source.workMaterialId},
+      ${source.maintenanceIssueId}, ${source.maintenanceWorkOrderId},
       ${cost.description}, ${cost.amount}, ${cost.currency},
       ${cost.incurredOn}, ${cost.reportingClass}, ${cost.supplierPartyId},
       ${cost.invoiceReference}, ${cost.recordedAt}, ${cost.recordedByUserId}
@@ -415,6 +442,22 @@ export class PostgresCostRepository implements CostRepository {
           ${this.sql.unsafe(costSelect)}
           where source_kind = 'work_material'
             and work_material_id = ${source.workMaterialId}
+          order by incurred_on, id
+        `;
+        break;
+      case 'maintenance_issue':
+        rows = await this.sql<CostRow[]>`
+          ${this.sql.unsafe(costSelect)}
+          where source_kind = 'maintenance_issue'
+            and maintenance_issue_id = ${source.maintenanceIssueId}
+          order by incurred_on, id
+        `;
+        break;
+      case 'maintenance_work_order':
+        rows = await this.sql<CostRow[]>`
+          ${this.sql.unsafe(costSelect)}
+          where source_kind = 'maintenance_work_order'
+            and maintenance_work_order_id = ${source.maintenanceWorkOrderId}
           order by incurred_on, id
         `;
         break;
