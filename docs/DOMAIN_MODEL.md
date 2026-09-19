@@ -243,23 +243,28 @@ Maintenance owns no money fields. Cost remains financial truth and may use Maint
 
 ## Keys + Access
 
-Canonical #20 models physical access media and their custody history without pretending to model the complete lock/access-control system.
+Canonical #20 models physical access media, their operational lifecycle and custody history without pretending to model the complete lock/access-control system.
 
 ```text
 AccessItem
+  ├─ lifecycle: active -> retired
   └─ AccessItemTransaction[]
         └─ Tenancy
 ```
 
-AccessItem is one exact physical `key`, `card` or `remote`. It has immutable Property/optional Unit/Space inventory scope, stable code, label and recording provenance. Property scope may represent a shared building entrance item; Unit/Space scope narrows which Tenancy may receive it. This scope is inventory association, not authoritative door/lock/programming permission truth.
+AccessItem is one exact physical `key`, `card` or `remote`. It has immutable Property/optional Unit/Space inventory scope, stable code, kind and original recording provenance. `label` is correctable descriptive metadata through optimistic versioning. Scope is inventory association, not authoritative door/lock/programming permission truth.
 
-AccessItemTransaction is the append-only custody source of truth. Supported events are `issued`, `returned` and `lost`. Current state is derived from the latest per-item sequence: no history or returned means available; issued means held by that Tenancy; lost means unavailable under that Tenancy's responsibility. There is deliberately no mutable current-holder column or parallel assignment table.
+AccessItem lifecycle is separate from custody. An active item may transition once to terminal `retired`, recording `retiredAt`, `retiredByUserId` and `retirementReason`. Retirement may happen while custody is available, issued or lost, but cannot be backdated before existing custody occurrence. Retirement never creates a custody event and never silently returns an item.
 
-Custody is Tenancy-grained. Party/TenancyParty remains the identity source and is not copied into access history. New issue is allowed only to `active`, `notice_given` or `move_out_pending` Tenancy. Property-scoped items may be issued to any Tenancy whose Unit belongs to that Property; Unit/Space-scoped items require the exact Tenancy Unit.
+AccessItemTransaction is the append-only custody source of truth. Supported events are `issued`, `returned` and `lost`. Current custody is derived from the latest per-item sequence: no history or returned means available; issued means held by that Tenancy; lost means unavailable under that Tenancy's responsibility. There is deliberately no mutable current-holder column or parallel assignment table.
 
-A lost item cannot be reissued. If it is recovered, a `returned` transaction by the same holding Tenancy makes it available again. Return/loss may be recorded after the Tenancy later ended because those events close or preserve already-existing custody history; Tenancy end itself does not erase or silently repair outstanding access items.
+Custody is Tenancy-grained. Party/TenancyParty remains the identity source and is not copied into access history. New issue requires both an active AccessItem and Tenancy in `active|notice_given|move_out_pending`. The UTC calendar date of `issued.occurredAt` must be on or after `Tenancy.actualStart`; PostgreSQL uses `(timezone('UTC', occurred_at))::date`, so session timezone cannot alter this cross-domain boundary.
 
-Transaction chronology is monotonic and append-only. `AccessItem.recordedAt <= occurredAt <= recordedAt`, and later item transactions cannot move occurrence or recording chronology backwards. PostgreSQL row-locks the AccessItem during transaction insertion and independently rechecks sequence, holder, Tenancy scope/state and temporal rules so concurrent issue attempts serialize.
+Property-scoped items may be issued to any Tenancy whose Unit belongs to that Property; Unit/Space-scoped items require the exact Tenancy Unit.
+
+A lost item cannot be reissued. If recovered, a `returned` transaction by the same holding Tenancy closes custody. Return/loss may still be recorded after the Tenancy ended or after the item was retired because those events preserve or close already-existing physical custody truth. Neither Tenancy end nor AccessItem retirement rewrites custody history.
+
+PostgreSQL row-locks the AccessItem during transaction insertion; AccessItem lifecycle/metadata updates lock that same row. This common serialization point makes issue-vs-issue and issue-vs-retirement races deterministic before sequence/state validation.
 
 Canonical #20 does not yet model AccessPoint/door topology, master-key hierarchy, credential secrets, electronic permission schedules, per-Person custody, lost-key billing or historical pre-registration import.
 
