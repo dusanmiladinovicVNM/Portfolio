@@ -4599,6 +4599,32 @@ describe('PostgreSQL infrastructure', () => {
       },
     );
 
+    await expect(
+      sql`
+        update public.asset_warranty_claims
+        set status = 'submitted',
+            submitted_at = '2026-09-19T08:06:00.000Z',
+            version = version + 1
+        where id = ${claim.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_warranty_claims_timestamp_order',
+    });
+
+    await expect(
+      sql`
+        update public.asset_warranty_claims
+        set status = 'cancelled',
+            cancelled_at = '2026-09-19T08:06:00.000Z',
+            version = version + 1
+        where id = ${claim.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_warranty_claims_timestamp_order',
+    });
+
     const submitted = await submitWarrantyClaimCommand(
       {
         assetServiceRepository,
