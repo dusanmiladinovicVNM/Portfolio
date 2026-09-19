@@ -44,8 +44,9 @@ create table public.asset_warranty_claims (
   resolved_at timestamptz,
   closed_at timestamptz,
   cancelled_at timestamptz,
+  recorded_at timestamptz not null,
+  recorded_by_user_id uuid not null references public.app_users(id) on delete restrict,
   version integer not null default 1,
-  created_at timestamptz not null default now(),
 
   constraint asset_warranty_claims_description_not_blank
     check (btrim(description) <> ''),
@@ -63,6 +64,9 @@ create table public.asset_warranty_claims (
       provider_reference is null or provider_reference = btrim(provider_reference)
     ),
   constraint asset_warranty_claims_version_positive check (version > 0),
+  constraint asset_warranty_claim_incident_not_future check (
+    incident_on <= (recorded_at at time zone 'UTC')::date
+  ),
   constraint asset_warranty_claims_state_shape check (
     (
       status = 'draft'
@@ -306,6 +310,8 @@ begin
      or new.warranty_id is distinct from old.warranty_id
      or new.incident_on is distinct from old.incident_on
      or new.description is distinct from old.description
+     or new.recorded_at is distinct from old.recorded_at
+     or new.recorded_by_user_id is distinct from old.recorded_by_user_id
   then
     raise exception 'WarrantyClaim identity/content is immutable after creation.'
       using errcode = '23514',
@@ -379,6 +385,43 @@ create trigger asset_warranty_claim_guard_trg
 before update or delete on public.asset_warranty_claims
 for each row execute function public.guard_asset_warranty_claim_mutation();
 
+create or replace function public.assert_service_plan_operational_eligibility(
+  target_asset_id uuid,
+  target_provider_party_id uuid
+)
+returns void
+language plpgsql
+as $asset_service_plan_eligibility$
+declare
+  target_asset_status text;
+  target_provider_status text;
+begin
+  select status
+    into target_asset_status
+  from public.assets
+  where id = target_asset_id;
+
+  if target_asset_status not in ('active', 'inactive') then
+    raise exception 'Retired or replaced Asset cannot have an operational ServicePlan.'
+      using errcode = '23514',
+            constraint = 'asset_service_plan_asset_status_invalid';
+  end if;
+
+  if target_provider_party_id is not null then
+    select status
+      into target_provider_status
+    from public.parties
+    where id = target_provider_party_id;
+
+    if target_provider_status <> 'active' then
+      raise exception 'Operational ServicePlan provider must be an active Party.'
+        using errcode = '23514',
+              constraint = 'asset_service_plan_provider_status_invalid';
+    end if;
+  end if;
+end;
+$asset_service_plan_eligibility$;
+
 create or replace function public.guard_asset_service_plan()
 returns trigger
 language plpgsql
@@ -396,6 +439,11 @@ begin
         using errcode = '23514',
               constraint = 'asset_service_plan_initial_state';
     end if;
+
+    perform public.assert_service_plan_operational_eligibility(
+      new.asset_id,
+      new.provider_party_id
+    );
     return new;
   end if;
 
@@ -430,6 +478,12 @@ begin
   if old.status = 'paused'
      and new.status in ('active', 'ended', 'cancelled')
   then
+    if new.status = 'active' then
+      perform public.assert_service_plan_operational_eligibility(
+        new.asset_id,
+        new.provider_party_id
+      );
+    end if;
     return new;
   end if;
 
