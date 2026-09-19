@@ -23,3 +23,5 @@ export * from './assets/asset-history.js';
 export * from './assets/asset-service.js';
 
 export * from './improvements/improvement.js';
+
+export * from './costs/cost.js';

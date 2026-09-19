@@ -8,6 +8,8 @@ import type {
   TenancyAssetAssignmentResponse,
   WarrantyClaimResponse,
   WarrantyResponse,
+  CostResponse,
+  CostReversalResponse,
   DocumentLinkResponse,
   DocumentResponse,
   DocumentVersionResponse,
@@ -41,6 +43,8 @@ import type {
   TenancyAssetAssignment,
   Warranty,
   WarrantyClaim,
+  Cost,
+  CostReversal,
   Document,
   DocumentLink,
   DocumentVersion,
@@ -652,5 +656,35 @@ export function toWorkRecordResponse(record: WorkRecord): WorkRecordResponse {
     })),
     recordedAt: record.recordedAt,
     recordedByUserId: record.recordedByUserId,
+  };
+}
+
+
+export function toCostResponse(cost: Cost): CostResponse {
+  return {
+    id: cost.id,
+    source: cost.source,
+    description: cost.description,
+    amount: cost.amount,
+    currency: cost.currency,
+    incurredOn: cost.incurredOn,
+    reportingClass: cost.reportingClass,
+    supplierPartyId: cost.supplierPartyId,
+    invoiceReference: cost.invoiceReference,
+    recordedAt: cost.recordedAt,
+    recordedByUserId: cost.recordedByUserId,
+  };
+}
+
+export function toCostReversalResponse(
+  reversal: CostReversal,
+): CostReversalResponse {
+  return {
+    id: reversal.id,
+    costId: reversal.costId,
+    replacementCostId: reversal.replacementCostId,
+    reason: reversal.reason,
+    recordedAt: reversal.recordedAt,
+    recordedByUserId: reversal.recordedByUserId,
   };
 }

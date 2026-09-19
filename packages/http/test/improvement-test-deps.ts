@@ -7,6 +7,9 @@ import type {
   WorkItem,
   WorkItemId,
   WorkRecord,
+  WorkRecordId,
+  WorkMaterial,
+  WorkMaterialId,
 } from '@portfolio/domain';
 
 export class InMemoryImprovementRepository implements ImprovementRepository {
@@ -117,6 +120,18 @@ export class InMemoryImprovementRepository implements ImprovementRepository {
       throw new Error('work item version conflict');
     }
     this.workItems.set(item.id, item);
+  }
+
+  async getWorkRecordById(id: WorkRecordId): Promise<WorkRecord | null> {
+    return this.workRecords.find((record) => record.id === id) ?? null;
+  }
+
+  async getWorkMaterialById(id: WorkMaterialId): Promise<WorkMaterial | null> {
+    for (const record of this.workRecords) {
+      const material = record.materials.find((item) => item.id === id);
+      if (material) return material;
+    }
+    return null;
   }
 
   async listWorkRecordsByProject(

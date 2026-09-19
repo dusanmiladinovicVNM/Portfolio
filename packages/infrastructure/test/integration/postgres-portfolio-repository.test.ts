@@ -9,6 +9,7 @@ import {
   changeWorkItemStatusCommand,
   changeServicePlanStatusCommand,
   closeWarrantyClaimCommand,
+  correctCostCommand,
   createAssetCommand,
   createImprovementProjectCommand,
   createWorkItemCommand,
@@ -31,6 +32,7 @@ import {
   addInspectionSignatureCommand,
   attachInspectionEvidenceCommand,
   cancelLeaseAgreementCommand,
+  createCostCommand,
   createDocumentCommand,
   createInspectionCommand,
   createInspectionFindingCommand,
@@ -62,6 +64,7 @@ import {
   planTenancyCommand,
   publishInspectionSchemaVersionCommand,
   replaceAssetCommand,
+  reverseCostCommand,
   updateAssetMetadataCommand,
   resolveActor,
   saveInspectionSectionCommand,
@@ -75,12 +78,16 @@ import {
 } from '@portfolio/application';
 import {
   addStoredDocumentVersion,
+  asCostId,
+  asCostReversalId,
   asDocumentVersionId,
   asInspectionResponseId,
   asOwnershipPeriodId,
   asPartyAddressId,
   asPartyId,
   asTenancyId,
+  createCost,
+  createCostReversal,
   createInspectionResponse,
   createOwnershipPeriod,
   createTenancy,
@@ -91,6 +98,7 @@ import {
   PostgresAssetInventoryRepository,
   PostgresAssetRepository,
   PostgresAssetServiceRepository,
+  PostgresCostRepository,
   PostgresDocumentRepository,
   PostgresImprovementRepository,
   PostgresInspectionRepository,
@@ -118,6 +126,7 @@ const leaseRepository = new PostgresLeaseRepository(sql);
 const tenancyRepository = new PostgresTenancyRepository(sql);
 const accessRepository = new PostgresUserAccessRepository(sql);
 const documentRepository = new PostgresDocumentRepository(sql);
+const costRepository = new PostgresCostRepository(sql);
 const inspectionRepository = new PostgresInspectionRepository(sql);
 const improvementRepository = new PostgresImprovementRepository(sql);
 
@@ -137,6 +146,8 @@ class SequenceIds implements IdGenerator {
 async function resetAndMigrate(): Promise<void> {
   await sql.unsafe(
     `drop table if exists
+      public.cost_reversals,
+      public.costs,
       public.improvement_project_assets,
       public.improvement_work_materials,
       public.improvement_work_records,
@@ -236,6 +247,8 @@ beforeAll(async () => {
 afterAll(async () => {
   await sql.unsafe(
     `drop table if exists
+      public.cost_reversals,
+      public.costs,
       public.improvement_project_assets,
       public.improvement_work_materials,
       public.improvement_work_records,
@@ -6214,6 +6227,379 @@ describe('PostgreSQL infrastructure', () => {
     } finally {
       await Promise.all([blocker.end(), contender.end()]);
     }
+  });
+
+
+  it('persists append-only Cost ledger facts and rejects financial history bypasses', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+    const ids = new SequenceIds([
+      'ad000000-0000-4000-8000-000000000001',
+      'ad000000-0000-4000-8000-000000000002',
+      'ad000000-0000-4000-8000-000000000003',
+      'ad000000-0000-4000-8000-000000000004',
+      'ad000000-0000-4000-8000-000000000005',
+      'ad000000-0000-4000-8000-000000000006',
+      'ad000000-0000-4000-8000-000000000007',
+      'ad000000-0000-4000-8000-000000000008',
+    ]);
+
+    const property = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-COST-INT',
+        name: 'Cost Integration Property',
+        propertyType: 'apartment_building',
+        street: 'Ledger Street',
+        houseNumber: '18',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+    const unit = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-COST-INT',
+        unitNumber: 'C1',
+        unitType: 'apartment',
+      },
+    );
+    const supplier = await createPartyCommand(
+      { partyRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PTY-COST-INT',
+        partyType: 'company',
+        legalName: 'Historical Cost Supplier d.o.o.',
+      },
+    );
+
+    await sql`
+      update public.parties
+      set status = 'inactive'
+      where id = ${supplier.id}
+    `;
+
+    const costDeps = {
+      costRepository,
+      portfolioRepository,
+      partyRepository,
+      assetRepository,
+      assetServiceRepository,
+      improvementRepository,
+      idGenerator: ids,
+      clock: { now: () => '2026-09-19T10:00:00.000Z' },
+    };
+
+    const first = await createCostCommand(
+      costDeps,
+      actor,
+      {
+        source: { kind: 'property', propertyId: property.id },
+        description: 'Roof works allocation',
+        amount: '1200.5',
+        currency: 'chf',
+        incurredOn: '2026-09-18',
+        reportingClass: 'capex',
+        supplierPartyId: supplier.id,
+        invoiceReference: 'INV-COST-INT-77',
+      },
+    );
+    expect(first).toMatchObject({
+      amount: '1200.50',
+      currency: 'CHF',
+      supplierPartyId: supplier.id,
+    });
+
+    const second = await createCostCommand(
+      {
+        ...costDeps,
+        clock: { now: () => '2026-09-19T10:05:00.000Z' },
+      },
+      actor,
+      {
+        source: { kind: 'unit', unitId: unit.id },
+        description: 'Unit share of the same supplier invoice',
+        amount: '300',
+        currency: 'CHF',
+        incurredOn: '2026-09-18',
+        reportingClass: 'opex',
+        supplierPartyId: supplier.id,
+        invoiceReference: 'INV-COST-INT-77',
+      },
+    );
+
+    const sameInvoice =
+      await costRepository.listCostsByInvoiceReference('INV-COST-INT-77');
+    expect(sameInvoice).toHaveLength(2);
+
+    await expect(
+      sql`
+        insert into public.costs (
+          id, source_kind, property_id,
+          description, amount, currency, incurred_on, reporting_class,
+          recorded_at, recorded_by_user_id
+        ) values (
+          'adf00000-0000-4000-8000-000000000009',
+          'property',
+          ${property.id},
+          'Unsupported currency',
+          1,
+          'ZZZ',
+          '2026-09-18',
+          'opex',
+          '2026-09-19T10:09:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'costs_currency_supported',
+    });
+
+    await expect(
+      sql`
+        insert into public.costs (
+          id, source_kind, property_id, unit_id,
+          description, amount, currency, incurred_on, reporting_class,
+          recorded_at, recorded_by_user_id
+        ) values (
+          'adf00000-0000-4000-8000-000000000001',
+          'property',
+          ${property.id},
+          ${unit.id},
+          'Ambiguous source',
+          1,
+          'CHF',
+          '2026-09-18',
+          'opex',
+          '2026-09-19T10:10:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'costs_exactly_one_source',
+    });
+
+    await expect(
+      sql`
+        insert into public.costs (
+          id, source_kind, property_id,
+          description, amount, currency, incurred_on, reporting_class,
+          recorded_at, recorded_by_user_id
+        ) values (
+          'adf00000-0000-4000-8000-000000000002',
+          'asset',
+          ${property.id},
+          'Spoofed source kind',
+          1,
+          'CHF',
+          '2026-09-18',
+          'opex',
+          '2026-09-19T10:10:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'costs_source_kind_matches_target',
+    });
+
+    await expect(
+      sql`
+        insert into public.costs (
+          id, source_kind, property_id,
+          description, amount, currency, incurred_on, reporting_class,
+          recorded_at, recorded_by_user_id
+        ) values (
+          'adf00000-0000-4000-8000-000000000003',
+          'property',
+          ${property.id},
+          'Future financial fact',
+          1,
+          'CHF',
+          '2026-09-20',
+          'opex',
+          '2026-09-19T23:00:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'costs_incurred_not_future',
+    });
+
+    await expect(
+      sql`
+        update public.costs
+        set amount = 999
+        where id = ${first.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'cost_immutable',
+    });
+
+    const correction = await correctCostCommand(
+      {
+        ...costDeps,
+        clock: { now: () => '2026-09-19T11:00:00.000Z' },
+      },
+      actor,
+      first.id,
+      'Supplier corrected invoice allocation',
+      {
+        source: first.source,
+        description: 'Roof works corrected allocation',
+        amount: '1150',
+        currency: 'CHF',
+        incurredOn: '2026-09-18',
+        reportingClass: 'capex',
+        supplierPartyId: supplier.id,
+        invoiceReference: 'INV-COST-INT-77',
+      },
+    );
+
+    expect(correction.replacement).toMatchObject({
+      amount: '1150.00',
+      recordedAt: '2026-09-19T11:00:00.000Z',
+    });
+    expect(correction.reversal).toMatchObject({
+      costId: first.id,
+      replacementCostId: correction.replacement.id,
+      recordedAt: '2026-09-19T11:00:00.000Z',
+    });
+
+    const originalStillThere = await costRepository.getCostById(first.id);
+    expect(originalStillThere).toMatchObject({ amount: '1200.50' });
+
+    const incomingCorrection =
+      await costRepository.getReversalByReplacementCostId(
+        correction.replacement.id,
+      );
+    expect(incomingCorrection).toMatchObject({
+      costId: first.id,
+      replacementCostId: correction.replacement.id,
+    });
+
+    await sql`
+      insert into public.costs (
+        id, source_kind, property_id,
+        description, amount, currency, incurred_on, reporting_class,
+        recorded_at, recorded_by_user_id
+      ) values (
+        'adf00000-0000-4000-8000-000000000010',
+        'property',
+        ${property.id},
+        'Pre-existing would-be replacement',
+        1100,
+        'CHF',
+        '2026-09-18',
+        'capex',
+        '2026-09-19T13:00:00.000Z',
+        'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+      )
+    `;
+
+    await expect(
+      sql`
+        insert into public.cost_reversals (
+          id, cost_id, replacement_cost_id, reason,
+          recorded_at, recorded_by_user_id
+        ) values (
+          'adf00000-0000-4000-8000-000000000011',
+          ${correction.replacement.id},
+          'adf00000-0000-4000-8000-000000000010',
+          'Must not retrofit another recorder cost as replacement',
+          '2026-09-19T13:00:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'cost_reversal_replacement_recorder_mismatch',
+    });
+
+    await expect(
+      sql`
+        insert into public.cost_reversals (
+          id, cost_id, reason, recorded_at, recorded_by_user_id
+        ) values (
+          'adf00000-0000-4000-8000-000000000004',
+          ${first.id},
+          'Duplicate reversal sabotage',
+          '2026-09-19T11:05:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23505',
+      constraint_name: 'cost_reversals_cost_uq',
+    });
+
+    await expect(
+      sql`
+        update public.cost_reversals
+        set reason = 'Rewrite reversal'
+        where id = ${correction.reversal.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'cost_reversal_immutable',
+    });
+
+    const secondReversal = await reverseCostCommand(
+      {
+        costRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T11:05:00.000Z' },
+      },
+      actor,
+      second.id,
+      'Void second allocation',
+    );
+    expect(secondReversal.replacementCostId).toBeNull();
+
+    const rogueReplacement = createCost({
+      id: asCostId('adf00000-0000-4000-8000-000000000005'),
+      source: second.source,
+      description: 'Must roll back',
+      amount: '250',
+      currency: 'CHF',
+      incurredOn: '2026-09-18',
+      reportingClass: 'opex',
+      supplierPartyId: supplier.id,
+      invoiceReference: 'INV-COST-INT-77',
+      recordedAt: '2026-09-19T12:00:00.000Z',
+      recordedByUserId: actor.userId,
+    });
+    const duplicateCorrection = createCostReversal({
+      id: asCostReversalId('adf00000-0000-4000-8000-000000000006'),
+      cost: second,
+      replacementCost: rogueReplacement,
+      reason: 'Must fail atomically',
+      recordedAt: '2026-09-19T12:00:00.000Z',
+      recordedByUserId: actor.userId,
+    });
+
+    await expect(
+      costRepository.insertCorrection(
+        rogueReplacement,
+        duplicateCorrection,
+      ),
+    ).rejects.toMatchObject({
+      code: 'COST_ALREADY_REVERSED',
+    });
+    expect(
+      await costRepository.getCostById(rogueReplacement.id),
+    ).toBeNull();
   });
 
 });

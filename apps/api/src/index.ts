@@ -6,6 +6,7 @@ import {
   PostgresAssetInventoryRepository,
   PostgresAssetRepository,
   PostgresAssetServiceRepository,
+  PostgresCostRepository,
   PostgresDocumentRepository,
   PostgresImprovementRepository,
   PostgresInspectionRepository,
@@ -47,6 +48,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
   const tenancyRepository = new PostgresTenancyRepository(sql);
   const userAccessRepository = new PostgresUserAccessRepository(sql);
   const documentRepository = new PostgresDocumentRepository(sql);
+  const costRepository = new PostgresCostRepository(sql);
   const inspectionRepository = new PostgresInspectionRepository(sql);
   const improvementRepository = new PostgresImprovementRepository(sql);
 
@@ -63,6 +65,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
       documentRepository,
       inspectionRepository,
       improvementRepository,
+      costRepository,
       staffDirectoryRepository: userAccessRepository,
       fileStorage: config.fileStorage,
       clock: new SystemClock(),

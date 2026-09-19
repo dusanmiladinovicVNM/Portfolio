@@ -44,6 +44,7 @@ import {
   InMemoryStaffDirectoryRepository,
 } from './inspection-test-deps.js';
 import { InMemoryImprovementRepository } from './improvement-test-deps.js';
+import { InMemoryCostRepository } from './cost-test-deps.js';
 
 const adminIdentity: VerifiedIdentity = {
   provider: 'supabase',
@@ -312,6 +313,7 @@ function buildHandler(
     assetInventoryRepository: new InMemoryAssetInventoryRepository(),
     assetServiceRepository: new InMemoryAssetServiceRepository(),
     improvementRepository: new InMemoryImprovementRepository(),
+    costRepository: new InMemoryCostRepository(),
     portfolioRepository: new InMemoryPortfolioRepository(),
     partyRepository: new InMemoryPartyRepository(),
     ownershipRepository: new InMemoryOwnershipRepository(),
@@ -1584,6 +1586,221 @@ describe('Portfolio HTTP boundary', () => {
     expect(inspectorWrite.status).toBe(403);
   });
 
+  it('runs append-only Cost creation and correction through HTTP', async () => {
+    const handler = buildHandler(
+      [
+        'ac000000-0000-4000-8000-000000000001',
+        'ac000000-0000-4000-8000-000000000002',
+        'ac000000-0000-4000-8000-000000000003',
+        'ac000000-0000-4000-8000-000000000004',
+        'ac000000-0000-4000-8000-000000000005',
+      ],
+      new SequenceClock([
+        '2026-09-19T10:00:00.000Z',
+        '2026-09-19T11:00:00.000Z',
+      ]),
+    );
+
+    const propertyResponse = await handler(
+      new Request('https://portfolio.test/properties', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ...propertyBody,
+          code: 'PROP-COST-HTTP',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(propertyResponse.status).toBe(201);
+    const property = (await propertyResponse.json()).data;
+
+    const supplierResponse = await handler(
+      new Request('https://portfolio.test/parties', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          code: 'PTY-COST-SUPPLIER',
+          partyType: 'company',
+          legalName: 'Cost Supplier d.o.o.',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(supplierResponse.status).toBe(201);
+    const supplier = (await supplierResponse.json()).data;
+
+    const createdResponse = await handler(
+      new Request('https://portfolio.test/costs', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          source: {
+            kind: 'property',
+            propertyId: property.id,
+          },
+          description: 'Roof repair allocation',
+          amount: '1200.5',
+          currency: 'chf',
+          incurredOn: '2026-09-18',
+          reportingClass: 'capex',
+          supplierPartyId: supplier.id,
+          invoiceReference: 'INV-HTTP-77',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(createdResponse.status).toBe(201);
+    const original = (await createdResponse.json()).data;
+    expect(original).toMatchObject({
+      source: { kind: 'property', propertyId: property.id },
+      amount: '1200.50',
+      currency: 'CHF',
+      reportingClass: 'capex',
+      supplierPartyId: supplier.id,
+      invoiceReference: 'INV-HTTP-77',
+      recordedAt: '2026-09-19T10:00:00.000Z',
+    });
+
+    const unsupportedCurrencyResponse = await handler(
+      new Request('https://portfolio.test/costs', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          source: { kind: 'property', propertyId: property.id },
+          description: 'Unsupported currency',
+          amount: '10',
+          currency: 'ZZZ',
+          incurredOn: '2026-09-18',
+          reportingClass: 'opex',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(unsupportedCurrencyResponse.status).toBe(400);
+
+    const sourceList = await handler(
+      new Request(
+        `https://portfolio.test/costs?sourceKind=property&sourceId=${property.id}`,
+      ),
+      adminIdentity,
+    );
+    expect(sourceList.status).toBe(200);
+    expect(await sourceList.json()).toMatchObject({
+      data: {
+        items: [
+          {
+            cost: { id: original.id, amount: '1200.50' },
+            reversal: null,
+          },
+        ],
+      },
+    });
+
+    const invoiceList = await handler(
+      new Request(
+        'https://portfolio.test/costs?invoiceReference=INV-HTTP-77',
+      ),
+      adminIdentity,
+    );
+    expect(invoiceList.status).toBe(200);
+    expect((await invoiceList.json()).data.items).toHaveLength(1);
+
+    const correctionResponse = await handler(
+      new Request(`https://portfolio.test/costs/${original.id}/correct`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          reason: 'Supplier corrected invoice total',
+          replacement: {
+            source: {
+              kind: 'property',
+              propertyId: property.id,
+            },
+            description: 'Roof repair allocation',
+            amount: '1150',
+            currency: 'CHF',
+            incurredOn: '2026-09-18',
+            reportingClass: 'capex',
+            supplierPartyId: supplier.id,
+            invoiceReference: 'INV-HTTP-77',
+          },
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(correctionResponse.status).toBe(201);
+    const correction = (await correctionResponse.json()).data;
+    expect(correction).toMatchObject({
+      replacement: {
+        amount: '1150.00',
+        recordedAt: '2026-09-19T11:00:00.000Z',
+      },
+      reversal: {
+        costId: original.id,
+        replacementCostId: correction.replacement.id,
+        reason: 'Supplier corrected invoice total',
+        recordedAt: '2026-09-19T11:00:00.000Z',
+      },
+    });
+
+    const originalHistory = await handler(
+      new Request(`https://portfolio.test/costs/${original.id}`),
+      adminIdentity,
+    );
+    expect(originalHistory.status).toBe(200);
+    expect(await originalHistory.json()).toMatchObject({
+      data: {
+        cost: { id: original.id, amount: '1200.50' },
+        reversal: {
+          replacementCostId: correction.replacement.id,
+        },
+        incomingCorrection: null,
+      },
+    });
+
+    const replacementHistory = await handler(
+      new Request(
+        `https://portfolio.test/costs/${correction.replacement.id}`,
+      ),
+      adminIdentity,
+    );
+    expect(replacementHistory.status).toBe(200);
+    expect(await replacementHistory.json()).toMatchObject({
+      data: {
+        cost: { id: correction.replacement.id, amount: '1150.00' },
+        reversal: null,
+        incomingCorrection: {
+          costId: original.id,
+          replacementCostId: correction.replacement.id,
+        },
+      },
+    });
+
+    const inspectorRead = await handler(
+      new Request(`https://portfolio.test/costs/${original.id}`),
+      inspectorIdentity,
+    );
+    expect(inspectorRead.status).toBe(403);
+
+    const inspectorWrite = await handler(
+      new Request('https://portfolio.test/costs', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          source: { kind: 'property', propertyId: property.id },
+          description: 'Forbidden financial write',
+          amount: '10',
+          currency: 'CHF',
+          incurredOn: '2026-09-19',
+          reportingClass: 'opex',
+        }),
+      }),
+      inspectorIdentity,
+    );
+    expect(inspectorWrite.status).toBe(403);
+  });
+
   it('allows inspector reads but rejects master-data writes', async () => {
     const handler = buildHandler();
 
@@ -1891,6 +2108,7 @@ describe('Portfolio HTTP boundary', () => {
     assetInventoryRepository: new InMemoryAssetInventoryRepository(),
         assetServiceRepository: new InMemoryAssetServiceRepository(),
         improvementRepository: new InMemoryImprovementRepository(),
+    costRepository: new InMemoryCostRepository(),
         portfolioRepository: new InMemoryPortfolioRepository(),
         partyRepository: new InMemoryPartyRepository(),
         ownershipRepository: new InMemoryOwnershipRepository(),

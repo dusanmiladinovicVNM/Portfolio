@@ -27,6 +27,8 @@ export const CAPABILITIES = [
   'service:write',
   'improvements:read',
   'improvements:write',
+  'costs:read',
+  'costs:write',
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
