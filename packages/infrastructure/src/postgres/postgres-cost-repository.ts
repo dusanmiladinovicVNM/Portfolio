@@ -5,7 +5,7 @@ import {
   asAssetId,
   asCostId,
   asCostReversalId,
-  asCurrencyCode,
+  asCostCurrency,
   asDateOnly,
   asImprovementProjectId,
   asMoneyAmount,
@@ -163,7 +163,7 @@ function mapCost(row: CostRow): Cost {
     source: sourceFromRow(row),
     description: row.description,
     amount: asMoneyAmount(moneyText(row.amount)),
-    currency: asCurrencyCode(row.currency),
+    currency: asCostCurrency(row.currency),
     incurredOn: dateOnly(row.incurred_on),
     reportingClass: row.reporting_class,
     supplierPartyId:
