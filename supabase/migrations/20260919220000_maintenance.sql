@@ -357,6 +357,35 @@ begin
             constraint = 'maintenance_work_order_definition_frozen';
   end if;
 
+  if old.status = 'assigned'
+     and new.status = 'assigned'
+     and new.assigned_at < old.assigned_at
+  then
+    raise exception 'WorkOrder reassignment cannot move assignedAt backwards.'
+      using errcode = '23514',
+            constraint = 'maintenance_work_order_assignment_time_order';
+  end if;
+
+  if new.status <> old.status
+     and (
+       new.title is distinct from old.title
+       or new.description is distinct from old.description
+       or (
+         not (old.status = 'draft' and new.status = 'assigned')
+         and (
+           new.assignee_kind is distinct from old.assignee_kind
+           or new.assigned_user_id is distinct from old.assigned_user_id
+           or new.assigned_party_id is distinct from old.assigned_party_id
+           or new.assigned_at is distinct from old.assigned_at
+         )
+       )
+     )
+  then
+    raise exception 'WorkOrder definition cannot change during lifecycle transition.'
+      using errcode = '23514',
+            constraint = 'maintenance_work_order_transition_mutation';
+  end if;
+
   if new.status = 'assigned'
      and (
        old.status = 'draft'
@@ -486,6 +515,15 @@ begin
     return new;
   end if;
 
+  if new.title is distinct from old.title
+     or new.description is distinct from old.description
+     or new.priority is distinct from old.priority
+  then
+    raise exception 'Issue metadata cannot change during terminal transition.'
+      using errcode = '23514',
+            constraint = 'maintenance_issue_transition_mutation';
+  end if;
+
   select
     count(*),
     count(*) filter (where status = 'completed'),
@@ -559,6 +597,8 @@ declare
   issue_asset_id uuid;
   service_asset_id uuid;
   service_performed_at timestamptz;
+  service_recorded_at timestamptz;
+  work_order_created_at timestamptz;
 begin
   if tg_op <> 'INSERT' then
     raise exception 'Maintenance ServiceEvent links are append-only.'
@@ -566,8 +606,8 @@ begin
             constraint = 'maintenance_service_event_link_immutable';
   end if;
 
-  select w.status, w.started_at, w.completed_at, i.asset_id
-    into work_order_status, work_order_started_at, work_order_completed_at, issue_asset_id
+  select w.status, w.started_at, w.completed_at, w.created_at, i.asset_id
+    into work_order_status, work_order_started_at, work_order_completed_at, work_order_created_at, issue_asset_id
   from public.maintenance_work_orders w
   join public.maintenance_issues i on i.id = w.issue_id
   where w.id = new.work_order_id
@@ -587,8 +627,8 @@ begin
             constraint = 'maintenance_service_event_asset_required';
   end if;
 
-  select asset_id, performed_at
-    into service_asset_id, service_performed_at
+  select asset_id, performed_at, recorded_at
+    into service_asset_id, service_performed_at, service_recorded_at
   from public.asset_service_events
   where id = new.service_event_id;
 
@@ -596,6 +636,14 @@ begin
     raise exception 'ServiceEvent Asset must match the Maintenance Issue Asset.'
       using errcode = '23514',
             constraint = 'maintenance_service_event_asset_mismatch';
+  end if;
+
+  if new.linked_at < work_order_created_at
+     or new.linked_at < service_recorded_at
+  then
+    raise exception 'Maintenance ServiceEvent link recording time is invalid.'
+      using errcode = '23514',
+            constraint = 'maintenance_service_event_link_time_invalid';
   end if;
 
   if service_performed_at < work_order_started_at then
