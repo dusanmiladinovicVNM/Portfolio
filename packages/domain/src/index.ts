@@ -17,3 +17,5 @@ export * from './inspections/inspection.js';
 export * from './inspections/inspection-evidence.js';
 
 export * from './assets/asset.js';
+
+export * from './assets/asset-history.js';

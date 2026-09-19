@@ -121,7 +121,7 @@ PR #14 establishes the registry grain:
 
 ```text
 Asset
-  ├─ Property                 required current placement context
+  ├─ Property                 required while currently located
   ├─ optional Unit            must belong to Property
   ├─ optional Space           requires Unit and must belong to it
   ├─ correctable name/manufacturer/model
@@ -129,7 +129,7 @@ Asset
   └─ AssetReplacement         predecessor → successor physical identity
 ```
 
-Valid current-placement shapes are therefore `Property only`, `Property + Unit`, or `Property + Unit + Space`. A building lift, central boiler or fire-control panel does not require a synthetic `COMMON` Unit.
+Valid located shapes are therefore `Property only`, `Property + Unit`, or `Property + Unit + Space`. A building lift, central boiler or fire-control panel does not require a synthetic `COMMON` Unit. A replaced historical Asset has no current placement projection.
 
 `Asset.id` is the immutable physical identity. `code` is stable business identity. `name`, `manufacturer` and `model` are correctable master metadata and may be corrected through an optimistic-CAS mutation without creating a new physical Asset. Dedicated metadata history is not introduced here; future AuditEvent/DomainEvent infrastructure should capture actor/time/delta for such corrections.
 
@@ -139,7 +139,24 @@ An Asset starts active and has an optimistic aggregate version. Supported metada
 
 Serial, product, inventory and similar identifiers are first-class append-only child records rather than notes. Identifier values are canonicalized against surrounding whitespace at the DB boundary. `inventory_tag`, `imei` and `mac_address` are globally unique; serial/product/barcode remain intentionally weaker until their business scope is explicitly defined. MAC/IMEI type-specific canonicalization is deferred rather than guessed prematurely.
 
-Service, warranty, condition history and tenancy inventory remain later bounded-context work.
+Canonical PR #15 adds temporal and tenancy history around the stable physical Asset identity:
+
+```text
+Asset
+  ├─ AssetLocationHistory[]        authoritative temporal placement
+  ├─ AssetConditionAssessment[]    append-only condition facts
+  └─ TenancyAssetAssignment[]      tenancy inventory membership
+       ├─ moveIn snapshot
+       └─ moveOut snapshot
+```
+
+`assets.property_id/unit_id/space_id` remain a current projection for efficient reads, but are not an independent source of truth. Located Assets must match exactly one open AssetLocationHistory interval; a replaced Asset has zero open intervals and a null projection.
+
+A move is one transaction: close the old interval, append the new interval, update the projection and CAS `Asset.version`. Replacement closes the predecessor interval at `replacedAt`, opens the successor at the same placement/timestamp and clears the predecessor projection. Tenancy inventory is independent of movement: assignment records inventory scope, not ownership, location or exclusive possession.
+
+Condition assessments are append-only. Move-in/move-out snapshots may reference exact condition assessments and preserve missing/present truth without overwriting a global condition field. Assignment is allowed only before Tenancy becomes terminal; move-in is limited to planned/active and move-out to active/notice-given/move-out-pending. Historical backfill will require a later explicit occurrence-time model.
+
+Warranty, Service and Maintenance remain later bounded-context work.
 ### ImprovementProject
 
 A body of work performed on a Property/Unit. It is not an Asset. A project may install, remove or replace assets.

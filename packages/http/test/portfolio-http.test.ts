@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   type Actor,
+  type ClockPort,
   type IdGenerator,
   type LeaseRepository,
   type OwnershipRepository,
@@ -32,7 +33,7 @@ import {
   type UnitId,
 } from '@portfolio/domain';
 import { createPortfolioHttpHandler } from '../src/index.js';
-import { InMemoryAssetRepository } from './asset-test-deps.js';
+import { InMemoryAssetInventoryRepository, InMemoryAssetRepository } from './asset-test-deps.js';
 import {
   FixedClock,
   InMemoryDocumentRepository,
@@ -194,22 +195,71 @@ class InMemoryOwnershipRepository implements OwnershipRepository {
 }
 
 
-class EmptyTenancyRepository implements TenancyRepository {
-  async getById(_id: TenancyId): Promise<Tenancy | null> { return null; }
-  async listByUnit(_unitId: UnitId): Promise<readonly Tenancy[]> { return []; }
-  async codeExists(_code: string): Promise<boolean> { return false; }
+class InMemoryTenancyRepository implements TenancyRepository {
+  private readonly tenancies = new Map<TenancyId, Tenancy>();
+
+  async getById(id: TenancyId): Promise<Tenancy | null> {
+    return this.tenancies.get(id) ?? null;
+  }
+
+  async listByUnit(unitId: UnitId): Promise<readonly Tenancy[]> {
+    return [...this.tenancies.values()].filter(
+      (tenancy) => tenancy.unitId === unitId,
+    );
+  }
+
+  async codeExists(code: string): Promise<boolean> {
+    const normalized = code.toLowerCase();
+    return [...this.tenancies.values()].some(
+      (tenancy) => tenancy.code.toLowerCase() === normalized,
+    );
+  }
+
   async hasPlannedReservationOverlap() { return false; }
   async hasActualOccupancyOverlap() { return false; }
-  async insert(_tenancy: Tenancy): Promise<void> {}
+
+  async insert(tenancy: Tenancy): Promise<void> {
+    this.tenancies.set(tenancy.id, tenancy);
+  }
+
   async insertParty(
-    _tenancyParty: TenancyParty,
-    _expectedTenancyVersion: number,
-    _newTenancyVersion: number,
-  ): Promise<void> {}
+    tenancyParty: TenancyParty,
+    expectedTenancyVersion: number,
+    newTenancyVersion: number,
+  ): Promise<void> {
+    const current = this.tenancies.get(tenancyParty.tenancyId);
+    if (!current || current.version !== expectedTenancyVersion) {
+      throw new Error('tenancy version conflict');
+    }
+    this.tenancies.set(current.id, {
+      ...current,
+      version: newTenancyVersion,
+      parties: [...current.parties, tenancyParty],
+    });
+  }
+
   async updateLifecycle(
-    _tenancy: Tenancy,
-    _expectedVersion: number,
-  ): Promise<void> {}
+    tenancy: Tenancy,
+    expectedVersion: number,
+  ): Promise<void> {
+    const current = this.tenancies.get(tenancy.id);
+    if (!current || current.version !== expectedVersion) {
+      throw new Error('tenancy version conflict');
+    }
+    this.tenancies.set(tenancy.id, tenancy);
+  }
+}
+
+class SequenceClock implements ClockPort {
+  private index = 0;
+
+  constructor(private readonly values: readonly string[]) {}
+
+  now(): string {
+    const value = this.values[this.index++];
+    if (!value) throw new Error('No test clock value configured.');
+    return value;
+  }
 }
 
 class EmptyLeaseRepository implements LeaseRepository {
@@ -254,19 +304,21 @@ function buildHandler(
     '22222222-2222-4222-8222-222222222222',
     '33333333-3333-4333-8333-333333333333',
   ],
+  clock: ClockPort = new FixedClock(),
 ) {
   return createPortfolioHttpHandler({
     assetRepository: new InMemoryAssetRepository(),
+    assetInventoryRepository: new InMemoryAssetInventoryRepository(),
     portfolioRepository: new InMemoryPortfolioRepository(),
     partyRepository: new InMemoryPartyRepository(),
     ownershipRepository: new InMemoryOwnershipRepository(),
-    tenancyRepository: new EmptyTenancyRepository(),
+    tenancyRepository: new InMemoryTenancyRepository(),
     leaseRepository: new EmptyLeaseRepository(),
     documentRepository: new InMemoryDocumentRepository(),
     inspectionRepository: new InMemoryInspectionRepository(),
     staffDirectoryRepository: new InMemoryStaffDirectoryRepository(),
     fileStorage: new MemoryFileStorage(),
-    clock: new FixedClock(),
+    clock,
     userAccessRepository: new InMemoryAccessRepository(),
     idGenerator: new FixedIds(ids),
   });
@@ -336,7 +388,20 @@ describe('Portfolio HTTP boundary', () => {
       'd1000000-0000-4000-8000-000000000007',
       'd1000000-0000-4000-8000-000000000008',
       'd1000000-0000-4000-8000-000000000009',
-    ]);
+      'd1000000-0000-4000-8000-000000000010',
+      'd1000000-0000-4000-8000-000000000011',
+      'd1000000-0000-4000-8000-000000000012',
+      'd1000000-0000-4000-8000-000000000013',
+      'd1000000-0000-4000-8000-000000000014',
+      'd1000000-0000-4000-8000-000000000015',
+      'd1000000-0000-4000-8000-000000000016',
+      'd1000000-0000-4000-8000-000000000017',
+      'd1000000-0000-4000-8000-000000000018',
+    ], new SequenceClock([
+      '2026-09-18T20:00:00.000Z',
+      '2026-09-18T20:05:00.000Z',
+      '2026-09-18T21:00:00.000Z',
+    ]));
 
     const propertyResponse = await handler(
       new Request('https://portfolio.test/properties', {
@@ -544,6 +609,9 @@ describe('Portfolio HTTP boundary', () => {
           id: asset.id,
           status: 'replaced',
           version: 4,
+          propertyId: null,
+          unitId: null,
+          spaceId: null,
         },
         replacementAsset: {
           code: 'ASSET-HTTP-002',
@@ -573,6 +641,378 @@ describe('Portfolio HTTP boundary', () => {
         },
       },
     });
+
+    const predecessorHistoryResponse = await handler(
+      new Request(`https://portfolio.test/assets/${asset.id}/location-history`),
+      inspectorIdentity,
+    );
+    expect(predecessorHistoryResponse.status).toBe(200);
+    const predecessorHistory =
+      (await predecessorHistoryResponse.json()).data.items;
+    expect(predecessorHistory).toHaveLength(1);
+    expect(predecessorHistory[0].validTo).not.toBeNull();
+  });
+
+  it('runs Asset history, movement, condition and tenancy inventory through HTTP', async () => {
+    const handler = buildHandler(
+      [
+        'e3000000-0000-4000-8000-000000000001',
+        'e3000000-0000-4000-8000-000000000002',
+        'e3000000-0000-4000-8000-000000000003',
+        'e3000000-0000-4000-8000-000000000004',
+        'e3000000-0000-4000-8000-000000000005',
+        'e3000000-0000-4000-8000-000000000006',
+        'e3000000-0000-4000-8000-000000000007',
+        'e3000000-0000-4000-8000-000000000008',
+        'e3000000-0000-4000-8000-000000000009',
+        'e3000000-0000-4000-8000-000000000010',
+        'e3000000-0000-4000-8000-000000000011',
+        'e3000000-0000-4000-8000-000000000012',
+        'e3000000-0000-4000-8000-000000000013',
+        'e3000000-0000-4000-8000-000000000014',
+        'e3000000-0000-4000-8000-000000000015',
+        'e3000000-0000-4000-8000-000000000016',
+        'e3000000-0000-4000-8000-000000000017',
+        'e3000000-0000-4000-8000-000000000018',
+        'e3000000-0000-4000-8000-000000000019',
+        'e3000000-0000-4000-8000-000000000020',
+        'e3000000-0000-4000-8000-000000000021',
+        'e3000000-0000-4000-8000-000000000022',
+        'e3000000-0000-4000-8000-000000000023',
+        'e3000000-0000-4000-8000-000000000024',
+      ],
+      new SequenceClock([
+        '2026-09-19T08:00:00.000Z',
+        '2026-09-19T08:10:00.000Z',
+        '2026-09-19T08:20:00.000Z',
+        '2026-09-19T08:30:00.000Z',
+        '2026-09-19T09:00:00.000Z',
+        '2026-09-19T10:00:00.000Z',
+      ]),
+    );
+
+    const propertyResponse = await handler(
+      new Request('https://portfolio.test/properties', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ...propertyBody,
+          code: 'PROP-HISTORY-HTTP',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(propertyResponse.status).toBe(201);
+    const property = (await propertyResponse.json()).data;
+
+    const createUnit = async (code: string, unitNumber: string) => {
+      const response = await handler(
+        new Request('https://portfolio.test/units', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            propertyId: property.id,
+            code,
+            unitNumber,
+            unitType: 'apartment',
+          }),
+        }),
+        adminIdentity,
+      );
+      expect(response.status).toBe(201);
+      return (await response.json()).data;
+    };
+
+    const unitA = await createUnit('UNIT-HISTORY-HTTP-A', 'HA');
+    const unitB = await createUnit('UNIT-HISTORY-HTTP-B', 'HB');
+
+    const createSpace = async (unitId: string, code: string, name: string) => {
+      const response = await handler(
+        new Request('https://portfolio.test/spaces', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            unitId,
+            code,
+            name,
+            spaceType: 'kitchen',
+          }),
+        }),
+        adminIdentity,
+      );
+      expect(response.status).toBe(201);
+      return (await response.json()).data;
+    };
+
+    const spaceA = await createSpace(unitA.id, 'KITCHEN-A', 'Kitchen A');
+    const spaceB = await createSpace(unitB.id, 'KITCHEN-B', 'Kitchen B');
+
+    const tenantResponse = await handler(
+      new Request('https://portfolio.test/parties', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          code: 'PTY-HISTORY-HTTP',
+          partyType: 'person',
+          firstName: 'HTTP',
+          lastName: 'Tenant',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(tenantResponse.status).toBe(201);
+    const tenant = (await tenantResponse.json()).data;
+
+    const tenancyResponse = await handler(
+      new Request(`https://portfolio.test/units/${unitA.id}/tenancies`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          code: 'TEN-HISTORY-HTTP',
+          parties: [
+            {
+              partyId: tenant.id,
+              role: 'tenant',
+              isPrimary: true,
+            },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(tenancyResponse.status).toBe(201);
+    const tenancy = (await tenancyResponse.json()).data;
+
+    const assetResponse = await handler(
+      new Request('https://portfolio.test/assets', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          code: 'ASSET-HISTORY-HTTP',
+          name: 'Movable refrigerator',
+          propertyId: property.id,
+          unitId: unitA.id,
+          spaceId: spaceA.id,
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(assetResponse.status).toBe(201);
+    const asset = (await assetResponse.json()).data;
+
+    const initialHistoryResponse = await handler(
+      new Request(
+        `https://portfolio.test/assets/${asset.id}/location-history`,
+      ),
+      inspectorIdentity,
+    );
+    expect(initialHistoryResponse.status).toBe(200);
+    expect(await initialHistoryResponse.json()).toMatchObject({
+      data: {
+        items: [
+          {
+            assetId: asset.id,
+            unitId: unitA.id,
+            spaceId: spaceA.id,
+            validTo: null,
+            changeType: 'asset_created',
+          },
+        ],
+      },
+    });
+
+    const conditionResponse = await handler(
+      new Request(
+        `https://portfolio.test/assets/${asset.id}/condition-assessments`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            condition: 'good',
+            notes: 'General condition',
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(conditionResponse.status).toBe(201);
+
+    const assignmentResponse = await handler(
+      new Request(`https://portfolio.test/tenancies/${tenancy.id}/assets`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ assetId: asset.id }),
+      }),
+      adminIdentity,
+    );
+    expect(assignmentResponse.status).toBe(201);
+    const assignment = (await assignmentResponse.json()).data;
+
+    const draftMoveInResponse = await handler(
+      new Request(
+        `https://portfolio.test/tenancy-assets/${assignment.id}/inventory`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            expectedVersion: 1,
+            phase: 'move_in',
+            presence: 'present',
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(draftMoveInResponse.status).toBe(422);
+    expect(await draftMoveInResponse.json()).toMatchObject({
+      error: { code: 'TENANCY_ASSET_TENANCY_STATE_INVALID' },
+    });
+
+    const planResponse = await handler(
+      new Request(`https://portfolio.test/tenancies/${tenancy.id}/plan`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          expectedVersion: 1,
+          plannedStart: '2026-09-20',
+          plannedEnd: '2027-09-19',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(planResponse.status).toBe(200);
+
+    const moveInResponse = await handler(
+      new Request(
+        `https://portfolio.test/tenancy-assets/${assignment.id}/inventory`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            expectedVersion: 1,
+            phase: 'move_in',
+            presence: 'present',
+            condition: 'good',
+            notes: 'Present at move-in',
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(moveInResponse.status).toBe(200);
+    expect(await moveInResponse.json()).toMatchObject({
+      data: { version: 2, moveIn: { presence: 'present' } },
+    });
+
+    const activateResponse = await handler(
+      new Request(`https://portfolio.test/tenancies/${tenancy.id}/activate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          expectedVersion: 2,
+          actualStart: '2026-09-20',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(activateResponse.status).toBe(200);
+
+    const movedResponse = await handler(
+      new Request(`https://portfolio.test/assets/${asset.id}/move`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          expectedVersion: 1,
+          propertyId: property.id,
+          unitId: unitB.id,
+          spaceId: spaceB.id,
+          reason: 'Transferred to Unit B',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(movedResponse.status).toBe(200);
+    expect(await movedResponse.json()).toMatchObject({
+      data: {
+        id: asset.id,
+        version: 2,
+        unitId: unitB.id,
+        spaceId: spaceB.id,
+      },
+    });
+
+    const movedHistoryResponse = await handler(
+      new Request(
+        `https://portfolio.test/assets/${asset.id}/location-history`,
+      ),
+      inspectorIdentity,
+    );
+    expect(movedHistoryResponse.status).toBe(200);
+    const movedHistory = (await movedHistoryResponse.json()).data.items;
+    expect(movedHistory).toHaveLength(2);
+    expect(movedHistory[0]).toMatchObject({
+      unitId: unitA.id,
+      spaceId: spaceA.id,
+      validTo: '2026-09-19T09:00:00.000Z',
+    });
+    expect(movedHistory[1]).toMatchObject({
+      unitId: unitB.id,
+      spaceId: spaceB.id,
+      validTo: null,
+      changeType: 'moved',
+    });
+
+    const moveOutResponse = await handler(
+      new Request(
+        `https://portfolio.test/tenancy-assets/${assignment.id}/inventory`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            expectedVersion: 2,
+            phase: 'move_out',
+            presence: 'missing',
+            notes: 'Not present at handover',
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(moveOutResponse.status).toBe(200);
+    expect(await moveOutResponse.json()).toMatchObject({
+      data: {
+        version: 3,
+        moveIn: { presence: 'present' },
+        moveOut: { presence: 'missing', conditionAssessmentId: null },
+      },
+    });
+
+    const inventoryResponse = await handler(
+      new Request(`https://portfolio.test/tenancies/${tenancy.id}/assets`),
+      inspectorIdentity,
+    );
+    expect(inventoryResponse.status).toBe(200);
+    expect(await inventoryResponse.json()).toMatchObject({
+      data: {
+        items: [
+          {
+            assetId: asset.id,
+            version: 3,
+            moveIn: { presence: 'present' },
+            moveOut: { presence: 'missing' },
+          },
+        ],
+      },
+    });
+
+    const conditionsResponse = await handler(
+      new Request(
+        `https://portfolio.test/assets/${asset.id}/condition-assessments`,
+      ),
+      inspectorIdentity,
+    );
+    expect(conditionsResponse.status).toBe(200);
+    expect((await conditionsResponse.json()).data.items).toHaveLength(2);
   });
 
   it('allows inspector reads but rejects master-data writes', async () => {
@@ -879,10 +1319,11 @@ describe('Portfolio HTTP boundary', () => {
     const handler = createPortfolioHttpHandler(
       {
         assetRepository: new InMemoryAssetRepository(),
+    assetInventoryRepository: new InMemoryAssetInventoryRepository(),
         portfolioRepository: new InMemoryPortfolioRepository(),
         partyRepository: new InMemoryPartyRepository(),
         ownershipRepository: new InMemoryOwnershipRepository(),
-        tenancyRepository: new EmptyTenancyRepository(),
+        tenancyRepository: new InMemoryTenancyRepository(),
         leaseRepository: new EmptyLeaseRepository(),
         documentRepository: new InMemoryDocumentRepository(),
         inspectionRepository: new InMemoryInspectionRepository(),

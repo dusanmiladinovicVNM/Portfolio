@@ -34,6 +34,9 @@ export type InspectionUnlockId = EntityId<'InspectionUnlock'>;
 export type AssetId = EntityId<'Asset'>;
 export type AssetIdentifierId = EntityId<'AssetIdentifier'>;
 export type AssetReplacementId = EntityId<'AssetReplacement'>;
+export type AssetLocationHistoryId = EntityId<'AssetLocationHistory'>;
+export type AssetConditionAssessmentId = EntityId<'AssetConditionAssessment'>;
+export type TenancyAssetAssignmentId = EntityId<'TenancyAssetAssignment'>;
 
 export const asUserId = (value: string): UserId => value as UserId;
 export const asPropertyId = (value: string): PropertyId => value as PropertyId;
@@ -65,3 +68,6 @@ export const asInspectionUnlockId = (value: string): InspectionUnlockId => value
 export const asAssetId = (value: string): AssetId => value as AssetId;
 export const asAssetIdentifierId = (value: string): AssetIdentifierId => value as AssetIdentifierId;
 export const asAssetReplacementId = (value: string): AssetReplacementId => value as AssetReplacementId;
+export const asAssetLocationHistoryId = (value: string): AssetLocationHistoryId => value as AssetLocationHistoryId;
+export const asAssetConditionAssessmentId = (value: string): AssetConditionAssessmentId => value as AssetConditionAssessmentId;
+export const asTenancyAssetAssignmentId = (value: string): TenancyAssetAssignmentId => value as TenancyAssetAssignmentId;

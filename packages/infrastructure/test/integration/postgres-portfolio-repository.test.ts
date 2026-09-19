@@ -6,6 +6,13 @@ import {
   activateTenancyCommand,
   changeAssetStatusCommand,
   createAssetCommand,
+  moveAssetCommand,
+  assessAssetConditionCommand,
+  assignAssetToTenancyCommand,
+  recordTenancyAssetInventoryCommand,
+  listAssetLocationHistoryQuery,
+  listAssetConditionAssessmentsQuery,
+  listTenancyAssetAssignmentsQuery,
   addInspectionSignatureCommand,
   attachInspectionEvidenceCommand,
   cancelLeaseAgreementCommand,
@@ -21,6 +28,7 @@ import {
   createPropertyCommand,
   createSpaceCommand,
   createUnitCommand,
+  endTenancyCommand,
   finalizeDocumentVersionCommand,
   finalizeInspectionCommand,
   generateInspectionFinalReportCommand,
@@ -64,6 +72,7 @@ import {
   type Party,
 } from '@portfolio/domain';
 import {
+  PostgresAssetInventoryRepository,
   PostgresAssetRepository,
   PostgresDocumentRepository,
   PostgresInspectionRepository,
@@ -83,6 +92,7 @@ if (!connectionString) {
 const sql = postgres(connectionString, { max: 1 });
 const portfolioRepository = new PostgresPortfolioRepository(sql);
 const assetRepository = new PostgresAssetRepository(sql);
+const assetInventoryRepository = new PostgresAssetInventoryRepository(sql);
 const partyRepository = new PostgresPartyRepository(sql);
 const ownershipRepository = new PostgresOwnershipRepository(sql);
 const leaseRepository = new PostgresLeaseRepository(sql);
@@ -107,6 +117,9 @@ class SequenceIds implements IdGenerator {
 async function resetAndMigrate(): Promise<void> {
   await sql.unsafe(
     `drop table if exists
+      public.tenancy_asset_assignments,
+      public.asset_condition_assessments,
+      public.asset_location_history,
       public.asset_replacements,
       public.asset_identifiers,
       public.assets,
@@ -3197,6 +3210,31 @@ describe('PostgreSQL infrastructure', () => {
       'b1000000-0000-4000-8000-000000000013',
       'b1000000-0000-4000-8000-000000000014',
       'b1000000-0000-4000-8000-000000000015',
+      'b1000000-0000-4000-8000-000000000016',
+      'b1000000-0000-4000-8000-000000000017',
+      'b1000000-0000-4000-8000-000000000018',
+      'b1000000-0000-4000-8000-000000000019',
+      'b1000000-0000-4000-8000-000000000020',
+      'b1000000-0000-4000-8000-000000000021',
+      'b1000000-0000-4000-8000-000000000022',
+      'b1000000-0000-4000-8000-000000000023',
+      'b1000000-0000-4000-8000-000000000024',
+      'b1000000-0000-4000-8000-000000000025',
+      'b1000000-0000-4000-8000-000000000026',
+      'b1000000-0000-4000-8000-000000000027',
+      'b1000000-0000-4000-8000-000000000028',
+      'b1000000-0000-4000-8000-000000000029',
+      'b1000000-0000-4000-8000-000000000030',
+      'b1000000-0000-4000-8000-000000000031',
+      'b1000000-0000-4000-8000-000000000032',
+      'b1000000-0000-4000-8000-000000000033',
+      'b1000000-0000-4000-8000-000000000034',
+      'b1000000-0000-4000-8000-000000000035',
+      'b1000000-0000-4000-8000-000000000036',
+      'b1000000-0000-4000-8000-000000000037',
+      'b1000000-0000-4000-8000-000000000038',
+      'b1000000-0000-4000-8000-000000000039',
+      'b1000000-0000-4000-8000-000000000040',
     ]);
 
     const property = await createPropertyCommand(
@@ -3257,7 +3295,7 @@ describe('PostgreSQL infrastructure', () => {
     );
 
     const asset = await createAssetCommand(
-      { assetRepository, portfolioRepository, idGenerator: ids },
+      { assetRepository, portfolioRepository, idGenerator: ids, clock: { now: () => '2026-09-22T08:00:00.000Z' } },
       actor,
       {
         code: 'ASSET-FRIDGE-001',
@@ -3298,7 +3336,7 @@ describe('PostgreSQL infrastructure', () => {
 
     await expect(
       createAssetCommand(
-        { assetRepository, portfolioRepository, idGenerator: ids },
+        { assetRepository, portfolioRepository, idGenerator: ids, clock: { now: () => '2026-09-22T08:00:00.000Z' } },
         actor,
         {
           code: 'ASSET-BAD-SPACE',
@@ -3311,7 +3349,7 @@ describe('PostgreSQL infrastructure', () => {
     ).rejects.toMatchObject({ code: 'ASSET_SPACE_UNIT_MISMATCH' });
 
     const otherAsset = await createAssetCommand(
-      { assetRepository, portfolioRepository, idGenerator: ids },
+      { assetRepository, portfolioRepository, idGenerator: ids, clock: { now: () => '2026-09-22T08:00:00.000Z' } },
       actor,
       {
         code: 'ASSET-OTHER-UNIT',
@@ -3326,18 +3364,22 @@ describe('PostgreSQL infrastructure', () => {
       sql`
         update public.assets
         set unit_id = ${otherUnit.id},
-            space_id = ${otherSpace.id}
+            space_id = ${otherSpace.id},
+            version = version + 1
         where id = ${asset.id}
       `,
     ).rejects.toMatchObject({
       code: '23514',
-      constraint_name: 'asset_identity_placement_immutable',
+      constraint_name: 'asset_move_location_required',
     });
 
     await expect(
       sql`
         update public.assets
-        set status = 'replaced',
+        set property_id = null,
+            unit_id = null,
+            space_id = null,
+            status = 'replaced',
             version = version + 1
         where id = ${asset.id}
       `,
@@ -3376,6 +3418,23 @@ describe('PostgreSQL infrastructure', () => {
             ${kitchen.id},
             'active',
             1
+          )
+        `;
+
+        await tx`
+          insert into public.asset_location_history (
+            id, asset_id, property_id, unit_id, space_id,
+            valid_from, change_type, changed_by_user_id, reason
+          ) values (
+            'b1f00000-0000-4000-8000-000000000010',
+            'b1f00000-0000-4000-8000-000000000002',
+            ${property.id},
+            ${unit.id},
+            ${kitchen.id},
+            '2026-09-22T09:04:00.000Z',
+            'asset_created',
+            ${actor.userId},
+            'Sabotage successor setup'
           )
         `;
 
@@ -3457,7 +3516,7 @@ describe('PostgreSQL infrastructure', () => {
     });
 
     const buildingAsset = await createAssetCommand(
-      { assetRepository, portfolioRepository, idGenerator: ids },
+      { assetRepository, portfolioRepository, idGenerator: ids, clock: { now: () => '2026-09-22T08:00:00.000Z' } },
       actor,
       {
         code: 'ASSET-BUILDING-LIFT',
@@ -3473,7 +3532,7 @@ describe('PostgreSQL infrastructure', () => {
 
     await expect(
       createAssetCommand(
-        { assetRepository, portfolioRepository, idGenerator: ids },
+        { assetRepository, portfolioRepository, idGenerator: ids, clock: { now: () => '2026-09-22T08:00:00.000Z' } },
         actor,
         {
           code: 'ASSET-DUP-INVENTORY',
@@ -3576,6 +3635,9 @@ describe('PostgreSQL infrastructure', () => {
       id: asset.id,
       status: 'replaced',
       version: 4,
+      propertyId: null,
+      unitId: null,
+      spaceId: null,
     });
     expect(replacementResult.replacementAsset).toMatchObject({
       status: 'active',
@@ -3588,6 +3650,28 @@ describe('PostgreSQL infrastructure', () => {
       replacementAssetId: replacementResult.replacementAsset.id,
       replacedByUserId: actor.userId,
     });
+
+    const predecessorHistory = await assetRepository.listLocationHistory(asset.id);
+    const successorHistory = await assetRepository.listLocationHistory(
+      replacementResult.replacementAsset.id,
+    );
+    expect(predecessorHistory).toHaveLength(1);
+    expect(predecessorHistory[0]).toMatchObject({
+      propertyId: property.id,
+      unitId: unit.id,
+      spaceId: kitchen.id,
+      validTo: '2026-09-22T09:10:00.000Z',
+    });
+    expect(successorHistory).toHaveLength(1);
+    expect(successorHistory[0]).toMatchObject({
+      propertyId: property.id,
+      unitId: unit.id,
+      spaceId: kitchen.id,
+      validFrom: '2026-09-22T09:10:00.000Z',
+      validTo: null,
+      changeType: 'replacement_created',
+    });
+    expect(await assetRepository.getCurrentLocation(asset.id)).toBeNull();
 
     await expect(
       sql`
@@ -3618,7 +3702,6 @@ describe('PostgreSQL infrastructure', () => {
       unit.id,
     );
     expect(assets.map((item) => item.code)).toEqual([
-      'ASSET-FRIDGE-001',
       'ASSET-FRIDGE-002',
     ]);
 
@@ -3626,7 +3709,12 @@ describe('PostgreSQL infrastructure', () => {
     const persistedReplacement = await assetRepository.getById(
       replacementResult.replacementAsset.id,
     );
-    expect(persistedOld?.status).toBe('replaced');
+    expect(persistedOld).toMatchObject({
+      status: 'replaced',
+      propertyId: null,
+      unitId: null,
+      spaceId: null,
+    });
     expect(persistedReplacement?.identifiers).toHaveLength(1);
 
     const propertyAssets = await listAssetsByPropertyQuery(
@@ -3637,10 +3725,559 @@ describe('PostgreSQL infrastructure', () => {
     );
     expect(propertyAssets.map((item) => item.code)).toEqual([
       'ASSET-BUILDING-LIFT',
-      'ASSET-FRIDGE-001',
       'ASSET-FRIDGE-002',
       'ASSET-OTHER-UNIT',
     ]);
+  });
+
+
+  it('keeps AssetLocationHistory authoritative and preserves Tenancy inventory truth', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+
+    const ids = new SequenceIds([
+      'c2000000-0000-4000-8000-000000000001',
+      'c2000000-0000-4000-8000-000000000002',
+      'c2000000-0000-4000-8000-000000000003',
+      'c2000000-0000-4000-8000-000000000004',
+      'c2000000-0000-4000-8000-000000000005',
+      'c2000000-0000-4000-8000-000000000006',
+      'c2000000-0000-4000-8000-000000000007',
+      'c2000000-0000-4000-8000-000000000008',
+      'c2000000-0000-4000-8000-000000000009',
+      'c2000000-0000-4000-8000-000000000010',
+      'c2000000-0000-4000-8000-000000000011',
+      'c2000000-0000-4000-8000-000000000012',
+      'c2000000-0000-4000-8000-000000000013',
+      'c2000000-0000-4000-8000-000000000014',
+      'c2000000-0000-4000-8000-000000000015',
+      'c2000000-0000-4000-8000-000000000016',
+      'c2000000-0000-4000-8000-000000000017',
+      'c2000000-0000-4000-8000-000000000018',
+      'c2000000-0000-4000-8000-000000000019',
+      'c2000000-0000-4000-8000-000000000020',
+      'c2000000-0000-4000-8000-000000000021',
+      'c2000000-0000-4000-8000-000000000022',
+      'c2000000-0000-4000-8000-000000000023',
+      'c2000000-0000-4000-8000-000000000024',
+      'c2000000-0000-4000-8000-000000000025',
+      'c2000000-0000-4000-8000-000000000026',
+      'c2000000-0000-4000-8000-000000000027',
+      'c2000000-0000-4000-8000-000000000028',
+      'c2000000-0000-4000-8000-000000000029',
+      'c2000000-0000-4000-8000-000000000030',
+      'c2000000-0000-4000-8000-000000000031',
+      'c2000000-0000-4000-8000-000000000032',
+    ]);
+
+    const property = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-HISTORY-INT',
+        name: 'History Integration',
+        propertyType: 'apartment_building',
+        street: 'History Street',
+        houseNumber: '1',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+    const unitA = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-HISTORY-A',
+        unitNumber: 'HA',
+        unitType: 'apartment',
+      },
+    );
+    const unitB = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-HISTORY-B',
+        unitNumber: 'HB',
+        unitType: 'apartment',
+      },
+    );
+    const spaceA = await createSpaceCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        unitId: unitA.id,
+        code: 'KITCHEN',
+        name: 'Kitchen A',
+        spaceType: 'kitchen',
+      },
+    );
+    const spaceB = await createSpaceCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        unitId: unitB.id,
+        code: 'KITCHEN',
+        name: 'Kitchen B',
+        spaceType: 'kitchen',
+      },
+    );
+
+    const tenant = await createPartyCommand(
+      { partyRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PTY-HISTORY-A',
+        partyType: 'person',
+        firstName: 'History',
+        lastName: 'Tenant',
+      },
+    );
+
+    const tenancy = await createTenancyCommand(
+      {
+        tenancyRepository,
+        portfolioRepository,
+        partyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        unitId: unitA.id,
+        code: 'TEN-HISTORY-A',
+        parties: [
+          {
+            partyId: tenant.id,
+            role: 'tenant',
+            isPrimary: true,
+          },
+        ],
+      },
+    );
+
+    const asset = await createAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T08:00:00.000Z' },
+      },
+      actor,
+      {
+        code: 'ASSET-HISTORY-001',
+        name: 'Movable refrigerator',
+        propertyId: property.id,
+        unitId: unitA.id,
+        spaceId: spaceA.id,
+      },
+    );
+
+    const initialHistory = await listAssetLocationHistoryQuery(
+      assetRepository,
+      actor,
+      asset.id,
+    );
+    expect(initialHistory).toHaveLength(1);
+    expect(initialHistory[0]).toMatchObject({
+      unitId: unitA.id,
+      spaceId: spaceA.id,
+      validTo: null,
+      changeType: 'asset_created',
+    });
+
+    await assessAssetConditionCommand(
+      {
+        assetRepository,
+        assetInventoryRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T08:10:00.000Z' },
+      },
+      actor,
+      asset.id,
+      { condition: 'good', notes: 'General condition' },
+    );
+
+    const assignment = await assignAssetToTenancyCommand(
+      {
+        assetRepository,
+        assetInventoryRepository,
+        tenancyRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T08:20:00.000Z' },
+      },
+      actor,
+      tenancy.id,
+      asset.id,
+    );
+    expect(assignment.version).toBe(1);
+
+    await expect(
+      recordTenancyAssetInventoryCommand(
+        {
+          assetRepository,
+          assetInventoryRepository,
+          tenancyRepository,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-19T08:25:00.000Z' },
+        },
+        actor,
+        assignment.id,
+        {
+          expectedVersion: 1,
+          phase: 'move_in',
+          presence: 'present',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'TENANCY_ASSET_TENANCY_STATE_INVALID',
+    });
+
+    await expect(
+      sql`
+        update public.tenancy_asset_assignments
+        set
+          move_in_presence = 'present',
+          move_in_recorded_at = '2026-09-19T08:25:00.000Z',
+          move_in_recorded_by_user_id = ${actor.userId},
+          version = version + 1
+        where id = ${assignment.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'tenancy_asset_assignment_move_in_tenancy_state',
+    });
+
+    const plannedTenancy = await planTenancyCommand(
+      { tenancyRepository },
+      actor,
+      tenancy.id,
+      1,
+      '2026-09-20',
+      '2027-09-19',
+    );
+    expect(plannedTenancy.status).toBe('planned');
+
+    const moveIn = await recordTenancyAssetInventoryCommand(
+      {
+        assetRepository,
+        assetInventoryRepository,
+        tenancyRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T08:30:00.000Z' },
+      },
+      actor,
+      assignment.id,
+      {
+        expectedVersion: 1,
+        phase: 'move_in',
+        presence: 'present',
+        condition: 'good',
+        notes: 'Present at move-in',
+      },
+    );
+    expect(moveIn).toMatchObject({
+      version: 2,
+      moveIn: { presence: 'present' },
+    });
+
+    const activeTenancy = await activateTenancyCommand(
+      { tenancyRepository },
+      actor,
+      tenancy.id,
+      plannedTenancy.version,
+      '2026-09-20',
+    );
+    expect(activeTenancy.status).toBe('active');
+
+    const moved = await moveAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T09:00:00.000Z' },
+      },
+      actor,
+      asset.id,
+      {
+        expectedVersion: 1,
+        propertyId: property.id,
+        unitId: unitB.id,
+        spaceId: spaceB.id,
+        reason: 'Transferred to Unit B',
+      },
+    );
+    expect(moved).toMatchObject({
+      id: asset.id,
+      version: 2,
+      unitId: unitB.id,
+      spaceId: spaceB.id,
+    });
+
+    const history = await listAssetLocationHistoryQuery(
+      assetRepository,
+      actor,
+      asset.id,
+    );
+    expect(history).toHaveLength(2);
+    expect(history[0]).toMatchObject({
+      unitId: unitA.id,
+      spaceId: spaceA.id,
+      validTo: '2026-09-19T09:00:00.000Z',
+    });
+    expect(history[1]).toMatchObject({
+      unitId: unitB.id,
+      spaceId: spaceB.id,
+      validFrom: '2026-09-19T09:00:00.000Z',
+      validTo: null,
+      changeType: 'moved',
+    });
+
+    await expect(
+      sql`
+        insert into public.asset_location_history (
+          id, asset_id, property_id, unit_id, space_id,
+          valid_from, valid_to, change_type, changed_by_user_id, reason
+        ) values (
+          'c2f00000-0000-4000-8000-000000000001',
+          ${asset.id},
+          ${property.id},
+          ${unitA.id},
+          ${spaceA.id},
+          '2026-09-19T07:00:00.000Z',
+          '2026-09-19T07:30:00.000Z',
+          'moved',
+          ${actor.userId},
+          'Fabricated backdated history'
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_location_history_insert_must_be_open',
+    });
+
+    await expect(
+      sql`
+        update public.assets
+        set
+          unit_id = ${unitA.id},
+          space_id = ${spaceA.id},
+          version = version + 1
+        where id = ${asset.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_move_location_required',
+    });
+
+    await expect(
+      sql.begin(async (tx) => {
+        await tx`
+          update public.asset_location_history
+          set valid_to = '2026-09-19T10:00:00.000Z'
+          where asset_id = ${asset.id}
+            and valid_to is null
+        `;
+      }),
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_location_open_interval_required',
+    });
+
+    await expect(
+      sql.begin(async (tx) => {
+        await tx`
+          update public.asset_location_history
+          set valid_to = '2026-09-19T10:00:00.000Z'
+          where asset_id = ${asset.id}
+            and valid_to is null
+        `;
+
+        await tx`
+          insert into public.asset_location_history (
+            id, asset_id, property_id, unit_id, space_id,
+            valid_from, change_type, changed_by_user_id, reason
+          ) values (
+            'c2f00000-0000-4000-8000-000000000003',
+            ${asset.id},
+            ${property.id},
+            ${unitA.id},
+            ${spaceA.id},
+            '2026-09-19T11:00:00.000Z',
+            'moved',
+            ${actor.userId},
+            'Attempted move with a one-hour history gap'
+          )
+        `;
+      }),
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_location_history_not_contiguous',
+    });
+
+    const moveOut = await recordTenancyAssetInventoryCommand(
+      {
+        assetRepository,
+        assetInventoryRepository,
+        tenancyRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T10:00:00.000Z' },
+      },
+      actor,
+      assignment.id,
+      {
+        expectedVersion: 2,
+        phase: 'move_out',
+        presence: 'missing',
+        notes: 'Not present at move-out check',
+      },
+    );
+    expect(moveOut).toMatchObject({
+      version: 3,
+      moveOut: { presence: 'missing', conditionAssessmentId: null },
+    });
+
+    const retiredAsset = await createAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T11:00:00.000Z' },
+      },
+      actor,
+      {
+        code: 'ASSET-HISTORY-RETIRED',
+        name: 'Retired inventory candidate',
+        propertyId: property.id,
+        unitId: unitA.id,
+        spaceId: spaceA.id,
+      },
+    );
+    await changeAssetStatusCommand(
+      assetRepository,
+      actor,
+      retiredAsset.id,
+      1,
+      'retired',
+    );
+
+    await expect(
+      sql`
+        insert into public.tenancy_asset_assignments (
+          id, tenancy_id, asset_id,
+          assigned_at, assigned_by_user_id, version
+        ) values (
+          'c2f00000-0000-4000-8000-000000000002',
+          ${tenancy.id},
+          ${retiredAsset.id},
+          '2026-09-19T11:10:00.000Z',
+          ${actor.userId},
+          1
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'tenancy_asset_assignment_asset_status_invalid',
+    });
+
+    const endedTenancy = await endTenancyCommand(
+      { tenancyRepository },
+      actor,
+      tenancy.id,
+      activeTenancy.version,
+      '2026-09-21',
+    );
+    expect(endedTenancy.status).toBe('ended');
+
+    const postEndAsset = await createAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-21T11:00:00.000Z' },
+      },
+      actor,
+      {
+        code: 'ASSET-HISTORY-POST-END',
+        name: 'Post-end inventory candidate',
+        propertyId: property.id,
+        unitId: unitA.id,
+        spaceId: spaceA.id,
+      },
+    );
+
+    await expect(
+      assignAssetToTenancyCommand(
+        {
+          assetRepository,
+          assetInventoryRepository,
+          tenancyRepository,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-21T11:05:00.000Z' },
+        },
+        actor,
+        tenancy.id,
+        postEndAsset.id,
+      ),
+    ).rejects.toMatchObject({
+      code: 'TENANCY_ASSET_TENANCY_STATE_INVALID',
+    });
+
+    await expect(
+      sql`
+        insert into public.tenancy_asset_assignments (
+          id, tenancy_id, asset_id,
+          assigned_at, assigned_by_user_id, version
+        ) values (
+          'c2f00000-0000-4000-8000-000000000004',
+          ${tenancy.id},
+          ${postEndAsset.id},
+          '2026-09-21T11:05:00.000Z',
+          ${actor.userId},
+          1
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'tenancy_asset_assignment_tenancy_state_invalid',
+    });
+
+    const conditions = await listAssetConditionAssessmentsQuery(
+      assetInventoryRepository,
+      assetRepository,
+      actor,
+      asset.id,
+    );
+    expect(conditions.map((item) => item.condition)).toEqual(['good', 'good']);
+
+    const assignments = await listTenancyAssetAssignmentsQuery(
+      assetInventoryRepository,
+      tenancyRepository,
+      actor,
+      tenancy.id,
+    );
+    expect(assignments).toHaveLength(1);
+    expect(assignments[0]).toMatchObject({
+      assetId: asset.id,
+      version: 3,
+      moveIn: { presence: 'present' },
+      moveOut: { presence: 'missing' },
+    });
+
+    await expect(
+      sql`
+        update public.asset_condition_assessments
+        set condition = 'poor'
+        where id = ${conditions[0]!.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_condition_assessment_immutable',
+    });
+
   });
 
 });

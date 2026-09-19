@@ -1,6 +1,7 @@
 import {
   ApplicationError,
   resolveActor,
+  type AssetInventoryRepository,
   type AssetRepository,
   type ClockPort,
   type DocumentRepository,
@@ -30,6 +31,7 @@ import { handleTenancyHttp } from './tenancy-http-routes.js';
 export interface PortfolioHttpDependencies {
   readonly portfolioRepository: PortfolioRepository;
   readonly assetRepository: AssetRepository;
+  readonly assetInventoryRepository: AssetInventoryRepository;
   readonly partyRepository: PartyRepository;
   readonly ownershipRepository: OwnershipRepository;
   readonly tenancyRepository: TenancyRepository;
@@ -92,7 +94,10 @@ function errorStatus(code: string): number {
     code === 'LEASE_AMENDMENT_TERMS_ALREADY_EXIST' ||
     code === 'ASSET_ALREADY_REPLACED' ||
     code === 'ASSET_REPLACEMENT_ALREADY_LINKED' ||
-    code === 'ASSET_IDENTIFIER_GLOBAL_CONFLICT'
+    code === 'ASSET_IDENTIFIER_GLOBAL_CONFLICT' ||
+    code === 'ASSET_LOCATION_OPEN_INTERVAL_CONFLICT' ||
+    code === 'ASSET_LOCATION_OVERLAP' ||
+    code === 'TENANCY_ASSET_ALREADY_ASSIGNED'
   ) {
     return 409;
   }
@@ -127,7 +132,9 @@ export function createPortfolioHttpHandler(
           handleAssetHttp(
             {
               assetRepository: deps.assetRepository,
+              assetInventoryRepository: deps.assetInventoryRepository,
               portfolioRepository: deps.portfolioRepository,
+              tenancyRepository: deps.tenancyRepository,
               idGenerator: deps.idGenerator,
               clock: deps.clock,
             },

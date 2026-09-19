@@ -80,32 +80,40 @@ These rules are architecture gates, not optional implementation notes.
 
 ## Assets
 
-65. Asset represents one physical identity. Its current placement always identifies one Property; Unit is optional, and Space is optional only when Unit is present. Any Unit must belong to that Property and any Space must belong to that Unit.
-66. Moving an Asset does not create a new Asset. Until AssetLocationHistory exists in canonical PR #15, Property/Unit/Space placement is protected from mutation rather than silently overwriting location truth.
+65. Asset represents one physical identity. A currently managed placement identifies one Property; Unit is optional, and Space is optional only when Unit is present. Any Unit must belong to that Property and any Space must belong to that Unit. A replaced historical Asset is intentionally unlocated.
+66. Moving an Asset does not create a new Asset. Movement is represented by AssetLocationHistory while Property/Unit/Space on Asset remain only the current projection.
 67. Replacing an Asset does create a new Asset; the old one remains in history and becomes `replaced` only in the same transaction that appends one predecessor→successor relationship.
-68. Replacement is not a movement workflow: successor and predecessor have the exact same current Property/Unit/Space placement, and replacement lineage is acyclic.
+68. Replacement transfers temporal placement rather than moving one identity: the predecessor location interval closes at `replacedAt`, the successor starts at that exact Property/Unit/Space and timestamp, the predecessor current projection becomes null, and replacement lineage is acyclic.
 69. Asset identifiers are structured append-only records with canonical trimmed values. `inventory_tag`, `imei` and `mac_address` are globally unique; serial/product/barcode have no stronger cross-Asset uniqueness until their business scope is explicitly defined.
-70. `Asset.id` is immutable physical identity and `code` is stable business identity. Name/manufacturer/model are correctable metadata. Supported metadata corrections and lifecycle changes use optimistic concurrency; retired/replaced lifecycle states are terminal. Service events are append-only history and Asset condition assessments preserve history rather than overwriting a single condition field.
+70. `Asset.id` is immutable physical identity and `code` is stable business identity. Name/manufacturer/model are correctable metadata. Supported metadata corrections, moves and lifecycle changes use optimistic concurrency; retired/replaced lifecycle states are terminal.
+71. AssetLocationHistory is the authoritative temporal placement truth. Active/inactive/retired Assets currently retain exactly one open location interval and a matching current projection. A `replaced` Asset has zero open intervals and a null current projection.
+72. An Asset move closes the current location interval, appends the next interval, updates the current placement projection and advances Asset.version in one transaction. Location intervals are contiguous, never overlap, and closed history is immutable.
+73. AssetConditionAssessment is append-only condition history; there is no mutable `asset.condition` master field.
+74. TenancyAssetAssignment links one physical Asset to one Tenancy inventory. The Asset must belong to that Tenancy's Unit when assigned; assignment does not itself change Asset location or ownership.
+75. Move-in and move-out inventory snapshots are append-once facts. Move-out requires move-in, cannot predate it, and a missing Asset cannot carry a condition assessment.
+76. TenancyAssetAssignment is inventory scope, not proof of current physical possession. The same Asset may therefore be in the inventory scope of different Tenancies, including a planned successor while another Tenancy still exists; no global one-open-assignment-per-Asset constraint applies.
+77. New Tenancy inventory assignment is allowed only while Tenancy is non-terminal (`draft/planned/active/notice_given/move_out_pending`). Move-in snapshot is allowed only for `planned/active`; move-out snapshot only for `active/notice_given/move_out_pending`.
+78. The current inventory model records `assignedAt/recordedAt`, not historical occurrence time. Ended/cancelled Tenancies therefore cannot be backfilled through normal inventory commands. A future historical-import workflow must introduce explicit occurredAt/happenedAt semantics rather than pretending current recording time is event time.
 
 ## Improvements and maintenance
 
-71. ImprovementProject is work; Asset is a physical item; Material is consumed input. They are not interchangeable.
-72. Issue and WorkOrder are different grains: a problem can exist before a work order and may require more than one work order.
-73. Cross-context workflows cannot bypass the owning domain to mutate its state.
+79. ImprovementProject is work; Asset is a physical item; Material is consumed input. They are not interchangeable.
+80. Issue and WorkOrder are different grains: a problem can exist before a work order and may require more than one work order.
+81. Cross-context workflows cannot bypass the owning domain to mutate its state.
 
 ## Money and documents
 
-74. Monetary values use decimal/numeric semantics, never binary floating point.
-75. Each DocumentVersion represents one binary content identity; its file metadata, SHA-256 and storage locator are immutable after registration.
-76. A final DocumentVersion is append-only evidence and cannot return to a mutable/stored state.
-77. A `signed_original` link identifies one exact final DocumentVersion, may only target a signed LeaseAgreement/LeaseAmendment, and is immutable once created.
-78. Binary storage location is infrastructure data, not business identity; Google Drive file IDs must never become Document or DocumentVersion IDs.
-79. External binary storage and PostgreSQL cannot share one ACID transaction. Upload registration therefore uses an idempotent storage object key and compensating delete when DB registration fails.
-80. Financial corrections preserve prior history through correction/reversal records where material.
+82. Monetary values use decimal/numeric semantics, never binary floating point.
+83. Each DocumentVersion represents one binary content identity; its file metadata, SHA-256 and storage locator are immutable after registration.
+84. A final DocumentVersion is append-only evidence and cannot return to a mutable/stored state.
+85. A `signed_original` link identifies one exact final DocumentVersion, may only target a signed LeaseAgreement/LeaseAmendment, and is immutable once created.
+86. Binary storage location is infrastructure data, not business identity; Google Drive file IDs must never become Document or DocumentVersion IDs.
+87. External binary storage and PostgreSQL cannot share one ACID transaction. Upload registration therefore uses an idempotent storage object key and compensating delete when DB registration fails.
+88. Financial corrections preserve prior history through correction/reversal records where material.
 
 ## Architecture
 
-81. Domain code cannot import Supabase, React, Deno, Google APIs or future Fastify infrastructure.
-82. UI components cannot coordinate multi-table business transactions.
-83. Multi-record business commands have one explicit transactional boundary.
-84. Database constraints enforce invariants that can be stated relationally.
+89. Domain code cannot import Supabase, React, Deno, Google APIs or future Fastify infrastructure.
+90. UI components cannot coordinate multi-table business transactions.
+91. Multi-record business commands have one explicit transactional boundary.
+92. Database constraints enforce invariants that can be stated relationally.

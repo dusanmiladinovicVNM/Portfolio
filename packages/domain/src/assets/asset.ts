@@ -50,7 +50,7 @@ export interface Asset {
   readonly id: AssetId;
   readonly code: string;
   readonly name: string;
-  readonly propertyId: PropertyId;
+  readonly propertyId: PropertyId | null;
   readonly unitId: UnitId | null;
   readonly spaceId: SpaceId | null;
   readonly manufacturer: string | null;
@@ -255,7 +255,20 @@ export function markAssetReplaced(asset: Asset): Asset {
       `Cannot replace Asset in status ${asset.status}.`,
     );
   }
-  return incrementStatus(asset, 'replaced');
+  if (asset.propertyId === null) {
+    throw new DomainError(
+      'ASSET_CURRENT_LOCATION_MISSING',
+      'A located Asset is required before replacement.',
+    );
+  }
+  return {
+    ...asset,
+    propertyId: null,
+    unitId: null,
+    spaceId: null,
+    status: 'replaced',
+    version: asset.version + 1,
+  };
 }
 
 export function createAssetReplacement(input: {
@@ -281,6 +294,8 @@ export function createAssetReplacement(input: {
     );
   }
   if (
+    input.replacedAsset.propertyId === null ||
+    input.replacementAsset.propertyId === null ||
     input.replacedAsset.propertyId !== input.replacementAsset.propertyId ||
     input.replacedAsset.unitId !== input.replacementAsset.unitId ||
     input.replacedAsset.spaceId !== input.replacementAsset.spaceId

@@ -84,7 +84,13 @@ describe('Asset Registry domain', () => {
     expect(() => changeAssetStatus(retired, 'active')).toThrowError(/cannot transition/);
 
     const replaced = markAssetReplaced(created);
-    expect(replaced).toMatchObject({ status: 'replaced', version: 2 });
+    expect(replaced).toMatchObject({
+      status: 'replaced',
+      version: 2,
+      propertyId: null,
+      unitId: null,
+      spaceId: null,
+    });
     expect(() => changeAssetStatus(replaced, 'inactive')).toThrowError(/cannot transition/);
   });
 

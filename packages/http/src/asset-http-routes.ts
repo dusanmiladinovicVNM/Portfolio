@@ -1,22 +1,36 @@
 import {
+  assessAssetConditionCommand,
+  assignAssetToTenancyCommand,
   changeAssetStatusCommand,
   createAssetCommand,
   getAssetQuery,
   getAssetReplacementLinksQuery,
+  getTenancyAssetAssignmentQuery,
+  listAssetConditionAssessmentsQuery,
+  listAssetLocationHistoryQuery,
   listAssetsByPropertyQuery,
   listAssetsByUnitQuery,
+  listTenancyAssetAssignmentsQuery,
+  moveAssetCommand,
+  recordTenancyAssetInventoryCommand,
   replaceAssetCommand,
   updateAssetMetadataCommand,
   type Actor,
+  type AssetInventoryRepository,
   type AssetRepository,
   type ClockPort,
   type IdGenerator,
   type PortfolioRepository,
+  type TenancyRepository,
 } from '@portfolio/application';
 import {
+  assessAssetConditionRequestSchema,
+  assignTenancyAssetRequestSchema,
   changeAssetStatusRequestSchema,
   createAssetRequestSchema,
   entityIdSchema,
+  moveAssetRequestSchema,
+  recordTenancyAssetInventoryRequestSchema,
   replaceAssetRequestSchema,
   updateAssetMetadataRequestSchema,
 } from '@portfolio/contracts';
@@ -24,17 +38,24 @@ import {
   asAssetId,
   asPropertyId,
   asSpaceId,
+  asTenancyAssetAssignmentId,
+  asTenancyId,
   asUnitId,
 } from '@portfolio/domain';
 import { json, requestJson, validationFailure } from './http-utils.js';
 import {
+  toAssetConditionAssessmentResponse,
+  toAssetLocationHistoryResponse,
   toAssetReplacementResponse,
   toAssetResponse,
+  toTenancyAssetAssignmentResponse,
 } from './response-mappers.js';
 
 export interface AssetRoutesDependencies {
   readonly assetRepository: AssetRepository;
+  readonly assetInventoryRepository: AssetInventoryRepository;
   readonly portfolioRepository: PortfolioRepository;
+  readonly tenancyRepository: TenancyRepository;
   readonly idGenerator: IdGenerator;
   readonly clock: ClockPort;
 }
@@ -51,48 +72,42 @@ export async function handleAssetHttp(
     const parsed = createAssetRequestSchema.safeParse(await requestJson(request));
     if (!parsed.success) return validationFailure();
 
-    const asset = await createAssetCommand(
-      deps,
-      actor,
-      {
-        code: parsed.data.code,
-        name: parsed.data.name,
-        propertyId: asPropertyId(parsed.data.propertyId),
-        ...(parsed.data.unitId !== undefined
-          ? {
-              unitId:
-                parsed.data.unitId === null
-                  ? null
-                  : asUnitId(parsed.data.unitId),
-            }
-          : {}),
-        ...(parsed.data.spaceId !== undefined
-          ? {
-              spaceId:
-                parsed.data.spaceId === null
-                  ? null
-                  : asSpaceId(parsed.data.spaceId),
-            }
-          : {}),
-        ...(parsed.data.manufacturer !== undefined
-          ? { manufacturer: parsed.data.manufacturer }
-          : {}),
-        ...(parsed.data.model !== undefined
-          ? { model: parsed.data.model }
-          : {}),
-        ...(parsed.data.identifiers !== undefined
-          ? {
-              identifiers: parsed.data.identifiers.map((identifier) => ({
-                identifierType: identifier.identifierType,
-                value: identifier.value,
-                ...(identifier.label !== undefined
-                  ? { label: identifier.label }
-                  : {}),
-              })),
-            }
-          : {}),
-      },
-    );
+    const asset = await createAssetCommand(deps, actor, {
+      code: parsed.data.code,
+      name: parsed.data.name,
+      propertyId: asPropertyId(parsed.data.propertyId),
+      ...(parsed.data.unitId !== undefined
+        ? {
+            unitId:
+              parsed.data.unitId === null
+                ? null
+                : asUnitId(parsed.data.unitId),
+          }
+        : {}),
+      ...(parsed.data.spaceId !== undefined
+        ? {
+            spaceId:
+              parsed.data.spaceId === null
+                ? null
+                : asSpaceId(parsed.data.spaceId),
+          }
+        : {}),
+      ...(parsed.data.manufacturer !== undefined
+        ? { manufacturer: parsed.data.manufacturer }
+        : {}),
+      ...(parsed.data.model !== undefined ? { model: parsed.data.model } : {}),
+      ...(parsed.data.identifiers !== undefined
+        ? {
+            identifiers: parsed.data.identifiers.map((identifier) => ({
+              identifierType: identifier.identifierType,
+              value: identifier.value,
+              ...(identifier.label !== undefined
+                ? { label: identifier.label }
+                : {}),
+            })),
+          }
+        : {}),
+    });
 
     return json({ data: toAssetResponse(asset) }, 201);
   }
@@ -108,7 +123,6 @@ export async function handleAssetHttp(
       actor,
       asPropertyId(parsedId.data),
     );
-
     return json({ data: { items: assets.map(toAssetResponse) } });
   }
 
@@ -123,8 +137,80 @@ export async function handleAssetHttp(
       actor,
       asUnitId(parsedId.data),
     );
-
     return json({ data: { items: assets.map(toAssetResponse) } });
+  }
+
+  const tenancyAssetsMatch = /^\/tenancies\/([^/]+)\/assets$/.exec(path);
+  if (tenancyAssetsMatch) {
+    const parsedId = entityIdSchema.safeParse(tenancyAssetsMatch[1]);
+    if (!parsedId.success) return validationFailure();
+    const tenancyId = asTenancyId(parsedId.data);
+
+    if (method === 'POST') {
+      const parsed = assignTenancyAssetRequestSchema.safeParse(
+        await requestJson(request),
+      );
+      if (!parsed.success) return validationFailure();
+
+      const assignment = await assignAssetToTenancyCommand(
+        deps,
+        actor,
+        tenancyId,
+        asAssetId(parsed.data.assetId),
+      );
+      return json({ data: toTenancyAssetAssignmentResponse(assignment) }, 201);
+    }
+
+    if (method === 'GET') {
+      const assignments = await listTenancyAssetAssignmentsQuery(
+        deps.assetInventoryRepository,
+        deps.tenancyRepository,
+        actor,
+        tenancyId,
+      );
+      return json({
+        data: { items: assignments.map(toTenancyAssetAssignmentResponse) },
+      });
+    }
+  }
+
+  const tenancyAssetMatch = /^\/tenancy-assets\/([^/]+)$/.exec(path);
+  if (method === 'GET' && tenancyAssetMatch) {
+    const parsedId = entityIdSchema.safeParse(tenancyAssetMatch[1]);
+    if (!parsedId.success) return validationFailure();
+
+    const assignment = await getTenancyAssetAssignmentQuery(
+      deps.assetInventoryRepository,
+      actor,
+      asTenancyAssetAssignmentId(parsedId.data),
+    );
+    return json({ data: toTenancyAssetAssignmentResponse(assignment) });
+  }
+
+  const inventoryMatch = /^\/tenancy-assets\/([^/]+)\/inventory$/.exec(path);
+  if (method === 'POST' && inventoryMatch) {
+    const parsedId = entityIdSchema.safeParse(inventoryMatch[1]);
+    const parsed = recordTenancyAssetInventoryRequestSchema.safeParse(
+      await requestJson(request),
+    );
+    if (!parsedId.success || !parsed.success) return validationFailure();
+
+    const assignment = await recordTenancyAssetInventoryCommand(
+      deps,
+      actor,
+      asTenancyAssetAssignmentId(parsedId.data),
+      {
+        expectedVersion: parsed.data.expectedVersion,
+        phase: parsed.data.phase,
+        presence: parsed.data.presence,
+        ...(parsed.data.condition !== undefined
+          ? { condition: parsed.data.condition }
+          : {}),
+        ...(parsed.data.notes !== undefined ? { notes: parsed.data.notes } : {}),
+      },
+    );
+
+    return json({ data: toTenancyAssetAssignmentResponse(assignment) });
   }
 
   const metadataMatch = /^\/assets\/([^/]+)\/metadata$/.exec(path);
@@ -148,8 +234,98 @@ export async function handleAssetHttp(
         ...(parsed.data.model !== undefined ? { model: parsed.data.model } : {}),
       },
     );
-
     return json({ data: toAssetResponse(asset) });
+  }
+
+  const moveMatch = /^\/assets\/([^/]+)\/move$/.exec(path);
+  if (method === 'POST' && moveMatch) {
+    const parsedId = entityIdSchema.safeParse(moveMatch[1]);
+    const parsed = moveAssetRequestSchema.safeParse(await requestJson(request));
+    if (!parsedId.success || !parsed.success) return validationFailure();
+
+    const asset = await moveAssetCommand(
+      deps,
+      actor,
+      asAssetId(parsedId.data),
+      {
+        expectedVersion: parsed.data.expectedVersion,
+        propertyId: asPropertyId(parsed.data.propertyId),
+        ...(parsed.data.unitId !== undefined
+          ? {
+              unitId:
+                parsed.data.unitId === null
+                  ? null
+                  : asUnitId(parsed.data.unitId),
+            }
+          : {}),
+        ...(parsed.data.spaceId !== undefined
+          ? {
+              spaceId:
+                parsed.data.spaceId === null
+                  ? null
+                  : asSpaceId(parsed.data.spaceId),
+            }
+          : {}),
+        ...(parsed.data.reason !== undefined ? { reason: parsed.data.reason } : {}),
+      },
+    );
+    return json({ data: toAssetResponse(asset) });
+  }
+
+  const locationHistoryMatch = /^\/assets\/([^/]+)\/location-history$/.exec(path);
+  if (method === 'GET' && locationHistoryMatch) {
+    const parsedId = entityIdSchema.safeParse(locationHistoryMatch[1]);
+    if (!parsedId.success) return validationFailure();
+
+    const history = await listAssetLocationHistoryQuery(
+      deps.assetRepository,
+      actor,
+      asAssetId(parsedId.data),
+    );
+    return json({
+      data: { items: history.map(toAssetLocationHistoryResponse) },
+    });
+  }
+
+  const conditionsMatch =
+    /^\/assets\/([^/]+)\/condition-assessments$/.exec(path);
+  if (conditionsMatch) {
+    const parsedId = entityIdSchema.safeParse(conditionsMatch[1]);
+    if (!parsedId.success) return validationFailure();
+    const assetId = asAssetId(parsedId.data);
+
+    if (method === 'POST') {
+      const parsed = assessAssetConditionRequestSchema.safeParse(
+        await requestJson(request),
+      );
+      if (!parsed.success) return validationFailure();
+
+      const assessment = await assessAssetConditionCommand(
+        deps,
+        actor,
+        assetId,
+        {
+          condition: parsed.data.condition,
+          ...(parsed.data.notes !== undefined ? { notes: parsed.data.notes } : {}),
+        },
+      );
+      return json(
+        { data: toAssetConditionAssessmentResponse(assessment) },
+        201,
+      );
+    }
+
+    if (method === 'GET') {
+      const assessments = await listAssetConditionAssessmentsQuery(
+        deps.assetInventoryRepository,
+        deps.assetRepository,
+        actor,
+        assetId,
+      );
+      return json({
+        data: { items: assessments.map(toAssetConditionAssessmentResponse) },
+      });
+    }
   }
 
   const statusMatch = /^\/assets\/([^/]+)\/status$/.exec(path);
@@ -167,7 +343,6 @@ export async function handleAssetHttp(
       parsed.data.expectedVersion,
       parsed.data.status,
     );
-
     return json({ data: toAssetResponse(asset) });
   }
 

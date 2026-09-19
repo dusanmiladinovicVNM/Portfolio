@@ -32,3 +32,7 @@ export * from './inspections/inspection-report-commands.js';
 export * from './assets/asset-repository.js';
 export * from './assets/asset-commands.js';
 export * from './assets/asset-queries.js';
+
+export * from './assets/asset-inventory-repository.js';
+export * from './assets/asset-history-commands.js';
+export * from './assets/asset-history-queries.js';
