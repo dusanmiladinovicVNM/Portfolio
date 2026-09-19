@@ -46,6 +46,7 @@ import {
 import { InMemoryImprovementRepository } from './improvement-test-deps.js';
 import { InMemoryCostRepository } from './cost-test-deps.js';
 import { InMemoryMaintenanceRepository } from './maintenance-test-deps.js';
+import { InMemoryAccessItemRepository } from './access-item-test-deps.js';
 
 const adminIdentity: VerifiedIdentity = {
   provider: 'supabase',
@@ -280,6 +281,7 @@ function buildHandler() {
   const tenancyRepository = new InMemoryTenancyRepository();
 
   const handler = createPortfolioHttpHandler({
+    accessItemRepository: new InMemoryAccessItemRepository(),
     assetRepository: new InMemoryAssetRepository(),
     assetInventoryRepository: new InMemoryAssetInventoryRepository(),
     assetServiceRepository: new InMemoryAssetServiceRepository(),
