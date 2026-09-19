@@ -173,12 +173,12 @@ export function retireAccessItem(
         'Last transaction belongs to another AccessItem.',
       );
     }
-    assertNotBefore(
-      retiredAt,
-      lastTransaction.occurredAt,
-      'retiredAt',
-      'last custody occurrence',
-    );
+    if (Date.parse(retiredAt) < Date.parse(lastTransaction.occurredAt)) {
+      throw new DomainError(
+        'ACCESS_ITEM_RETIREMENT_BEFORE_CUSTODY',
+        'AccessItem retirement cannot predate existing custody history.',
+      );
+    }
   }
 
   return {
