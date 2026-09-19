@@ -34,7 +34,11 @@ export interface ImprovementRepository {
     code: string,
   ): Promise<boolean>;
   insertWorkItem(item: WorkItem): Promise<void>;
-  updateWorkItem(item: WorkItem, expectedVersion: number): Promise<void>;
+  updateWorkItemPlan(item: WorkItem, expectedVersion: number): Promise<void>;
+  updateWorkItemLifecycle(
+    item: WorkItem,
+    expectedVersion: number,
+  ): Promise<void>;
 
   listWorkRecordsByProject(
     projectId: ImprovementProjectId,
