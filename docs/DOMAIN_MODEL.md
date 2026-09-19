@@ -180,7 +180,41 @@ Provider Party rules distinguish history from future operations. Warranty and Se
 Asset replacement does not transfer predecessor Warranty/Service history to the successor. Existing predecessor ServicePlans remain historical records but cease to be operationally applicable once that Asset is `replaced`; they may be ended/cancelled but not reactivated, and no new active plan may be created for that predecessor. Cost, Improvement material flows and Maintenance Issue/WorkOrder creation remain downstream canonical phases.
 ### ImprovementProject
 
-A body of work performed on a Property/Unit. It is not an Asset. A project may install, remove or replace assets.
+Canonical PR #17 separates planned work from completed-work evidence:
+
+```text
+ImprovementProject
+  └─ WorkItem[]
+       └─ WorkRecord[]
+            ├─ WorkMaterial[]
+            └─ ProjectAsset[]
+```
+
+An ImprovementProject is one managed renovation/improvement initiative. It has immutable physical scope at Property level with optional Unit and Space, using the same hierarchy rules as the rest of Portfolio. Property-only scope represents common/building works; this phase does not invent synthetic Units or a premature multi-scope model.
+
+Project lifecycle is `draft -> planned -> in_progress -> completed`, with cancellation from non-terminal states. Project identity/scope remain stable; name, description and planned dates are correctable only before work begins. Completion requires every WorkItem to be terminal.
+
+WorkItem is expected/planned scope. It is not proof that the work happened. Its lifecycle is `planned -> in_progress -> completed` with cancellation from planned/in-progress. Starting/completing a WorkItem requires the parent Project to be in progress.
+
+WorkRecord is append-only historical work truth under one exact WorkItem. `performedAt` is when the work happened and `recordedAt` is when Portfolio recorded it, so historical entry remains honest. A WorkRecord may reference a contractor Party by stable identity even if that Party is now inactive.
+
+Normal WorkRecord creation is one sealed transaction:
+
+```text
+WorkRecord
++ WorkMaterial[]
++ ProjectAsset[]
++ seal
+= one commit
+```
+
+The database requires the parent WorkRecord to be sealed at commit and rejects later mutation or child append.
+
+WorkMaterial records exact positive material/consumable quantity with decimal semantics. It contains no money and is not an Asset. If a component needs identifiers, placement, warranty, service history or replacement lineage, it belongs in Asset Registry instead.
+
+ProjectAsset records that an existing Asset was `affected`, `installed` or `removed` by a WorkRecord. It is evidence only: it does not move, retire, replace or otherwise mutate the Asset. Physical replacement stays in AssetReplacement; a project may record the predecessor as removed and successor as installed.
+
+Canonical #17 deliberately does not create Cost/invoice records, Maintenance Issue/WorkOrder, material stock/procurement or contractor billing. Those later contexts may link back to Project/WorkRecord without becoming their source of truth.
 
 ### Cost
 
