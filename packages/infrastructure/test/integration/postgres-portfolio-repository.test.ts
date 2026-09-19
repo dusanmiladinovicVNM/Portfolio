@@ -5732,6 +5732,185 @@ describe('PostgreSQL infrastructure', () => {
   });
 
 
+  it('does not backdate Project cancellation before child work history but allows later child cleanup cancellation', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+    const ids = new SequenceIds([
+      'ff200000-0000-4000-8000-000000000001',
+    ]);
+
+    const property = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-IMPROVEMENT-CANCEL-HISTORY',
+        name: 'Improvement Cancellation History',
+        propertyType: 'apartment_building',
+        street: 'Temporal Street',
+        houseNumber: '2',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+
+    const projectId = 'ff2a0000-0000-4000-8000-000000000001';
+    const itemId = 'ff2a0000-0000-4000-8000-000000000002';
+
+    await sql`
+      insert into public.improvement_projects (
+        id, code, name, property_id, created_at, created_by_user_id
+      ) values (
+        ${projectId},
+        'IMP-CANCEL-HISTORY',
+        'Cancellation history sabotage',
+        ${property.id},
+        '2026-10-20T08:00:00.000Z',
+        ${actor.userId}
+      )
+    `;
+    await sql`
+      update public.improvement_projects
+      set status = 'planned',
+          planned_at = '2026-10-20T08:05:00.000Z',
+          version = 2
+      where id = ${projectId}
+    `;
+    await sql`
+      update public.improvement_projects
+      set status = 'in_progress',
+          started_at = '2026-10-20T08:10:00.000Z',
+          version = 3
+      where id = ${projectId}
+    `;
+
+    await sql`
+      insert into public.improvement_work_items (
+        id, project_id, code, title, created_at, created_by_user_id
+      ) values (
+        ${itemId},
+        ${projectId},
+        'WI-CANCEL-HISTORY',
+        'Child completed after proposed parent cancellation',
+        '2026-10-20T13:00:00.000Z',
+        ${actor.userId}
+      )
+    `;
+    await sql`
+      update public.improvement_work_items
+      set status = 'in_progress',
+          started_at = '2026-10-20T14:00:00.000Z',
+          version = 2
+      where id = ${itemId}
+    `;
+    await sql`
+      update public.improvement_work_items
+      set status = 'completed',
+          completed_at = '2026-10-20T16:00:00.000Z',
+          version = 3
+      where id = ${itemId}
+    `;
+
+    await expect(
+      sql`
+        update public.improvement_projects
+        set status = 'cancelled',
+            cancelled_at = '2026-10-20T12:00:00.000Z',
+            version = 4
+        where id = ${projectId}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name:
+        'improvement_project_cancelled_before_work_item_history',
+    });
+
+    const cleanupProjectId = 'ff2a0000-0000-4000-8000-000000000003';
+    const cleanupItemId = 'ff2a0000-0000-4000-8000-000000000004';
+
+    await sql`
+      insert into public.improvement_projects (
+        id, code, name, property_id, created_at, created_by_user_id
+      ) values (
+        ${cleanupProjectId},
+        'IMP-CANCEL-CLEANUP',
+        'Cancellation cleanup policy',
+        ${property.id},
+        '2026-10-21T08:00:00.000Z',
+        ${actor.userId}
+      )
+    `;
+    await sql`
+      update public.improvement_projects
+      set status = 'planned',
+          planned_at = '2026-10-21T08:05:00.000Z',
+          version = 2
+      where id = ${cleanupProjectId}
+    `;
+    await sql`
+      update public.improvement_projects
+      set status = 'in_progress',
+          started_at = '2026-10-21T08:10:00.000Z',
+          version = 3
+      where id = ${cleanupProjectId}
+    `;
+    await sql`
+      insert into public.improvement_work_items (
+        id, project_id, code, title, created_at, created_by_user_id
+      ) values (
+        ${cleanupItemId},
+        ${cleanupProjectId},
+        'WI-CANCEL-CLEANUP',
+        'Cleanup after parent cancellation',
+        '2026-10-21T09:00:00.000Z',
+        ${actor.userId}
+      )
+    `;
+    await sql`
+      update public.improvement_work_items
+      set status = 'in_progress',
+          started_at = '2026-10-21T10:00:00.000Z',
+          version = 2
+      where id = ${cleanupItemId}
+    `;
+
+    await sql`
+      update public.improvement_projects
+      set status = 'cancelled',
+          cancelled_at = '2026-10-21T12:00:00.000Z',
+          version = 4
+      where id = ${cleanupProjectId}
+    `;
+
+    await sql`
+      update public.improvement_work_items
+      set status = 'cancelled',
+          cancelled_at = '2026-10-21T13:00:00.000Z',
+          version = 3
+      where id = ${cleanupItemId}
+    `;
+
+    const cleanupRows = await sql<
+      { project_cancelled_at: Date; item_cancelled_at: Date }[]
+    >`
+      select
+        p.cancelled_at as project_cancelled_at,
+        wi.cancelled_at as item_cancelled_at
+      from public.improvement_projects p
+      join public.improvement_work_items wi on wi.project_id = p.id
+      where p.id = ${cleanupProjectId}
+        and wi.id = ${cleanupItemId}
+    `;
+    expect(cleanupRows[0]?.project_cancelled_at.toISOString()).toBe(
+      '2026-10-21T12:00:00.000Z',
+    );
+    expect(cleanupRows[0]?.item_cancelled_at.toISOString()).toBe(
+      '2026-10-21T13:00:00.000Z',
+    );
+  });
+
   it('serializes Improvement parent lifecycle with child writes', async () => {
     const actor = await resolveActor(accessRepository, {
       provider: 'supabase',
