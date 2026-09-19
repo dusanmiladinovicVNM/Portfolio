@@ -51,6 +51,7 @@ import {
   listAssetsByPropertyQuery,
   listAssetsByUnitQuery,
   lockInspectionCommand,
+  markTenancyMoveOutPendingCommand,
   planTenancyCommand,
   publishInspectionSchemaVersionCommand,
   replaceAssetCommand,
@@ -4133,6 +4134,43 @@ describe('PostgreSQL infrastructure', () => {
       constraint_name: 'asset_location_history_not_contiguous',
     });
 
+    await expect(
+      recordTenancyAssetInventoryCommand(
+        {
+          assetRepository,
+          assetInventoryRepository,
+          tenancyRepository,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-19T09:55:00.000Z' },
+        },
+        actor,
+        assignment.id,
+        {
+          expectedVersion: 2,
+          phase: 'move_out',
+          presence: 'present',
+          notes: 'Contradictory present snapshot after move',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'TENANCY_ASSET_PRESENT_UNIT_MISMATCH',
+    });
+
+    await expect(
+      sql`
+        update public.tenancy_asset_assignments
+        set
+          move_out_presence = 'present',
+          move_out_recorded_at = '2026-09-19T09:55:00.000Z',
+          move_out_recorded_by_user_id = ${actor.userId},
+          version = version + 1
+        where id = ${assignment.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'tenancy_asset_assignment_present_unit_mismatch',
+    });
+
     const moveOut = await recordTenancyAssetInventoryCommand(
       {
         assetRepository,
@@ -4198,11 +4236,80 @@ describe('PostgreSQL infrastructure', () => {
       constraint_name: 'tenancy_asset_assignment_asset_status_invalid',
     });
 
-    const endedTenancy = await endTenancyCommand(
+    const noticedTenancy = await giveTenancyNoticeCommand(
       { tenancyRepository },
       actor,
       tenancy.id,
       activeTenancy.version,
+      '2026-09-20',
+      '2026-09-21',
+    );
+    const pendingTenancy = await markTenancyMoveOutPendingCommand(
+      { tenancyRepository },
+      actor,
+      tenancy.id,
+      noticedTenancy.version,
+    );
+    expect(pendingTenancy.status).toBe('move_out_pending');
+
+    const pendingCandidate = await createAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-20T12:00:00.000Z' },
+      },
+      actor,
+      {
+        code: 'ASSET-HISTORY-PENDING',
+        name: 'Late assignment candidate',
+        propertyId: property.id,
+        unitId: unitA.id,
+        spaceId: spaceA.id,
+      },
+    );
+
+    await expect(
+      assignAssetToTenancyCommand(
+        {
+          assetRepository,
+          assetInventoryRepository,
+          tenancyRepository,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-20T12:05:00.000Z' },
+        },
+        actor,
+        tenancy.id,
+        pendingCandidate.id,
+      ),
+    ).rejects.toMatchObject({
+      code: 'TENANCY_ASSET_TENANCY_STATE_INVALID',
+    });
+
+    await expect(
+      sql`
+        insert into public.tenancy_asset_assignments (
+          id, tenancy_id, asset_id,
+          assigned_at, assigned_by_user_id, version
+        ) values (
+          'c2f00000-0000-4000-8000-000000000005',
+          ${tenancy.id},
+          ${pendingCandidate.id},
+          '2026-09-20T12:05:00.000Z',
+          ${actor.userId},
+          1
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'tenancy_asset_assignment_tenancy_state_invalid',
+    });
+
+    const endedTenancy = await endTenancyCommand(
+      { tenancyRepository },
+      actor,
+      tenancy.id,
+      pendingTenancy.version,
       '2026-09-21',
     );
     expect(endedTenancy.status).toBe('ended');
