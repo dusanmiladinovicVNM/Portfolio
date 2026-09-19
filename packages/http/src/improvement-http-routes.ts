@@ -196,7 +196,13 @@ export async function handleImprovementHttp(
         deps,
         actor,
         projectId,
-        parsed.data,
+        {
+          code: parsed.data.code,
+          title: parsed.data.title,
+          ...(parsed.data.description !== undefined
+            ? { description: parsed.data.description }
+            : {}),
+        },
       );
       return json({ data: toWorkItemResponse(item) }, 201);
     }
