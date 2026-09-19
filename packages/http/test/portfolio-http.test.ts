@@ -1288,6 +1288,281 @@ describe('Portfolio HTTP boundary', () => {
     expect(inspectorWrite.status).toBe(403);
   });
 
+  it('runs ImprovementProject, WorkItem and sealed work evidence through HTTP', async () => {
+    const handler = buildHandler(
+      [
+        'fd000000-0000-4000-8000-000000000001',
+        'fd000000-0000-4000-8000-000000000002',
+        'fd000000-0000-4000-8000-000000000003',
+        'fd000000-0000-4000-8000-000000000004',
+        'fd000000-0000-4000-8000-000000000005',
+        'fd000000-0000-4000-8000-000000000006',
+        'fd000000-0000-4000-8000-000000000007',
+        'fd000000-0000-4000-8000-000000000008',
+        'fd000000-0000-4000-8000-000000000009',
+        'fd000000-0000-4000-8000-000000000010',
+        'fd000000-0000-4000-8000-000000000011',
+        'fd000000-0000-4000-8000-000000000012',
+        'fd000000-0000-4000-8000-000000000013',
+      ],
+      new SequenceClock([
+        '2026-09-19T10:00:00.000Z',
+        '2026-09-19T10:05:00.000Z',
+        '2026-09-20T08:00:00.000Z',
+        '2026-10-01T08:00:00.000Z',
+        '2026-10-01T08:05:00.000Z',
+        '2026-10-01T09:00:00.000Z',
+        '2026-10-03T09:00:00.000Z',
+        '2026-10-03T10:00:00.000Z',
+        '2026-10-03T11:00:00.000Z',
+      ]),
+    );
+
+    const propertyResponse = await handler(
+      new Request('https://portfolio.test/properties', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ...propertyBody,
+          code: 'PROP-IMPROVEMENT-HTTP',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(propertyResponse.status).toBe(201);
+    const property = (await propertyResponse.json()).data;
+
+    const unitResponse = await handler(
+      new Request('https://portfolio.test/units', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          propertyId: property.id,
+          code: 'UNIT-IMPROVEMENT-HTTP',
+          unitNumber: 'I1',
+          unitType: 'apartment',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(unitResponse.status).toBe(201);
+    const unit = (await unitResponse.json()).data;
+
+    const spaceResponse = await handler(
+      new Request('https://portfolio.test/spaces', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          unitId: unit.id,
+          code: 'KITCHEN-IMPROVEMENT-HTTP',
+          name: 'Kitchen',
+          spaceType: 'kitchen',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(spaceResponse.status).toBe(201);
+    const space = (await spaceResponse.json()).data;
+
+    const contractorResponse = await handler(
+      new Request('https://portfolio.test/parties', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          code: 'PTY-IMPROVEMENT-CONTRACTOR',
+          partyType: 'company',
+          legalName: 'Renovation Contractor d.o.o.',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(contractorResponse.status).toBe(201);
+    const contractor = (await contractorResponse.json()).data;
+
+    const assetResponse = await handler(
+      new Request('https://portfolio.test/assets', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          code: 'ASSET-IMPROVEMENT-HTTP',
+          name: 'Built-in oven',
+          propertyId: property.id,
+          unitId: unit.id,
+          spaceId: space.id,
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(assetResponse.status).toBe(201);
+    const asset = (await assetResponse.json()).data;
+
+    const projectResponse = await handler(
+      new Request('https://portfolio.test/improvement-projects', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          code: 'IMP-HTTP-001',
+          name: 'Kitchen renovation',
+          description: 'Replace cabinetry and finishes',
+          propertyId: property.id,
+          unitId: unit.id,
+          spaceId: space.id,
+          plannedStartOn: '2026-10-01',
+          plannedEndOn: '2026-10-31',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(projectResponse.status).toBe(201);
+    const project = (await projectResponse.json()).data;
+    expect(project).toMatchObject({ status: 'draft', version: 1 });
+
+    const planResponse = await handler(
+      new Request(
+        `https://portfolio.test/improvement-projects/${project.id}/status`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ expectedVersion: 1, action: 'plan' }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(planResponse.status).toBe(200);
+
+    const startProjectResponse = await handler(
+      new Request(
+        `https://portfolio.test/improvement-projects/${project.id}/status`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ expectedVersion: 2, action: 'start' }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(startProjectResponse.status).toBe(200);
+
+    const itemResponse = await handler(
+      new Request(
+        `https://portfolio.test/improvement-projects/${project.id}/work-items`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            code: 'WI-01',
+            title: 'Install new cabinetry',
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(itemResponse.status).toBe(201);
+    const item = (await itemResponse.json()).data;
+
+    const startItemResponse = await handler(
+      new Request(`https://portfolio.test/work-items/${item.id}/status`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ expectedVersion: 1, action: 'start' }),
+      }),
+      adminIdentity,
+    );
+    expect(startItemResponse.status).toBe(200);
+
+    const recordResponse = await handler(
+      new Request(
+        `https://portfolio.test/work-items/${item.id}/work-records`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            performedAt: '2026-10-02T14:00:00.000Z',
+            contractorPartyId: contractor.id,
+            description: 'Installed cabinet carcasses and oven surround',
+            reference: 'SITE-DIARY-17',
+            materials: [
+              {
+                name: 'Moisture-resistant board',
+                quantity: '12.5',
+                unit: 'm2',
+              },
+            ],
+            assets: [
+              {
+                assetId: asset.id,
+                action: 'affected',
+                notes: 'Oven surround adjusted around existing Asset',
+              },
+            ],
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(recordResponse.status).toBe(201);
+    expect(await recordResponse.json()).toMatchObject({
+      data: {
+        projectId: project.id,
+        workItemId: item.id,
+        contractorPartyId: contractor.id,
+        performedAt: '2026-10-02T14:00:00.000Z',
+        recordedAt: '2026-10-03T09:00:00.000Z',
+        materials: [{ quantity: '12.5', unit: 'm2' }],
+        assets: [{ assetId: asset.id, action: 'affected' }],
+      },
+    });
+
+    const completeItemResponse = await handler(
+      new Request(`https://portfolio.test/work-items/${item.id}/status`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ expectedVersion: 2, action: 'complete' }),
+      }),
+      adminIdentity,
+    );
+    expect(completeItemResponse.status).toBe(200);
+
+    const completeProjectResponse = await handler(
+      new Request(
+        `https://portfolio.test/improvement-projects/${project.id}/status`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ expectedVersion: 3, action: 'complete' }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(completeProjectResponse.status).toBe(200);
+    expect(await completeProjectResponse.json()).toMatchObject({
+      data: { status: 'completed', version: 4 },
+    });
+
+    const inspectorRecords = await handler(
+      new Request(
+        `https://portfolio.test/improvement-projects/${project.id}/work-records`,
+      ),
+      inspectorIdentity,
+    );
+    expect(inspectorRecords.status).toBe(200);
+    expect((await inspectorRecords.json()).data.items).toHaveLength(1);
+
+    const inspectorWrite = await handler(
+      new Request('https://portfolio.test/improvement-projects', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          code: 'IMP-FORBIDDEN',
+          name: 'Forbidden',
+          propertyId: property.id,
+        }),
+      }),
+      inspectorIdentity,
+    );
+    expect(inspectorWrite.status).toBe(403);
+  });
+
   it('allows inspector reads but rejects master-data writes', async () => {
     const handler = buildHandler();
 
