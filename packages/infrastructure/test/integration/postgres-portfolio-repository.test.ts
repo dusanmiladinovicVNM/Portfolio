@@ -6536,6 +6536,115 @@ describe('PostgreSQL infrastructure', () => {
     });
     expect((await assetRepository.getById(asset.id))?.unitId).toBe(unitB.id);
 
+    // Sequential sabotage: once an Issue has captured Unit A at 13:00,
+    // a later direct-SQL backdated move may not close that interval at 12:00.
+    const protectedAsset = await createAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T10:00:00.000Z' },
+      },
+      actor,
+      {
+        code: 'ASSET-MAINT-SNAPSHOT-GUARD',
+        name: 'Asset with protected Maintenance snapshot',
+        propertyId: property.id,
+        unitId: unitA.id,
+        spaceId: spaceA.id,
+      },
+    );
+    const protectedIssue = await createMaintenanceIssueCommand(
+      {
+        ...maintenanceDeps,
+        clock: { now: () => '2026-09-19T15:00:00.000Z' },
+      },
+      actor,
+      {
+        code: 'MI-PROTECTED-HISTORY',
+        propertyId: property.id,
+        unitId: unitA.id,
+        spaceId: spaceA.id,
+        assetId: protectedAsset.id,
+        title: 'Historical scope must survive later Asset edits',
+        priority: 'normal',
+        reportedAt: '2026-09-19T13:00:00.000Z',
+      },
+    );
+    expect(protectedIssue).toMatchObject({
+      assetId: protectedAsset.id,
+      unitId: unitA.id,
+      spaceId: spaceA.id,
+      reportedAt: '2026-09-19T13:00:00.000Z',
+      recordedAt: '2026-09-19T15:00:00.000Z',
+    });
+
+    const protectedLocation = await assetRepository.getCurrentLocation(
+      protectedAsset.id,
+    );
+    expect(protectedLocation).toMatchObject({
+      unitId: unitA.id,
+      spaceId: spaceA.id,
+      validFrom: '2026-09-19T10:00:00.000Z',
+      validTo: null,
+    });
+
+    await expect(
+      sql`
+        update public.asset_location_history
+        set valid_to = '2026-09-19T12:00:00.000Z'
+        where id = ${protectedLocation!.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'maintenance_issue_asset_history_snapshot_conflict',
+    });
+
+    // Positive boundary: closing the interval after the Issue occurrence
+    // preserves [10:00, 14:00), so the 13:00 snapshot remains true.
+    const protectedMoved = await moveAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T14:00:00.000Z' },
+      },
+      actor,
+      protectedAsset.id,
+      {
+        expectedVersion: protectedAsset.version,
+        propertyId: property.id,
+        unitId: unitB.id,
+        spaceId: spaceB.id,
+        reason: 'Backdated move after the protected Issue occurrence',
+      },
+    );
+    expect(protectedMoved).toMatchObject({
+      unitId: unitB.id,
+      spaceId: spaceB.id,
+      version: protectedAsset.version + 1,
+    });
+    expect(
+      await assetRepository.getLocationAt(
+        protectedAsset.id,
+        '2026-09-19T13:00:00.000Z',
+      ),
+    ).toMatchObject({
+      unitId: unitA.id,
+      spaceId: spaceA.id,
+      validTo: '2026-09-19T14:00:00.000Z',
+    });
+    expect(
+      await assetRepository.getLocationAt(
+        protectedAsset.id,
+        '2026-09-19T14:00:00.000Z',
+      ),
+    ).toMatchObject({
+      unitId: unitB.id,
+      spaceId: spaceB.id,
+      validFrom: '2026-09-19T14:00:00.000Z',
+    });
+
     await expect(
       createMaintenanceIssueCommand(
         maintenanceDeps,
