@@ -6974,6 +6974,70 @@ describe('PostgreSQL infrastructure', () => {
       version: 1,
     });
 
+    await sql`
+      insert into public.maintenance_issues (
+        id, code, property_id,
+        title, priority, status, reported_at, version,
+        recorded_at, recorded_by_user_id
+      ) values (
+        'acf00000-0000-4000-8000-000000000006',
+        'MI-WO-TIME-PARENT',
+        ${property.id},
+        'Parent Issue for WorkOrder timestamp parity',
+        'normal',
+        'open',
+        '2026-09-19T08:00:00.000Z',
+        1,
+        '2026-09-19T10:00:00.000Z',
+        ${actor.userId}
+      )
+    `;
+
+    await expect(
+      sql`
+        insert into public.maintenance_work_orders (
+          id, issue_id, code, title, status, version,
+          created_at, created_by_user_id
+        ) values (
+          'acf00000-0000-4000-8000-000000000007',
+          'acf00000-0000-4000-8000-000000000006',
+          'MWO-BEFORE-PARENT-RECORDED',
+          'Illegal WorkOrder before parent recording',
+          'draft',
+          1,
+          '2026-09-19T09:59:59.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'maintenance_work_order_before_issue_recorded',
+    });
+
+    await sql`
+      insert into public.maintenance_work_orders (
+        id, issue_id, code, title, status, version,
+        created_at, created_by_user_id
+      ) values (
+        'acf00000-0000-4000-8000-000000000008',
+        'acf00000-0000-4000-8000-000000000006',
+        'MWO-AT-PARENT-RECORDED',
+        'Exact Issue recording boundary',
+        'draft',
+        1,
+        '2026-09-19T10:00:00.000Z',
+        ${actor.userId}
+      )
+    `;
+
+    const exactBoundaryWorkOrder = await maintenanceRepository.getWorkOrderById(
+      'acf00000-0000-4000-8000-000000000008' as import('@portfolio/domain').MaintenanceWorkOrderId,
+    );
+    expect(exactBoundaryWorkOrder).toMatchObject({
+      status: 'draft',
+      createdAt: '2026-09-19T10:00:00.000Z',
+    });
+
     await expect(
       sql`
         insert into public.maintenance_issues (
