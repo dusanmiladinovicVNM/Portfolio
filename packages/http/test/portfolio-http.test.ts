@@ -1586,6 +1586,7 @@ describe('Portfolio HTTP boundary', () => {
       {
         assetRepository: new InMemoryAssetRepository(),
     assetInventoryRepository: new InMemoryAssetInventoryRepository(),
+        assetServiceRepository: new InMemoryAssetServiceRepository(),
         portfolioRepository: new InMemoryPortfolioRepository(),
         partyRepository: new InMemoryPartyRepository(),
         ownershipRepository: new InMemoryOwnershipRepository(),
