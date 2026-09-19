@@ -271,7 +271,7 @@ describe('AccessItem domain', () => {
         lastTransaction: issued,
       }),
     ).toThrowError(
-      expect.objectContaining({ code: 'ACCESS_ITEM_TIMESTAMP_ORDER_INVALID' }),
+      expect.objectContaining({ code: 'ACCESS_ITEM_RETIREMENT_BEFORE_CUSTODY' }),
     );
   });
 
