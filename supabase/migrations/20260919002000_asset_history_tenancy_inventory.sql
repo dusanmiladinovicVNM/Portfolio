@@ -251,7 +251,9 @@ language plpgsql
 as $tenancy_asset_assignment_guard$
 declare
   tenancy_unit_id uuid;
+  tenancy_status text;
   asset_unit_id uuid;
+  asset_status text;
   assessment_asset_id uuid;
   move_in_changed boolean;
   move_out_changed boolean;
@@ -263,11 +265,13 @@ begin
   end if;
 
   if tg_op = 'INSERT' then
-    select unit_id into tenancy_unit_id
+    select unit_id, status
+      into tenancy_unit_id, tenancy_status
     from public.tenancies
     where id = new.tenancy_id;
 
-    select unit_id into asset_unit_id
+    select unit_id, status
+      into asset_unit_id, asset_status
     from public.assets
     where id = new.asset_id;
 
@@ -275,6 +279,18 @@ begin
       raise exception 'Tenancy inventory Asset must belong to the Tenancy Unit.'
         using errcode = '23514',
               constraint = 'tenancy_asset_assignment_unit_mismatch';
+    end if;
+
+    if tenancy_status = 'cancelled' then
+      raise exception 'Cancelled Tenancy cannot receive Asset inventory assignments.'
+        using errcode = '23514',
+              constraint = 'tenancy_asset_assignment_tenancy_cancelled';
+    end if;
+
+    if asset_status in ('retired', 'replaced') then
+      raise exception 'Retired or replaced Asset cannot be newly assigned to Tenancy inventory.'
+        using errcode = '23514',
+              constraint = 'tenancy_asset_assignment_asset_status_invalid';
     end if;
 
     if new.version <> 1
