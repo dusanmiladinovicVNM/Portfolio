@@ -105,7 +105,7 @@ Service history must reference the exact physical Asset identity.
 - ProjectAsset
 - contractor/work history
 
-### PR #18 — Unified Cost Ledger (IN PROGRESS)
+### PR #18 — Unified Cost Ledger (DONE)
 
 - normalized Cost
 - source links
@@ -115,7 +115,7 @@ Service history must reference the exact physical Asset identity.
 
 Cost is a financial projection/fact, not a substitute for its source business entity.
 
-### PR #19 — Maintenance
+### PR #19 — Maintenance (IN PROGRESS)
 
 - Issue
 - WorkOrder
