@@ -14,7 +14,7 @@ create table public.costs (
   work_record_id uuid references public.improvement_work_records(id) on delete restrict,
   work_material_id uuid references public.improvement_work_materials(id) on delete restrict,
   description text not null,
-  amount numeric(18, 2) not null,
+  amount numeric not null,
   currency text not null,
   incurred_on date not null,
   reporting_class text not null,
@@ -26,6 +26,10 @@ create table public.costs (
   constraint costs_description_not_blank check (btrim(description) <> ''),
   constraint costs_description_canonical check (description = btrim(description)),
   constraint costs_amount_positive check (amount > 0),
+  constraint costs_amount_scale_valid check (scale(amount) <= 2),
+  constraint costs_amount_range_valid check (
+    amount < 10000000000000000::numeric
+  ),
   constraint costs_currency_supported check (currency in ('CHF', 'EUR', 'RSD')),
   constraint costs_reporting_class_valid
     check (reporting_class in ('capex', 'opex', 'unclassified')),
