@@ -28,6 +28,7 @@ import {
   createPropertyCommand,
   createSpaceCommand,
   createUnitCommand,
+  endTenancyCommand,
   finalizeDocumentVersionCommand,
   finalizeInspectionCommand,
   generateInspectionFinalReportCommand,
@@ -4137,6 +4138,68 @@ describe('PostgreSQL infrastructure', () => {
     expect(moveOut).toMatchObject({
       version: 3,
       moveOut: { presence: 'missing', conditionAssessmentId: null },
+    });
+
+    const endedTenancy = await endTenancyCommand(
+      { tenancyRepository },
+      actor,
+      tenancy.id,
+      activeTenancy.version,
+      '2026-09-21',
+    );
+    expect(endedTenancy.status).toBe('ended');
+
+    const postEndAsset = await createAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-21T11:00:00.000Z' },
+      },
+      actor,
+      {
+        code: 'ASSET-HISTORY-POST-END',
+        name: 'Post-end inventory candidate',
+        propertyId: property.id,
+        unitId: unitA.id,
+        spaceId: spaceA.id,
+      },
+    );
+
+    await expect(
+      assignAssetToTenancyCommand(
+        {
+          assetRepository,
+          assetInventoryRepository,
+          tenancyRepository,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-21T11:05:00.000Z' },
+        },
+        actor,
+        tenancy.id,
+        postEndAsset.id,
+      ),
+    ).rejects.toMatchObject({
+      code: 'TENANCY_ASSET_TENANCY_STATE_INVALID',
+    });
+
+    await expect(
+      sql`
+        insert into public.tenancy_asset_assignments (
+          id, tenancy_id, asset_id,
+          assigned_at, assigned_by_user_id, version
+        ) values (
+          'c2f00000-0000-4000-8000-000000000004',
+          ${tenancy.id},
+          ${postEndAsset.id},
+          '2026-09-21T11:05:00.000Z',
+          ${actor.userId},
+          1
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'tenancy_asset_assignment_tenancy_state_invalid',
     });
 
     const conditions = await listAssetConditionAssessmentsQuery(
