@@ -187,7 +187,7 @@ begin
     end if;
 
   elsif new.type = 'returned' then
-    if previous_type not in ('issued', 'lost') then
+    if previous_type is null or previous_type not in ('issued', 'lost') then
       raise exception 'Only an issued or lost AccessItem can be returned.'
         using errcode = '23514',
               constraint = 'access_item_transaction_return_invalid_state';
