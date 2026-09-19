@@ -4424,6 +4424,22 @@ describe('PostgreSQL infrastructure', () => {
       'fb000000-0000-4000-8000-000000000012',
       'fb000000-0000-4000-8000-000000000013',
       'fb000000-0000-4000-8000-000000000014',
+      'fb000000-0000-4000-8000-000000000015',
+      'fb000000-0000-4000-8000-000000000016',
+      'fb000000-0000-4000-8000-000000000017',
+      'fb000000-0000-4000-8000-000000000018',
+      'fb000000-0000-4000-8000-000000000019',
+      'fb000000-0000-4000-8000-000000000020',
+      'fb000000-0000-4000-8000-000000000021',
+      'fb000000-0000-4000-8000-000000000022',
+      'fb000000-0000-4000-8000-000000000023',
+      'fb000000-0000-4000-8000-000000000024',
+      'fb000000-0000-4000-8000-000000000025',
+      'fb000000-0000-4000-8000-000000000026',
+      'fb000000-0000-4000-8000-000000000027',
+      'fb000000-0000-4000-8000-000000000028',
+      'fb000000-0000-4000-8000-000000000029',
+      'fb000000-0000-4000-8000-000000000030',
     ]);
 
     const property = await createPropertyCommand(
@@ -4501,13 +4517,16 @@ describe('PostgreSQL infrastructure', () => {
     await expect(
       sql`
         insert into public.asset_warranty_claims (
-          id, warranty_id, incident_on, description, status, version
+          id, warranty_id, incident_on, description, status,
+          recorded_at, recorded_by_user_id, version
         ) values (
           'fbf00000-0000-4000-8000-000000000001',
           ${warranty.id},
           '2028-01-01',
           'Outside coverage',
           'draft',
+          '2026-09-19T08:06:00.000Z',
+          ${actor.userId},
           1
         )
       `,
@@ -4527,8 +4546,51 @@ describe('PostgreSQL infrastructure', () => {
       constraint_name: 'asset_warranty_immutable',
     });
 
+    await expect(
+      createWarrantyClaimCommand(
+        {
+          assetServiceRepository,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-19T08:06:00.000Z' },
+        },
+        actor,
+        warranty.id,
+        {
+          incidentOn: '2027-03-01',
+          description: 'Impossible future incident',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'WARRANTY_CLAIM_INCIDENT_IN_FUTURE',
+    });
+
+    await expect(
+      sql`
+        insert into public.asset_warranty_claims (
+          id, warranty_id, incident_on, description, status,
+          recorded_at, recorded_by_user_id, version
+        ) values (
+          'fbf00000-0000-4000-8000-000000000004',
+          ${warranty.id},
+          '2027-03-01',
+          'Impossible future incident',
+          'draft',
+          '2026-09-19T08:06:00.000Z',
+          ${actor.userId},
+          1
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_warranty_claim_incident_not_future',
+    });
+
     const claim = await createWarrantyClaimCommand(
-      { assetServiceRepository, idGenerator: ids },
+      {
+        assetServiceRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T08:07:00.000Z' },
+      },
       actor,
       warranty.id,
       {
@@ -4614,6 +4676,57 @@ describe('PostgreSQL infrastructure', () => {
       where id = ${provider.id}
     `;
 
+    await expect(
+      createServicePlanCommand(
+        {
+          assetRepository,
+          assetServiceRepository,
+          partyRepository,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-19T08:24:00.000Z' },
+        },
+        actor,
+        asset.id,
+        {
+          name: 'Invalid inactive-provider plan',
+          scheduleKind: 'one_time',
+          firstDueOn: '2027-08-01',
+          providerPartyId: provider.id,
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'SERVICE_PLAN_PROVIDER_STATUS_INVALID',
+    });
+
+    await expect(
+      sql`
+        insert into public.asset_service_plans (
+          id, asset_id, name, schedule_kind, first_due_on,
+          provider_party_id, status, version, created_at, created_by_user_id
+        ) values (
+          'fbf00000-0000-4000-8000-000000000005',
+          ${asset.id},
+          'Invalid inactive-provider plan',
+          'one_time',
+          '2027-08-01',
+          ${provider.id},
+          'active',
+          1,
+          '2026-09-19T08:24:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_service_plan_provider_status_invalid',
+    });
+
+    await sql`
+      update public.parties
+      set status = 'active'
+      where id = ${provider.id}
+    `;
+
     const plan = await createServicePlanCommand(
       {
         assetRepository,
@@ -4646,14 +4759,51 @@ describe('PostgreSQL infrastructure', () => {
     });
 
     const paused = await changeServicePlanStatusCommand(
-      assetServiceRepository,
+      { assetRepository, assetServiceRepository, partyRepository },
       actor,
       plan.id,
       1,
       'paused',
     );
+
+    await sql`
+      update public.parties
+      set status = 'inactive'
+      where id = ${provider.id}
+    `;
+
+    await expect(
+      changeServicePlanStatusCommand(
+        { assetRepository, assetServiceRepository, partyRepository },
+        actor,
+        plan.id,
+        paused.version,
+        'active',
+      ),
+    ).rejects.toMatchObject({
+      code: 'SERVICE_PLAN_PROVIDER_STATUS_INVALID',
+    });
+
+    await expect(
+      sql`
+        update public.asset_service_plans
+        set status = 'active',
+            version = version + 1
+        where id = ${plan.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_service_plan_provider_status_invalid',
+    });
+
+    await sql`
+      update public.parties
+      set status = 'active'
+      where id = ${provider.id}
+    `;
+
     const activeAgain = await changeServicePlanStatusCommand(
-      assetServiceRepository,
+      { assetRepository, assetServiceRepository, partyRepository },
       actor,
       plan.id,
       paused.version,
@@ -4694,7 +4844,11 @@ describe('PostgreSQL infrastructure', () => {
       },
     );
     const otherClaim = await createWarrantyClaimCommand(
-      { assetServiceRepository, idGenerator: ids },
+      {
+        assetServiceRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T08:41:00.000Z' },
+      },
       actor,
       otherWarranty.id,
       {
@@ -4744,6 +4898,12 @@ describe('PostgreSQL infrastructure', () => {
       code: '23514',
       constraint_name: 'asset_service_event_claim_asset_mismatch',
     });
+
+    await sql`
+      update public.parties
+      set status = 'inactive'
+      where id = ${provider.id}
+    `;
 
     const event = await recordServiceEventCommand(
       {
@@ -4813,11 +4973,66 @@ describe('PostgreSQL infrastructure', () => {
       constraint_name: 'asset_service_part_immutable',
     });
 
-    const ended = await changeServicePlanStatusCommand(
-      assetServiceRepository,
+    await sql`
+      update public.parties
+      set status = 'active'
+      where id = ${provider.id}
+    `;
+
+    const replacement = await replaceAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T09:00:00.000Z' },
+      },
+      actor,
+      asset.id,
+      {
+        expectedVersion: 1,
+        code: 'ASSET-SERVICE-INT-REPLACEMENT',
+        name: 'Replacement heat pump',
+      },
+    );
+    expect(replacement.replaced.status).toBe('replaced');
+
+    const pausedAfterReplacement = await changeServicePlanStatusCommand(
+      { assetRepository, assetServiceRepository, partyRepository },
       actor,
       plan.id,
       activeAgain.version,
+      'paused',
+    );
+
+    await expect(
+      changeServicePlanStatusCommand(
+        { assetRepository, assetServiceRepository, partyRepository },
+        actor,
+        plan.id,
+        pausedAfterReplacement.version,
+        'active',
+      ),
+    ).rejects.toMatchObject({
+      code: 'SERVICE_PLAN_ASSET_STATUS_INVALID',
+    });
+
+    await expect(
+      sql`
+        update public.asset_service_plans
+        set status = 'active',
+            version = version + 1
+        where id = ${plan.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_service_plan_asset_status_invalid',
+    });
+
+    const ended = await changeServicePlanStatusCommand(
+      { assetRepository, assetServiceRepository, partyRepository },
+      actor,
+      plan.id,
+      pausedAfterReplacement.version,
       'ended',
     );
     expect(ended.status).toBe('ended');
