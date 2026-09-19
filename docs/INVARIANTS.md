@@ -156,3 +156,16 @@ These rules are architecture gates, not optional implementation notes.
 123. UI components cannot coordinate multi-table business transactions.
 124. Multi-record business commands have one explicit transactional boundary.
 125. Database constraints enforce invariants that can be stated relationally.
+
+
+## Keys + Access
+
+126. AccessItem is one exact physical key/card/remote. Property is required; Unit is optional; Space requires Unit. Unit must belong to Property and Space to Unit. Scope is inventory association, not exact lock/door/electronic permission truth.
+127. AccessItem identity, kind, physical scope and recording provenance are immutable in canonical #20. No transaction may occur before the AccessItem was recorded.
+128. AccessItemTransaction is append-only custody history. Per AccessItem, sequence starts at 1 and advances exactly by one; updates/deletes are forbidden.
+129. Current AccessItem state is derived only from the latest transaction: no transaction or `returned` = available; `issued` = held by that Tenancy; `lost` = unavailable and still associated with that holding Tenancy. There is no parallel mutable current-holder truth.
+130. New issue is allowed only to Tenancy in `active|notice_given|move_out_pending`. Property-scoped item may serve any Tenancy in that Property; Unit/Space-scoped item requires that exact Tenancy Unit.
+131. `returned` requires previous state `issued|lost`; `lost` requires previous state `issued`; both must reference the exact current holding Tenancy. A lost item cannot be reissued until returned.
+132. AccessItem transaction time is monotonic: `item.recordedAt <= occurredAt <= recordedAt`; later transactions cannot move either occurrence or recording time before the previous transaction. Equality is legal because sequence provides deterministic order.
+133. Ending a Tenancy does not rewrite outstanding AccessItem custody. Return/loss may close an existing custody chain after Tenancy end, while a new issue to ended/cancelled/draft/planned Tenancy is forbidden.
+134. PostgreSQL transaction insertion row-locks the AccessItem as the per-item serialization point, then independently revalidates next sequence, Tenancy scope/state, holder and temporal transition. Concurrent issue attempts for one available item therefore cannot both commit.
