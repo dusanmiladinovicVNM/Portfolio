@@ -397,7 +397,11 @@ describe('Portfolio HTTP boundary', () => {
       'd1000000-0000-4000-8000-000000000016',
       'd1000000-0000-4000-8000-000000000017',
       'd1000000-0000-4000-8000-000000000018',
-    ]);
+    ], new SequenceClock([
+      '2026-09-18T20:00:00.000Z',
+      '2026-09-18T20:05:00.000Z',
+      '2026-09-18T21:00:00.000Z',
+    ]));
 
     const propertyResponse = await handler(
       new Request('https://portfolio.test/properties', {
