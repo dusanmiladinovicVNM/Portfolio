@@ -13,3 +13,5 @@ export * from './postgres/postgres-asset-inventory-repository.js';
 export * from './postgres/postgres-asset-service-repository.js';
 export * from './postgres/postgres-improvement-repository.js';
 export * from './postgres/postgres-cost-repository.js';
+
+export * from './postgres/postgres-maintenance-repository.js';
