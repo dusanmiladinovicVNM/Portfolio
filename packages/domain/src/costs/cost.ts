@@ -29,6 +29,8 @@ export const COST_REPORTING_CLASSES = [
   'unclassified',
 ] as const;
 
+export const COST_SUPPORTED_CURRENCIES = ['CHF', 'EUR', 'RSD'] as const;
+
 export type CostReportingClass = (typeof COST_REPORTING_CLASSES)[number];
 
 export type CostSource =
@@ -117,6 +119,17 @@ function positiveMoney(value: string): MoneyAmount {
   return amount;
 }
 
+function costCurrency(value: string): CurrencyCode {
+  const currency = asCurrencyCode(value);
+  if (!COST_SUPPORTED_CURRENCIES.some((supported) => supported === currency)) {
+    throw new DomainError(
+      'COST_CURRENCY_UNSUPPORTED',
+      `Cost currency must be one of: ${COST_SUPPORTED_CURRENCIES.join(', ')}.`,
+    );
+  }
+  return currency;
+}
+
 export function createCost(input: {
   readonly id: CostId;
   readonly source: CostSource;
@@ -145,7 +158,7 @@ export function createCost(input: {
     source: input.source,
     description: required(input.description, 'description'),
     amount: positiveMoney(input.amount),
-    currency: asCurrencyCode(input.currency),
+    currency: costCurrency(input.currency),
     incurredOn,
     reportingClass: input.reportingClass,
     supplierPartyId: input.supplierPartyId ?? null,
@@ -187,6 +200,17 @@ export function createCostReversal(input: {
     throw new DomainError(
       'COST_REPLACEMENT_RECORDING_MISMATCH',
       'Replacement Cost and reversal must share the same recordedAt.',
+    );
+  }
+
+  if (
+    input.replacementCost !== undefined &&
+    input.replacementCost !== null &&
+    input.replacementCost.recordedByUserId !== input.recordedByUserId
+  ) {
+    throw new DomainError(
+      'COST_REPLACEMENT_RECORDER_MISMATCH',
+      'Replacement Cost and reversal must share the same recordedByUserId.',
     );
   }
 
