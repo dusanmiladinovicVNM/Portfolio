@@ -12,6 +12,7 @@ import {
   type TenancyAssetPhase,
   type TenancyAssetPresence,
   type TenancyId,
+  type TenancyStatus,
 } from '@portfolio/domain';
 import { requireCapability, type Actor } from '../security/access.js';
 import type { ClockPort } from '../shared/clock.js';
@@ -28,10 +29,49 @@ export interface AssetHistoryDependencies {
   readonly clock: ClockPort;
 }
 
+const TENANCY_ASSET_ASSIGNMENT_STATUSES: readonly TenancyStatus[] = [
+  'draft',
+  'planned',
+  'active',
+  'notice_given',
+  'move_out_pending',
+];
+
+const TENANCY_ASSET_MOVE_IN_STATUSES: readonly TenancyStatus[] = [
+  'planned',
+  'active',
+];
+
+const TENANCY_ASSET_MOVE_OUT_STATUSES: readonly TenancyStatus[] = [
+  'active',
+  'notice_given',
+  'move_out_pending',
+];
+
+function assertTenancyInventoryPhaseAllowed(
+  status: TenancyStatus,
+  phase: TenancyAssetPhase,
+): void {
+  const allowed =
+    phase === 'move_in'
+      ? TENANCY_ASSET_MOVE_IN_STATUSES
+      : TENANCY_ASSET_MOVE_OUT_STATUSES;
+  if (!allowed.includes(status)) {
+    throw new DomainError(
+      'TENANCY_ASSET_TENANCY_STATE_INVALID',
+      `${phase} inventory cannot be recorded while Tenancy is ${status}.`,
+    );
+  }
+}
+
 export async function assessAssetConditionCommand(
   deps: Pick<
     AssetHistoryDependencies,
-    'assetRepository' | 'assetInventoryRepository' | 'idGenerator' | 'clock'
+    | 'assetRepository'
+    | 'assetInventoryRepository'
+    | 'tenancyRepository'
+    | 'idGenerator'
+    | 'clock'
   >,
   actor: Actor,
   assetId: AssetId,
@@ -77,10 +117,10 @@ export async function assignAssetToTenancyCommand(
   if (!asset) {
     throw new DomainError('ASSET_NOT_FOUND', 'Asset not found.');
   }
-  if (tenancy.status === 'cancelled') {
+  if (!TENANCY_ASSET_ASSIGNMENT_STATUSES.includes(tenancy.status)) {
     throw new DomainError(
-      'TENANCY_ASSET_TENANCY_CANCELLED',
-      'A cancelled Tenancy cannot receive inventory assignments.',
+      'TENANCY_ASSET_TENANCY_STATE_INVALID',
+      `Tenancy inventory cannot be assigned while Tenancy is ${tenancy.status}.`,
     );
   }
   if (asset.unitId !== tenancy.unitId) {
@@ -140,9 +180,18 @@ export async function recordTenancyAssetInventoryCommand(
     );
   }
 
-  if (!(await deps.assetRepository.getById(assignment.assetId))) {
+  const [asset, tenancy] = await Promise.all([
+    deps.assetRepository.getById(assignment.assetId),
+    deps.tenancyRepository.getById(assignment.tenancyId),
+  ]);
+  if (!asset) {
     throw new DomainError('ASSET_NOT_FOUND', 'Assigned Asset not found.');
   }
+  if (!tenancy) {
+    throw new DomainError('TENANCY_NOT_FOUND', 'Tenancy not found.');
+  }
+
+  assertTenancyInventoryPhaseAllowed(tenancy.status, input.phase);
 
   const recordedAt = deps.clock.now();
   const assessment =
