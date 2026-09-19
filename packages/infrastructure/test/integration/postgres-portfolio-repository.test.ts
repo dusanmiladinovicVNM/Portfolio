@@ -5,9 +5,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   activateTenancyCommand,
   changeAssetStatusCommand,
+  changeImprovementProjectStatusCommand,
+  changeWorkItemStatusCommand,
   changeServicePlanStatusCommand,
   closeWarrantyClaimCommand,
   createAssetCommand,
+  createImprovementProjectCommand,
+  createWorkItemCommand,
   createServicePlanCommand,
   createWarrantyClaimCommand,
   createWarrantyCommand,
@@ -16,8 +20,10 @@ import {
   assignAssetToTenancyCommand,
   recordTenancyAssetInventoryCommand,
   recordServiceEventCommand,
+  recordWorkCommand,
   resolveWarrantyClaimCommand,
   submitWarrantyClaimCommand,
+  updateImprovementProjectPlanCommand,
   listAssetLocationHistoryQuery,
   listAssetConditionAssessmentsQuery,
   listTenancyAssetAssignmentsQuery,
@@ -85,6 +91,7 @@ import {
   PostgresAssetRepository,
   PostgresAssetServiceRepository,
   PostgresDocumentRepository,
+  PostgresImprovementRepository,
   PostgresInspectionRepository,
   PostgresLeaseRepository,
   PostgresOwnershipRepository,
@@ -111,6 +118,7 @@ const tenancyRepository = new PostgresTenancyRepository(sql);
 const accessRepository = new PostgresUserAccessRepository(sql);
 const documentRepository = new PostgresDocumentRepository(sql);
 const inspectionRepository = new PostgresInspectionRepository(sql);
+const improvementRepository = new PostgresImprovementRepository(sql);
 
 class SequenceIds implements IdGenerator {
   private index = 0;
@@ -128,6 +136,11 @@ class SequenceIds implements IdGenerator {
 async function resetAndMigrate(): Promise<void> {
   await sql.unsafe(
     `drop table if exists
+      public.improvement_project_assets,
+      public.improvement_work_materials,
+      public.improvement_work_records,
+      public.improvement_work_items,
+      public.improvement_projects,
       public.asset_service_parts,
       public.asset_service_events,
       public.asset_service_plans,
@@ -222,6 +235,11 @@ beforeAll(async () => {
 afterAll(async () => {
   await sql.unsafe(
     `drop table if exists
+      public.improvement_project_assets,
+      public.improvement_work_materials,
+      public.improvement_work_records,
+      public.improvement_work_items,
+      public.improvement_projects,
       public.asset_replacements,
       public.asset_identifiers,
       public.assets,
