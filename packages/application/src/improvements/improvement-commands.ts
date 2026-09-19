@@ -152,7 +152,7 @@ export async function createImprovementProjectCommand(
 
   if (await deps.improvementRepository.projectCodeExists(input.code)) {
     throw new DomainError(
-      'IMPROVEMENT_PROJECT_CODE_EXISTS',
+      'IMPROVEMENT_PROJECT_CODE_ALREADY_EXISTS',
       'ImprovementProject code already exists.',
     );
   }
@@ -262,7 +262,7 @@ export async function createWorkItemCommand(
     await deps.improvementRepository.workItemCodeExists(projectId, input.code)
   ) {
     throw new DomainError(
-      'WORK_ITEM_CODE_EXISTS',
+      'WORK_ITEM_CODE_ALREADY_EXISTS',
       'WorkItem code already exists inside ImprovementProject.',
     );
   }
