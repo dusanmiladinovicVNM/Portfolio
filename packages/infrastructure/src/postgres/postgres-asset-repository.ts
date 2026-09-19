@@ -65,8 +65,8 @@ interface AssetLocationRow {
   property_id: string;
   unit_id: string | null;
   space_id: string | null;
-  valid_from: string;
-  valid_to: string | null;
+  valid_from: string | Date;
+  valid_to: string | Date | null;
   change_type: AssetLocationChangeType;
   changed_by_user_id: string | null;
   reason: string | null;
@@ -92,6 +92,14 @@ function mapReplacement(row: AssetReplacementRow): AssetReplacement {
   };
 }
 
+function locationInstant(value: string | Date): string {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+function nullableLocationInstant(value: string | Date | null): string | null {
+  return value === null ? null : locationInstant(value);
+}
+
 function mapLocation(row: AssetLocationRow): AssetLocationHistory {
   return {
     id: asAssetLocationHistoryId(row.id),
@@ -99,8 +107,8 @@ function mapLocation(row: AssetLocationRow): AssetLocationHistory {
     propertyId: asPropertyId(row.property_id),
     unitId: row.unit_id === null ? null : asUnitId(row.unit_id),
     spaceId: row.space_id === null ? null : asSpaceId(row.space_id),
-    validFrom: row.valid_from,
-    validTo: row.valid_to,
+    validFrom: locationInstant(row.valid_from),
+    validTo: nullableLocationInstant(row.valid_to),
     changeType: row.change_type,
     changedByUserId:
       row.changed_by_user_id === null ? null : asUserId(row.changed_by_user_id),
