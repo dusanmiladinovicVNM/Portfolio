@@ -2,6 +2,7 @@ import type {
   Asset,
   AssetId,
   AssetReplacement,
+  AssetLocationHistory,
   GloballyUniqueAssetIdentifierType,
   PropertyId,
   UnitId,
@@ -17,7 +18,7 @@ export interface AssetRepository {
     value: string,
   ): Promise<boolean>;
 
-  insert(asset: Asset): Promise<void>;
+  insert(asset: Asset, initialLocation: AssetLocationHistory): Promise<void>;
   updateMetadata(asset: Asset, expectedVersion: number): Promise<void>;
   updateStatus(asset: Asset, expectedVersion: number): Promise<void>;
   replaceAsset(
@@ -25,6 +26,15 @@ export interface AssetRepository {
     replaced: Asset,
     replacement: Asset,
     relation: AssetReplacement,
+    replacementLocation: AssetLocationHistory,
+  ): Promise<void>;
+  getCurrentLocation(assetId: AssetId): Promise<AssetLocationHistory | null>;
+  listLocationHistory(assetId: AssetId): Promise<readonly AssetLocationHistory[]>;
+  moveAsset(
+    current: Asset,
+    moved: Asset,
+    currentLocation: AssetLocationHistory,
+    nextLocation: AssetLocationHistory,
   ): Promise<void>;
 
   getReplacementByReplacedAssetId(
