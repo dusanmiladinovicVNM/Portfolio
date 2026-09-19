@@ -3920,6 +3920,29 @@ describe('PostgreSQL infrastructure', () => {
 
     await expect(
       sql`
+        insert into public.asset_location_history (
+          id, asset_id, property_id, unit_id, space_id,
+          valid_from, valid_to, change_type, changed_by_user_id, reason
+        ) values (
+          'c2f00000-0000-4000-8000-000000000001',
+          ${asset.id},
+          ${property.id},
+          ${unitA.id},
+          ${spaceA.id},
+          '2026-09-19T07:00:00.000Z',
+          '2026-09-19T07:30:00.000Z',
+          'moved',
+          ${actor.userId},
+          'Fabricated backdated history'
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_location_history_insert_must_be_open',
+    });
+
+    await expect(
+      sql`
         update public.assets
         set
           unit_id = ${unitA.id},
@@ -3997,6 +4020,49 @@ describe('PostgreSQL infrastructure', () => {
     ).rejects.toMatchObject({
       code: '23514',
       constraint_name: 'asset_condition_assessment_immutable',
+    });
+
+    const retiredAsset = await createAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T11:00:00.000Z' },
+      },
+      actor,
+      {
+        code: 'ASSET-HISTORY-RETIRED',
+        name: 'Retired inventory candidate',
+        propertyId: property.id,
+        unitId: unitA.id,
+        spaceId: spaceA.id,
+      },
+    );
+    await changeAssetStatusCommand(
+      assetRepository,
+      actor,
+      retiredAsset.id,
+      1,
+      'retired',
+    );
+
+    await expect(
+      sql`
+        insert into public.tenancy_asset_assignments (
+          id, tenancy_id, asset_id,
+          assigned_at, assigned_by_user_id, version
+        ) values (
+          'c2f00000-0000-4000-8000-000000000002',
+          ${tenancy.id},
+          ${retiredAsset.id},
+          '2026-09-19T11:10:00.000Z',
+          ${actor.userId},
+          1
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'tenancy_asset_assignment_asset_status_invalid',
     });
   });
 
