@@ -3,6 +3,7 @@ import {
   resolveActor,
   type AssetInventoryRepository,
   type AssetRepository,
+  type AssetServiceRepository,
   type ClockPort,
   type DocumentRepository,
   type FileStoragePort,
@@ -19,6 +20,7 @@ import {
 } from '@portfolio/application';
 import { DomainError } from '@portfolio/domain';
 import { handleAssetHttp } from './asset-http-routes.js';
+import { handleAssetServiceHttp } from './asset-service-http-routes.js';
 import { handleDocumentHttp } from './document-http-routes.js';
 import { errorResponse } from './http-utils.js';
 import { handleInspectionHttp } from './inspection-http-routes.js';
@@ -32,6 +34,7 @@ export interface PortfolioHttpDependencies {
   readonly portfolioRepository: PortfolioRepository;
   readonly assetRepository: AssetRepository;
   readonly assetInventoryRepository: AssetInventoryRepository;
+  readonly assetServiceRepository: AssetServiceRepository;
   readonly partyRepository: PartyRepository;
   readonly ownershipRepository: OwnershipRepository;
   readonly tenancyRepository: TenancyRepository;
@@ -128,6 +131,19 @@ export function createPortfolioHttpHandler(
       const actor = await resolveActor(deps.userAccessRepository, identity);
 
       const handlers = [
+        () =>
+          handleAssetServiceHttp(
+            {
+              assetRepository: deps.assetRepository,
+              assetServiceRepository: deps.assetServiceRepository,
+              partyRepository: deps.partyRepository,
+              idGenerator: deps.idGenerator,
+              clock: deps.clock,
+            },
+            actor,
+            request,
+            path,
+          ),
         () =>
           handleAssetHttp(
             {
