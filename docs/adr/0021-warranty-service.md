@@ -48,7 +48,7 @@ draft -> submitted -> approved -> closed
 draft|submitted -> cancelled
 ```
 
-Rejected, cancelled and closed claims are terminal.
+Rejected, cancelled and closed claims are terminal. Claim audit time is monotonic from recording: submission cannot predate `recordedAt`; resolution cannot predate submission; closing cannot predate resolution; draft cancellation cannot predate `recordedAt`, and submitted cancellation cannot predate submission.
 
 ### ServicePlan
 
@@ -78,7 +78,7 @@ A ServiceEvent is one immutable historical occurrence for one exact Asset.
 
 `performedAt` means when the work happened. `recordedAt` means when Portfolio recorded it. Historical import therefore does not falsify event time.
 
-A ServiceEvent may optionally reference a ServicePlan and/or WarrantyClaim. Any referenced Plan/Claim must resolve to the same Asset.
+A ServiceEvent may optionally reference a ServicePlan and/or WarrantyClaim. Any referenced Plan/Claim must resolve to the same Asset. No ordering invariant between `ServiceEvent.performedAt` and `WarrantyClaim.incidentOn` is imposed in this phase because that link expresses relevance to the claim, not necessarily work performed as a consequence of it.
 
 ServiceEvent and its ServicePart children commit atomically and are append-only.
 
