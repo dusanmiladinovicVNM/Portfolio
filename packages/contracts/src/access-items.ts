@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   ACCESS_ITEM_KINDS,
+  ACCESS_ITEM_STATUSES,
   ACCESS_ITEM_TRANSACTION_TYPES,
 } from '@portfolio/domain';
 import { entityIdSchema } from './portfolio.js';
@@ -22,6 +23,16 @@ export const issueAccessItemRequestSchema = z.object({
   note: z.string().trim().min(1).nullable().optional(),
 });
 
+export const updateAccessItemRequestSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+  label: z.string().trim().min(1),
+});
+
+export const retireAccessItemRequestSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+  retirementReason: z.string().trim().min(1),
+});
+
 export const accessItemCustodyEventRequestSchema = z.object({
   occurredAt: timestampSchema,
   note: z.string().trim().min(1).nullable().optional(),
@@ -35,6 +46,11 @@ export const accessItemResponseSchema = z.object({
   unitId: entityIdSchema.nullable(),
   spaceId: entityIdSchema.nullable(),
   label: z.string(),
+  status: z.enum(ACCESS_ITEM_STATUSES),
+  retiredAt: timestampSchema.nullable(),
+  retiredByUserId: entityIdSchema.nullable(),
+  retirementReason: z.string().nullable(),
+  version: z.number().int().positive(),
   recordedAt: timestampSchema,
   recordedByUserId: entityIdSchema,
 });
@@ -68,6 +84,8 @@ export const accessItemDetailResponseSchema = accessItemEntryResponseSchema.exte
 
 export type CreateAccessItemRequest = z.infer<typeof createAccessItemRequestSchema>;
 export type IssueAccessItemRequest = z.infer<typeof issueAccessItemRequestSchema>;
+export type UpdateAccessItemRequest = z.infer<typeof updateAccessItemRequestSchema>;
+export type RetireAccessItemRequest = z.infer<typeof retireAccessItemRequestSchema>;
 export type AccessItemCustodyEventRequest = z.infer<
   typeof accessItemCustodyEventRequestSchema
 >;
