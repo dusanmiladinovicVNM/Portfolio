@@ -136,7 +136,7 @@ async function appendCustodyTransaction(
     occurredAt: input.occurredAt,
     recordedAt: deps.clock.now(),
     recordedByUserId: actor.userId,
-    note: input.note,
+    ...(input.note !== undefined ? { note: input.note } : {}),
   });
   await deps.accessItemRepository.appendTransaction(transaction);
   return transaction;
@@ -161,8 +161,8 @@ export async function createAccessItemCommand(
     code: input.code,
     kind: input.kind,
     propertyId: input.propertyId,
-    unitId: input.unitId,
-    spaceId: input.spaceId,
+    ...(input.unitId !== undefined ? { unitId: input.unitId } : {}),
+    ...(input.spaceId !== undefined ? { spaceId: input.spaceId } : {}),
     label: input.label,
     recordedAt: deps.clock.now(),
     recordedByUserId: actor.userId,
