@@ -20,6 +20,7 @@ import {
   startImprovementProject,
   startWorkItem,
   updateImprovementProjectPlan,
+  updateWorkItemPlan,
 } from '../src/index.js';
 
 const userId = asUserId('fc000000-0000-4000-8000-000000000001');
@@ -62,6 +63,46 @@ describe('Improvements and Works domain', () => {
     expect(() =>
       updateImprovementProjectPlan(started, { name: 'Rewrite' }),
     ).toThrowError(/draft or planned/);
+  });
+
+  it('allows WorkItem plan correction only before work starts', () => {
+    const plannedProject = planImprovementProject(
+      project(),
+      '2026-09-20T08:00:00.000Z',
+    );
+    const startedProject = startImprovementProject(
+      plannedProject,
+      '2026-10-01T08:00:00.000Z',
+    );
+    const item = createWorkItem({
+      id: asWorkItemId('fc000000-0000-4000-8000-000000000022'),
+      project: startedProject,
+      code: 'W-PLAN',
+      title: 'Install cabniets',
+      description: 'Initial scope',
+      createdAt: '2026-10-01T08:05:00.000Z',
+      createdByUserId: userId,
+    });
+
+    const corrected = updateWorkItemPlan(item, {
+      title: 'Install cabinets',
+      description: 'Corrected planned scope',
+    });
+    expect(corrected).toMatchObject({
+      title: 'Install cabinets',
+      description: 'Corrected planned scope',
+      status: 'planned',
+      version: 2,
+    });
+
+    const active = startWorkItem(
+      corrected,
+      startedProject,
+      '2026-10-01T09:00:00.000Z',
+    );
+    expect(() =>
+      updateWorkItemPlan(active, { title: 'Rewrite after start' }),
+    ).toThrowError(/only be corrected while planned/);
   });
 
   it('requires all WorkItems terminal before project completion', () => {
@@ -125,11 +166,16 @@ describe('Improvements and Works domain', () => {
       createdAt: '2026-10-01T08:10:00.000Z',
       createdByUserId: userId,
     });
+    const activeItem = startWorkItem(
+      item,
+      started,
+      '2026-10-01T09:00:00.000Z',
+    );
 
     const record = createWorkRecord({
       id: asWorkRecordId('fc000000-0000-4000-8000-000000000006'),
       project: started,
-      workItem: item,
+      workItem: activeItem,
       contractorPartyId: asPartyId(
         'fc000000-0000-4000-8000-000000000007',
       ),
@@ -156,7 +202,7 @@ describe('Improvements and Works domain', () => {
 
     expect(record).toMatchObject({
       projectId: started.id,
-      workItemId: item.id,
+      workItemId: activeItem.id,
       performedAt: '2026-10-01T12:00:00.000Z',
       recordedAt: '2026-10-03T09:00:00.000Z',
     });
@@ -167,93 +213,136 @@ describe('Improvements and Works domain', () => {
     expect(record.assets[0]).toMatchObject({ action: 'affected' });
   });
 
-  it('does not let work history assert a future or post-terminal occurrence', () => {
-    const cancelled = cancelImprovementProject(
+  it('bounds WorkRecord occurrence between starts, terminal cutoffs and recording time', () => {
+    const plannedProject = planImprovementProject(
       project(),
       '2026-09-20T08:00:00.000Z',
     );
-    const item = {
-      ...createWorkItem({
-        id: asWorkItemId('fc000000-0000-4000-8000-000000000011'),
-        project: project(),
-        code: 'W-03',
-        title: 'Cancelled scope',
-        createdAt: '2026-09-19T11:00:00.000Z',
-        createdByUserId: userId,
-      }),
-      status: 'cancelled' as const,
-      cancelledAt: '2026-09-20T08:00:00.000Z',
-      version: 2,
-    };
+    const startedProject = startImprovementProject(
+      plannedProject,
+      '2026-10-01T08:00:00.000Z',
+    );
+    const item = createWorkItem({
+      id: asWorkItemId('fc000000-0000-4000-8000-000000000011'),
+      project: startedProject,
+      code: 'W-03',
+      title: 'Bounded work',
+      createdAt: '2026-10-01T08:05:00.000Z',
+      createdByUserId: userId,
+    });
 
     expect(() =>
       createWorkRecord({
         id: asWorkRecordId('fc000000-0000-4000-8000-000000000012'),
-        project: cancelled,
+        project: startedProject,
         workItem: item,
-        performedAt: '2026-09-21T08:00:00.000Z',
-        description: 'Impossible late work',
-        recordedAt: '2026-09-22T08:00:00.000Z',
+        performedAt: '2026-10-01T08:30:00.000Z',
+        description: 'Item never started',
+        recordedAt: '2026-10-01T10:00:00.000Z',
+        recordedByUserId: userId,
+      }),
+    ).toThrowError(/requires started Project and WorkItem/);
+
+    const activeItem = startWorkItem(
+      item,
+      startedProject,
+      '2026-10-01T09:00:00.000Z',
+    );
+
+    expect(() =>
+      createWorkRecord({
+        id: asWorkRecordId('fc000000-0000-4000-8000-000000000013'),
+        project: startedProject,
+        workItem: activeItem,
+        performedAt: '2026-10-01T08:30:00.000Z',
+        description: 'Before WorkItem start',
+        recordedAt: '2026-10-01T10:00:00.000Z',
+        recordedByUserId: userId,
+      }),
+    ).toThrowError(/before Project or WorkItem startedAt/);
+
+    const completedItem = completeWorkItem(
+      activeItem,
+      startedProject,
+      '2026-10-01T17:00:00.000Z',
+    );
+    const completedProject = completeImprovementProject(
+      startedProject,
+      [completedItem],
+      '2026-10-02T17:00:00.000Z',
+    );
+
+    expect(() =>
+      createWorkRecord({
+        id: asWorkRecordId('fc000000-0000-4000-8000-000000000014'),
+        project: completedProject,
+        workItem: completedItem,
+        performedAt: '2026-10-01T18:00:00.000Z',
+        description: 'After WorkItem completion',
+        recordedAt: '2026-10-03T08:00:00.000Z',
         recordedByUserId: userId,
       }),
     ).toThrowError(/terminal time/);
 
-    const open = project();
-    const openItem = createWorkItem({
-      id: asWorkItemId('fc000000-0000-4000-8000-000000000013'),
-      project: open,
-      code: 'W-04',
-      title: 'Future work',
-      createdAt: '2026-09-19T11:00:00.000Z',
-      createdByUserId: userId,
-    });
     expect(() =>
       createWorkRecord({
-        id: asWorkRecordId('fc000000-0000-4000-8000-000000000014'),
-        project: open,
-        workItem: openItem,
-        performedAt: '2026-09-21T08:00:00.000Z',
+        id: asWorkRecordId('fc000000-0000-4000-8000-000000000023'),
+        project: startedProject,
+        workItem: activeItem,
+        performedAt: '2026-10-02T08:00:00.000Z',
         description: 'Future entry',
-        recordedAt: '2026-09-20T08:00:00.000Z',
+        recordedAt: '2026-10-01T18:00:00.000Z',
         recordedByUserId: userId,
       }),
     ).toThrowError(/cannot be after recordedAt/);
   });
 
-  it('keeps ProjectAsset as evidence instead of Asset lifecycle mutation', () => {
-    const draft = project();
+  it('keeps ProjectAsset actions as work semantics instead of Asset truth', () => {
+    const plannedProject = planImprovementProject(
+      project(),
+      '2026-09-20T08:00:00.000Z',
+    );
+    const startedProject = startImprovementProject(
+      plannedProject,
+      '2026-10-01T08:00:00.000Z',
+    );
     const item = createWorkItem({
       id: asWorkItemId('fc000000-0000-4000-8000-000000000015'),
-      project: draft,
+      project: startedProject,
       code: 'W-05',
-      title: 'Replace boiler',
-      createdAt: '2026-09-19T11:00:00.000Z',
+      title: 'Boiler work',
+      createdAt: '2026-10-01T08:05:00.000Z',
       createdByUserId: userId,
     });
+    const activeItem = startWorkItem(
+      item,
+      startedProject,
+      '2026-10-01T09:00:00.000Z',
+    );
     const record = createWorkRecord({
       id: asWorkRecordId('fc000000-0000-4000-8000-000000000016'),
-      project: draft,
-      workItem: item,
-      performedAt: '2026-09-18T08:00:00.000Z',
-      description: 'Historical boiler works',
+      project: startedProject,
+      workItem: activeItem,
+      performedAt: '2026-10-01T12:00:00.000Z',
+      description: 'Boiler installation/removal work',
       assets: [
         {
           id: asProjectAssetId('fc000000-0000-4000-8000-000000000017'),
           assetId: asAssetId('fc000000-0000-4000-8000-000000000018'),
-          action: 'removed',
+          action: 'removal_work',
         },
         {
           id: asProjectAssetId('fc000000-0000-4000-8000-000000000019'),
           assetId: asAssetId('fc000000-0000-4000-8000-000000000020'),
-          action: 'installed',
+          action: 'installation_work',
         },
       ],
-      recordedAt: '2026-09-19T12:00:00.000Z',
+      recordedAt: '2026-10-02T12:00:00.000Z',
       recordedByUserId: userId,
     });
     expect(record.assets.map((asset) => asset.action)).toEqual([
-      'removed',
-      'installed',
+      'removal_work',
+      'installation_work',
     ]);
   });
 
