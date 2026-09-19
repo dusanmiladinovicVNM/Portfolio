@@ -36,3 +36,7 @@ export * from './assets/asset-queries.js';
 export * from './assets/asset-inventory-repository.js';
 export * from './assets/asset-history-commands.js';
 export * from './assets/asset-history-queries.js';
+
+export * from './assets/asset-service-repository.js';
+export * from './assets/asset-service-commands.js';
+export * from './assets/asset-service-queries.js';
