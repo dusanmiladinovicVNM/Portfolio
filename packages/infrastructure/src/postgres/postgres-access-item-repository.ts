@@ -12,6 +12,7 @@ import {
   type AccessItem,
   type AccessItemId,
   type AccessItemKind,
+  type AccessItemStatus,
   type AccessItemTransaction,
   type AccessItemTransactionType,
   type PropertyId,
@@ -34,6 +35,11 @@ interface AccessItemRow {
   unit_id: string | null;
   space_id: string | null;
   label: string;
+  status: AccessItemStatus;
+  retired_at: string | Date | null;
+  retired_by_user_id: string | null;
+  retirement_reason: string | null;
+  version: number;
   recorded_at: string | Date;
   recorded_by_user_id: string;
 }
@@ -54,6 +60,10 @@ function instant(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
+function nullableInstant(value: string | Date | null): string | null {
+  return value === null ? null : instant(value);
+}
+
 function mapItem(row: AccessItemRow): AccessItem {
   return {
     id: asAccessItemId(row.id),
@@ -63,6 +73,12 @@ function mapItem(row: AccessItemRow): AccessItem {
     unitId: row.unit_id === null ? null : asUnitId(row.unit_id),
     spaceId: row.space_id === null ? null : asSpaceId(row.space_id),
     label: row.label,
+    status: row.status,
+    retiredAt: nullableInstant(row.retired_at),
+    retiredByUserId:
+      row.retired_by_user_id === null ? null : asUserId(row.retired_by_user_id),
+    retirementReason: row.retirement_reason,
+    version: row.version,
     recordedAt: instant(row.recorded_at),
     recordedByUserId: asUserId(row.recorded_by_user_id),
   };
@@ -110,6 +126,16 @@ function translate(error: unknown): DomainError | null {
         'ACCESS_ITEM_TENANCY_NOT_ELIGIBLE',
         'AccessItem can only be issued to a current Tenancy.',
       );
+    case 'access_item_transaction_before_tenancy_start':
+      return new DomainError(
+        'ACCESS_ITEM_ISSUE_BEFORE_TENANCY_START',
+        'AccessItem issue occurrence cannot predate the Tenancy actualStart UTC calendar date.',
+      );
+    case 'access_item_transaction_item_not_active':
+      return new DomainError(
+        'ACCESS_ITEM_RETIRED',
+        'A retired AccessItem cannot be issued.',
+      );
     case 'access_item_transaction_property_mismatch':
       return new DomainError(
         'ACCESS_ITEM_TENANCY_PROPERTY_MISMATCH',
@@ -156,11 +182,33 @@ function translate(error: unknown): DomainError | null {
         'ACCESS_ITEM_TRANSACTION_IMMUTABLE',
         'AccessItem transactions are append-only.',
       );
+    case 'access_item_retirement_before_custody':
+      return new DomainError(
+        'ACCESS_ITEM_RETIREMENT_BEFORE_CUSTODY',
+        'AccessItem retirement cannot predate existing custody history.',
+      );
+    case 'access_item_invalid_transition':
+    case 'access_item_lifecycle_mutation_invalid':
+    case 'access_item_retirement_provenance_required':
+      return new DomainError(
+        'ACCESS_ITEM_INVALID_TRANSITION',
+        'AccessItem lifecycle transition is invalid.',
+      );
+    case 'access_item_retirement_immutable':
+      return new DomainError(
+        'ACCESS_ITEM_ALREADY_RETIRED',
+        'AccessItem retirement provenance is immutable.',
+      );
+    case 'access_item_version_step_invalid':
+      return new DomainError(
+        'ACCESS_ITEM_VERSION_CONFLICT',
+        'AccessItem version must advance exactly once.',
+      );
     case 'access_item_immutable':
     case 'access_item_delete_forbidden':
       return new DomainError(
         'ACCESS_ITEM_IMMUTABLE',
-        'AccessItem identity, kind and scope are immutable.',
+        'AccessItem identity, kind, scope and recording provenance are immutable.',
       );
     default:
       return null;
@@ -180,6 +228,7 @@ async function translated<T>(operation: () => Promise<T>): Promise<T> {
 const itemSelect = `
   select
     id, code, kind, property_id, unit_id, space_id, label,
+    status, retired_at, retired_by_user_id, retirement_reason, version,
     recorded_at, recorded_by_user_id
   from public.access_items
 `;
@@ -229,7 +278,8 @@ export class PostgresAccessItemRepository implements AccessItemRepository {
     const rows = await this.sql<AccessItemRow[]>`
       select
         i.id, i.code, i.kind, i.property_id, i.unit_id, i.space_id, i.label,
-        i.recorded_at, i.recorded_by_user_id
+        i.status, i.retired_at, i.retired_by_user_id, i.retirement_reason,
+        i.version, i.recorded_at, i.recorded_by_user_id
       from public.access_items i
       join lateral (
         select t.tenancy_id, t.type
@@ -261,13 +311,41 @@ export class PostgresAccessItemRepository implements AccessItemRepository {
       await this.sql`
         insert into public.access_items (
           id, code, kind, property_id, unit_id, space_id, label,
+          status, retired_at, retired_by_user_id, retirement_reason, version,
           recorded_at, recorded_by_user_id
         ) values (
           ${item.id}, ${item.code}, ${item.kind}, ${item.propertyId},
           ${item.unitId}, ${item.spaceId}, ${item.label},
+          ${item.status}, ${item.retiredAt}, ${item.retiredByUserId},
+          ${item.retirementReason}, ${item.version},
           ${item.recordedAt}, ${item.recordedByUserId}
         )
       `;
+    });
+  }
+
+  async updateItem(item: AccessItem, expectedVersion: number): Promise<void> {
+    await translated(async () => {
+      const rows = await this.sql<{ id: string }[]>`
+        update public.access_items
+        set
+          label = ${item.label},
+          status = ${item.status},
+          retired_at = ${item.retiredAt},
+          retired_by_user_id = ${item.retiredByUserId},
+          retirement_reason = ${item.retirementReason},
+          version = ${item.version}
+        where id = ${item.id}
+          and version = ${expectedVersion}
+        returning id
+      `;
+
+      if (rows.length === 0) {
+        throw new DomainError(
+          'ACCESS_ITEM_VERSION_CONFLICT',
+          'AccessItem was modified concurrently.',
+        );
+      }
     });
   }
 
