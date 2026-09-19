@@ -5,11 +5,19 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   activateTenancyCommand,
   changeAssetStatusCommand,
+  changeServicePlanStatusCommand,
+  closeWarrantyClaimCommand,
   createAssetCommand,
+  createServicePlanCommand,
+  createWarrantyClaimCommand,
+  createWarrantyCommand,
   moveAssetCommand,
   assessAssetConditionCommand,
   assignAssetToTenancyCommand,
   recordTenancyAssetInventoryCommand,
+  recordServiceEventCommand,
+  resolveWarrantyClaimCommand,
+  submitWarrantyClaimCommand,
   listAssetLocationHistoryQuery,
   listAssetConditionAssessmentsQuery,
   listTenancyAssetAssignmentsQuery,
@@ -43,6 +51,7 @@ import {
   listAssetsByPropertyQuery,
   listAssetsByUnitQuery,
   lockInspectionCommand,
+  markTenancyMoveOutPendingCommand,
   planTenancyCommand,
   publishInspectionSchemaVersionCommand,
   replaceAssetCommand,
@@ -74,6 +83,7 @@ import {
 import {
   PostgresAssetInventoryRepository,
   PostgresAssetRepository,
+  PostgresAssetServiceRepository,
   PostgresDocumentRepository,
   PostgresInspectionRepository,
   PostgresLeaseRepository,
@@ -93,6 +103,7 @@ const sql = postgres(connectionString, { max: 1 });
 const portfolioRepository = new PostgresPortfolioRepository(sql);
 const assetRepository = new PostgresAssetRepository(sql);
 const assetInventoryRepository = new PostgresAssetInventoryRepository(sql);
+const assetServiceRepository = new PostgresAssetServiceRepository(sql);
 const partyRepository = new PostgresPartyRepository(sql);
 const ownershipRepository = new PostgresOwnershipRepository(sql);
 const leaseRepository = new PostgresLeaseRepository(sql);
@@ -117,6 +128,11 @@ class SequenceIds implements IdGenerator {
 async function resetAndMigrate(): Promise<void> {
   await sql.unsafe(
     `drop table if exists
+      public.asset_service_parts,
+      public.asset_service_events,
+      public.asset_service_plans,
+      public.asset_warranty_claims,
+      public.asset_warranties,
       public.tenancy_asset_assignments,
       public.asset_condition_assessments,
       public.asset_location_history,
@@ -4118,6 +4134,43 @@ describe('PostgreSQL infrastructure', () => {
       constraint_name: 'asset_location_history_not_contiguous',
     });
 
+    await expect(
+      recordTenancyAssetInventoryCommand(
+        {
+          assetRepository,
+          assetInventoryRepository,
+          tenancyRepository,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-19T09:55:00.000Z' },
+        },
+        actor,
+        assignment.id,
+        {
+          expectedVersion: 2,
+          phase: 'move_out',
+          presence: 'present',
+          notes: 'Contradictory present snapshot after move',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'TENANCY_ASSET_PRESENT_UNIT_MISMATCH',
+    });
+
+    await expect(
+      sql`
+        update public.tenancy_asset_assignments
+        set
+          move_out_presence = 'present',
+          move_out_recorded_at = '2026-09-19T09:55:00.000Z',
+          move_out_recorded_by_user_id = ${actor.userId},
+          version = version + 1
+        where id = ${assignment.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'tenancy_asset_assignment_present_unit_mismatch',
+    });
+
     const moveOut = await recordTenancyAssetInventoryCommand(
       {
         assetRepository,
@@ -4183,11 +4236,80 @@ describe('PostgreSQL infrastructure', () => {
       constraint_name: 'tenancy_asset_assignment_asset_status_invalid',
     });
 
-    const endedTenancy = await endTenancyCommand(
+    const noticedTenancy = await giveTenancyNoticeCommand(
       { tenancyRepository },
       actor,
       tenancy.id,
       activeTenancy.version,
+      '2026-09-20',
+      '2026-09-21',
+    );
+    const pendingTenancy = await markTenancyMoveOutPendingCommand(
+      { tenancyRepository },
+      actor,
+      tenancy.id,
+      noticedTenancy.version,
+    );
+    expect(pendingTenancy.status).toBe('move_out_pending');
+
+    const pendingCandidate = await createAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-20T12:00:00.000Z' },
+      },
+      actor,
+      {
+        code: 'ASSET-HISTORY-PENDING',
+        name: 'Late assignment candidate',
+        propertyId: property.id,
+        unitId: unitA.id,
+        spaceId: spaceA.id,
+      },
+    );
+
+    await expect(
+      assignAssetToTenancyCommand(
+        {
+          assetRepository,
+          assetInventoryRepository,
+          tenancyRepository,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-20T12:05:00.000Z' },
+        },
+        actor,
+        tenancy.id,
+        pendingCandidate.id,
+      ),
+    ).rejects.toMatchObject({
+      code: 'TENANCY_ASSET_TENANCY_STATE_INVALID',
+    });
+
+    await expect(
+      sql`
+        insert into public.tenancy_asset_assignments (
+          id, tenancy_id, asset_id,
+          assigned_at, assigned_by_user_id, version
+        ) values (
+          'c2f00000-0000-4000-8000-000000000005',
+          ${tenancy.id},
+          ${pendingCandidate.id},
+          '2026-09-20T12:05:00.000Z',
+          ${actor.userId},
+          1
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'tenancy_asset_assignment_tenancy_state_invalid',
+    });
+
+    const endedTenancy = await endTenancyCommand(
+      { tenancyRepository },
+      actor,
+      tenancy.id,
+      pendingTenancy.version,
       '2026-09-21',
     );
     expect(endedTenancy.status).toBe('ended');
@@ -4278,6 +4400,724 @@ describe('PostgreSQL infrastructure', () => {
       constraint_name: 'asset_condition_assessment_immutable',
     });
 
+  });
+
+
+  it('persists Warranty and Service history and rejects direct invariant bypasses', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+
+    const ids = new SequenceIds([
+      'fb000000-0000-4000-8000-000000000001',
+      'fb000000-0000-4000-8000-000000000002',
+      'fb000000-0000-4000-8000-000000000003',
+      'fb000000-0000-4000-8000-000000000004',
+      'fb000000-0000-4000-8000-000000000005',
+      'fb000000-0000-4000-8000-000000000006',
+      'fb000000-0000-4000-8000-000000000007',
+      'fb000000-0000-4000-8000-000000000008',
+      'fb000000-0000-4000-8000-000000000009',
+      'fb000000-0000-4000-8000-000000000010',
+      'fb000000-0000-4000-8000-000000000011',
+      'fb000000-0000-4000-8000-000000000012',
+      'fb000000-0000-4000-8000-000000000013',
+      'fb000000-0000-4000-8000-000000000014',
+      'fb000000-0000-4000-8000-000000000015',
+      'fb000000-0000-4000-8000-000000000016',
+      'fb000000-0000-4000-8000-000000000017',
+      'fb000000-0000-4000-8000-000000000018',
+      'fb000000-0000-4000-8000-000000000019',
+      'fb000000-0000-4000-8000-000000000020',
+      'fb000000-0000-4000-8000-000000000021',
+      'fb000000-0000-4000-8000-000000000022',
+      'fb000000-0000-4000-8000-000000000023',
+      'fb000000-0000-4000-8000-000000000024',
+      'fb000000-0000-4000-8000-000000000025',
+      'fb000000-0000-4000-8000-000000000026',
+      'fb000000-0000-4000-8000-000000000027',
+      'fb000000-0000-4000-8000-000000000028',
+      'fb000000-0000-4000-8000-000000000029',
+      'fb000000-0000-4000-8000-000000000030',
+    ]);
+
+    const property = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-SERVICE-INT',
+        name: 'Service Integration',
+        propertyType: 'apartment_building',
+        street: 'Service Street',
+        houseNumber: '1',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+
+    const unit = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-SERVICE-INT',
+        unitNumber: 'S1',
+        unitType: 'apartment',
+      },
+    );
+
+    const provider = await createPartyCommand(
+      { partyRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PTY-SERVICE-INT',
+        partyType: 'company',
+        legalName: 'Historic Service Provider d.o.o.',
+      },
+    );
+
+    const asset = await createAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T08:00:00.000Z' },
+      },
+      actor,
+      {
+        code: 'ASSET-SERVICE-INT',
+        name: 'Heat pump',
+        propertyId: property.id,
+        unitId: unit.id,
+      },
+    );
+
+    const warranty = await createWarrantyCommand(
+      {
+        assetRepository,
+        assetServiceRepository,
+        partyRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T08:05:00.000Z' },
+      },
+      actor,
+      asset.id,
+      {
+        warrantyType: 'manufacturer',
+        providerPartyId: provider.id,
+        reference: 'W-INT-1',
+        validFrom: '2026-01-01',
+        validTo: '2027-12-31',
+        terms: 'Compressor and electronics',
+      },
+    );
+
+    await expect(
+      sql`
+        insert into public.asset_warranty_claims (
+          id, warranty_id, incident_on, description, status,
+          recorded_at, recorded_by_user_id, version
+        ) values (
+          'fbf00000-0000-4000-8000-000000000001',
+          ${warranty.id},
+          '2028-01-01',
+          'Outside coverage',
+          'draft',
+          '2026-09-19T08:06:00.000Z',
+          ${actor.userId},
+          1
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_warranty_claim_outside_coverage',
+    });
+
+    await expect(
+      sql`
+        update public.asset_warranties
+        set terms = 'Rewritten terms'
+        where id = ${warranty.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_warranty_immutable',
+    });
+
+    await expect(
+      createWarrantyClaimCommand(
+        {
+          assetServiceRepository,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-19T08:06:00.000Z' },
+        },
+        actor,
+        warranty.id,
+        {
+          incidentOn: '2027-03-01',
+          description: 'Impossible future incident',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'WARRANTY_CLAIM_INCIDENT_IN_FUTURE',
+    });
+
+    await expect(
+      sql`
+        insert into public.asset_warranty_claims (
+          id, warranty_id, incident_on, description, status,
+          recorded_at, recorded_by_user_id, version
+        ) values (
+          'fbf00000-0000-4000-8000-000000000004',
+          ${warranty.id},
+          '2027-03-01',
+          'Impossible future incident',
+          'draft',
+          '2026-09-19T08:06:00.000Z',
+          ${actor.userId},
+          1
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_warranty_claim_incident_not_future',
+    });
+
+    const claim = await createWarrantyClaimCommand(
+      {
+        assetServiceRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T08:07:00.000Z' },
+      },
+      actor,
+      warranty.id,
+      {
+        incidentOn: '2026-09-01',
+        description: 'Compressor stopped',
+      },
+    );
+
+    await expect(
+      sql`
+        update public.asset_warranty_claims
+        set status = 'submitted',
+            submitted_at = '2026-09-19T08:06:00.000Z',
+            version = version + 1
+        where id = ${claim.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_warranty_claims_timestamp_order',
+    });
+
+    await expect(
+      sql`
+        update public.asset_warranty_claims
+        set status = 'cancelled',
+            cancelled_at = '2026-09-19T08:06:00.000Z',
+            version = version + 1
+        where id = ${claim.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_warranty_claims_timestamp_order',
+    });
+
+    const submitted = await submitWarrantyClaimCommand(
+      {
+        assetServiceRepository,
+        clock: { now: () => '2026-09-19T08:10:00.000Z' },
+      },
+      actor,
+      claim.id,
+      1,
+      'CASE-INT-77',
+    );
+    const approved = await resolveWarrantyClaimCommand(
+      {
+        assetServiceRepository,
+        clock: { now: () => '2026-09-19T08:15:00.000Z' },
+      },
+      actor,
+      claim.id,
+      submitted.version,
+      'approved',
+    );
+    const closed = await closeWarrantyClaimCommand(
+      {
+        assetServiceRepository,
+        clock: { now: () => '2026-09-19T08:20:00.000Z' },
+      },
+      actor,
+      claim.id,
+      approved.version,
+    );
+    expect(closed).toMatchObject({
+      status: 'closed',
+      version: 4,
+      providerReference: 'CASE-INT-77',
+    });
+
+    await expect(
+      sql`
+        update public.asset_warranty_claims
+        set description = 'Rewritten incident',
+            version = version + 1
+        where id = ${claim.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_warranty_claim_identity_immutable',
+    });
+
+    await expect(
+      sql`
+        update public.asset_warranty_claims
+        set status = 'submitted',
+            version = version + 1
+        where id = ${claim.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_warranty_claim_transition_invalid',
+    });
+
+    await expect(
+      sql`
+        update public.asset_warranty_claims
+        set closed_at = null,
+            version = version + 1
+        where id = ${claim.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_warranty_claim_timestamp_immutable',
+    });
+
+    await sql`
+      update public.parties
+      set status = 'inactive'
+      where id = ${provider.id}
+    `;
+
+    await expect(
+      createServicePlanCommand(
+        {
+          assetRepository,
+          assetServiceRepository,
+          partyRepository,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-19T08:24:00.000Z' },
+        },
+        actor,
+        asset.id,
+        {
+          name: 'Invalid inactive-provider plan',
+          scheduleKind: 'one_time',
+          firstDueOn: '2027-08-01',
+          providerPartyId: provider.id,
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'SERVICE_PLAN_PROVIDER_STATUS_INVALID',
+    });
+
+    await expect(
+      sql`
+        insert into public.asset_service_plans (
+          id, asset_id, name, schedule_kind, first_due_on,
+          provider_party_id, status, version, created_at, created_by_user_id
+        ) values (
+          'fbf00000-0000-4000-8000-000000000005',
+          ${asset.id},
+          'Invalid inactive-provider plan',
+          'one_time',
+          '2027-08-01',
+          ${provider.id},
+          'active',
+          1,
+          '2026-09-19T08:24:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_service_plan_provider_status_invalid',
+    });
+
+    await sql`
+      update public.parties
+      set status = 'active'
+      where id = ${provider.id}
+    `;
+
+    const plan = await createServicePlanCommand(
+      {
+        assetRepository,
+        assetServiceRepository,
+        partyRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T08:25:00.000Z' },
+      },
+      actor,
+      asset.id,
+      {
+        name: 'Annual heat-pump service',
+        scheduleKind: 'recurring',
+        firstDueOn: '2027-09-01',
+        intervalMonths: 12,
+        providerPartyId: provider.id,
+      },
+    );
+
+    await expect(
+      sql`
+        update public.asset_service_plans
+        set name = 'Rewritten plan',
+            version = version + 1
+        where id = ${plan.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_service_plan_definition_immutable',
+    });
+
+    const paused = await changeServicePlanStatusCommand(
+      { assetRepository, assetServiceRepository, partyRepository },
+      actor,
+      plan.id,
+      1,
+      'paused',
+    );
+
+    await sql`
+      update public.parties
+      set status = 'inactive'
+      where id = ${provider.id}
+    `;
+
+    await expect(
+      changeServicePlanStatusCommand(
+        { assetRepository, assetServiceRepository, partyRepository },
+        actor,
+        plan.id,
+        paused.version,
+        'active',
+      ),
+    ).rejects.toMatchObject({
+      code: 'SERVICE_PLAN_PROVIDER_STATUS_INVALID',
+    });
+
+    await expect(
+      sql`
+        update public.asset_service_plans
+        set status = 'active',
+            version = version + 1
+        where id = ${plan.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_service_plan_provider_status_invalid',
+    });
+
+    await sql`
+      update public.parties
+      set status = 'active'
+      where id = ${provider.id}
+    `;
+
+    const activeAgain = await changeServicePlanStatusCommand(
+      { assetRepository, assetServiceRepository, partyRepository },
+      actor,
+      plan.id,
+      paused.version,
+      'active',
+    );
+    expect(activeAgain.status).toBe('active');
+
+    const otherAsset = await createAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T08:35:00.000Z' },
+      },
+      actor,
+      {
+        code: 'ASSET-SERVICE-OTHER',
+        name: 'Other heat pump',
+        propertyId: property.id,
+        unitId: unit.id,
+      },
+    );
+
+    const otherWarranty = await createWarrantyCommand(
+      {
+        assetRepository,
+        assetServiceRepository,
+        partyRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T08:40:00.000Z' },
+      },
+      actor,
+      otherAsset.id,
+      {
+        warrantyType: 'seller',
+        validFrom: '2026-01-01',
+        validTo: '2027-12-31',
+      },
+    );
+    const otherClaim = await createWarrantyClaimCommand(
+      {
+        assetServiceRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T08:41:00.000Z' },
+      },
+      actor,
+      otherWarranty.id,
+      {
+        incidentOn: '2026-09-01',
+        description: 'Other Asset claim',
+      },
+    );
+
+    await expect(
+      sql`
+        insert into public.asset_service_events (
+          id, asset_id, service_plan_id, event_type,
+          performed_at, description, recorded_at, recorded_by_user_id
+        ) values (
+          'fbf00000-0000-4000-8000-000000000002',
+          ${otherAsset.id},
+          ${plan.id},
+          'repair',
+          '2026-09-10T10:00:00.000Z',
+          'Wrong plan Asset',
+          '2026-09-19T08:45:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_service_event_plan_asset_mismatch',
+    });
+
+    await expect(
+      sql`
+        insert into public.asset_service_events (
+          id, asset_id, warranty_claim_id, event_type,
+          performed_at, description, recorded_at, recorded_by_user_id
+        ) values (
+          'fbf00000-0000-4000-8000-000000000003',
+          ${asset.id},
+          ${otherClaim.id},
+          'warranty_service',
+          '2026-09-10T10:00:00.000Z',
+          'Wrong claim Asset',
+          '2026-09-19T08:45:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_service_event_claim_asset_mismatch',
+    });
+
+    await sql`
+      update public.parties
+      set status = 'inactive'
+      where id = ${provider.id}
+    `;
+
+    const event = await recordServiceEventCommand(
+      {
+        assetRepository,
+        assetServiceRepository,
+        partyRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T08:30:00.000Z' },
+      },
+      actor,
+      asset.id,
+      {
+        servicePlanId: plan.id,
+        warrantyClaimId: claim.id,
+        eventType: 'warranty_service',
+        performedAt: '2026-09-10T10:00:00.000Z',
+        providerPartyId: provider.id,
+        description: 'Compressor replaced under warranty',
+        reference: 'SRV-INT-1',
+        parts: [
+          {
+            name: 'Compressor',
+            partNumber: 'CMP-9000',
+            serialNumber: 'CMP-SN-INT-1',
+            quantity: 1,
+          },
+        ],
+      },
+    );
+
+    expect(event).toMatchObject({
+      assetId: asset.id,
+      servicePlanId: plan.id,
+      warrantyClaimId: claim.id,
+      performedAt: '2026-09-10T10:00:00.000Z',
+      recordedAt: '2026-09-19T08:30:00.000Z',
+    });
+    expect(event.parts).toHaveLength(1);
+
+    const persistedEvents =
+      await assetServiceRepository.listServiceEventsByAsset(asset.id);
+    expect(persistedEvents).toHaveLength(1);
+    expect(persistedEvents[0]?.parts[0]).toMatchObject({
+      name: 'Compressor',
+      quantity: 1,
+    });
+
+    await expect(
+      sql`
+        update public.asset_service_events
+        set description = 'Rewritten service'
+        where id = ${event.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_service_event_immutable',
+    });
+
+    await expect(
+      sql`
+        update public.asset_service_parts
+        set quantity = 2
+        where service_event_id = ${event.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_service_part_immutable',
+    });
+
+    await sql`
+      update public.parties
+      set status = 'active'
+      where id = ${provider.id}
+    `;
+
+    const replacement = await replaceAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T09:00:00.000Z' },
+      },
+      actor,
+      asset.id,
+      {
+        expectedVersion: 1,
+        code: 'ASSET-SERVICE-INT-REPLACEMENT',
+        name: 'Replacement heat pump',
+      },
+    );
+    expect(replacement.replacedAsset.status).toBe('replaced');
+
+    await expect(
+      createServicePlanCommand(
+        {
+          assetRepository,
+          assetServiceRepository,
+          partyRepository,
+          idGenerator: ids,
+          clock: { now: () => '2026-09-19T09:05:00.000Z' },
+        },
+        actor,
+        asset.id,
+        {
+          name: 'Impossible successor-era plan',
+          scheduleKind: 'one_time',
+          firstDueOn: '2027-10-01',
+          providerPartyId: provider.id,
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'SERVICE_PLAN_ASSET_STATUS_INVALID',
+    });
+
+    await expect(
+      sql`
+        insert into public.asset_service_plans (
+          id, asset_id, name, schedule_kind, first_due_on,
+          status, version, created_at, created_by_user_id
+        ) values (
+          'fbf00000-0000-4000-8000-000000000006',
+          ${asset.id},
+          'Impossible successor-era plan',
+          'one_time',
+          '2027-10-01',
+          'active',
+          1,
+          '2026-09-19T09:05:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_service_plan_asset_status_invalid',
+    });
+
+    const pausedAfterReplacement = await changeServicePlanStatusCommand(
+      { assetRepository, assetServiceRepository, partyRepository },
+      actor,
+      plan.id,
+      activeAgain.version,
+      'paused',
+    );
+
+    await expect(
+      changeServicePlanStatusCommand(
+        { assetRepository, assetServiceRepository, partyRepository },
+        actor,
+        plan.id,
+        pausedAfterReplacement.version,
+        'active',
+      ),
+    ).rejects.toMatchObject({
+      code: 'SERVICE_PLAN_ASSET_STATUS_INVALID',
+    });
+
+    await expect(
+      sql`
+        update public.asset_service_plans
+        set status = 'active',
+            version = version + 1
+        where id = ${plan.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_service_plan_asset_status_invalid',
+    });
+
+    const ended = await changeServicePlanStatusCommand(
+      { assetRepository, assetServiceRepository, partyRepository },
+      actor,
+      plan.id,
+      pausedAfterReplacement.version,
+      'ended',
+    );
+    expect(ended.status).toBe('ended');
+
+    await expect(
+      sql`
+        update public.asset_service_plans
+        set status = 'active',
+            version = version + 1
+        where id = ${plan.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_service_plan_transition_invalid',
+    });
   });
 
 });

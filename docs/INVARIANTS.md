@@ -92,28 +92,40 @@ These rules are architecture gates, not optional implementation notes.
 74. TenancyAssetAssignment links one physical Asset to one Tenancy inventory. The Asset must belong to that Tenancy's Unit when assigned; assignment does not itself change Asset location or ownership.
 75. Move-in and move-out inventory snapshots are append-once facts. Move-out requires move-in, cannot predate it, and a missing Asset cannot carry a condition assessment.
 76. TenancyAssetAssignment is inventory scope, not proof of current physical possession. The same Asset may therefore be in the inventory scope of different Tenancies, including a planned successor while another Tenancy still exists; no global one-open-assignment-per-Asset constraint applies.
-77. New Tenancy inventory assignment is allowed only while Tenancy is non-terminal (`draft/planned/active/notice_given/move_out_pending`). Move-in snapshot is allowed only for `planned/active`; move-out snapshot only for `active/notice_given/move_out_pending`.
+77. New Tenancy inventory assignment is allowed only while Tenancy is `draft/planned/active`. Move-in snapshot is allowed only for `planned/active`; move-out snapshot only for `active/notice_given/move_out_pending`. Any snapshot recorded as `present` requires the Asset's current Unit projection to equal the Tenancy Unit at recording time; `missing` remains legal after the Asset has moved elsewhere.
 78. The current inventory model records `assignedAt/recordedAt`, not historical occurrence time. Ended/cancelled Tenancies therefore cannot be backfilled through normal inventory commands. A future historical-import workflow must introduce explicit occurredAt/happenedAt semantics rather than pretending current recording time is event time.
+
+## Warranty and service
+
+79. Warranty belongs to one exact physical Asset identity. Asset replacement never silently migrates predecessor Warranty, Claim, ServicePlan or ServiceEvent history to the successor.
+80. Warranty coverage is append-only. Coverage activity/expiry is derived from `validFrom/validTo`, not from a mutable warranty status.
+81. WarrantyClaim belongs to exactly one Warranty and records immutable `recordedAt`/`recordedByUserId` provenance. Its incident date must fall inside that Warranty coverage interval and cannot be later than the UTC calendar date of `recordedAt`; later submission/resolution timestamps do not redefine when the covered incident happened.
+82. WarrantyClaim lifecycle is explicit, optimistic and temporally monotonic from `recordedAt`: `submittedAt >= recordedAt`; `resolvedAt >= submittedAt`; `closedAt >= resolvedAt`; cancellation occurs at or after `submittedAt` when submitted, otherwise at or after `recordedAt`. Lifecycle is `draft -> submitted -> approved|rejected`, `draft|submitted -> cancelled`, and `approved -> closed`. Rejected/cancelled/closed are terminal and prior lifecycle timestamps are immutable once set.
+83. ServicePlan belongs to one exact Asset and represents expected future service policy, not a WorkOrder and not proof that service occurred. New or reactivated active plans are allowed only for `active/inactive` Assets; `retired/replaced` Assets are operationally ineligible. Effective applicability is derived from both Plan and Asset state rather than by mutating plans from the Asset replacement transaction. One-time plans have no interval; recurring plans require a positive integer month interval. No mutable next-due projection is canonical in this phase.
+84. ServicePlan lifecycle is optimistic: `active <-> paused`, `active|paused -> ended|cancelled`; ended/cancelled are terminal. Plan definition and Asset identity are immutable after creation in this phase. A provider Party, when present, must be active when a plan is created or reactivated.
+85. ServiceEvent is append-only completed-work history for one exact Asset. `performedAt` is occurrence time, `recordedAt` is system recording time, and performedAt cannot be later than recordedAt.
+86. Optional ServiceEvent references to ServicePlan or WarrantyClaim must resolve to the same physical Asset. Warranty and ServiceEvent history may reference inactive/archived provider Parties because historical identity requires existence, while a new or reactivated ServicePlan requires its provider Party to be active.
+87. ServiceEvent plus its ServicePart children is one transaction. ServicePart is append-only service evidence, not a substitute for Asset identity; a component needing independent identifiers, placement, warranty or future service history must be modeled as another Asset.
 
 ## Improvements and maintenance
 
-79. ImprovementProject is work; Asset is a physical item; Material is consumed input. They are not interchangeable.
-80. Issue and WorkOrder are different grains: a problem can exist before a work order and may require more than one work order.
-81. Cross-context workflows cannot bypass the owning domain to mutate its state.
+88. ImprovementProject is work; Asset is a physical item; Material is consumed input. They are not interchangeable.
+89. Issue and WorkOrder are different grains: a problem can exist before a work order and may require more than one work order.
+90. Cross-context workflows cannot bypass the owning domain to mutate its state.
 
 ## Money and documents
 
-82. Monetary values use decimal/numeric semantics, never binary floating point.
-83. Each DocumentVersion represents one binary content identity; its file metadata, SHA-256 and storage locator are immutable after registration.
-84. A final DocumentVersion is append-only evidence and cannot return to a mutable/stored state.
-85. A `signed_original` link identifies one exact final DocumentVersion, may only target a signed LeaseAgreement/LeaseAmendment, and is immutable once created.
-86. Binary storage location is infrastructure data, not business identity; Google Drive file IDs must never become Document or DocumentVersion IDs.
-87. External binary storage and PostgreSQL cannot share one ACID transaction. Upload registration therefore uses an idempotent storage object key and compensating delete when DB registration fails.
-88. Financial corrections preserve prior history through correction/reversal records where material.
+91. Monetary values use decimal/numeric semantics, never binary floating point.
+92. Each DocumentVersion represents one binary content identity; its file metadata, SHA-256 and storage locator are immutable after registration.
+93. A final DocumentVersion is append-only evidence and cannot return to a mutable/stored state.
+94. A `signed_original` link identifies one exact final DocumentVersion, may only target a signed LeaseAgreement/LeaseAmendment, and is immutable once created.
+95. Binary storage location is infrastructure data, not business identity; Google Drive file IDs must never become Document or DocumentVersion IDs.
+96. External binary storage and PostgreSQL cannot share one ACID transaction. Upload registration therefore uses an idempotent storage object key and compensating delete when DB registration fails.
+97. Financial corrections preserve prior history through correction/reversal records where material.
 
 ## Architecture
 
-89. Domain code cannot import Supabase, React, Deno, Google APIs or future Fastify infrastructure.
-90. UI components cannot coordinate multi-table business transactions.
-91. Multi-record business commands have one explicit transactional boundary.
-92. Database constraints enforce invariants that can be stated relationally.
+98. Domain code cannot import Supabase, React, Deno, Google APIs or future Fastify infrastructure.
+99. UI components cannot coordinate multi-table business transactions.
+100. Multi-record business commands have one explicit transactional boundary.
+101. Database constraints enforce invariants that can be stated relationally.

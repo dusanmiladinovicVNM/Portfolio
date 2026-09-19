@@ -7,3 +7,4 @@ export * from './lease.js';
 export * from './documents.js';
 export * from './inspections.js';
 export * from './assets.js';
+export * from './service.js';
