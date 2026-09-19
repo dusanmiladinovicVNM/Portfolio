@@ -3,11 +3,14 @@ import {
   GLOBALLY_UNIQUE_ASSET_IDENTIFIER_TYPES,
   asAssetId,
   asAssetIdentifierId,
+  asAssetLocationHistoryId,
   asAssetReplacementId,
   changeAssetStatus,
   createAsset,
+  createAssetLocationHistory,
   createAssetReplacement,
   markAssetReplaced,
+  moveAssetPlacement,
   updateAssetMetadata,
   type Asset,
   type AssetId,
@@ -49,6 +52,14 @@ export interface UpdateAssetMetadataCommandInput {
   readonly model?: string | null;
 }
 
+export interface MoveAssetCommandInput {
+  readonly expectedVersion: number;
+  readonly propertyId: PropertyId;
+  readonly unitId?: UnitId | null;
+  readonly spaceId?: SpaceId | null;
+  readonly reason?: string | null;
+}
+
 export interface ReplaceAssetCommandInput {
   readonly expectedVersion: number;
   readonly code: string;
@@ -62,6 +73,7 @@ export interface AssetDependencies {
   readonly assetRepository: AssetRepository;
   readonly portfolioRepository: PortfolioRepository;
   readonly idGenerator: IdGenerator;
+  readonly clock: ClockPort;
 }
 
 async function requireAsset(
@@ -195,10 +207,7 @@ export async function createAssetCommand(
       ? { manufacturer: input.manufacturer }
       : {}),
     ...(input.model !== undefined ? { model: input.model } : {}),
-    identifiers: identifierInputs(
-      deps.idGenerator,
-      input.identifiers ?? [],
-    ),
+    identifiers: identifierInputs(deps.idGenerator, input.identifiers ?? []),
   });
 
   if (await deps.assetRepository.codeExists(asset.code)) {
@@ -208,7 +217,15 @@ export async function createAssetCommand(
     );
   }
 
-  await deps.assetRepository.insert(asset);
+  const initialLocation = createAssetLocationHistory({
+    id: asAssetLocationHistoryId(deps.idGenerator.next()),
+    asset,
+    validFrom: deps.clock.now(),
+    changeType: 'asset_created',
+    changedByUserId: actor.userId,
+  });
+
+  await deps.assetRepository.insert(asset, initialLocation);
   return asset;
 }
 
@@ -253,8 +270,77 @@ export async function changeAssetStatusCommand(
   return updated;
 }
 
+export async function moveAssetCommand(
+  deps: AssetDependencies,
+  actor: Actor,
+  assetId: AssetId,
+  input: MoveAssetCommandInput,
+): Promise<Asset> {
+  requireCapability(actor, 'assets:write');
+  const current = await requireAsset(deps.assetRepository, assetId);
+  assertExpectedVersion(current, input.expectedVersion);
+
+  const targetUnitId = input.unitId ?? null;
+  const targetSpaceId = input.spaceId ?? null;
+  await assertPlacement(
+    deps.portfolioRepository,
+    input.propertyId,
+    targetUnitId,
+    targetSpaceId,
+  );
+
+  const currentLocation = await deps.assetRepository.getCurrentLocation(assetId);
+  if (!currentLocation) {
+    throw new DomainError(
+      'ASSET_CURRENT_LOCATION_MISSING',
+      'Asset has no open authoritative location interval.',
+    );
+  }
+  if (
+    currentLocation.propertyId !== current.propertyId ||
+    currentLocation.unitId !== current.unitId ||
+    currentLocation.spaceId !== current.spaceId
+  ) {
+    throw new DomainError(
+      'ASSET_LOCATION_PROJECTION_DIVERGED',
+      'Asset current placement does not match its authoritative open location interval.',
+    );
+  }
+
+  const moved = moveAssetPlacement(current, {
+    propertyId: input.propertyId,
+    unitId: targetUnitId,
+    spaceId: targetSpaceId,
+  });
+
+  const movedAt = deps.clock.now();
+  if (Date.parse(movedAt) <= Date.parse(currentLocation.validFrom)) {
+    throw new DomainError(
+      'ASSET_LOCATION_INVALID_INTERVAL',
+      'A move must occur after the current location interval began.',
+    );
+  }
+
+  const nextLocation = createAssetLocationHistory({
+    id: asAssetLocationHistoryId(deps.idGenerator.next()),
+    asset: moved,
+    validFrom: movedAt,
+    changeType: 'moved',
+    changedByUserId: actor.userId,
+    ...(input.reason !== undefined ? { reason: input.reason } : {}),
+  });
+
+  await deps.assetRepository.moveAsset(
+    current,
+    moved,
+    currentLocation,
+    nextLocation,
+  );
+  return moved;
+}
+
 export async function replaceAssetCommand(
-  deps: AssetDependencies & { readonly clock: ClockPort },
+  deps: AssetDependencies,
   actor: Actor,
   assetId: AssetId,
   input: ReplaceAssetCommandInput,
@@ -283,10 +369,7 @@ export async function replaceAssetCommand(
       ? { manufacturer: input.manufacturer }
       : {}),
     ...(input.model !== undefined ? { model: input.model } : {}),
-    identifiers: identifierInputs(
-      deps.idGenerator,
-      input.identifiers ?? [],
-    ),
+    identifiers: identifierInputs(deps.idGenerator, input.identifiers ?? []),
   });
 
   if (await deps.assetRepository.codeExists(replacementAsset.code)) {
@@ -296,13 +379,22 @@ export async function replaceAssetCommand(
     );
   }
 
+  const replacedAt = deps.clock.now();
   const replacedAsset = markAssetReplaced(current);
   const replacement = createAssetReplacement({
     id: asAssetReplacementId(deps.idGenerator.next()),
     replacedAsset: current,
     replacementAsset,
     replacedByUserId: actor.userId,
-    replacedAt: deps.clock.now(),
+    replacedAt,
+  });
+  const replacementLocation = createAssetLocationHistory({
+    id: asAssetLocationHistoryId(deps.idGenerator.next()),
+    asset: replacementAsset,
+    validFrom: replacedAt,
+    changeType: 'replacement_created',
+    changedByUserId: actor.userId,
+    reason: `Replacement for ${current.code}`,
   });
 
   await deps.assetRepository.replaceAsset(
@@ -310,6 +402,7 @@ export async function replaceAssetCommand(
     replacedAsset,
     replacementAsset,
     replacement,
+    replacementLocation,
   );
 
   return { replacedAsset, replacementAsset, replacement };
