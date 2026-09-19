@@ -115,6 +115,12 @@ export function createAssetLocationHistory(input: {
   readonly reason?: string | null;
 }): AssetLocationHistory {
   assertPlacementShape(input.asset.unitId, input.asset.spaceId);
+  if (input.asset.propertyId === null) {
+    throw new DomainError(
+      'ASSET_CURRENT_LOCATION_MISSING',
+      'An unlocated Asset cannot create a location-history interval.',
+    );
+  }
   return {
     id: input.id,
     assetId: input.asset.id,
@@ -158,6 +164,12 @@ export function moveAssetPlacement(
   },
 ): Asset {
   assertPlacementShape(target.unitId, target.spaceId);
+  if (asset.propertyId === null) {
+    throw new DomainError(
+      'ASSET_CURRENT_LOCATION_MISSING',
+      'An unlocated Asset requires a dedicated placement workflow.',
+    );
+  }
 
   if (
     asset.propertyId === target.propertyId &&
