@@ -44,8 +44,8 @@ export const WORK_MATERIAL_UNITS = [
 
 export const PROJECT_ASSET_ACTIONS = [
   'affected',
-  'installed',
-  'removed',
+  'installation_work',
+  'removal_work',
 ] as const;
 
 export type ImprovementProjectStatus =
@@ -476,6 +476,39 @@ export function createWorkItem(input: {
   };
 }
 
+export function updateWorkItemPlan(
+  item: WorkItem,
+  input: {
+    readonly title?: string;
+    readonly description?: string | null;
+  },
+): WorkItem {
+  if (item.status !== 'planned') {
+    throw new DomainError(
+      'WORK_ITEM_PLAN_FROZEN',
+      'WorkItem plan can only be corrected while planned.',
+    );
+  }
+
+  const title =
+    input.title === undefined ? item.title : required(input.title, 'title');
+  const description =
+    input.description === undefined
+      ? item.description
+      : optional(input.description);
+
+  if (title === item.title && description === item.description) {
+    return item;
+  }
+
+  return {
+    ...item,
+    title,
+    description,
+    version: item.version + 1,
+  };
+}
+
 export function startWorkItem(
   item: WorkItem,
   project: ImprovementProject,
@@ -619,6 +652,22 @@ export function createWorkRecord(input: {
     throw new DomainError(
       'WORK_RECORD_PERFORMED_IN_FUTURE',
       'WorkRecord performedAt cannot be after recordedAt.',
+    );
+  }
+
+  if (input.project.startedAt === null || input.workItem.startedAt === null) {
+    throw new DomainError(
+      'WORK_RECORD_START_TIME_MISSING',
+      'WorkRecord requires started Project and WorkItem occurrence boundaries.',
+    );
+  }
+
+  const startBoundary = [input.project.startedAt, input.workItem.startedAt]
+    .sort((left, right) => Date.parse(right) - Date.parse(left))[0]!;
+  if (Date.parse(performedAt) < Date.parse(startBoundary)) {
+    throw new DomainError(
+      'WORK_RECORD_BEFORE_START_TIME',
+      'WorkRecord performedAt cannot be before Project or WorkItem startedAt.',
     );
   }
 
