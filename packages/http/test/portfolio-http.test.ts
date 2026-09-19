@@ -2258,4 +2258,205 @@ describe('Portfolio HTTP boundary', () => {
     expect(inspectorWrite.status).toBe(403);
   });
 
+
+  it('runs Maintenance Issue -> WorkOrder -> Cost through HTTP', async () => {
+    const propertyId = '91000000-0000-4000-8000-000000000001';
+    const issueId = '91000000-0000-4000-8000-000000000002';
+    const workOrderId = '91000000-0000-4000-8000-000000000003';
+    const costId = '91000000-0000-4000-8000-000000000004';
+    const handler = buildHandler([propertyId, issueId, workOrderId, costId]);
+
+    const property = await handler(
+      new Request('https://portfolio.test/properties', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...propertyBody,
+          code: 'PROP-MAINT-HTTP',
+          name: 'Maintenance HTTP Building',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(property.status).toBe(201);
+
+    const issueCreated = await handler(
+      new Request('https://portfolio.test/maintenance-issues', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'MI-HTTP-1',
+          propertyId,
+          title: 'Heating failure',
+          description: 'Boiler does not start.',
+          priority: 'high',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(issueCreated.status).toBe(201);
+    expect(await issueCreated.clone().json()).toMatchObject({
+      data: {
+        id: issueId,
+        propertyId,
+        status: 'open',
+        priority: 'high',
+        version: 1,
+      },
+    });
+
+    const workOrderCreated = await handler(
+      new Request(
+        `https://portfolio.test/maintenance-issues/${issueId}/work-orders`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            code: 'MWO-HTTP-1',
+            title: 'Diagnose and repair boiler',
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(workOrderCreated.status).toBe(201);
+    expect(await workOrderCreated.clone().json()).toMatchObject({
+      data: {
+        id: workOrderId,
+        issueId,
+        status: 'draft',
+        version: 1,
+      },
+    });
+
+    const assigned = await handler(
+      new Request(
+        `https://portfolio.test/maintenance-work-orders/${workOrderId}/assign`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            expectedVersion: 1,
+            assignee: {
+              kind: 'user',
+              userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            },
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(assigned.status).toBe(200);
+    expect(await assigned.clone().json()).toMatchObject({
+      data: { status: 'assigned', version: 2 },
+    });
+
+    const started = await handler(
+      new Request(
+        `https://portfolio.test/maintenance-work-orders/${workOrderId}/status`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ expectedVersion: 2, action: 'start' }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(started.status).toBe(200);
+    expect(await started.clone().json()).toMatchObject({
+      data: { status: 'in_progress', version: 3 },
+    });
+
+    const completed = await handler(
+      new Request(
+        `https://portfolio.test/maintenance-work-orders/${workOrderId}/status`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ expectedVersion: 3, action: 'complete' }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(completed.status).toBe(200);
+    expect(await completed.clone().json()).toMatchObject({
+      data: { status: 'completed', version: 4 },
+    });
+
+    const resolved = await handler(
+      new Request(
+        `https://portfolio.test/maintenance-issues/${issueId}/status`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ expectedVersion: 1, action: 'resolve' }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(resolved.status).toBe(200);
+    expect(await resolved.clone().json()).toMatchObject({
+      data: { status: 'resolved', version: 2 },
+    });
+
+    const costCreated = await handler(
+      new Request('https://portfolio.test/costs', {
+        method: 'POST',
+        body: JSON.stringify({
+          source: {
+            kind: 'maintenance_work_order',
+            maintenanceWorkOrderId: workOrderId,
+          },
+          description: 'Boiler repair allocation',
+          amount: '125.50',
+          currency: 'CHF',
+          incurredOn: '2026-09-18',
+          reportingClass: 'opex',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(costCreated.status).toBe(201);
+    expect(await costCreated.clone().json()).toMatchObject({
+      data: {
+        id: costId,
+        source: {
+          kind: 'maintenance_work_order',
+          maintenanceWorkOrderId: workOrderId,
+        },
+        amount: '125.50',
+      },
+    });
+
+    const costs = await handler(
+      new Request(
+        `https://portfolio.test/costs?sourceKind=maintenance_work_order&sourceId=${workOrderId}`,
+      ),
+      adminIdentity,
+    );
+    expect(costs.status).toBe(200);
+    expect(await costs.clone().json()).toMatchObject({
+      data: {
+        items: [
+          {
+            cost: {
+              id: costId,
+              source: {
+                kind: 'maintenance_work_order',
+                maintenanceWorkOrderId: workOrderId,
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    const inspectorWrite = await handler(
+      new Request('https://portfolio.test/maintenance-issues', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'MI-FORBIDDEN',
+          propertyId,
+          title: 'Forbidden maintenance write',
+          priority: 'normal',
+        }),
+      }),
+      inspectorIdentity,
+    );
+    expect(inspectorWrite.status).toBe(403);
+  });
+
 });
