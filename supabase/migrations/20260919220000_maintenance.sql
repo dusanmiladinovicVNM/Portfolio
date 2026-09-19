@@ -67,6 +67,37 @@ create index maintenance_issues_asset_idx
   on public.maintenance_issues (asset_id, status, reported_at desc, id)
   where asset_id is not null;
 
+create or replace function public.guard_maintenance_issue_asset_history()
+returns trigger
+language plpgsql
+as $maintenance_issue_asset_history_guard$
+begin
+  if old.valid_to is null
+     and new.valid_to is not null
+     and exists (
+       select 1
+       from public.maintenance_issues mi
+       where mi.asset_id = old.asset_id
+         and mi.property_id = old.property_id
+         and mi.unit_id is not distinct from old.unit_id
+         and mi.space_id is not distinct from old.space_id
+         and mi.reported_at >= old.valid_from
+         and mi.reported_at >= new.valid_to
+     )
+  then
+    raise exception 'Asset location history cannot be closed before an existing Maintenance Issue occurrence.'
+      using errcode = '23514',
+            constraint = 'maintenance_issue_asset_history_snapshot_conflict';
+  end if;
+
+  return new;
+end;
+$maintenance_issue_asset_history_guard$;
+
+create trigger maintenance_issue_asset_history_guard_trg
+before update on public.asset_location_history
+for each row execute function public.guard_maintenance_issue_asset_history();
+
 create table public.maintenance_work_orders (
   id uuid primary key,
   issue_id uuid not null references public.maintenance_issues(id) on delete restrict,
