@@ -241,6 +241,28 @@ ServiceEvent remains Asset/Service completed-work truth. Maintenance stores only
 
 Maintenance owns no money fields. Cost remains financial truth and may use MaintenanceIssue or MaintenanceWorkOrder as typed CostSource values.
 
+## Keys + Access
+
+Canonical #20 models physical access media and their custody history without pretending to model the complete lock/access-control system.
+
+```text
+AccessItem
+  └─ AccessItemTransaction[]
+        └─ Tenancy
+```
+
+AccessItem is one exact physical `key`, `card` or `remote`. It has immutable Property/optional Unit/Space inventory scope, stable code, label and recording provenance. Property scope may represent a shared building entrance item; Unit/Space scope narrows which Tenancy may receive it. This scope is inventory association, not authoritative door/lock/programming permission truth.
+
+AccessItemTransaction is the append-only custody source of truth. Supported events are `issued`, `returned` and `lost`. Current state is derived from the latest per-item sequence: no history or returned means available; issued means held by that Tenancy; lost means unavailable under that Tenancy's responsibility. There is deliberately no mutable current-holder column or parallel assignment table.
+
+Custody is Tenancy-grained. Party/TenancyParty remains the identity source and is not copied into access history. New issue is allowed only to `active`, `notice_given` or `move_out_pending` Tenancy. Property-scoped items may be issued to any Tenancy whose Unit belongs to that Property; Unit/Space-scoped items require the exact Tenancy Unit.
+
+A lost item cannot be reissued. If it is recovered, a `returned` transaction by the same holding Tenancy makes it available again. Return/loss may be recorded after the Tenancy later ended because those events close or preserve already-existing custody history; Tenancy end itself does not erase or silently repair outstanding access items.
+
+Transaction chronology is monotonic and append-only. `AccessItem.recordedAt <= occurredAt <= recordedAt`, and later item transactions cannot move occurrence or recording chronology backwards. PostgreSQL row-locks the AccessItem during transaction insertion and independently rechecks sequence, holder, Tenancy scope/state and temporal rules so concurrent issue attempts serialize.
+
+Canonical #20 does not yet model AccessPoint/door topology, master-key hierarchy, credential secrets, electronic permission schedules, per-Person custody, lost-key billing or historical pre-registration import.
+
 ### Cost
 
 Canonical #18 defines Cost as one append-only positive monetary allocation to exactly one typed business source. Cost is a financial fact/projection and never substitutes for the source entity's own state or lifecycle.
