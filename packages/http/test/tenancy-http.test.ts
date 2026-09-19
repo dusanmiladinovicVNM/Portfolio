@@ -33,7 +33,7 @@ import {
   type UnitId,
 } from '@portfolio/domain';
 import { createPortfolioHttpHandler } from '../src/index.js';
-import { InMemoryAssetInventoryRepository, InMemoryAssetRepository } from './asset-test-deps.js';
+import { InMemoryAssetInventoryRepository, InMemoryAssetRepository, InMemoryAssetServiceRepository } from './asset-test-deps.js';
 import {
   FixedClock,
   InMemoryDocumentRepository,
