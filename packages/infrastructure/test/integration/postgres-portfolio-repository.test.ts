@@ -5731,4 +5731,250 @@ describe('PostgreSQL infrastructure', () => {
     });
   });
 
+
+  it('serializes Improvement parent lifecycle with child writes', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+    const ids = new SequenceIds([
+      'ff100000-0000-4000-8000-000000000001',
+      'ff100000-0000-4000-8000-000000000002',
+      'ff100000-0000-4000-8000-000000000003',
+      'ff100000-0000-4000-8000-000000000004',
+    ]);
+
+    const property = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-IMPROVEMENT-CONCURRENCY',
+        name: 'Improvement Concurrency',
+        propertyType: 'apartment_building',
+        street: 'Lock Street',
+        houseNumber: '1',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+
+    const createStartedProject = async (
+      code: string,
+      createdAt: string,
+      plannedAt: string,
+      startedAt: string,
+    ) => {
+      const project = await createImprovementProjectCommand(
+        {
+          improvementRepository,
+          portfolioRepository,
+          partyRepository,
+          assetRepository,
+          idGenerator: ids,
+          clock: { now: () => createdAt },
+        },
+        actor,
+        {
+          code,
+          name: code,
+          propertyId: property.id,
+        },
+      );
+      const planned = await changeImprovementProjectStatusCommand(
+        {
+          improvementRepository,
+          clock: { now: () => plannedAt },
+        },
+        actor,
+        project.id,
+        project.version,
+        'plan',
+      );
+      return changeImprovementProjectStatusCommand(
+        {
+          improvementRepository,
+          clock: { now: () => startedAt },
+        },
+        actor,
+        project.id,
+        planned.version,
+        'start',
+      );
+    };
+
+    const projectForChildRace = await createStartedProject(
+      'IMP-CONCURRENCY-CHILD',
+      '2026-10-10T08:00:00.000Z',
+      '2026-10-10T08:05:00.000Z',
+      '2026-10-10T09:00:00.000Z',
+    );
+    const projectForRecordRace = await createStartedProject(
+      'IMP-CONCURRENCY-RECORD',
+      '2026-10-11T08:00:00.000Z',
+      '2026-10-11T08:05:00.000Z',
+      '2026-10-11T09:00:00.000Z',
+    );
+    const itemForRecordRace = await createWorkItemCommand(
+      {
+        improvementRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-10-11T09:05:00.000Z' },
+      },
+      actor,
+      projectForRecordRace.id,
+      {
+        code: 'WI-CONCURRENCY-RECORD',
+        title: 'Concurrent work',
+      },
+    );
+    const activeItem = await changeWorkItemStatusCommand(
+      {
+        improvementRepository,
+        clock: { now: () => '2026-10-11T10:00:00.000Z' },
+      },
+      actor,
+      itemForRecordRace.id,
+      itemForRecordRace.version,
+      'start',
+    );
+
+    const blocker = postgres(connectionString, { max: 1 });
+    const contender = postgres(connectionString, { max: 1 });
+
+    function deferred() {
+      let resolve!: () => void;
+      const promise = new Promise<void>((done) => {
+        resolve = done;
+      });
+      return { promise, resolve };
+    }
+
+    try {
+      const projectLocked = deferred();
+      const releaseProject = deferred();
+      const completingProject = blocker.begin(async (tx) => {
+        await tx`
+          update public.improvement_projects
+          set status = 'completed',
+              completed_at = '2026-10-10T12:00:00.000Z',
+              version = version + 1
+          where id = ${projectForChildRace.id}
+        `;
+        projectLocked.resolve();
+        await releaseProject.promise;
+      });
+
+      await projectLocked.promise;
+
+      await expect(
+        contender.begin(async (tx) => {
+          await tx.unsafe("set local lock_timeout = '250ms'");
+          await tx`
+            insert into public.improvement_work_items (
+              id, project_id, code, title, status, version,
+              created_at, created_by_user_id
+            ) values (
+              'ff1f0000-0000-4000-8000-000000000001',
+              ${projectForChildRace.id},
+              'WI-RACE',
+              'Concurrent child',
+              'planned',
+              1,
+              '2026-10-10T12:00:01.000Z',
+              ${actor.userId}
+            )
+          `;
+        }),
+      ).rejects.toMatchObject({ code: '55P03' });
+
+      releaseProject.resolve();
+      await completingProject;
+
+      await expect(
+        contender`
+          insert into public.improvement_work_items (
+            id, project_id, code, title, status, version,
+            created_at, created_by_user_id
+          ) values (
+            'ff1f0000-0000-4000-8000-000000000001',
+            ${projectForChildRace.id},
+            'WI-RACE',
+            'Concurrent child',
+            'planned',
+            1,
+            '2026-10-10T12:00:01.000Z',
+            ${actor.userId}
+          )
+        `,
+      ).rejects.toMatchObject({
+        code: '23514',
+        constraint_name: 'improvement_work_item_project_terminal',
+      });
+
+      const itemLocked = deferred();
+      const releaseItem = deferred();
+      const completingItem = blocker.begin(async (tx) => {
+        await tx`
+          update public.improvement_work_items
+          set status = 'completed',
+              completed_at = '2026-10-11T12:00:00.000Z',
+              version = version + 1
+          where id = ${activeItem.id}
+        `;
+        itemLocked.resolve();
+        await releaseItem.promise;
+      });
+
+      await itemLocked.promise;
+
+      await expect(
+        contender.begin(async (tx) => {
+          await tx.unsafe("set local lock_timeout = '250ms'");
+          await tx`
+            insert into public.improvement_work_records (
+              id, project_id, work_item_id, performed_at,
+              description, recorded_at, recorded_by_user_id, sealed
+            ) values (
+              'ff1f0000-0000-4000-8000-000000000002',
+              ${projectForRecordRace.id},
+              ${activeItem.id},
+              '2026-10-11T13:00:00.000Z',
+              'Concurrent work record',
+              '2026-10-11T14:00:00.000Z',
+              ${actor.userId},
+              false
+            )
+          `;
+        }),
+      ).rejects.toMatchObject({ code: '55P03' });
+
+      releaseItem.resolve();
+      await completingItem;
+
+      await expect(
+        contender`
+          insert into public.improvement_work_records (
+            id, project_id, work_item_id, performed_at,
+            description, recorded_at, recorded_by_user_id, sealed
+          ) values (
+            'ff1f0000-0000-4000-8000-000000000002',
+            ${projectForRecordRace.id},
+            ${activeItem.id},
+            '2026-10-11T13:00:00.000Z',
+            'Concurrent work record',
+            '2026-10-11T14:00:00.000Z',
+            ${actor.userId},
+            false
+          )
+        `,
+      ).rejects.toMatchObject({
+        code: '23514',
+        constraint_name: 'improvement_work_record_after_terminal_time',
+      });
+    } finally {
+      await Promise.all([blocker.end(), contender.end()]);
+    }
+  });
+
 });
