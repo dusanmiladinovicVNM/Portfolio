@@ -377,11 +377,44 @@ begin
             constraint = 'improvement_project_version_step';
   end if;
 
-  if old.status = 'draft' and new.status in ('planned', 'cancelled') then
+  if new.status = 'cancelled'
+     and old.status in ('draft', 'planned', 'in_progress')
+  then
+    if exists (
+      select 1
+      from public.improvement_work_records wr
+      where wr.project_id = old.id
+        and wr.sealed = true
+        and wr.performed_at > new.cancelled_at
+    ) then
+      raise exception 'ImprovementProject cancellation cannot predate existing WorkRecord history.'
+        using errcode = '23514',
+              constraint = 'improvement_project_terminal_before_work_record';
+    end if;
+
+    if exists (
+      select 1
+      from public.improvement_work_items wi
+      where wi.project_id = old.id
+        and (
+          wi.created_at > new.cancelled_at
+          or (wi.started_at is not null and wi.started_at > new.cancelled_at)
+          or (wi.completed_at is not null and wi.completed_at > new.cancelled_at)
+        )
+    ) then
+      raise exception 'ImprovementProject cancellation cannot predate existing WorkItem creation/start/completion history.'
+        using errcode = '23514',
+              constraint = 'improvement_project_cancelled_before_work_item_history';
+    end if;
+
     return new;
   end if;
 
-  if old.status = 'planned' and new.status in ('in_progress', 'cancelled') then
+  if old.status = 'draft' and new.status = 'planned' then
+    return new;
+  end if;
+
+  if old.status = 'planned' and new.status = 'in_progress' then
     return new;
   end if;
 
@@ -416,21 +449,6 @@ begin
       raise exception 'ImprovementProject completion cannot predate a WorkItem terminal timestamp.'
         using errcode = '23514',
               constraint = 'improvement_project_completed_before_work_item_terminal';
-    end if;
-    return new;
-  end if;
-
-  if old.status = 'in_progress' and new.status = 'cancelled' then
-    if exists (
-      select 1
-      from public.improvement_work_records wr
-      where wr.project_id = old.id
-        and wr.sealed = true
-        and wr.performed_at > new.cancelled_at
-    ) then
-      raise exception 'ImprovementProject cancellation cannot predate existing WorkRecord history.'
-        using errcode = '23514',
-              constraint = 'improvement_project_terminal_before_work_record';
     end if;
     return new;
   end if;
