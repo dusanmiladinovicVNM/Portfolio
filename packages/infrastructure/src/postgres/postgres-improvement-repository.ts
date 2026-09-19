@@ -231,6 +231,11 @@ function translate(error: unknown): DomainError | null {
         'IMPROVEMENT_PROJECT_COMPLETED_BEFORE_WORK_ITEM_TERMINAL',
         'ImprovementProject completion cannot predate a WorkItem terminal timestamp.',
       );
+    case 'improvement_project_cancelled_before_work_item_history':
+      return new DomainError(
+        'IMPROVEMENT_PROJECT_CANCELLED_BEFORE_WORK_ITEM_HISTORY',
+        'ImprovementProject cancellation cannot predate existing WorkItem creation/start/completion history.',
+      );
     case 'improvement_project_plan_frozen':
       return new DomainError(
         'IMPROVEMENT_PROJECT_PLAN_FROZEN',
