@@ -26,7 +26,7 @@ create table public.costs (
   constraint costs_description_not_blank check (btrim(description) <> ''),
   constraint costs_description_canonical check (description = btrim(description)),
   constraint costs_amount_positive check (amount > 0),
-  constraint costs_currency_iso_shape check (currency ~ '^[A-Z]{3}$'),
+  constraint costs_currency_supported check (currency in ('CHF', 'EUR', 'RSD')),
   constraint costs_reporting_class_valid
     check (reporting_class in ('capex', 'opex', 'unclassified')),
   constraint costs_invoice_reference_not_blank
@@ -168,6 +168,7 @@ as $cost_reversal_guard$
 declare
   original_recorded_at timestamptz;
   replacement_recorded_at timestamptz;
+  replacement_recorded_by_user_id uuid;
 begin
   if tg_op = 'UPDATE' or tg_op = 'DELETE' then
     raise exception 'Cost reversal history is append-only.'
@@ -194,8 +195,8 @@ begin
   end if;
 
   if new.replacement_cost_id is not null then
-    select recorded_at
-      into replacement_recorded_at
+    select recorded_at, recorded_by_user_id
+      into replacement_recorded_at, replacement_recorded_by_user_id
     from public.costs
     where id = new.replacement_cost_id
     for update;
@@ -210,6 +211,12 @@ begin
       raise exception 'Replacement Cost and reversal must share recordedAt.'
         using errcode = '23514',
               constraint = 'cost_reversal_replacement_recording_mismatch';
+    end if;
+
+    if replacement_recorded_by_user_id <> new.recorded_by_user_id then
+      raise exception 'Replacement Cost and reversal must share recordedByUserId.'
+        using errcode = '23514',
+              constraint = 'cost_reversal_replacement_recorder_mismatch';
     end if;
 
     if exists (
