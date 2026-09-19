@@ -59,6 +59,8 @@ interface ClaimRow {
   resolved_at: string | Date | null;
   closed_at: string | Date | null;
   cancelled_at: string | Date | null;
+  recorded_at: string | Date;
+  recorded_by_user_id: string;
   version: number;
 }
 
@@ -147,6 +149,8 @@ function mapClaim(row: ClaimRow): WarrantyClaim {
     resolvedAt: nullableInstant(row.resolved_at),
     closedAt: nullableInstant(row.closed_at),
     cancelledAt: nullableInstant(row.cancelled_at),
+    recordedAt: instant(row.recorded_at),
+    recordedByUserId: asUserId(row.recorded_by_user_id),
     version: row.version,
   };
 }
@@ -196,6 +200,11 @@ function translate(error: unknown): DomainError | null {
         'WARRANTY_CLAIM_OUTSIDE_COVERAGE',
         'WarrantyClaim incident is outside Warranty coverage.',
       );
+    case 'asset_warranty_claim_incident_in_future':
+      return new DomainError(
+        'WARRANTY_CLAIM_INCIDENT_IN_FUTURE',
+        'WarrantyClaim incident cannot be after its recording date.',
+      );
     case 'asset_warranty_claim_version_step':
       return new DomainError(
         'WARRANTY_CLAIM_VERSION_CONFLICT',
@@ -214,6 +223,16 @@ function translate(error: unknown): DomainError | null {
       return new DomainError(
         'WARRANTY_CLAIM_DELETE_FORBIDDEN',
         'WarrantyClaim history cannot be deleted.',
+      );
+    case 'asset_service_plan_asset_status_invalid':
+      return new DomainError(
+        'SERVICE_PLAN_ASSET_STATUS_INVALID',
+        'A retired or replaced Asset cannot start or resume an active ServicePlan.',
+      );
+    case 'asset_service_plan_provider_status_invalid':
+      return new DomainError(
+        'SERVICE_PLAN_PROVIDER_STATUS_INVALID',
+        'A ServicePlan provider must be an active Party.',
       );
     case 'asset_service_plan_version_step':
       return new DomainError(
@@ -278,7 +297,7 @@ const claimSelect = `
   select
     id, warranty_id, incident_on, description, status,
     provider_reference, submitted_at, resolved_at, closed_at,
-    cancelled_at, version
+    cancelled_at, recorded_at, recorded_by_user_id, version
   from public.asset_warranty_claims
 `;
 
@@ -359,12 +378,13 @@ export class PostgresAssetServiceRepository implements AssetServiceRepository {
       insert into public.asset_warranty_claims (
         id, warranty_id, incident_on, description, status,
         provider_reference, submitted_at, resolved_at, closed_at,
-        cancelled_at, version
+        cancelled_at, recorded_at, recorded_by_user_id, version
       ) values (
         ${claim.id}, ${claim.warrantyId}, ${claim.incidentOn},
         ${claim.description}, ${claim.status}, ${claim.providerReference},
         ${claim.submittedAt}, ${claim.resolvedAt}, ${claim.closedAt},
-        ${claim.cancelledAt}, ${claim.version}
+        ${claim.cancelledAt}, ${claim.recordedAt},
+        ${claim.recordedByUserId}, ${claim.version}
       )
     `);
   }
