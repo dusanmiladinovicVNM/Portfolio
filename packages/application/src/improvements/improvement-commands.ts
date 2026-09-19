@@ -226,18 +226,27 @@ export async function changeImprovementProjectStatusCommand(
   );
 
   const now = deps.clock.now();
-  const changed =
-    action === 'plan'
-      ? planImprovementProject(project, now)
-      : action === 'start'
-        ? startImprovementProject(project, now)
-        : action === 'complete'
-          ? completeImprovementProject(
-              project,
-              await deps.improvementRepository.listWorkItemsByProject(project.id),
-              now,
-            )
-          : cancelImprovementProject(project, now);
+  let changed;
+  if (action === 'plan') {
+    changed = planImprovementProject(project, now);
+  } else if (action === 'start') {
+    changed = startImprovementProject(project, now);
+  } else if (action === 'complete') {
+    const [workItems, workRecords] = await Promise.all([
+      deps.improvementRepository.listWorkItemsByProject(project.id),
+      deps.improvementRepository.listWorkRecordsByProject(project.id),
+    ]);
+    changed = completeImprovementProject(
+      project,
+      workItems,
+      workRecords,
+      now,
+    );
+  } else {
+    const workRecords =
+      await deps.improvementRepository.listWorkRecordsByProject(project.id);
+    changed = cancelImprovementProject(project, workRecords, now);
+  }
 
   await deps.improvementRepository.updateProjectLifecycle(
     changed,
@@ -330,12 +339,17 @@ export async function changeWorkItemStatusCommand(
   );
 
   const now = deps.clock.now();
-  const changed =
-    action === 'start'
-      ? startWorkItem(item, project, now)
-      : action === 'complete'
-        ? completeWorkItem(item, project, now)
-        : cancelWorkItem(item, now);
+  let changed;
+  if (action === 'start') {
+    changed = startWorkItem(item, project, now);
+  } else {
+    const workRecords =
+      await deps.improvementRepository.listWorkRecordsByItem(item.id);
+    changed =
+      action === 'complete'
+        ? completeWorkItem(item, project, workRecords, now)
+        : cancelWorkItem(item, workRecords, now);
+  }
 
   await deps.improvementRepository.updateWorkItemLifecycle(
     changed,
