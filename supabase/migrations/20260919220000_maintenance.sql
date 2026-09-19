@@ -337,6 +337,7 @@ language plpgsql
 as $maintenance_work_order_guard$
 declare
   issue_status text;
+  issue_recorded_at timestamptz;
   assignee_status text;
   linked_service_events integer;
   latest_service_performed_at timestamptz;
@@ -347,8 +348,8 @@ begin
             constraint = 'maintenance_work_order_immutable';
   end if;
 
-  select status
-    into issue_status
+  select status, recorded_at
+    into issue_status, issue_recorded_at
   from public.maintenance_issues
   where id = new.issue_id
   for share;
@@ -360,6 +361,12 @@ begin
   end if;
 
   if tg_op = 'INSERT' then
+    if new.created_at < issue_recorded_at then
+      raise exception 'Maintenance WorkOrder cannot be created before its parent Issue was recorded.'
+        using errcode = '23514',
+              constraint = 'maintenance_work_order_before_issue_recorded';
+    end if;
+
     if new.status <> 'draft'
        or new.version <> 1
        or new.assignee_kind is not null
