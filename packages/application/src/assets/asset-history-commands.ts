@@ -67,11 +67,7 @@ function assertTenancyInventoryPhaseAllowed(
 export async function assessAssetConditionCommand(
   deps: Pick<
     AssetHistoryDependencies,
-    | 'assetRepository'
-    | 'assetInventoryRepository'
-    | 'tenancyRepository'
-    | 'idGenerator'
-    | 'clock'
+    'assetRepository' | 'assetInventoryRepository' | 'idGenerator' | 'clock'
   >,
   actor: Actor,
   assetId: AssetId,
