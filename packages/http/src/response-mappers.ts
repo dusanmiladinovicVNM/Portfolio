@@ -1,4 +1,6 @@
 import type {
+  AccessItemResponse,
+  AccessItemTransactionResponse,
   AssetConditionAssessmentResponse,
   AssetLocationHistoryResponse,
   AssetReplacementResponse,
@@ -36,6 +38,8 @@ import type {
   UnitResponse,
 } from '@portfolio/contracts';
 import type {
+  AccessItem,
+  AccessItemTransaction,
   Asset,
   AssetConditionAssessment,
   AssetLocationHistory,
@@ -736,5 +740,36 @@ export function toMaintenanceWorkOrderResponse(
     version: workOrder.version,
     createdAt: workOrder.createdAt,
     createdByUserId: workOrder.createdByUserId,
+  };
+}
+
+
+export function toAccessItemResponse(item: AccessItem): AccessItemResponse {
+  return {
+    id: item.id,
+    code: item.code,
+    kind: item.kind,
+    propertyId: item.propertyId,
+    unitId: item.unitId,
+    spaceId: item.spaceId,
+    label: item.label,
+    recordedAt: item.recordedAt,
+    recordedByUserId: item.recordedByUserId,
+  };
+}
+
+export function toAccessItemTransactionResponse(
+  transaction: AccessItemTransaction,
+): AccessItemTransactionResponse {
+  return {
+    id: transaction.id,
+    accessItemId: transaction.accessItemId,
+    tenancyId: transaction.tenancyId,
+    type: transaction.type,
+    sequence: transaction.sequence,
+    occurredAt: transaction.occurredAt,
+    recordedAt: transaction.recordedAt,
+    recordedByUserId: transaction.recordedByUserId,
+    note: transaction.note,
   };
 }
