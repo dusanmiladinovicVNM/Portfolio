@@ -233,7 +233,7 @@ MaintenanceIssue is one reported problem. It owns immutable physical scope (Prop
 
 An InspectionFinding may originate at most one MaintenanceIssue. The Finding remains Inspection truth, must belong to the same Unit, and must already exist when the Issue is reported: `Issue.reportedAt >= Finding.createdAt`. Maintenance never edits Inspection content; PostgreSQL only freezes the linked Finding's `createdAt` provenance needed to preserve this cross-context invariant.
 
-MaintenanceWorkOrder is one operational task under one exact Issue. One Issue may have several WorkOrders. WorkOrder lifecycle is `draft -> assigned -> in_progress -> completed` with cancellation from any non-terminal state. Assignment may target one active internal User or active Party and may be changed before work starts. Task definition and assignment freeze after start.
+MaintenanceWorkOrder is one operational task under one exact Issue. One Issue may have several WorkOrders. WorkOrder lifecycle is `draft -> assigned -> in_progress -> completed` with cancellation from any non-terminal state. A WorkOrder cannot be created before its parent Issue was recorded: `WorkOrder.createdAt >= Issue.recordedAt`. Assignment may target one active internal User or active Party and may be changed before work starts. Task definition and assignment freeze after start.
 
 Issue resolution requires at least one completed WorkOrder and every WorkOrder terminal. Issue cancellation requires every existing WorkOrder cancelled. Parent/child writes share a PostgreSQL lock protocol: WorkOrder writes lock the parent Issue, so terminal Issue transitions serialize with concurrent child creation or lifecycle changes.
 
