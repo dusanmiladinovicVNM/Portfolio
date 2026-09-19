@@ -122,15 +122,15 @@ These rules are architecture gates, not optional implementation notes.
 ## Maintenance
 
 97. MaintenanceIssue and MaintenanceWorkOrder are different grains: a reported problem can exist before work is commissioned and one Issue may require several WorkOrders.
-98. MaintenanceIssue has immutable Property/optional Unit/Space/Asset scope. Unit must belong to Property, Space requires and belongs to Unit, and an Asset-scoped Issue snapshots that Asset's exact current placement at creation; later Asset movement never rewrites Issue history.
-99. One InspectionFinding may originate at most one MaintenanceIssue. The Finding must belong to the same Unit, remains Inspection-owned truth, and is never mutated by Maintenance.
+98. MaintenanceIssue has immutable Property/optional Unit/Space/Asset scope. Unit must belong to Property and Space requires and belongs to Unit. For an Asset-scoped Issue, scope must equal the authoritative AssetLocationHistory interval containing `reportedAt` using `validFrom <= reportedAt < validTo` (or open-ended `validTo`); the current Asset projection at `recordedAt` is not historical truth.
+99. One InspectionFinding may originate at most one MaintenanceIssue. The Finding must belong to the same Unit and `Issue.reportedAt >= Finding.createdAt`. Inspection retains ownership; once the Finding is used as an origin, the `createdAt` provenance required by this invariant cannot be rewritten.
 100. MaintenanceIssue lifecycle is optimistic and terminal: `open -> resolved|cancelled`. Title/description/priority are correctable only while open; code, scope, origin and reported/recorded provenance are immutable.
 101. Resolving an Issue requires at least one completed WorkOrder and every child WorkOrder terminal. Cancelling an Issue requires every existing WorkOrder cancelled. An Issue terminal timestamp cannot predate its recording time or any child terminal timestamp.
 102. MaintenanceWorkOrder belongs to exactly one Issue and follows `draft -> assigned -> in_progress -> completed`, with cancellation from any non-terminal state. Definition and assignment freeze once work starts; reassignment before start cannot move `assignedAt` backwards.
 103. WorkOrder assignment targets exactly one active internal User or active Party at assignment time. Later deactivation does not rewrite historical assignment.
 104. ServiceEvent remains Asset/Service truth. A Maintenance link is append-only, one ServiceEvent belongs to at most one WorkOrder in this phase, the Issue must be Asset-scoped, Asset identities must match, and `ServiceEvent.performedAt` must lie within the WorkOrder execution interval. WorkOrder completion cannot predate linked service work and a WorkOrder with linked ServiceEvents cannot be cancelled.
 105. Maintenance stores no monetary amount, currency, invoice or payment truth. Cost remains the financial source of truth and may reference MaintenanceIssue or MaintenanceWorkOrder through the existing typed CostSource model.
-106. WorkOrder writes share-lock their parent Issue and ServiceEvent-link inserts share-lock their WorkOrder. Parent terminal transitions therefore serialize with concurrent child writes instead of relying on racy check-then-write validation.
+106. Asset-scoped Issue inserts share-lock the AssetLocationHistory interval that contains `reportedAt`; closing an open interval during Asset movement therefore serializes with historical scope capture. Origin-Finding lookup share-locks the Finding row. WorkOrder writes share-lock their parent Issue and ServiceEvent-link inserts share-lock their WorkOrder. These cross-row invariants therefore serialize with the mutations that could invalidate them instead of relying on racy check-then-write validation.
 
 ## Money and documents
 
