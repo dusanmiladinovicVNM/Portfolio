@@ -1,6 +1,7 @@
 import {
   DomainError,
   deriveAccessItemState,
+  type AccessItem,
   type AccessItemId,
   type PropertyId,
   type TenancyId,
@@ -9,7 +10,7 @@ import {
 import { requireCapability, type Actor } from '../security/access.js';
 import type { AccessItemRepository } from './access-item-repository.js';
 
-async function withState(repository: AccessItemRepository, item: Awaited<ReturnType<AccessItemRepository['getItemById']>> extends infer T ? Exclude<T, null> : never) {
+async function withState(repository: AccessItemRepository, item: AccessItem) {
   const lastTransaction = await repository.getLastTransaction(item.id);
   return {
     item,
