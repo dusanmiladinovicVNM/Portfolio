@@ -92,7 +92,7 @@ export const assetResponseSchema = z.object({
   id: entityIdSchema,
   code: z.string(),
   name: z.string(),
-  propertyId: entityIdSchema,
+  propertyId: entityIdSchema.nullable(),
   unitId: entityIdSchema.nullable(),
   spaceId: entityIdSchema.nullable(),
   manufacturer: z.string().nullable(),
