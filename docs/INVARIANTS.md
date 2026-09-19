@@ -133,7 +133,7 @@ These rules are architecture gates, not optional implementation notes.
 103. External binary storage and PostgreSQL cannot share one ACID transaction. Upload registration therefore uses an idempotent storage object key and compensating delete when DB registration fails.
 104. Financial corrections preserve prior history through correction/reversal records where material.
 105. One Cost is one immutable positive exact monetary allocation to exactly one typed CostSource; source kind and target must agree.
-106. Cost amount uses the current two-decimal money model and Cost currency is restricted to the configured set `CHF|EUR|RSD`; canonical #18 does not claim generic ISO 4217 minor-unit support.
+106. Cost amount uses the current two-decimal money model: at most two decimal places and at most 16 whole-part digits. PostgreSQL preserves the incoming exact numeric value until explicit scale/range checks run, so direct SQL cannot silently round an over-scale amount. Cost currency is restricted to the configured set `CHF|EUR|RSD`; canonical #18 does not claim generic ISO 4217 minor-unit support.
 107. `Cost.incurredOn` cannot be later than the UTC calendar date of immutable `recordedAt`.
 108. Cost supplier identity requires Party existence, not current active status; invoice reference is external metadata and never becomes Invoice/AP source of truth.
 109. One Cost may be reversed at most once and one replacement Cost may belong to at most one incoming correction.
