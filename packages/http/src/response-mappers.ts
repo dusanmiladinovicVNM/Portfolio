@@ -753,6 +753,11 @@ export function toAccessItemResponse(item: AccessItem): AccessItemResponse {
     unitId: item.unitId,
     spaceId: item.spaceId,
     label: item.label,
+    status: item.status,
+    retiredAt: item.retiredAt,
+    retiredByUserId: item.retiredByUserId,
+    retirementReason: item.retirementReason,
+    version: item.version,
     recordedAt: item.recordedAt,
     recordedByUserId: item.recordedByUserId,
   };
