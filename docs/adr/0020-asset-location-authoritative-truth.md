@@ -10,7 +10,7 @@ Asset Registry stores `assets.property_id`, optional `unit_id` and optional `spa
 
 `AssetLocationHistory` is the authoritative temporal truth.
 
-Every Asset has exactly one open location interval. Location intervals for one Asset never overlap. Closed intervals are immutable.
+Every Asset has exactly one open location interval. Location intervals for one Asset are contiguous from initial registration onward and never overlap. Closed intervals are immutable.
 
 `assets.property_id/unit_id/space_id` are a current projection only. PostgreSQL deferred constraint guards require that projection to match the single open history interval at transaction commit.
 
