@@ -236,6 +236,16 @@ function translate(error: unknown): DomainError | null {
         'COST_REPLACEMENT_ALREADY_REVERSED',
         'Replacement Cost is already reversed.',
       );
+    case 'costs_amount_scale_valid':
+      return new DomainError(
+        'COST_AMOUNT_SCALE_INVALID',
+        'Cost amount must have at most two decimal places.',
+      );
+    case 'costs_amount_range_valid':
+      return new DomainError(
+        'COST_AMOUNT_RANGE_INVALID',
+        'Cost amount exceeds the supported money range.',
+      );
     case 'costs_currency_supported':
       return new DomainError(
         'COST_CURRENCY_UNSUPPORTED',
