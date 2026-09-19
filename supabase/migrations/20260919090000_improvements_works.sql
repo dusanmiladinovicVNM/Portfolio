@@ -396,10 +396,42 @@ begin
         using errcode = '23514',
               constraint = 'improvement_project_open_work_items';
     end if;
+    if exists (
+      select 1
+      from public.improvement_work_records wr
+      where wr.project_id = old.id
+        and wr.sealed = true
+        and wr.performed_at > new.completed_at
+    ) then
+      raise exception 'ImprovementProject completion cannot predate existing WorkRecord history.'
+        using errcode = '23514',
+              constraint = 'improvement_project_terminal_before_work_record';
+    end if;
+    if exists (
+      select 1
+      from public.improvement_work_items wi
+      where wi.project_id = old.id
+        and coalesce(wi.completed_at, wi.cancelled_at) > new.completed_at
+    ) then
+      raise exception 'ImprovementProject completion cannot predate a WorkItem terminal timestamp.'
+        using errcode = '23514',
+              constraint = 'improvement_project_completed_before_work_item_terminal';
+    end if;
     return new;
   end if;
 
   if old.status = 'in_progress' and new.status = 'cancelled' then
+    if exists (
+      select 1
+      from public.improvement_work_records wr
+      where wr.project_id = old.id
+        and wr.sealed = true
+        and wr.performed_at > new.cancelled_at
+    ) then
+      raise exception 'ImprovementProject cancellation cannot predate existing WorkRecord history.'
+        using errcode = '23514',
+              constraint = 'improvement_project_terminal_before_work_record';
+    end if;
     return new;
   end if;
 
@@ -426,7 +458,8 @@ begin
   select status, started_at
     into project_status, project_started_at
   from public.improvement_projects
-  where id = coalesce(new.project_id, old.project_id);
+  where id = coalesce(new.project_id, old.project_id)
+  for share;
 
   if tg_op = 'INSERT' then
     if project_status in ('completed', 'cancelled') then
@@ -534,10 +567,32 @@ begin
         using errcode = '23514',
               constraint = 'improvement_work_item_project_not_in_progress';
     end if;
+    if exists (
+      select 1
+      from public.improvement_work_records wr
+      where wr.work_item_id = old.id
+        and wr.sealed = true
+        and wr.performed_at > new.completed_at
+    ) then
+      raise exception 'WorkItem completion cannot predate existing WorkRecord history.'
+        using errcode = '23514',
+              constraint = 'improvement_work_item_terminal_before_work_record';
+    end if;
     return new;
   end if;
 
   if old.status in ('planned', 'in_progress') and new.status = 'cancelled' then
+    if exists (
+      select 1
+      from public.improvement_work_records wr
+      where wr.work_item_id = old.id
+        and wr.sealed = true
+        and wr.performed_at > new.cancelled_at
+    ) then
+      raise exception 'WorkItem cancellation cannot predate existing WorkRecord history.'
+        using errcode = '23514',
+              constraint = 'improvement_work_item_terminal_before_work_record';
+    end if;
     return new;
   end if;
 
@@ -574,22 +629,28 @@ begin
 
     select
       wi.started_at,
-      p.started_at,
       wi.completed_at,
-      wi.cancelled_at,
+      wi.cancelled_at
+    into
+      item_started_at,
+      item_completed_at,
+      item_cancelled_at
+    from public.improvement_work_items wi
+    where wi.id = new.work_item_id
+      and wi.project_id = new.project_id
+    for share;
+
+    select
+      p.started_at,
       p.completed_at,
       p.cancelled_at
     into
-      item_started_at,
       project_started_at,
-      item_completed_at,
-      item_cancelled_at,
       project_completed_at,
       project_cancelled_at
-    from public.improvement_work_items wi
-    join public.improvement_projects p on p.id = wi.project_id
-    where wi.id = new.work_item_id
-      and wi.project_id = new.project_id;
+    from public.improvement_projects p
+    where p.id = new.project_id
+    for share;
 
     if item_started_at is null or project_started_at is null then
       raise exception 'WorkRecord requires started Project and WorkItem occurrence boundaries.'
@@ -694,7 +755,8 @@ begin
     select sealed
       into parent_sealed
     from public.improvement_work_records
-    where id = new.work_record_id;
+    where id = new.work_record_id
+    for share;
 
     if parent_sealed is distinct from false then
       raise exception 'WorkRecord evidence can be inserted only before the parent is sealed.'
