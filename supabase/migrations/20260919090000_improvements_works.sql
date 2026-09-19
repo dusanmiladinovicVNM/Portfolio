@@ -268,7 +268,7 @@ create table public.improvement_project_assets (
   notes text,
 
   constraint improvement_project_assets_action_valid
-    check (action in ('affected', 'installed', 'removed')),
+    check (action in ('affected', 'installation_work', 'removal_work')),
   constraint improvement_project_assets_notes_not_blank
     check (notes is null or btrim(notes) <> ''),
   constraint improvement_project_assets_notes_canonical
@@ -289,6 +289,7 @@ as $improvement_project_guard$
 declare
   plan_changed boolean;
   lifecycle_timestamp_changed boolean;
+  definition_changed boolean;
 begin
   if tg_op = 'INSERT' then
     if new.status <> 'draft'
@@ -455,15 +456,17 @@ begin
   if new.id is distinct from old.id
      or new.project_id is distinct from old.project_id
      or new.code is distinct from old.code
-     or new.title is distinct from old.title
-     or new.description is distinct from old.description
      or new.created_at is distinct from old.created_at
      or new.created_by_user_id is distinct from old.created_by_user_id
   then
-    raise exception 'WorkItem definition is immutable.'
+    raise exception 'WorkItem identity is immutable.'
       using errcode = '23514',
             constraint = 'improvement_work_item_definition_immutable';
   end if;
+
+  definition_changed :=
+    new.title is distinct from old.title
+    or new.description is distinct from old.description;
 
   lifecycle_timestamp_changed :=
     new.started_at is distinct from old.started_at
@@ -471,12 +474,38 @@ begin
     or new.cancelled_at is distinct from old.cancelled_at;
 
   if new.status = old.status then
-    if lifecycle_timestamp_changed or new.version <> old.version then
-      raise exception 'WorkItem may change only through lifecycle transitions.'
+    if lifecycle_timestamp_changed then
+      raise exception 'WorkItem lifecycle timestamps change only with lifecycle transitions.'
+        using errcode = '23514',
+              constraint = 'improvement_work_item_version_step';
+    end if;
+
+    if definition_changed then
+      if old.status <> 'planned' then
+        raise exception 'WorkItem plan is frozen after work starts.'
+          using errcode = '23514',
+                constraint = 'improvement_work_item_plan_frozen';
+      end if;
+      if new.version <> old.version + 1 then
+        raise exception 'WorkItem plan correction must advance version by one.'
+          using errcode = '23514',
+                constraint = 'improvement_work_item_version_step';
+      end if;
+      return new;
+    end if;
+
+    if new.version <> old.version then
+      raise exception 'WorkItem version may advance only with a supported mutation.'
         using errcode = '23514',
               constraint = 'improvement_work_item_version_step';
     end if;
     return new;
+  end if;
+
+  if definition_changed then
+    raise exception 'WorkItem plan correction and lifecycle transition are separate commands.'
+      using errcode = '23514',
+            constraint = 'improvement_work_item_mixed_mutation_forbidden';
   end if;
 
   if new.version <> old.version + 1 then
@@ -527,10 +556,13 @@ returns trigger
 language plpgsql
 as $improvement_work_record_guard$
 declare
+  item_started_at timestamptz;
+  project_started_at timestamptz;
   item_completed_at timestamptz;
   item_cancelled_at timestamptz;
   project_completed_at timestamptz;
   project_cancelled_at timestamptz;
+  start_boundary timestamptz;
   terminal_cutoff timestamptz;
 begin
   if tg_op = 'INSERT' then
@@ -541,11 +573,15 @@ begin
     end if;
 
     select
+      wi.started_at,
+      p.started_at,
       wi.completed_at,
       wi.cancelled_at,
       p.completed_at,
       p.cancelled_at
     into
+      item_started_at,
+      project_started_at,
       item_completed_at,
       item_cancelled_at,
       project_completed_at,
@@ -554,6 +590,19 @@ begin
     join public.improvement_projects p on p.id = wi.project_id
     where wi.id = new.work_item_id
       and wi.project_id = new.project_id;
+
+    if item_started_at is null or project_started_at is null then
+      raise exception 'WorkRecord requires started Project and WorkItem occurrence boundaries.'
+        using errcode = '23514',
+              constraint = 'improvement_work_record_start_time_missing';
+    end if;
+
+    start_boundary := greatest(item_started_at, project_started_at);
+    if new.performed_at < start_boundary then
+      raise exception 'WorkRecord cannot occur before Project/WorkItem startedAt.'
+        using errcode = '23514',
+              constraint = 'improvement_work_record_before_start_time';
+    end if;
 
     select min(value)
       into terminal_cutoff
@@ -685,6 +734,6 @@ comment on table public.improvement_work_records is
 comment on table public.improvement_work_materials is
   'Exact material/consumable evidence attached atomically to one WorkRecord; no financial Cost semantics.';
 comment on table public.improvement_project_assets is
-  'Append-only evidence that an existing Asset was affected/installed/removed by one WorkRecord; never Asset lifecycle truth.';
+  'Append-only evidence that work affected, installed around/on, or removed around/on an existing Asset; action labels are work semantics, never Asset lifecycle/location truth.';
 
 commit;
