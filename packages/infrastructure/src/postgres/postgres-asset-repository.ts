@@ -259,23 +259,6 @@ const locationSelect = `
   from public.asset_location_history
 `;
 
-async function insertLocation(
-  tx: Sql,
-  location: AssetLocationHistory,
-): Promise<void> {
-  await tx`
-    insert into public.asset_location_history (
-      id, asset_id, property_id, unit_id, space_id,
-      valid_from, valid_to, change_type, changed_by_user_id, reason
-    ) values (
-      ${location.id}, ${location.assetId}, ${location.propertyId},
-      ${location.unitId}, ${location.spaceId}, ${location.validFrom},
-      ${location.validTo}, ${location.changeType},
-      ${location.changedByUserId}, ${location.reason}
-    )
-  `;
-}
-
 export class PostgresAssetRepository implements AssetRepository {
   constructor(private readonly sql: Sql) {}
 
@@ -385,7 +368,18 @@ export class PostgresAssetRepository implements AssetRepository {
           `;
         }
 
-        await insertLocation(tx as Sql, initialLocation);
+        await tx`
+          insert into public.asset_location_history (
+            id, asset_id, property_id, unit_id, space_id,
+            valid_from, valid_to, change_type, changed_by_user_id, reason
+          ) values (
+            ${initialLocation.id}, ${initialLocation.assetId},
+            ${initialLocation.propertyId}, ${initialLocation.unitId},
+            ${initialLocation.spaceId}, ${initialLocation.validFrom},
+            ${initialLocation.validTo}, ${initialLocation.changeType},
+            ${initialLocation.changedByUserId}, ${initialLocation.reason}
+          )
+        `;
       });
     });
   }
@@ -477,7 +471,18 @@ export class PostgresAssetRepository implements AssetRepository {
           );
         }
 
-        await insertLocation(tx as Sql, nextLocation);
+        await tx`
+          insert into public.asset_location_history (
+            id, asset_id, property_id, unit_id, space_id,
+            valid_from, valid_to, change_type, changed_by_user_id, reason
+          ) values (
+            ${nextLocation.id}, ${nextLocation.assetId},
+            ${nextLocation.propertyId}, ${nextLocation.unitId},
+            ${nextLocation.spaceId}, ${nextLocation.validFrom},
+            ${nextLocation.validTo}, ${nextLocation.changeType},
+            ${nextLocation.changedByUserId}, ${nextLocation.reason}
+          )
+        `;
 
         const updated = await tx<{ id: string }[]>`
           update public.assets
@@ -537,7 +542,18 @@ export class PostgresAssetRepository implements AssetRepository {
           `;
         }
 
-        await insertLocation(tx as Sql, replacementLocation);
+        await tx`
+          insert into public.asset_location_history (
+            id, asset_id, property_id, unit_id, space_id,
+            valid_from, valid_to, change_type, changed_by_user_id, reason
+          ) values (
+            ${replacementLocation.id}, ${replacementLocation.assetId},
+            ${replacementLocation.propertyId}, ${replacementLocation.unitId},
+            ${replacementLocation.spaceId}, ${replacementLocation.validFrom},
+            ${replacementLocation.validTo}, ${replacementLocation.changeType},
+            ${replacementLocation.changedByUserId}, ${replacementLocation.reason}
+          )
+        `;
 
         await tx`
           insert into public.asset_replacements (
