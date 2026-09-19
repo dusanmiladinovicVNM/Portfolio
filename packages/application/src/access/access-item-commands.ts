@@ -1,10 +1,13 @@
 import {
   DomainError,
+  accessItemUtcCalendarDate,
   asAccessItemId,
   asAccessItemTransactionId,
   createAccessItem,
   createAccessItemTransaction,
   deriveAccessItemState,
+  retireAccessItem,
+  updateAccessItemLabel,
   type AccessItem,
   type AccessItemId,
   type AccessItemKind,
@@ -39,6 +42,15 @@ async function requireItem(
     throw new DomainError('ACCESS_ITEM_NOT_FOUND', 'AccessItem not found.');
   }
   return item;
+}
+
+function assertExpectedVersion(item: AccessItem, expectedVersion: number): void {
+  if (item.version !== expectedVersion) {
+    throw new DomainError(
+      'ACCESS_ITEM_VERSION_CONFLICT',
+      'AccessItem has changed since the caller last read it.',
+    );
+  }
 }
 
 async function requireTenancy(
@@ -181,6 +193,48 @@ export async function createAccessItemCommand(
   return item;
 }
 
+export async function updateAccessItemLabelCommand(
+  deps: Pick<AccessItemDependencies, 'accessItemRepository'>,
+  actor: Actor,
+  accessItemId: AccessItemId,
+  expectedVersion: number,
+  label: string,
+): Promise<AccessItem> {
+  requireCapability(actor, 'access_items:write');
+  const item = await requireItem(deps.accessItemRepository, accessItemId);
+  assertExpectedVersion(item, expectedVersion);
+
+  const updated = updateAccessItemLabel(item, label);
+  if (updated === item) return item;
+
+  await deps.accessItemRepository.updateItem(updated, item.version);
+  return updated;
+}
+
+export async function retireAccessItemCommand(
+  deps: Pick<AccessItemDependencies, 'accessItemRepository' | 'clock'>,
+  actor: Actor,
+  accessItemId: AccessItemId,
+  expectedVersion: number,
+  retirementReason: string,
+): Promise<AccessItem> {
+  requireCapability(actor, 'access_items:write');
+  const item = await requireItem(deps.accessItemRepository, accessItemId);
+  assertExpectedVersion(item, expectedVersion);
+  const lastTransaction =
+    await deps.accessItemRepository.getLastTransaction(accessItemId);
+
+  const retired = retireAccessItem(item, {
+    retiredAt: deps.clock.now(),
+    retiredByUserId: actor.userId,
+    retirementReason,
+    lastTransaction,
+  });
+
+  await deps.accessItemRepository.updateItem(retired, item.version);
+  return retired;
+}
+
 export async function issueAccessItemCommand(
   deps: AccessItemDependencies,
   actor: Actor,
@@ -196,6 +250,13 @@ export async function issueAccessItemCommand(
   const item = await requireItem(deps.accessItemRepository, accessItemId);
   const tenancy = await requireTenancy(deps.tenancyRepository, input.tenancyId);
 
+  if (item.status !== 'active') {
+    throw new DomainError(
+      'ACCESS_ITEM_RETIRED',
+      'A retired AccessItem cannot be issued.',
+    );
+  }
+
   if (
     tenancy.status !== 'active' &&
     tenancy.status !== 'notice_given' &&
@@ -204,6 +265,23 @@ export async function issueAccessItemCommand(
     throw new DomainError(
       'ACCESS_ITEM_TENANCY_NOT_ELIGIBLE',
       'AccessItem can only be issued to a current Tenancy.',
+    );
+  }
+
+  if (tenancy.actualStart === null) {
+    throw new DomainError(
+      'ACCESS_ITEM_TENANCY_INVALID_STATE',
+      'Current Tenancy is missing actualStart.',
+    );
+  }
+
+  if (
+    accessItemUtcCalendarDate(input.occurredAt, 'occurredAt') <
+    tenancy.actualStart
+  ) {
+    throw new DomainError(
+      'ACCESS_ITEM_ISSUE_BEFORE_TENANCY_START',
+      'AccessItem issue occurrence cannot predate the Tenancy actualStart UTC calendar date.',
     );
   }
 
