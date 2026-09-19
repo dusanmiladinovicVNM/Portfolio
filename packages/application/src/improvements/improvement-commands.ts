@@ -243,9 +243,16 @@ export async function changeImprovementProjectStatusCommand(
       now,
     );
   } else {
-    const workRecords =
-      await deps.improvementRepository.listWorkRecordsByProject(project.id);
-    changed = cancelImprovementProject(project, workRecords, now);
+    const [workItems, workRecords] = await Promise.all([
+      deps.improvementRepository.listWorkItemsByProject(project.id),
+      deps.improvementRepository.listWorkRecordsByProject(project.id),
+    ]);
+    changed = cancelImprovementProject(
+      project,
+      workItems,
+      workRecords,
+      now,
+    );
   }
 
   await deps.improvementRepository.updateProjectLifecycle(
