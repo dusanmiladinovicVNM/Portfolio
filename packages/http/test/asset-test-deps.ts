@@ -11,6 +11,7 @@ import type {
   AssetReplacement,
   GloballyUniqueAssetIdentifierType,
   ServiceEvent,
+  ServiceEventId,
   ServicePlan,
   ServicePlanId,
   PropertyId,
@@ -242,6 +243,12 @@ export class InMemoryAssetServiceRepository
       throw new Error('service plan version conflict');
     }
     this.plans.set(plan.id, plan);
+  }
+
+  async getServiceEventById(
+    id: ServiceEventId,
+  ): Promise<ServiceEvent | null> {
+    return this.events.find((event) => event.id === id) ?? null;
   }
 
   async listServiceEventsByAsset(
