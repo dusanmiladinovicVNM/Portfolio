@@ -143,6 +143,20 @@ function instant(value: string, field: string): string {
   return value;
 }
 
+function assertClaimTimestampOrder(
+  value: string,
+  notBefore: string,
+  field: string,
+  predecessorField: string,
+): void {
+  if (Date.parse(value) < Date.parse(notBefore)) {
+    throw new DomainError(
+      'WARRANTY_CLAIM_TIMESTAMP_ORDER_INVALID',
+      `${field} cannot be before ${predecessorField}.`,
+    );
+  }
+}
+
 function assertWarrantyCoverage(
   warranty: Warranty,
   incidentOn: DateOnly,
@@ -270,11 +284,19 @@ export function submitWarrantyClaim(
     );
   }
 
+  const submittedAt = instant(submittedAtValue, 'submittedAt');
+  assertClaimTimestampOrder(
+    submittedAt,
+    claim.recordedAt,
+    'submittedAt',
+    'recordedAt',
+  );
+
   return {
     ...claim,
     status: 'submitted',
     providerReference: optional(providerReference),
-    submittedAt: instant(submittedAtValue, 'submittedAt'),
+    submittedAt,
     version: claim.version + 1,
   };
 }
@@ -291,10 +313,24 @@ export function resolveWarrantyClaim(
     );
   }
 
+  const resolvedAt = instant(resolvedAtValue, 'resolvedAt');
+  if (claim.submittedAt === null) {
+    throw new DomainError(
+      'WARRANTY_CLAIM_INVALID_STATE',
+      'Submitted WarrantyClaim is missing submittedAt.',
+    );
+  }
+  assertClaimTimestampOrder(
+    resolvedAt,
+    claim.submittedAt,
+    'resolvedAt',
+    'submittedAt',
+  );
+
   return {
     ...claim,
     status: decision,
-    resolvedAt: instant(resolvedAtValue, 'resolvedAt'),
+    resolvedAt,
     version: claim.version + 1,
   };
 }
@@ -310,10 +346,24 @@ export function closeWarrantyClaim(
     );
   }
 
+  const closedAt = instant(closedAtValue, 'closedAt');
+  if (claim.resolvedAt === null) {
+    throw new DomainError(
+      'WARRANTY_CLAIM_INVALID_STATE',
+      'Approved WarrantyClaim is missing resolvedAt.',
+    );
+  }
+  assertClaimTimestampOrder(
+    closedAt,
+    claim.resolvedAt,
+    'closedAt',
+    'resolvedAt',
+  );
+
   return {
     ...claim,
     status: 'closed',
-    closedAt: instant(closedAtValue, 'closedAt'),
+    closedAt,
     version: claim.version + 1,
   };
 }
@@ -329,10 +379,26 @@ export function cancelWarrantyClaim(
     );
   }
 
+  const cancelledAt = instant(cancelledAtValue, 'cancelledAt');
+  const notBefore =
+    claim.status === 'submitted' ? claim.submittedAt : claim.recordedAt;
+  if (notBefore === null) {
+    throw new DomainError(
+      'WARRANTY_CLAIM_INVALID_STATE',
+      'Submitted WarrantyClaim is missing submittedAt.',
+    );
+  }
+  assertClaimTimestampOrder(
+    cancelledAt,
+    notBefore,
+    'cancelledAt',
+    claim.status === 'submitted' ? 'submittedAt' : 'recordedAt',
+  );
+
   return {
     ...claim,
     status: 'cancelled',
-    cancelledAt: instant(cancelledAtValue, 'cancelledAt'),
+    cancelledAt,
     version: claim.version + 1,
   };
 }
