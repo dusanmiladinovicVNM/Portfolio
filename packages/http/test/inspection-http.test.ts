@@ -46,6 +46,7 @@ import {
   InMemoryStaffDirectoryRepository,
 } from './inspection-test-deps.js';
 import { InMemoryImprovementRepository } from './improvement-test-deps.js';
+import { InMemoryCostRepository } from './cost-test-deps.js';
 
 const adminIdentity: VerifiedIdentity = {
   provider: 'supabase',
@@ -220,6 +221,7 @@ function buildHandler() {
     assetInventoryRepository: new InMemoryAssetInventoryRepository(),
     assetServiceRepository: new InMemoryAssetServiceRepository(),
     improvementRepository: new InMemoryImprovementRepository(),
+    costRepository: new InMemoryCostRepository(),
     portfolioRepository,
     partyRepository: new EmptyPartyRepository(),
     ownershipRepository: new EmptyOwnershipRepository(),
