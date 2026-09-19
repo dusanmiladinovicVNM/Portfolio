@@ -34,7 +34,7 @@ interface AssetRow {
   id: string;
   code: string;
   name: string;
-  property_id: string;
+  property_id: string | null;
   unit_id: string | null;
   space_id: string | null;
   manufacturer: string | null;
@@ -291,7 +291,7 @@ export class PostgresAssetRepository implements AssetRepository {
       id,
       code: row.code,
       name: row.name,
-      propertyId: asPropertyId(row.property_id),
+      propertyId: row.property_id === null ? null : asPropertyId(row.property_id),
       unitId: row.unit_id === null ? null : asUnitId(row.unit_id),
       spaceId: row.space_id === null ? null : asSpaceId(row.space_id),
       manufacturer: row.manufacturer,
@@ -527,6 +527,7 @@ export class PostgresAssetRepository implements AssetRepository {
     replaced: Asset,
     replacement: Asset,
     relation: AssetReplacement,
+    predecessorLocation: AssetLocationHistory,
     replacementLocation: AssetLocationHistory,
   ): Promise<void> {
     await translated(async () => {
@@ -579,15 +580,37 @@ export class PostgresAssetRepository implements AssetRepository {
           )
         `;
 
+        const closed = await tx<{ id: string }[]>`
+          update public.asset_location_history
+          set valid_to = ${relation.replacedAt}
+          where id = ${predecessorLocation.id}
+            and asset_id = ${current.id}
+            and valid_to is null
+            and valid_from = ${predecessorLocation.validFrom}
+          returning id
+        `;
+        if (closed.length === 0) {
+          throw new DomainError(
+            'ASSET_LOCATION_VERSION_CONFLICT',
+            'Predecessor location changed before replacement completed.',
+          );
+        }
+
         const rows = await tx<{ id: string }[]>`
           update public.assets
           set
+            property_id = null,
+            unit_id = null,
+            space_id = null,
             status = ${replaced.status},
             version = ${replaced.version},
             updated_at = now()
           where id = ${current.id}
             and version = ${current.version}
             and status = ${current.status}
+            and property_id is not distinct from ${current.propertyId}::uuid
+            and unit_id is not distinct from ${current.unitId}::uuid
+            and space_id is not distinct from ${current.spaceId}::uuid
           returning id
         `;
 
