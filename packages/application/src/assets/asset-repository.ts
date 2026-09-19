@@ -26,6 +26,7 @@ export interface AssetRepository {
     replaced: Asset,
     replacement: Asset,
     relation: AssetReplacement,
+    predecessorLocation: AssetLocationHistory,
     replacementLocation: AssetLocationHistory,
   ): Promise<void>;
   getCurrentLocation(assetId: AssetId): Promise<AssetLocationHistory | null>;
