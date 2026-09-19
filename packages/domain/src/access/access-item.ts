@@ -10,9 +10,11 @@ import type {
 } from '../shared/entity-id.js';
 
 export const ACCESS_ITEM_KINDS = ['key', 'card', 'remote'] as const;
+export const ACCESS_ITEM_STATUSES = ['active', 'retired'] as const;
 export const ACCESS_ITEM_TRANSACTION_TYPES = ['issued', 'returned', 'lost'] as const;
 
 export type AccessItemKind = (typeof ACCESS_ITEM_KINDS)[number];
+export type AccessItemStatus = (typeof ACCESS_ITEM_STATUSES)[number];
 export type AccessItemTransactionType =
   (typeof ACCESS_ITEM_TRANSACTION_TYPES)[number];
 export type AccessItemStateKind = 'available' | 'issued' | 'lost';
@@ -25,6 +27,11 @@ export interface AccessItem {
   readonly unitId: UnitId | null;
   readonly spaceId: SpaceId | null;
   readonly label: string;
+  readonly status: AccessItemStatus;
+  readonly retiredAt: string | null;
+  readonly retiredByUserId: UserId | null;
+  readonly retirementReason: string | null;
+  readonly version: number;
   readonly recordedAt: string;
   readonly recordedByUserId: UserId;
 }
@@ -85,6 +92,11 @@ function assertNotBefore(
   }
 }
 
+export function accessItemUtcCalendarDate(value: string, field: string): string {
+  const parsed = instant(value, field);
+  return new Date(parsed).toISOString().slice(0, 10);
+}
+
 export function createAccessItem(input: {
   readonly id: AccessItemId;
   readonly code: string;
@@ -111,8 +123,71 @@ export function createAccessItem(input: {
     unitId: input.unitId ?? null,
     spaceId: input.spaceId ?? null,
     label: required(input.label, 'label'),
+    status: 'active',
+    retiredAt: null,
+    retiredByUserId: null,
+    retirementReason: null,
+    version: 1,
     recordedAt: instant(input.recordedAt, 'recordedAt'),
     recordedByUserId: input.recordedByUserId,
+  };
+}
+
+export function updateAccessItemLabel(
+  item: AccessItem,
+  labelValue: string,
+): AccessItem {
+  const label = required(labelValue, 'label');
+  if (label === item.label) return item;
+  return {
+    ...item,
+    label,
+    version: item.version + 1,
+  };
+}
+
+export function retireAccessItem(
+  item: AccessItem,
+  input: {
+    readonly retiredAt: string;
+    readonly retiredByUserId: UserId;
+    readonly retirementReason: string;
+    readonly lastTransaction?: AccessItemTransaction | null;
+  },
+): AccessItem {
+  if (item.status === 'retired') {
+    throw new DomainError(
+      'ACCESS_ITEM_ALREADY_RETIRED',
+      'AccessItem is already retired.',
+    );
+  }
+
+  const retiredAt = instant(input.retiredAt, 'retiredAt');
+  assertNotBefore(retiredAt, item.recordedAt, 'retiredAt', 'recordedAt');
+
+  const lastTransaction = input.lastTransaction ?? null;
+  if (lastTransaction !== null) {
+    if (lastTransaction.accessItemId !== item.id) {
+      throw new DomainError(
+        'ACCESS_ITEM_TRANSACTION_PARENT_MISMATCH',
+        'Last transaction belongs to another AccessItem.',
+      );
+    }
+    assertNotBefore(
+      retiredAt,
+      lastTransaction.occurredAt,
+      'retiredAt',
+      'last custody occurrence',
+    );
+  }
+
+  return {
+    ...item,
+    status: 'retired',
+    retiredAt,
+    retiredByUserId: input.retiredByUserId,
+    retirementReason: required(input.retirementReason, 'retirementReason'),
+    version: item.version + 1,
   };
 }
 
@@ -147,6 +222,13 @@ export function createAccessItemTransaction(input: {
 }): AccessItemTransaction {
   const occurredAt = instant(input.occurredAt, 'occurredAt');
   const recordedAt = instant(input.recordedAt, 'recordedAt');
+
+  if (input.type === 'issued' && input.item.status !== 'active') {
+    throw new DomainError(
+      'ACCESS_ITEM_RETIRED',
+      'A retired AccessItem cannot be issued.',
+    );
+  }
 
   assertNotBefore(
     occurredAt,
