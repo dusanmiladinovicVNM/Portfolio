@@ -5,11 +5,19 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   activateTenancyCommand,
   changeAssetStatusCommand,
+  changeServicePlanStatusCommand,
+  closeWarrantyClaimCommand,
   createAssetCommand,
+  createServicePlanCommand,
+  createWarrantyClaimCommand,
+  createWarrantyCommand,
   moveAssetCommand,
   assessAssetConditionCommand,
   assignAssetToTenancyCommand,
   recordTenancyAssetInventoryCommand,
+  recordServiceEventCommand,
+  resolveWarrantyClaimCommand,
+  submitWarrantyClaimCommand,
   listAssetLocationHistoryQuery,
   listAssetConditionAssessmentsQuery,
   listTenancyAssetAssignmentsQuery,
@@ -74,6 +82,7 @@ import {
 import {
   PostgresAssetInventoryRepository,
   PostgresAssetRepository,
+  PostgresAssetServiceRepository,
   PostgresDocumentRepository,
   PostgresInspectionRepository,
   PostgresLeaseRepository,
@@ -93,6 +102,7 @@ const sql = postgres(connectionString, { max: 1 });
 const portfolioRepository = new PostgresPortfolioRepository(sql);
 const assetRepository = new PostgresAssetRepository(sql);
 const assetInventoryRepository = new PostgresAssetInventoryRepository(sql);
+const assetServiceRepository = new PostgresAssetServiceRepository(sql);
 const partyRepository = new PostgresPartyRepository(sql);
 const ownershipRepository = new PostgresOwnershipRepository(sql);
 const leaseRepository = new PostgresLeaseRepository(sql);
@@ -117,6 +127,11 @@ class SequenceIds implements IdGenerator {
 async function resetAndMigrate(): Promise<void> {
   await sql.unsafe(
     `drop table if exists
+      public.asset_service_parts,
+      public.asset_service_events,
+      public.asset_service_plans,
+      public.asset_warranty_claims,
+      public.asset_warranties,
       public.tenancy_asset_assignments,
       public.asset_condition_assessments,
       public.asset_location_history,
