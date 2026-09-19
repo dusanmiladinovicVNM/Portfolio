@@ -3,7 +3,6 @@ import { DomainError } from '../shared/domain-error.js';
 import {
   asCurrencyCode,
   asMoneyAmount,
-  type CurrencyCode,
   type MoneyAmount,
 } from '../shared/money.js';
 import type {
@@ -32,6 +31,7 @@ export const COST_REPORTING_CLASSES = [
 export const COST_SUPPORTED_CURRENCIES = ['CHF', 'EUR', 'RSD'] as const;
 
 export type CostReportingClass = (typeof COST_REPORTING_CLASSES)[number];
+export type CostCurrency = (typeof COST_SUPPORTED_CURRENCIES)[number];
 
 export type CostSource =
   | { readonly kind: 'property'; readonly propertyId: PropertyId }
@@ -62,7 +62,7 @@ export interface Cost {
   readonly source: CostSource;
   readonly description: string;
   readonly amount: MoneyAmount;
-  readonly currency: CurrencyCode;
+  readonly currency: CostCurrency;
   readonly incurredOn: DateOnly;
   readonly reportingClass: CostReportingClass;
   readonly supplierPartyId: PartyId | null;
@@ -119,7 +119,7 @@ function positiveMoney(value: string): MoneyAmount {
   return amount;
 }
 
-function costCurrency(value: string): CurrencyCode {
+export function asCostCurrency(value: string): CostCurrency {
   const currency = asCurrencyCode(value);
   if (!COST_SUPPORTED_CURRENCIES.some((supported) => supported === currency)) {
     throw new DomainError(
@@ -127,7 +127,7 @@ function costCurrency(value: string): CurrencyCode {
       `Cost currency must be one of: ${COST_SUPPORTED_CURRENCIES.join(', ')}.`,
     );
   }
-  return currency;
+  return currency as CostCurrency;
 }
 
 export function createCost(input: {
@@ -158,7 +158,7 @@ export function createCost(input: {
     source: input.source,
     description: required(input.description, 'description'),
     amount: positiveMoney(input.amount),
-    currency: costCurrency(input.currency),
+    currency: asCostCurrency(input.currency),
     incurredOn,
     reportingClass: input.reportingClass,
     supplierPartyId: input.supplierPartyId ?? null,
