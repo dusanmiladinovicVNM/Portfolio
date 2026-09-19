@@ -6342,6 +6342,30 @@ describe('PostgreSQL infrastructure', () => {
     await expect(
       sql`
         insert into public.costs (
+          id, source_kind, property_id,
+          description, amount, currency, incurred_on, reporting_class,
+          recorded_at, recorded_by_user_id
+        ) values (
+          'adf00000-0000-4000-8000-000000000009',
+          'property',
+          ${property.id},
+          'Unsupported currency',
+          1,
+          'ZZZ',
+          '2026-09-18',
+          'opex',
+          '2026-09-19T10:09:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'costs_currency_supported',
+    });
+
+    await expect(
+      sql`
+        insert into public.costs (
           id, source_kind, property_id, unit_id,
           description, amount, currency, incurred_on, reporting_class,
           recorded_at, recorded_by_user_id
@@ -6455,6 +6479,53 @@ describe('PostgreSQL infrastructure', () => {
 
     const originalStillThere = await costRepository.getCostById(first.id);
     expect(originalStillThere).toMatchObject({ amount: '1200.50' });
+
+    const incomingCorrection =
+      await costRepository.getReversalByReplacementCostId(
+        correction.replacement.id,
+      );
+    expect(incomingCorrection).toMatchObject({
+      costId: first.id,
+      replacementCostId: correction.replacement.id,
+    });
+
+    await sql`
+      insert into public.costs (
+        id, source_kind, property_id,
+        description, amount, currency, incurred_on, reporting_class,
+        recorded_at, recorded_by_user_id
+      ) values (
+        'adf00000-0000-4000-8000-000000000010',
+        'property',
+        ${property.id},
+        'Pre-existing would-be replacement',
+        1100,
+        'CHF',
+        '2026-09-18',
+        'capex',
+        '2026-09-19T13:00:00.000Z',
+        'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+      )
+    `;
+
+    await expect(
+      sql`
+        insert into public.cost_reversals (
+          id, cost_id, replacement_cost_id, reason,
+          recorded_at, recorded_by_user_id
+        ) values (
+          'adf00000-0000-4000-8000-000000000011',
+          ${correction.replacement.id},
+          'adf00000-0000-4000-8000-000000000010',
+          'Must not retrofit another recorder cost as replacement',
+          '2026-09-19T13:00:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'cost_reversal_replacement_recorder_mismatch',
+    });
 
     await expect(
       sql`
