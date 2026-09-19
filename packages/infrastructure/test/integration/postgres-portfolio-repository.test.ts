@@ -6366,6 +6366,30 @@ describe('PostgreSQL infrastructure', () => {
     await expect(
       sql`
         insert into public.costs (
+          id, source_kind, property_id,
+          description, amount, currency, incurred_on, reporting_class,
+          recorded_at, recorded_by_user_id
+        ) values (
+          'adf00000-0000-4000-8000-000000000012',
+          'property',
+          ${property.id},
+          'Over-scale amount must not be rounded',
+          1.005,
+          'CHF',
+          '2026-09-18',
+          'opex',
+          '2026-09-19T10:09:30.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'costs_amount_scale_valid',
+    });
+
+    await expect(
+      sql`
+        insert into public.costs (
           id, source_kind, property_id, unit_id,
           description, amount, currency, incurred_on, reporting_class,
           recorded_at, recorded_by_user_id
