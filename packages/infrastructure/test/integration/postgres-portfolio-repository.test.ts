@@ -8102,15 +8102,154 @@ describe('PostgreSQL infrastructure', () => {
       constraint_name: 'access_item_transaction_immutable',
     });
 
+    const correctedUnitKey = await updateAccessItemLabelCommand(
+      { accessItemRepository },
+      actor,
+      unitKey.id,
+      unitKey.version,
+      'Unit A entrance key — corrected label',
+    );
+    expect(correctedUnitKey).toMatchObject({
+      label: 'Unit A entrance key — corrected label',
+      version: 2,
+    });
+
     await expect(
       sql`
         update public.access_items
-        set label = 'rewritten identity'
+        set unit_id = ${unitB.id},
+            version = version + 1
         where id = ${unitKey.id}
       `,
     ).rejects.toMatchObject({
       code: '23514',
       constraint_name: 'access_item_immutable',
+    });
+
+    const retirementCard = await createAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T11:30:00.000Z' },
+      },
+      actor,
+      {
+        code: 'CARD-ACCESS-RETIRE',
+        kind: 'card',
+        propertyId: property.id,
+        label: 'Credential to retire while issued',
+      },
+    );
+
+    const retirementIssued = await issueAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T11:31:00.000Z' },
+      },
+      actor,
+      retirementCard.id,
+      {
+        tenancyId: activeA.id,
+        occurredAt: '2026-09-19T11:31:00.000Z',
+      },
+    );
+    expect(retirementIssued.sequence).toBe(1);
+
+    await expect(
+      sql`
+        update public.access_items
+        set status = 'retired',
+            retired_at = '2026-09-19T11:30:30.000Z',
+            retired_by_user_id = ${actor.userId},
+            retirement_reason = 'Backdated invalid retirement',
+            version = version + 1
+        where id = ${retirementCard.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'access_item_retirement_before_custody',
+    });
+
+    const retiredWhileIssued = await retireAccessItemCommand(
+      {
+        accessItemRepository,
+        clock: { now: () => '2026-09-19T11:32:00.000Z' },
+      },
+      actor,
+      retirementCard.id,
+      retirementCard.version,
+      'Credential permanently disabled',
+    );
+    expect(retiredWhileIssued).toMatchObject({
+      status: 'retired',
+      version: 2,
+      retirementReason: 'Credential permanently disabled',
+    });
+
+    await expect(
+      issueAccessItemCommand(
+        {
+          ...accessDeps,
+          clock: { now: () => '2026-09-19T11:33:00.000Z' },
+        },
+        actor,
+        retirementCard.id,
+        {
+          tenancyId: activeA.id,
+          occurredAt: '2026-09-19T11:33:00.000Z',
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'ACCESS_ITEM_RETIRED' });
+
+    const retirementReturned = await returnAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T11:34:00.000Z' },
+      },
+      actor,
+      retirementCard.id,
+      {
+        occurredAt: '2026-09-19T11:34:00.000Z',
+        note: 'Returned after credential was disabled',
+      },
+    );
+    expect(retirementReturned).toMatchObject({
+      type: 'returned',
+      sequence: 2,
+      tenancyId: activeA.id,
+    });
+
+    await expect(
+      sql`
+        insert into public.access_item_transactions (
+          id, access_item_id, tenancy_id, type, sequence,
+          occurred_at, recorded_at, recorded_by_user_id
+        ) values (
+          'aef20000-0000-4000-8000-000000000003',
+          ${retirementCard.id},
+          ${activeA.id},
+          'issued',
+          3,
+          '2026-09-19T11:35:00.000Z',
+          '2026-09-19T11:35:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'access_item_transaction_item_not_active',
+    });
+
+    const correctedRetiredCard = await updateAccessItemLabelCommand(
+      { accessItemRepository },
+      actor,
+      retirementCard.id,
+      retiredWhileIssued.version,
+      'Disabled building credential',
+    );
+    expect(correctedRetiredCard).toMatchObject({
+      status: 'retired',
+      label: 'Disabled building credential',
+      version: 3,
     });
 
     const raceKey = await createAccessItemCommand(
