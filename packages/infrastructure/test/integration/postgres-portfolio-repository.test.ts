@@ -4994,7 +4994,7 @@ describe('PostgreSQL infrastructure', () => {
         name: 'Replacement heat pump',
       },
     );
-    expect(replacement.replaced.status).toBe('replaced');
+    expect(replacement.replacedAsset.status).toBe('replaced');
 
     const pausedAfterReplacement = await changeServicePlanStatusCommand(
       { assetRepository, assetServiceRepository, partyRepository },
