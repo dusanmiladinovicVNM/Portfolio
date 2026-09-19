@@ -4481,14 +4481,24 @@ describe('PostgreSQL infrastructure', () => {
       sql`
         update public.asset_warranty_claims
         set status = 'submitted',
-            closed_at = null,
-            resolved_at = null,
             version = version + 1
         where id = ${claim.id}
       `,
     ).rejects.toMatchObject({
       code: '23514',
       constraint_name: 'asset_warranty_claim_transition_invalid',
+    });
+
+    await expect(
+      sql`
+        update public.asset_warranty_claims
+        set closed_at = null,
+            version = version + 1
+        where id = ${claim.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'asset_warranty_claim_timestamp_immutable',
     });
 
     await sql`
