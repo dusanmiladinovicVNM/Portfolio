@@ -352,7 +352,12 @@ export function assignMaintenanceWorkOrder(
     );
   }
   const assignedAt = instant(assignedAtValue, 'assignedAt');
-  assertNotBefore(assignedAt, order.createdAt, 'assignedAt', 'createdAt');
+  assertNotBefore(
+    assignedAt,
+    order.assignedAt ?? order.createdAt,
+    'assignedAt',
+    order.assignedAt === null ? 'createdAt' : 'previous assignedAt',
+  );
   return {
     ...order,
     assignee,
@@ -380,6 +385,7 @@ export function startMaintenanceWorkOrder(
 export function completeMaintenanceWorkOrder(
   order: MaintenanceWorkOrder,
   completedAtValue: string,
+  serviceEvents: readonly { readonly performedAt: string }[] = [],
 ): MaintenanceWorkOrder {
   if (order.status !== 'in_progress' || order.startedAt === null) {
     throw new DomainError(
@@ -389,6 +395,16 @@ export function completeMaintenanceWorkOrder(
   }
   const completedAt = instant(completedAtValue, 'completedAt');
   assertNotBefore(completedAt, order.startedAt, 'completedAt', 'startedAt');
+  if (
+    serviceEvents.some(
+      (event) => Date.parse(event.performedAt) > Date.parse(completedAt),
+    )
+  ) {
+    throw new DomainError(
+      'MAINTENANCE_WORK_ORDER_COMPLETION_BEFORE_SERVICE',
+      'WorkOrder completion cannot predate linked ServiceEvent work.',
+    );
+  }
   return {
     ...order,
     status: 'completed',
@@ -432,6 +448,7 @@ export function createMaintenanceWorkOrderServiceEventLink(input: {
     readonly id: ServiceEventId;
     readonly assetId: AssetId;
     readonly performedAt: string;
+    readonly recordedAt: string;
   };
   readonly linkedAt: string;
   readonly linkedByUserId: UserId;
@@ -478,10 +495,23 @@ export function createMaintenanceWorkOrderServiceEventLink(input: {
       'ServiceEvent performedAt cannot be after WorkOrder completedAt.',
     );
   }
+  const linkedAt = instant(input.linkedAt, 'linkedAt');
+  assertNotBefore(
+    linkedAt,
+    input.workOrder.createdAt,
+    'linkedAt',
+    'WorkOrder.createdAt',
+  );
+  assertNotBefore(
+    linkedAt,
+    input.serviceEvent.recordedAt,
+    'linkedAt',
+    'ServiceEvent.recordedAt',
+  );
   return {
     workOrderId: input.workOrder.id,
     serviceEventId: input.serviceEvent.id,
-    linkedAt: instant(input.linkedAt, 'linkedAt'),
+    linkedAt,
     linkedByUserId: input.linkedByUserId,
   };
 }
