@@ -205,6 +205,11 @@ function translate(error: unknown): DomainError | null {
         'WARRANTY_CLAIM_INCIDENT_IN_FUTURE',
         'WarrantyClaim incident cannot be after its recording date.',
       );
+    case 'asset_warranty_claims_timestamp_order':
+      return new DomainError(
+        'WARRANTY_CLAIM_TIMESTAMP_ORDER_INVALID',
+        'WarrantyClaim lifecycle timestamps cannot precede their temporal predecessor.',
+      );
     case 'asset_warranty_claim_version_step':
       return new DomainError(
         'WARRANTY_CLAIM_VERSION_CONFLICT',
