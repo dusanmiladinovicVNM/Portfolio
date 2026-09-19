@@ -30,6 +30,10 @@ export interface AssetRepository {
     replacementLocation: AssetLocationHistory,
   ): Promise<void>;
   getCurrentLocation(assetId: AssetId): Promise<AssetLocationHistory | null>;
+  getLocationAt(
+    assetId: AssetId,
+    at: string,
+  ): Promise<AssetLocationHistory | null>;
   listLocationHistory(assetId: AssetId): Promise<readonly AssetLocationHistory[]>;
   moveAsset(
     current: Asset,
