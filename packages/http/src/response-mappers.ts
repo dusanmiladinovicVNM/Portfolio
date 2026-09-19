@@ -11,6 +11,9 @@ import type {
   DocumentLinkResponse,
   DocumentResponse,
   DocumentVersionResponse,
+  ImprovementProjectResponse,
+  WorkItemResponse,
+  WorkRecordResponse,
   InspectionEvidenceResponse,
   InspectionFindingResponse,
   InspectionFinalSnapshotResponse,
@@ -41,6 +44,9 @@ import type {
   Document,
   DocumentLink,
   DocumentVersion,
+  ImprovementProject,
+  WorkItem,
+  WorkRecord,
   Inspection,
   InspectionEvidence,
   InspectionFinding,
@@ -574,5 +580,77 @@ export function toServiceEventResponse(
     })),
     recordedAt: event.recordedAt,
     recordedByUserId: event.recordedByUserId,
+  };
+}
+
+
+export function toImprovementProjectResponse(
+  project: ImprovementProject,
+): ImprovementProjectResponse {
+  return {
+    id: project.id,
+    code: project.code,
+    name: project.name,
+    description: project.description,
+    propertyId: project.propertyId,
+    unitId: project.unitId,
+    spaceId: project.spaceId,
+    plannedStartOn: project.plannedStartOn,
+    plannedEndOn: project.plannedEndOn,
+    status: project.status,
+    plannedAt: project.plannedAt,
+    startedAt: project.startedAt,
+    completedAt: project.completedAt,
+    cancelledAt: project.cancelledAt,
+    version: project.version,
+    createdAt: project.createdAt,
+    createdByUserId: project.createdByUserId,
+  };
+}
+
+export function toWorkItemResponse(item: WorkItem): WorkItemResponse {
+  return {
+    id: item.id,
+    projectId: item.projectId,
+    code: item.code,
+    title: item.title,
+    description: item.description,
+    status: item.status,
+    startedAt: item.startedAt,
+    completedAt: item.completedAt,
+    cancelledAt: item.cancelledAt,
+    version: item.version,
+    createdAt: item.createdAt,
+    createdByUserId: item.createdByUserId,
+  };
+}
+
+export function toWorkRecordResponse(record: WorkRecord): WorkRecordResponse {
+  return {
+    id: record.id,
+    projectId: record.projectId,
+    workItemId: record.workItemId,
+    contractorPartyId: record.contractorPartyId,
+    performedAt: record.performedAt,
+    description: record.description,
+    reference: record.reference,
+    materials: record.materials.map((material) => ({
+      id: material.id,
+      workRecordId: material.workRecordId,
+      name: material.name,
+      reference: material.reference,
+      quantity: material.quantity,
+      unit: material.unit,
+      notes: material.notes,
+    })),
+    assets: record.assets.map((asset) => ({
+      id: asset.id,
+      workRecordId: asset.workRecordId,
+      assetId: asset.assetId,
+      action: asset.action,
+      notes: asset.notes,
+    })),
+    recordedAt: record.recordedAt,
+    recordedByUserId: record.recordedByUserId,
   };
 }
