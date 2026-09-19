@@ -80,6 +80,16 @@ export class InMemoryCostRepository implements CostRepository {
     return this.reversals.get(costId) ?? null;
   }
 
+  async getReversalByReplacementCostId(
+    costId: CostId,
+  ): Promise<CostReversal | null> {
+    return (
+      [...this.reversals.values()].find(
+        (reversal) => reversal.replacementCostId === costId,
+      ) ?? null
+    );
+  }
+
   async insertCost(cost: Cost): Promise<void> {
     this.costs.set(cost.id, cost);
   }
