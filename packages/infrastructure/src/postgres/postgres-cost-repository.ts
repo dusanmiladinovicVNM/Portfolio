@@ -226,10 +226,20 @@ function translate(error: unknown): DomainError | null {
         'COST_REPLACEMENT_RECORDING_MISMATCH',
         'Replacement Cost and reversal must share recordedAt.',
       );
+    case 'cost_reversal_replacement_recorder_mismatch':
+      return new DomainError(
+        'COST_REPLACEMENT_RECORDER_MISMATCH',
+        'Replacement Cost and reversal must share recordedByUserId.',
+      );
     case 'cost_reversal_replacement_already_reversed':
       return new DomainError(
         'COST_REPLACEMENT_ALREADY_REVERSED',
         'Replacement Cost is already reversed.',
+      );
+    case 'costs_currency_supported':
+      return new DomainError(
+        'COST_CURRENCY_UNSUPPORTED',
+        'Cost currency is not supported by this ledger.',
       );
     case 'costs_incurred_not_future':
       return new DomainError(
@@ -434,6 +444,20 @@ export class PostgresCostRepository implements CostRepository {
         recorded_at, recorded_by_user_id
       from public.cost_reversals
       where cost_id = ${costId}
+      limit 1
+    `;
+    return rows.length === 0 ? null : mapReversal(rows[0]!);
+  }
+
+  async getReversalByReplacementCostId(
+    costId: CostId,
+  ): Promise<CostReversal | null> {
+    const rows = await this.sql<ReversalRow[]>`
+      select
+        id, cost_id, replacement_cost_id, reason,
+        recorded_at, recorded_by_user_id
+      from public.cost_reversals
+      where replacement_cost_id = ${costId}
       limit 1
     `;
     return rows.length === 0 ? null : mapReversal(rows[0]!);
