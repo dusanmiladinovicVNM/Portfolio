@@ -1,4 +1,5 @@
 import { DomainError } from '../shared/domain-error.js';
+import { asInstant } from '../shared/instant.js';
 import type {
   AccessItemId,
   AccessItemTransactionId,
@@ -68,16 +69,6 @@ function optional(value: string | null | undefined): string | null {
   return normalized || null;
 }
 
-function instant(value: string, field: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}T/.test(value) || Number.isNaN(Date.parse(value))) {
-    throw new DomainError(
-      'ACCESS_ITEM_INVALID_TIMESTAMP',
-      `${field} must be a valid ISO timestamp.`,
-    );
-  }
-  return value;
-}
-
 function assertNotBefore(
   value: string,
   notBefore: string,
@@ -93,7 +84,7 @@ function assertNotBefore(
 }
 
 export function accessItemUtcCalendarDate(value: string, field: string): string {
-  const parsed = instant(value, field);
+  const parsed = asInstant(value, field, 'ACCESS_ITEM_INVALID_TIMESTAMP');
   return new Date(parsed).toISOString().slice(0, 10);
 }
 
@@ -128,7 +119,7 @@ export function createAccessItem(input: {
     retiredByUserId: null,
     retirementReason: null,
     version: 1,
-    recordedAt: instant(input.recordedAt, 'recordedAt'),
+    recordedAt: asInstant(input.recordedAt, 'recordedAt', 'ACCESS_ITEM_INVALID_TIMESTAMP'),
     recordedByUserId: input.recordedByUserId,
   };
 }
@@ -162,7 +153,7 @@ export function retireAccessItem(
     );
   }
 
-  const retiredAt = instant(input.retiredAt, 'retiredAt');
+  const retiredAt = asInstant(input.retiredAt, 'retiredAt', 'ACCESS_ITEM_INVALID_TIMESTAMP');
   assertNotBefore(retiredAt, item.recordedAt, 'retiredAt', 'recordedAt');
 
   const lastTransaction = input.lastTransaction ?? null;
@@ -220,8 +211,8 @@ export function createAccessItemTransaction(input: {
   readonly recordedByUserId: UserId;
   readonly note?: string | null;
 }): AccessItemTransaction {
-  const occurredAt = instant(input.occurredAt, 'occurredAt');
-  const recordedAt = instant(input.recordedAt, 'recordedAt');
+  const occurredAt = asInstant(input.occurredAt, 'occurredAt', 'ACCESS_ITEM_INVALID_TIMESTAMP');
+  const recordedAt = asInstant(input.recordedAt, 'recordedAt', 'ACCESS_ITEM_INVALID_TIMESTAMP');
 
   if (input.type === 'issued' && input.item.status !== 'active') {
     throw new DomainError(
