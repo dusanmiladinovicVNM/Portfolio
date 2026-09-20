@@ -19,6 +19,26 @@ These are different grains.
 
 ## Decision
 
+### Canonical Instant policy
+
+Every Portfolio field that represents an instant, rather than a date-only business date, requires an explicit timezone in external/domain input:
+
+```text
+...Z
+or
+...+02:00
+```
+
+Offset-less values such as:
+
+```text
+2026-09-20T00:30:00
+```
+
+are invalid because JavaScript runtime timezone and PostgreSQL session timezone could otherwise assign different instants to the same text.
+
+The shared domain `asInstant()` and contracts `instantSchema` both enforce the explicit offset and normalize accepted values to UTC ISO. This policy is cross-context and is also used by Access, Assets, Service, Cost, Improvements, Inspections, Maintenance and Documents. Date-only fields such as Tenancy actualStart/actualEnd remain date-only and are not converted into instants.
+
 ### Meter
 
 One `Meter` is one exact physical cumulative utility meter.
@@ -79,6 +99,7 @@ At the moment retirement is written:
 
 ```text
 installedAt <= retiredAt <= retirementRecordedAt
+Meter.recordedAt <= retirementRecordedAt
 retiredAt >= latest reading occurrence already persisted at that moment
 ```
 
@@ -101,6 +122,14 @@ One `MeterReading` is one append-only physical register observation:
 - `readAt` business occurrence;
 - immutable recording provenance;
 - optional note.
+
+Historical occurrence is allowed, but system provenance cannot predate the parent registration:
+
+```text
+readAt may be < Meter.recordedAt
+MeterReading.recordedAt >= Meter.recordedAt
+MeterReading.recordedAt >= readAt
+```
 
 Reading value is a non-negative exact decimal with at most:
 
@@ -224,7 +253,10 @@ At minimum canonical #21 must prove:
 19. one Meter+Tenancy+boundary-type exists at most once;
 20. concurrent duplicate boundary insertion serializes;
 21. lower later register value does not produce invented negative consumption;
-22. inspector may append reading/boundary facts but may not create/retire Meter master data.
+22. inspector may append reading/boundary facts but may not create/retire Meter master data;
+23. offset-less canonical instant input is rejected while explicit offsets are UTC-normalized;
+24. MeterReading.recordedAt cannot predate Meter.recordedAt while historical readAt remains legal;
+25. retirementRecordedAt cannot predate Meter.recordedAt while historical retiredAt remains legal.
 
 ## Deferred
 
