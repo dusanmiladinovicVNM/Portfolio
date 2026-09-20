@@ -44,7 +44,7 @@ A Unit survives changes of tenant, agreement and inspection.
 
 Grain: one named physical subdivision of a Unit, such as kitchen, bedroom, balcony, cellar or parking-related space.
 
-Space exists so inspections, assets, work and costs can later be localized without encoding room names in free text.
+Space exists so inspections, assets, work and costs can later be localized without encoding room names in free text. `Space.unitId` is physical parent identity and is immutable after creation; moving a Space between Units would rewrite every historical relationship that uses Space as scope.
 
 ## Planned model
 
@@ -62,7 +62,7 @@ The operational occupancy/rental relationship for one Unit over time. It is not 
 
 ### LeaseAgreement
 
-A legal agreement associated with a Tenancy. Signed versions are immutable. Changes are represented through amendments or successor agreements.
+A legal agreement associated with a Tenancy. `LeaseAgreement.tenancyId` is immutable from creation, including while draft; reparenting would rewrite the agreement's historical Unit attribution. Signed content is immutable. Changes are represented through amendments or successor agreements. `LeaseAmendment.agreementId` is likewise immutable from creation.
 
 ### Inspection
 
@@ -320,8 +320,10 @@ dual-write events. Source domain rows remain authoritative.
 A projected event has stable identity:
 
 ```text
-eventKey = deterministic eventType + canonical source identity
+eventKey = eventType + ":" + sourceId
 ```
+
+The domain projection boundary validates this exact formula; a non-empty but mismatched key is invalid.
 
 Repeated reads and different filters therefore return the same event identity.
 
@@ -347,12 +349,16 @@ event type and event key. When a date-only event and an exact instant share the
 same calendar date, deterministic display order does not imply a real
 before/after relationship.
 
-Unit attribution is conservative. Direct Unit relationships are used when the
-source stores them. Access custody follows Tenancy Unit even for
-Property-scoped AccessItems. Asset condition and ServiceEvent history resolves
-through `AssetLocationHistory` at the exact event occurrence, so a later Asset
-move cannot rewrite historical Unit chronology. Property-wide or otherwise
-ambiguous facts are omitted rather than copied or guessed.
+Unit attribution is conservative. Direct Unit relationships are used only when
+their parent identity is durable. `Space.unitId`,
+`LeaseAgreement.tenancyId`, `LeaseAmendment.agreementId` and
+`Tenancy.unitId` are database-immutable parent truth. `DocumentLink` is an
+append-once relationship fact, so a projected `document.linked` occurrence
+cannot be retargeted or deleted later. Access custody follows Tenancy Unit even
+for Property-scoped AccessItems. Asset condition and ServiceEvent history
+resolves through `AssetLocationHistory` at the exact event occurrence, so a
+later Asset move cannot rewrite historical Unit chronology. Property-wide or
+otherwise ambiguous facts are omitted rather than copied or guessed.
 
 The projection does not reconstruct historical state transitions from current
 `status` or generic `updatedAt` fields. A transition appears only when the
@@ -360,7 +366,11 @@ source domain retained a durable business occurrence.
 
 The JSON `details` payload contains small display-supporting copies of
 canonical facts such as codes, exact decimal strings, condition or description.
-It is a read-model convenience and cannot be written back to domain state.
+Historical event details must not expose a mutable current lifecycle field under
+a name that looks like an event-time snapshot. For example,
+`tenancy.created` does not carry today's Tenancy status, and WarrantyClaim
+historical events do not carry today's claim status. The payload is a read-model
+convenience and cannot be written back to domain state.
 
 Technical request/security/audit logging remains a separate concern from this
 business chronology.
