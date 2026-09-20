@@ -220,6 +220,21 @@ export interface UnitTimelineEvent {
   readonly details: UnitTimelineDetails;
 }
 
+export interface CreateUnitTimelineEventInput
+  extends Omit<
+    UnitTimelineEvent,
+    'occurredOn' | 'occurredAt' | 'recordedAt'
+  > {
+  readonly occurredOn: string;
+  readonly occurredAt: string | null;
+  readonly recordedAt: string | null;
+}
+
+const CATEGORY_SET = new Set<string>(UNIT_TIMELINE_CATEGORIES);
+const EVENT_TYPE_SET = new Set<string>(UNIT_TIMELINE_EVENT_TYPES);
+const PRECISION_SET = new Set<string>(UNIT_TIMELINE_TEMPORAL_PRECISIONS);
+const SOURCE_TYPE_SET = new Set<string>(UNIT_TIMELINE_SOURCE_TYPES);
+
 function required(value: string, field: string): string {
   const normalized = value.trim();
   if (!normalized) {
@@ -231,12 +246,27 @@ function required(value: string, field: string): string {
   return normalized;
 }
 
-export function createUnitTimelineEvent(input: UnitTimelineEvent): UnitTimelineEvent {
-  const expectedCategory = EVENT_CATEGORY[input.eventType];
+export function createUnitTimelineEvent(
+  input: CreateUnitTimelineEventInput,
+): UnitTimelineEvent {
+  if (
+    !CATEGORY_SET.has(input.category) ||
+    !EVENT_TYPE_SET.has(input.eventType) ||
+    !PRECISION_SET.has(input.precision) ||
+    !SOURCE_TYPE_SET.has(input.sourceType)
+  ) {
+    throw new DomainError(
+      'UNIT_TIMELINE_INVALID_EVENT',
+      'Timeline event contains an unsupported category, type, precision or source type.',
+    );
+  }
+
+  const eventType = input.eventType as UnitTimelineEventType;
+  const expectedCategory = EVENT_CATEGORY[eventType];
   if (input.category !== expectedCategory) {
     throw new DomainError(
       'UNIT_TIMELINE_INVALID_EVENT',
-      `Event type ${input.eventType} belongs to category ${expectedCategory}.`,
+      `Event type ${eventType} belongs to category ${expectedCategory}.`,
     );
   }
 
@@ -282,9 +312,13 @@ export function createUnitTimelineEvent(input: UnitTimelineEvent): UnitTimelineE
   return {
     ...input,
     eventKey: required(input.eventKey, 'eventKey'),
+    category: input.category as UnitTimelineCategory,
+    eventType,
+    precision: input.precision as UnitTimelineTemporalPrecision,
     occurredOn,
     occurredAt,
     recordedAt,
+    sourceType: input.sourceType as UnitTimelineSourceType,
     sourceId: required(input.sourceId, 'sourceId'),
     relatedEntityType:
       input.relatedEntityType === null
