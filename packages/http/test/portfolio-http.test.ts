@@ -48,6 +48,7 @@ import { InMemoryCostRepository } from './cost-test-deps.js';
 import { InMemoryMaintenanceRepository } from './maintenance-test-deps.js';
 import { InMemoryAccessItemRepository } from './access-item-test-deps.js';
 import { InMemoryMeterRepository } from './meter-test-deps.js';
+import { InMemoryUnitTimelineRepository } from './unit-timeline-test-deps.js';
 
 const adminIdentity: VerifiedIdentity = {
   provider: 'supabase',
@@ -314,6 +315,7 @@ function buildHandler(
   return createPortfolioHttpHandler({
     accessItemRepository: new InMemoryAccessItemRepository(),
     meterRepository: new InMemoryMeterRepository(),
+    unitTimelineRepository: new InMemoryUnitTimelineRepository(),
     assetRepository: new InMemoryAssetRepository(),
     assetInventoryRepository: new InMemoryAssetInventoryRepository(),
     assetServiceRepository: new InMemoryAssetServiceRepository(),
@@ -2112,6 +2114,7 @@ describe('Portfolio HTTP boundary', () => {
       {
         accessItemRepository: new InMemoryAccessItemRepository(),
     meterRepository: new InMemoryMeterRepository(),
+    unitTimelineRepository: new InMemoryUnitTimelineRepository(),
         assetRepository: new InMemoryAssetRepository(),
     assetInventoryRepository: new InMemoryAssetInventoryRepository(),
         assetServiceRepository: new InMemoryAssetServiceRepository(),
