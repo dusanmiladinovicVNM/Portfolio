@@ -1,9 +1,11 @@
 import {
   DomainError,
   asMeterId,
+  asMeterReadingBoundaryId,
   asMeterReadingId,
   createMeter,
   createMeterReading,
+  createMeterReadingBoundary,
   meterUtcCalendarDate,
   retireMeter,
   updateMeterLabel,
@@ -11,7 +13,9 @@ import {
   type MeterId,
   type MeterMeasurementUnit,
   type MeterReading,
-  type MeterReadingContext,
+  type MeterReadingBoundary,
+  type MeterReadingBoundaryType,
+  type MeterReadingId,
   type MeterUtilityType,
   type SpaceId,
   type Tenancy,
@@ -42,6 +46,17 @@ async function requireMeter(
     throw new DomainError('METER_NOT_FOUND', 'Meter not found.');
   }
   return meter;
+}
+
+async function requireReading(
+  repository: MeterRepository,
+  id: MeterReadingId,
+): Promise<MeterReading> {
+  const reading = await repository.getReadingById(id);
+  if (!reading) {
+    throw new DomainError('METER_READING_NOT_FOUND', 'Meter reading not found.');
+  }
+  return reading;
 }
 
 async function requireTenancy(
@@ -88,25 +103,25 @@ async function assertMeterPlacement(
   }
 }
 
-async function assertHandoverReading(
+async function assertBoundarySemantics(
   deps: Pick<MeterDependencies, 'meterRepository' | 'tenancyRepository'>,
+  reading: MeterReading,
   meter: Meter,
-  context: Exclude<MeterReadingContext, 'regular'>,
   tenancyId: TenancyId,
-  readAt: string,
+  type: MeterReadingBoundaryType,
 ): Promise<void> {
   const tenancy = await requireTenancy(deps.tenancyRepository, tenancyId);
 
   if (tenancy.unitId !== meter.unitId) {
     throw new DomainError(
       'METER_READING_TENANCY_UNIT_MISMATCH',
-      'Move-in/out Meter reading Tenancy must belong to the Meter Unit.',
+      'Meter reading boundary Tenancy must belong to the Meter Unit.',
     );
   }
 
-  const readDate = meterUtcCalendarDate(readAt, 'readAt');
+  const readDate = meterUtcCalendarDate(reading.readAt, 'readAt');
 
-  if (context === 'move_in') {
+  if (type === 'move_in') {
     if (tenancy.actualStart === null) {
       throw new DomainError(
         'METER_MOVE_IN_REQUIRES_ACTUAL_START',
@@ -135,14 +150,14 @@ async function assertHandoverReading(
   }
 
   if (
-    await deps.meterRepository.handoverReadingExists(
+    await deps.meterRepository.boundaryExistsForMeterTenancy(
       meter.id,
       tenancy.id,
-      context,
+      type,
     )
   ) {
     throw new DomainError(
-      'METER_HANDOVER_READING_ALREADY_EXISTS',
+      'METER_READING_BOUNDARY_ALREADY_EXISTS',
       'This Meter already has the requested Tenancy boundary reading.',
     );
   }
@@ -245,16 +260,11 @@ export async function retireMeterCommand(
 }
 
 export async function recordMeterReadingCommand(
-  deps: Pick<
-    MeterDependencies,
-    'meterRepository' | 'tenancyRepository' | 'idGenerator' | 'clock'
-  >,
+  deps: Pick<MeterDependencies, 'meterRepository' | 'idGenerator' | 'clock'>,
   actor: Actor,
   meterId: MeterId,
   input: {
     readonly value: string;
-    readonly context: MeterReadingContext;
-    readonly tenancyId?: TenancyId | null;
     readonly readAt: string;
     readonly note?: string | null;
   },
@@ -262,29 +272,10 @@ export async function recordMeterReadingCommand(
   requireCapability(actor, 'meter_readings:write');
 
   const meter = await requireMeter(deps.meterRepository, meterId);
-
-  if (input.context !== 'regular') {
-    if (input.tenancyId === undefined || input.tenancyId === null) {
-      throw new DomainError(
-        'METER_READING_TENANCY_REQUIRED',
-        'Move-in and move-out readings require a Tenancy.',
-      );
-    }
-    await assertHandoverReading(
-      deps,
-      meter,
-      input.context,
-      input.tenancyId,
-      input.readAt,
-    );
-  }
-
   const reading = createMeterReading({
     id: asMeterReadingId(deps.idGenerator.next()),
     meter,
     value: input.value,
-    context: input.context,
-    ...(input.tenancyId !== undefined ? { tenancyId: input.tenancyId } : {}),
     readAt: input.readAt,
     recordedAt: deps.clock.now(),
     recordedByUserId: actor.userId,
@@ -293,4 +284,42 @@ export async function recordMeterReadingCommand(
 
   await deps.meterRepository.insertReading(reading);
   return reading;
+}
+
+export async function linkMeterReadingBoundaryCommand(
+  deps: Pick<
+    MeterDependencies,
+    'meterRepository' | 'tenancyRepository' | 'idGenerator' | 'clock'
+  >,
+  actor: Actor,
+  readingId: MeterReadingId,
+  input: {
+    readonly tenancyId: TenancyId;
+    readonly type: MeterReadingBoundaryType;
+  },
+): Promise<MeterReadingBoundary> {
+  requireCapability(actor, 'meter_readings:write');
+
+  const reading = await requireReading(deps.meterRepository, readingId);
+  const meter = await requireMeter(deps.meterRepository, reading.meterId);
+
+  await assertBoundarySemantics(
+    deps,
+    reading,
+    meter,
+    input.tenancyId,
+    input.type,
+  );
+
+  const boundary = createMeterReadingBoundary({
+    id: asMeterReadingBoundaryId(deps.idGenerator.next()),
+    reading,
+    tenancyId: input.tenancyId,
+    type: input.type,
+    recordedAt: deps.clock.now(),
+    recordedByUserId: actor.userId,
+  });
+
+  await deps.meterRepository.insertBoundary(boundary);
+  return boundary;
 }
