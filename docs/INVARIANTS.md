@@ -5,7 +5,7 @@ These rules are architecture gates, not optional implementation notes.
 ## Portfolio
 
 1. A Unit belongs to exactly one Property.
-2. A Space belongs to exactly one Unit.
+2. A Space belongs to exactly one Unit; `Space.unitId` is immutable after creation.
 3. A Unit identity survives all tenant, agreement and inspection changes.
 4. A Property/Unit must not store a current tenant as master identity data.
 5. Unit lifecycle status is administrative only (`active/inactive/archived`); occupancy/vacancy is derived from Tenancy.
@@ -38,7 +38,7 @@ These rules are architecture gates, not optional implementation notes.
 26. Actual occupancy facts are not rejected merely because they later conflict with a future plan; the future Tenancy cannot activate until actual occupancy is resolved.
 27. For notice-bearing Tenancy: actualStart <= noticeGivenAt <= terminationEffectiveAt.
 28. Every Tenancy aggregate mutation increments an optimistic concurrency version.
-29. LeaseAgreement is a legal record separate from the operational Tenancy.
+29. LeaseAgreement is a legal record separate from the operational Tenancy; `LeaseAgreement.tenancyId` is immutable from creation, including while draft.
 30. A Tenancy has at most one non-cancelled initial LeaseAgreement root.
 31. A renewal/replacement references exactly one signed predecessor in the same Tenancy and becomes effective after that predecessor starts.
 32. A predecessor has at most one non-cancelled direct successor.
@@ -46,7 +46,7 @@ These rules are architecture gates, not optional implementation notes.
 34. A successor never rewrites the predecessor's signed `effectiveTo`; historical governing validity is derived from the signed legal period plus the signed successor boundary.
 35. AgreementParty snapshots legal membership/role, not mutable Party display fields. Names, addresses and other rendered legal identity in a signed instrument are preserved by the exact final signed DocumentVersion.
 36. A signed LeaseAgreement is immutable except for explicit lifecycle metadata transitions.
-37. A signed LeaseAmendment is immutable.
+37. `LeaseAmendment.agreementId` is immutable from creation; once signed, the LeaseAmendment content is immutable.
 38. Every signed agreement/amendment that changes effective terms emits exactly one immutable TenancyTermVersion.
 39. Signing and term-version creation are one transaction; a signed legal record without its effective term snapshot is invalid.
 40. Effective terms exist only inside the governing agreement's legal date range and before any signed successor becomes effective.
@@ -137,7 +137,7 @@ These rules are architecture gates, not optional implementation notes.
 107. Monetary values use decimal/numeric semantics, never binary floating point.
 108. Each DocumentVersion represents one binary content identity; its file metadata, SHA-256 and storage locator are immutable after registration.
 109. A final DocumentVersion is append-only evidence and cannot return to a mutable/stored state.
-110. A `signed_original` link identifies one exact final DocumentVersion, may only target a signed LeaseAgreement/LeaseAmendment, and is immutable once created.
+110. Every DocumentLink is an append-once relationship fact: UPDATE and DELETE are forbidden. A `signed_original` link additionally identifies one exact final DocumentVersion and may only target a signed LeaseAgreement/LeaseAmendment. Future unlink/correction semantics require explicit reversal/supersession history rather than mutation of the original link.
 111. Binary storage location is infrastructure data, not business identity; Google Drive file IDs must never become Document or DocumentVersion IDs.
 112. External binary storage and PostgreSQL cannot share one ACID transaction. Upload registration therefore uses an idempotent storage object key and compensating delete when DB registration fails.
 113. Financial corrections preserve prior history through correction/reversal records where material.
@@ -192,10 +192,10 @@ These rules are architecture gates, not optional implementation notes.
 ## Business Events + Unit Timeline
 
 148. Unit Timeline is a read-only projection of canonical domain tables. No `domain_events` write table or command-side dual-write may become competing business truth.
-149. Every projected event has a deterministic stable `eventKey` derived from event type and canonical source identity; filtering, pagination and repeated reads must not change that identity.
+149. Every projected event has the exact stable identity `eventKey = eventType + ":" + sourceId`. The domain projection boundary validates the formula; filtering, pagination and repeated reads must not change that identity.
 150. Timeline temporal precision is explicit. Date-only facts have `precision = date`, `occurredAt = null` and retain the exact business date. Instant facts have canonical UTC `occurredAt`, `precision = instant`, and `occurredOn = UTC date(occurredAt)`.
 151. Timeline ordering is deterministic but must not imply false intra-day chronology between a date-only event and an exact instant on the same calendar date.
-152. An event may enter a Unit timeline only through a deterministic source relationship. Asset/Service attribution uses historical AssetLocationHistory at event occurrence; Property-wide or otherwise ambiguous sources are omitted rather than guessed or copied to every Unit.
+152. An event may enter a Unit timeline only through deterministic durable parent truth. `Space.unitId`, `Tenancy.unitId`, `LeaseAgreement.tenancyId` and `LeaseAmendment.agreementId` are immutable, DocumentLink is append-only, and Asset/Service attribution uses historical AssetLocationHistory at event occurrence. Property-wide or otherwise ambiguous sources are omitted rather than guessed or copied to every Unit.
 153. Current `status` and generic `updatedAt` must not be used to invent a historical transition whose canonical occurrence was not retained by the source domain.
-154. Timeline `details` are denormalized read-model display facts only. They are never accepted as commands and never override source entities.
+154. Timeline `details` are denormalized read-model display facts only. Historical details must not present mutable current lifecycle state as if it were an event-time snapshot. Details are never accepted as commands and never override source entities.
 155. Unit Timeline reads require `portfolio:read`. Technical audit/security/request logging remains separate from business-event chronology.
