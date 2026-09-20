@@ -8820,6 +8820,73 @@ describe('PostgreSQL infrastructure', () => {
       },
     );
 
+    await expect(
+      sql`
+        insert into public.meter_readings (
+          id, meter_id, value, read_at, recorded_at,
+          recorded_by_user_id
+        ) values (
+          'cf500000-0000-4000-8000-000000000001',
+          ${meter.id},
+          1,
+          '2026-02-01T08:00:00.000Z',
+          '2026-02-01T08:05:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'meter_reading_recorded_before_meter_registration',
+    });
+
+    await sql`
+      insert into public.meters (
+        id, code, serial_number, utility_type, measurement_unit,
+        unit_id, label, installed_at, status, version,
+        recorded_at, recorded_by_user_id
+      ) values (
+        'cf500000-0000-4000-8000-000000000002',
+        'MTR-HIST-RETIRE',
+        'SER-HIST-RETIRE',
+        'water',
+        'm3',
+        ${unitA.id},
+        'Historical retirement provenance meter',
+        '2026-01-01T00:00:00.000Z',
+        'active',
+        1,
+        '2026-09-20T13:00:00.000Z',
+        ${actor.userId}
+      )
+    `;
+
+    await expect(
+      sql`
+        update public.meters
+        set status = 'retired',
+            retired_at = '2026-02-01T08:00:00.000Z',
+            retirement_recorded_at = '2026-03-01T08:00:00.000Z',
+            retired_by_user_id = ${actor.userId},
+            retirement_reason = 'Historical retirement',
+            version = version + 1
+        where id = 'cf500000-0000-4000-8000-000000000002'
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'meters_retirement_recorded_after_registration',
+    });
+
+    await sql`
+      update public.meters
+      set status = 'retired',
+          retired_at = '2026-02-01T08:00:00.000Z',
+          retirement_recorded_at = '2026-09-20T13:00:00.000Z',
+          retired_by_user_id = ${actor.userId},
+          retirement_reason = 'Historical retirement backfilled after registration',
+          version = version + 1
+      where id = 'cf500000-0000-4000-8000-000000000002'
+    `;
+
     const corrected = await updateMeterLabelCommand(
       { meterRepository },
       actor,
