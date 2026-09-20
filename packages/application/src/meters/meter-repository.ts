@@ -2,7 +2,8 @@ import type {
   Meter,
   MeterId,
   MeterReading,
-  MeterReadingContext,
+  MeterReadingBoundary,
+  MeterReadingBoundaryType,
   MeterReadingId,
   TenancyId,
   UnitId,
@@ -17,14 +18,19 @@ export interface MeterRepository {
 
   getReadingById(id: MeterReadingId): Promise<MeterReading | null>;
   listReadings(meterId: MeterId): Promise<readonly MeterReading[]>;
-  listBoundaryReadingsByTenancy(
-    tenancyId: TenancyId,
-  ): Promise<readonly MeterReading[]>;
-  handoverReadingExists(
-    meterId: MeterId,
-    tenancyId: TenancyId,
-    context: Exclude<MeterReadingContext, 'regular'>,
-  ): Promise<boolean>;
   getLatestReadingAt(meterId: MeterId): Promise<string | null>;
   insertReading(reading: MeterReading): Promise<void>;
+
+  listBoundariesByMeter(
+    meterId: MeterId,
+  ): Promise<readonly MeterReadingBoundary[]>;
+  listBoundariesByTenancy(
+    tenancyId: TenancyId,
+  ): Promise<readonly MeterReadingBoundary[]>;
+  boundaryExistsForMeterTenancy(
+    meterId: MeterId,
+    tenancyId: TenancyId,
+    type: MeterReadingBoundaryType,
+  ): Promise<boolean>;
+  insertBoundary(boundary: MeterReadingBoundary): Promise<void>;
 }
