@@ -6,10 +6,10 @@ import {
   WARRANTY_CLAIM_STATUSES,
   WARRANTY_TYPES,
 } from '@portfolio/domain';
+import { instantSchema } from './api.js';
 import { entityIdSchema } from './portfolio.js';
 
 const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-const timestampSchema = z.string().min(1);
 
 export const createWarrantyRequestSchema = z.object({
   warrantyType: z.enum(WARRANTY_TYPES),
@@ -65,7 +65,7 @@ export const recordServiceEventRequestSchema = z.object({
   servicePlanId: entityIdSchema.nullable().optional(),
   warrantyClaimId: entityIdSchema.nullable().optional(),
   eventType: z.enum(SERVICE_EVENT_TYPES),
-  performedAt: timestampSchema,
+  performedAt: instantSchema,
   providerPartyId: entityIdSchema.nullable().optional(),
   description: z.string().trim().min(1),
   reference: z.string().trim().min(1).nullable().optional(),
@@ -81,7 +81,7 @@ export const warrantyResponseSchema = z.object({
   validFrom: isoDateSchema,
   validTo: isoDateSchema.nullable(),
   terms: z.string().nullable(),
-  recordedAt: timestampSchema,
+  recordedAt: instantSchema,
   recordedByUserId: entityIdSchema,
 });
 
@@ -92,11 +92,11 @@ export const warrantyClaimResponseSchema = z.object({
   description: z.string(),
   status: z.enum(WARRANTY_CLAIM_STATUSES),
   providerReference: z.string().nullable(),
-  submittedAt: timestampSchema.nullable(),
-  resolvedAt: timestampSchema.nullable(),
-  closedAt: timestampSchema.nullable(),
-  cancelledAt: timestampSchema.nullable(),
-  recordedAt: timestampSchema,
+  submittedAt: instantSchema.nullable(),
+  resolvedAt: instantSchema.nullable(),
+  closedAt: instantSchema.nullable(),
+  cancelledAt: instantSchema.nullable(),
+  recordedAt: instantSchema,
   recordedByUserId: entityIdSchema,
   version: z.number().int().positive(),
 });
@@ -112,7 +112,7 @@ export const servicePlanResponseSchema = z.object({
   notes: z.string().nullable(),
   status: z.enum(SERVICE_PLAN_STATUSES),
   version: z.number().int().positive(),
-  createdAt: timestampSchema,
+  createdAt: instantSchema,
   createdByUserId: entityIdSchema,
 });
 
@@ -132,12 +132,12 @@ export const serviceEventResponseSchema = z.object({
   servicePlanId: entityIdSchema.nullable(),
   warrantyClaimId: entityIdSchema.nullable(),
   eventType: z.enum(SERVICE_EVENT_TYPES),
-  performedAt: timestampSchema,
+  performedAt: instantSchema,
   providerPartyId: entityIdSchema.nullable(),
   description: z.string(),
   reference: z.string().nullable(),
   parts: z.array(servicePartResponseSchema),
-  recordedAt: timestampSchema,
+  recordedAt: instantSchema,
   recordedByUserId: entityIdSchema,
 });
 
