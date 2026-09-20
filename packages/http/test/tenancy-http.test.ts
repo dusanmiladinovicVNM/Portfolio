@@ -46,6 +46,7 @@ import {
 import { InMemoryImprovementRepository } from './improvement-test-deps.js';
 import { InMemoryCostRepository } from './cost-test-deps.js';
 import { InMemoryMaintenanceRepository } from './maintenance-test-deps.js';
+import { InMemoryAccessItemRepository } from './access-item-test-deps.js';
 
 const adminIdentity: VerifiedIdentity = {
   provider: 'supabase',
@@ -278,8 +279,10 @@ function buildHandler() {
   const portfolioRepository = new InMemoryPortfolioRepository();
   const partyRepository = new InMemoryPartyRepository();
   const tenancyRepository = new InMemoryTenancyRepository();
+  const accessItemRepository = new InMemoryAccessItemRepository();
 
   const handler = createPortfolioHttpHandler({
+    accessItemRepository,
     assetRepository: new InMemoryAssetRepository(),
     assetInventoryRepository: new InMemoryAssetInventoryRepository(),
     assetServiceRepository: new InMemoryAssetServiceRepository(),
@@ -306,10 +309,20 @@ function buildHandler() {
       '10000000-0000-4000-8000-000000000006',
       '10000000-0000-4000-8000-000000000007',
       '10000000-0000-4000-8000-000000000008',
+      '10000000-0000-4000-8000-000000000009',
+      '10000000-0000-4000-8000-000000000010',
+      '10000000-0000-4000-8000-000000000011',
+      '10000000-0000-4000-8000-000000000012',
     ]),
   });
 
-  return { handler, portfolioRepository, partyRepository, tenancyRepository };
+  return {
+    handler,
+    portfolioRepository,
+    partyRepository,
+    tenancyRepository,
+    accessItemRepository,
+  };
 }
 
 async function seedUnitAndTenant(handler: ReturnType<typeof buildHandler>['handler']) {
@@ -356,6 +369,250 @@ async function seedUnitAndTenant(handler: ReturnType<typeof buildHandler>['handl
     adminIdentity,
   );
 }
+
+describe('AccessItem HTTP custody lifecycle', () => {
+  it('runs create -> issue -> loss -> return -> reissue with Tenancy-grained custody', async () => {
+    const { handler } = buildHandler();
+    await seedUnitAndTenant(handler);
+
+    const createdTenancy = await handler(
+      new Request(
+        'https://portfolio.test/units/10000000-0000-4000-8000-000000000002/tenancies',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            code: 'TEN-ACCESS-1',
+            parties: [
+              {
+                partyId: '10000000-0000-4000-8000-000000000003',
+                role: 'tenant',
+                isPrimary: true,
+              },
+            ],
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    const tenancyId = (await createdTenancy.json()).data.id as string;
+
+    await handler(
+      new Request(`https://portfolio.test/tenancies/${tenancyId}/plan`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 1,
+          plannedStart: '2026-09-18',
+        }),
+      }),
+      adminIdentity,
+    );
+    await handler(
+      new Request(`https://portfolio.test/tenancies/${tenancyId}/activate`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 2,
+          actualStart: '2026-09-18',
+        }),
+      }),
+      adminIdentity,
+    );
+
+    const createdItem = await handler(
+      new Request('https://portfolio.test/access-items', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'KEY-HTTP-1',
+          kind: 'key',
+          propertyId: '10000000-0000-4000-8000-000000000001',
+          unitId: '10000000-0000-4000-8000-000000000002',
+          label: 'Apartment entrance key',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(createdItem.status).toBe(201);
+    const createdItemBody = await createdItem.json();
+    const itemId = createdItemBody.data.id as string;
+    expect(createdItemBody).toMatchObject({
+      data: { status: 'active', version: 1 },
+    });
+
+    const correctedLabel = await handler(
+      new Request(`https://portfolio.test/access-items/${itemId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          expectedVersion: 1,
+          label: 'Main entrance — left cylinder',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(correctedLabel.status).toBe(200);
+    expect(await correctedLabel.json()).toMatchObject({
+      data: {
+        label: 'Main entrance — left cylinder',
+        status: 'active',
+        version: 2,
+      },
+    });
+
+    const issue = await handler(
+      new Request(`https://portfolio.test/access-items/${itemId}/issue`, {
+        method: 'POST',
+        body: JSON.stringify({
+          tenancyId,
+          occurredAt: '2026-09-18T20:00:00.000Z',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(issue.status).toBe(201);
+    expect(await issue.json()).toMatchObject({
+      data: { type: 'issued', sequence: 1, tenancyId },
+    });
+
+    const lost = await handler(
+      new Request(`https://portfolio.test/access-items/${itemId}/loss`, {
+        method: 'POST',
+        body: JSON.stringify({
+          occurredAt: '2026-09-18T20:00:00.000Z',
+          note: 'Reported missing during handover',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(lost.status).toBe(201);
+    expect(await lost.json()).toMatchObject({
+      data: { type: 'lost', sequence: 2, tenancyId },
+    });
+
+    const detailWhileLost = await handler(
+      new Request(`https://portfolio.test/access-items/${itemId}`),
+      inspectorIdentity,
+    );
+    expect(detailWhileLost.status).toBe(200);
+    expect(await detailWhileLost.json()).toMatchObject({
+      data: {
+        state: { kind: 'lost', tenancyId },
+        transactions: [
+          { type: 'issued', sequence: 1 },
+          { type: 'lost', sequence: 2 },
+        ],
+      },
+    });
+
+    const inspectorWrite = await handler(
+      new Request(`https://portfolio.test/access-items/${itemId}/return`, {
+        method: 'POST',
+        body: JSON.stringify({
+          occurredAt: '2026-09-18T20:00:00.000Z',
+        }),
+      }),
+      inspectorIdentity,
+    );
+    expect(inspectorWrite.status).toBe(403);
+
+    const returned = await handler(
+      new Request(`https://portfolio.test/access-items/${itemId}/return`, {
+        method: 'POST',
+        body: JSON.stringify({
+          occurredAt: '2026-09-18T20:00:00.000Z',
+          note: 'Recovered and handed back',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(returned.status).toBe(201);
+    expect(await returned.json()).toMatchObject({
+      data: { type: 'returned', sequence: 3, tenancyId },
+    });
+
+    const reissued = await handler(
+      new Request(`https://portfolio.test/access-items/${itemId}/issue`, {
+        method: 'POST',
+        body: JSON.stringify({
+          tenancyId,
+          occurredAt: '2026-09-18T20:00:00.000Z',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(reissued.status).toBe(201);
+    expect(await reissued.json()).toMatchObject({
+      data: { type: 'issued', sequence: 4, tenancyId },
+    });
+
+    const tenancyItems = await handler(
+      new Request(`https://portfolio.test/tenancies/${tenancyId}/access-items`),
+      adminIdentity,
+    );
+    expect(tenancyItems.status).toBe(200);
+    expect(await tenancyItems.json()).toMatchObject({
+      data: {
+        items: [
+          {
+            item: {
+              id: itemId,
+              code: 'KEY-HTTP-1',
+              status: 'active',
+              version: 2,
+            },
+            state: { kind: 'issued', tenancyId },
+          },
+        ],
+      },
+    });
+
+    const retired = await handler(
+      new Request(`https://portfolio.test/access-items/${itemId}/retire`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 2,
+          retirementReason: 'Lock cylinder replaced',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(retired.status).toBe(200);
+    expect(await retired.json()).toMatchObject({
+      data: {
+        status: 'retired',
+        version: 3,
+        retirementReason: 'Lock cylinder replaced',
+      },
+    });
+
+    const returnedAfterRetirement = await handler(
+      new Request(`https://portfolio.test/access-items/${itemId}/return`, {
+        method: 'POST',
+        body: JSON.stringify({
+          occurredAt: '2026-09-18T20:00:00.000Z',
+          note: 'Returned after administrative retirement',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(returnedAfterRetirement.status).toBe(201);
+    expect(await returnedAfterRetirement.json()).toMatchObject({
+      data: { type: 'returned', sequence: 5, tenancyId },
+    });
+
+    const retiredReissue = await handler(
+      new Request(`https://portfolio.test/access-items/${itemId}/issue`, {
+        method: 'POST',
+        body: JSON.stringify({
+          tenancyId,
+          occurredAt: '2026-09-18T20:00:00.000Z',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(retiredReissue.status).toBe(409);
+    expect(await retiredReissue.json()).toMatchObject({
+      error: { code: 'ACCESS_ITEM_RETIRED' },
+    });
+  });
+});
 
 describe('Tenancy HTTP lifecycle', () => {
   it('runs draft → planned → active → notice → move-out → ended with version increments', async () => {

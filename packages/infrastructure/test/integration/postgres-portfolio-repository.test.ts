@@ -4,6 +4,12 @@ import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   activateTenancyCommand,
+  createAccessItemCommand,
+  issueAccessItemCommand,
+  reportAccessItemLostCommand,
+  retireAccessItemCommand,
+  returnAccessItemCommand,
+  updateAccessItemLabelCommand,
   changeAssetStatusCommand,
   changeImprovementProjectStatusCommand,
   changeWorkItemStatusCommand,
@@ -101,6 +107,7 @@ import {
   type Party,
 } from '@portfolio/domain';
 import {
+  PostgresAccessItemRepository,
   PostgresAssetInventoryRepository,
   PostgresAssetRepository,
   PostgresAssetServiceRepository,
@@ -124,6 +131,7 @@ if (!connectionString) {
 
 const sql = postgres(connectionString, { max: 1 });
 const portfolioRepository = new PostgresPortfolioRepository(sql);
+const accessItemRepository = new PostgresAccessItemRepository(sql);
 const assetRepository = new PostgresAssetRepository(sql);
 const assetInventoryRepository = new PostgresAssetInventoryRepository(sql);
 const assetServiceRepository = new PostgresAssetServiceRepository(sql);
@@ -154,6 +162,8 @@ class SequenceIds implements IdGenerator {
 async function resetAndMigrate(): Promise<void> {
   await sql.unsafe(
     `drop table if exists
+      public.access_item_transactions,
+      public.access_items,
       public.cost_reversals,
       public.costs,
       public.maintenance_work_order_service_events,
@@ -258,6 +268,8 @@ beforeAll(async () => {
 afterAll(async () => {
   await sql.unsafe(
     `drop table if exists
+      public.access_item_transactions,
+      public.access_items,
       public.cost_reversals,
       public.costs,
       public.maintenance_work_order_service_events,
@@ -7528,6 +7540,1072 @@ describe('PostgreSQL infrastructure', () => {
     } finally {
       await Promise.all([blocker.end(), contender.end()]);
     }
+  });
+
+
+  it('persists AccessItem custody and rejects scope, temporal, state and concurrency bypasses', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+
+    const ids = new SequenceIds([
+      'ae000000-0000-4000-8000-000000000001',
+      'ae000000-0000-4000-8000-000000000002',
+      'ae000000-0000-4000-8000-000000000003',
+      'ae000000-0000-4000-8000-000000000004',
+      'ae000000-0000-4000-8000-000000000005',
+      'ae000000-0000-4000-8000-000000000006',
+      'ae000000-0000-4000-8000-000000000007',
+      'ae000000-0000-4000-8000-000000000008',
+      'ae000000-0000-4000-8000-000000000009',
+      'ae000000-0000-4000-8000-000000000010',
+      'ae000000-0000-4000-8000-000000000011',
+      'ae000000-0000-4000-8000-000000000012',
+      'ae000000-0000-4000-8000-000000000013',
+      'ae000000-0000-4000-8000-000000000014',
+      'ae000000-0000-4000-8000-000000000015',
+      'ae000000-0000-4000-8000-000000000016',
+      'ae000000-0000-4000-8000-000000000017',
+      'ae000000-0000-4000-8000-000000000018',
+      'ae000000-0000-4000-8000-000000000019',
+      'ae000000-0000-4000-8000-000000000020',
+      'ae000000-0000-4000-8000-000000000021',
+      'ae000000-0000-4000-8000-000000000022',
+      'ae000000-0000-4000-8000-000000000023',
+      'ae000000-0000-4000-8000-000000000024',
+      'ae000000-0000-4000-8000-000000000025',
+      'ae000000-0000-4000-8000-000000000026',
+      'ae000000-0000-4000-8000-000000000027',
+      'ae000000-0000-4000-8000-000000000028',
+      'ae000000-0000-4000-8000-000000000029',
+      'ae000000-0000-4000-8000-000000000030',
+      'ae000000-0000-4000-8000-000000000031',
+      'ae000000-0000-4000-8000-000000000032',
+      'ae000000-0000-4000-8000-000000000033',
+      'ae000000-0000-4000-8000-000000000034',
+      'ae000000-0000-4000-8000-000000000035',
+      'ae000000-0000-4000-8000-000000000036',
+      'ae000000-0000-4000-8000-000000000037',
+      'ae000000-0000-4000-8000-000000000038',
+      'ae000000-0000-4000-8000-000000000039',
+      'ae000000-0000-4000-8000-000000000040',
+    ]);
+
+    const property = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-ACCESS-INT',
+        name: 'Access Integration Property',
+        propertyType: 'apartment_building',
+        street: 'Access Street',
+        houseNumber: '20',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+
+    const unitA = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-ACCESS-A',
+        unitNumber: 'A',
+        unitType: 'apartment',
+      },
+    );
+    const unitB = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-ACCESS-B',
+        unitNumber: 'B',
+        unitType: 'apartment',
+      },
+    );
+
+    const partyA = await createPartyCommand(
+      { partyRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PTY-ACCESS-A',
+        partyType: 'person',
+        firstName: 'Access',
+        lastName: 'Tenant A',
+      },
+    );
+    const partyB = await createPartyCommand(
+      { partyRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PTY-ACCESS-B',
+        partyType: 'person',
+        firstName: 'Access',
+        lastName: 'Tenant B',
+      },
+    );
+
+    const tenancyA = await createTenancyCommand(
+      {
+        tenancyRepository,
+        portfolioRepository,
+        partyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        unitId: unitA.id,
+        code: 'TEN-ACCESS-A',
+        parties: [
+          { partyId: partyA.id, role: 'tenant', isPrimary: true },
+        ],
+      },
+    );
+    const plannedA = await planTenancyCommand(
+      { tenancyRepository },
+      actor,
+      tenancyA.id,
+      tenancyA.version,
+      '2026-09-19',
+    );
+    const activeA = await activateTenancyCommand(
+      { tenancyRepository },
+      actor,
+      plannedA.id,
+      plannedA.version,
+      '2026-09-19',
+    );
+
+    const tenancyB = await createTenancyCommand(
+      {
+        tenancyRepository,
+        portfolioRepository,
+        partyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        unitId: unitB.id,
+        code: 'TEN-ACCESS-B',
+        parties: [
+          { partyId: partyB.id, role: 'tenant', isPrimary: true },
+        ],
+      },
+    );
+
+    const accessDeps = {
+      accessItemRepository,
+      portfolioRepository,
+      tenancyRepository,
+      idGenerator: ids,
+      clock: { now: () => '2026-09-19T10:00:00.000Z' },
+    };
+
+    await expect(
+      sql`
+        insert into public.access_items (
+          id, code, kind, property_id, unit_id, label,
+          status, retired_at, retired_by_user_id, retirement_reason, version,
+          recorded_at, recorded_by_user_id
+        ) values (
+          'aef40000-0000-4000-8000-000000000001',
+          'KEY-ACCESS-ILLEGAL-RETIRED',
+          'key',
+          ${property.id},
+          ${unitA.id},
+          'Illegal retired creation',
+          'retired',
+          '2026-09-19T09:00:00.000Z',
+          ${actor.userId},
+          'Must pass through lifecycle transition',
+          1,
+          '2026-09-19T09:00:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'access_item_initial_state',
+    });
+
+    await expect(
+      sql`
+        insert into public.access_items (
+          id, code, kind, property_id, unit_id, label,
+          status, version, recorded_at, recorded_by_user_id
+        ) values (
+          'aef40000-0000-4000-8000-000000000002',
+          'KEY-ACCESS-ILLEGAL-VERSION',
+          'key',
+          ${property.id},
+          ${unitA.id},
+          'Illegal initial version',
+          'active',
+          2,
+          '2026-09-19T09:00:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'access_item_initial_state',
+    });
+
+    await sql`
+      insert into public.access_items (
+        id, code, kind, property_id, unit_id, label,
+        status, version, recorded_at, recorded_by_user_id
+      ) values (
+        'aef40000-0000-4000-8000-000000000003',
+        'KEY-ACCESS-VALID-INITIAL',
+        'key',
+        ${property.id},
+        ${unitA.id},
+        'Valid direct initial state',
+        'active',
+        1,
+        '2026-09-19T09:00:00.000Z',
+        ${actor.userId}
+      )
+    `;
+
+    expect(
+      await accessItemRepository.getItemById(
+        'aef40000-0000-4000-8000-000000000003' as import('@portfolio/domain').AccessItemId,
+      ),
+    ).toMatchObject({
+      status: 'active',
+      version: 1,
+      retiredAt: null,
+      retirementReason: null,
+    });
+
+    const tenancyStartBoundaryKey = await createAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-18T12:00:00.000Z' },
+      },
+      actor,
+      {
+        code: 'KEY-ACCESS-START-BOUNDARY',
+        kind: 'key',
+        propertyId: property.id,
+        unitId: unitA.id,
+        label: 'Tenancy start UTC boundary key',
+      },
+    );
+
+    await expect(
+      issueAccessItemCommand(
+        {
+          ...accessDeps,
+          clock: { now: () => '2026-09-19T00:05:00.000Z' },
+        },
+        actor,
+        tenancyStartBoundaryKey.id,
+        {
+          tenancyId: activeA.id,
+          occurredAt: '2026-09-18T23:59:59.000Z',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'ACCESS_ITEM_ISSUE_BEFORE_TENANCY_START',
+    });
+
+    await expect(
+      sql`
+        insert into public.access_item_transactions (
+          id, access_item_id, tenancy_id, type, sequence,
+          occurred_at, recorded_at, recorded_by_user_id
+        ) values (
+          'aef20000-0000-4000-8000-000000000001',
+          ${tenancyStartBoundaryKey.id},
+          ${activeA.id},
+          'issued',
+          1,
+          '2026-09-18T23:59:59.000Z',
+          '2026-09-19T00:05:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'access_item_transaction_before_tenancy_start',
+    });
+
+    await sql`
+      insert into public.access_item_transactions (
+        id, access_item_id, tenancy_id, type, sequence,
+        occurred_at, recorded_at, recorded_by_user_id
+      ) values (
+        'aef20000-0000-4000-8000-000000000002',
+        ${tenancyStartBoundaryKey.id},
+        ${activeA.id},
+        'issued',
+        1,
+        '2026-09-19T00:00:00.000Z',
+        '2026-09-19T00:00:00.000Z',
+        ${actor.userId}
+      )
+    `;
+
+    expect(
+      await accessItemRepository.getLastTransaction(tenancyStartBoundaryKey.id),
+    ).toMatchObject({
+      type: 'issued',
+      sequence: 1,
+      occurredAt: '2026-09-19T00:00:00.000Z',
+    });
+
+    const unitKey = await createAccessItemCommand(
+      accessDeps,
+      actor,
+      {
+        code: 'KEY-ACCESS-A',
+        kind: 'key',
+        propertyId: property.id,
+        unitId: unitA.id,
+        label: 'Unit A entrance key',
+      },
+    );
+
+    const issued = await issueAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T10:05:00.000Z' },
+      },
+      actor,
+      unitKey.id,
+      {
+        tenancyId: activeA.id,
+        occurredAt: '2026-09-19T10:05:00.000Z',
+      },
+    );
+    expect(issued).toMatchObject({
+      type: 'issued',
+      sequence: 1,
+      tenancyId: activeA.id,
+    });
+
+    await expect(
+      sql`
+        update public.tenancies
+        set actual_start = '2026-09-20',
+            version = version + 1,
+            updated_at = now()
+        where id = ${activeA.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'tenancy_actual_start_immutable',
+    });
+
+    await expect(
+      sql`
+        update public.tenancies
+        set unit_id = ${unitB.id},
+            version = version + 1,
+            updated_at = now()
+        where id = ${activeA.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'tenancy_unit_immutable',
+    });
+
+    expect(await tenancyRepository.getById(activeA.id)).toMatchObject({
+      unitId: unitA.id,
+      actualStart: '2026-09-19',
+    });
+
+    const lost = await reportAccessItemLostCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T10:10:00.000Z' },
+      },
+      actor,
+      unitKey.id,
+      {
+        occurredAt: '2026-09-19T10:09:00.000Z',
+        note: 'Reported lost',
+      },
+    );
+    expect(lost).toMatchObject({ type: 'lost', sequence: 2 });
+
+    await expect(
+      issueAccessItemCommand(
+        {
+          ...accessDeps,
+          clock: { now: () => '2026-09-19T10:11:00.000Z' },
+        },
+        actor,
+        unitKey.id,
+        {
+          tenancyId: activeA.id,
+          occurredAt: '2026-09-19T10:11:00.000Z',
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'ACCESS_ITEM_NOT_AVAILABLE' });
+
+    const returned = await returnAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T10:12:00.000Z' },
+      },
+      actor,
+      unitKey.id,
+      {
+        occurredAt: '2026-09-19T10:12:00.000Z',
+        note: 'Recovered and returned',
+      },
+    );
+    expect(returned).toMatchObject({ type: 'returned', sequence: 3 });
+
+    const reissued = await issueAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T10:13:00.000Z' },
+      },
+      actor,
+      unitKey.id,
+      {
+        tenancyId: activeA.id,
+        occurredAt: '2026-09-19T10:13:00.000Z',
+      },
+    );
+    expect(reissued).toMatchObject({ type: 'issued', sequence: 4 });
+
+    const propertyCard = await createAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T10:20:00.000Z' },
+      },
+      actor,
+      {
+        code: 'CARD-ACCESS-PROP',
+        kind: 'card',
+        propertyId: property.id,
+        label: 'Building entrance card',
+      },
+    );
+
+    await expect(
+      sql`
+        insert into public.access_item_transactions (
+          id, access_item_id, tenancy_id, type, sequence,
+          occurred_at, recorded_at, recorded_by_user_id
+        ) values (
+          'aef00000-0000-4000-8000-000000000001',
+          ${propertyCard.id},
+          ${tenancyB.id},
+          'issued',
+          1,
+          '2026-09-19T10:21:00.000Z',
+          '2026-09-19T10:21:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'access_item_transaction_tenancy_not_eligible',
+    });
+
+    const plannedB = await planTenancyCommand(
+      { tenancyRepository },
+      actor,
+      tenancyB.id,
+      tenancyB.version,
+      '2026-09-19',
+    );
+    const activeB = await activateTenancyCommand(
+      { tenancyRepository },
+      actor,
+      plannedB.id,
+      plannedB.version,
+      '2026-09-19',
+    );
+
+    const propertyIssued = await issueAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T10:22:00.000Z' },
+      },
+      actor,
+      propertyCard.id,
+      {
+        tenancyId: activeB.id,
+        occurredAt: '2026-09-19T10:22:00.000Z',
+      },
+    );
+    expect(propertyIssued).toMatchObject({
+      tenancyId: activeB.id,
+      type: 'issued',
+    });
+
+    const wrongUnitRemote = await createAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T10:30:00.000Z' },
+      },
+      actor,
+      {
+        code: 'REMOTE-ACCESS-A',
+        kind: 'remote',
+        propertyId: property.id,
+        unitId: unitA.id,
+        label: 'Unit A garage remote',
+      },
+    );
+
+    await expect(
+      sql`
+        insert into public.access_item_transactions (
+          id, access_item_id, tenancy_id, type, sequence,
+          occurred_at, recorded_at, recorded_by_user_id
+        ) values (
+          'aef00000-0000-4000-8000-000000000002',
+          ${wrongUnitRemote.id},
+          ${activeB.id},
+          'issued',
+          1,
+          '2026-09-19T10:31:00.000Z',
+          '2026-09-19T10:31:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'access_item_transaction_unit_mismatch',
+    });
+
+    const temporalKey = await createAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T11:00:00.000Z' },
+      },
+      actor,
+      {
+        code: 'KEY-ACCESS-TIME',
+        kind: 'key',
+        propertyId: property.id,
+        unitId: unitA.id,
+        label: 'Temporal guard key',
+      },
+    );
+
+    await expect(
+      sql`
+        insert into public.access_item_transactions (
+          id, access_item_id, tenancy_id, type, sequence,
+          occurred_at, recorded_at, recorded_by_user_id
+        ) values (
+          'aef00000-0000-4000-8000-000000000003',
+          ${temporalKey.id},
+          ${activeA.id},
+          'issued',
+          1,
+          '2026-09-19T10:59:59.000Z',
+          '2026-09-19T11:01:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'access_item_transaction_before_item_recorded',
+    });
+
+    const emptyKey = await createAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T11:10:00.000Z' },
+      },
+      actor,
+      {
+        code: 'KEY-ACCESS-EMPTY',
+        kind: 'key',
+        propertyId: property.id,
+        unitId: unitA.id,
+        label: 'Never issued key',
+      },
+    );
+
+    await expect(
+      sql`
+        insert into public.access_item_transactions (
+          id, access_item_id, tenancy_id, type, sequence,
+          occurred_at, recorded_at, recorded_by_user_id
+        ) values (
+          'aef00000-0000-4000-8000-000000000004',
+          ${emptyKey.id},
+          ${activeA.id},
+          'returned',
+          1,
+          '2026-09-19T11:11:00.000Z',
+          '2026-09-19T11:11:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'access_item_transaction_return_invalid_state',
+    });
+
+    const holderCard = await createAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T11:20:00.000Z' },
+      },
+      actor,
+      {
+        code: 'CARD-ACCESS-HOLDER',
+        kind: 'card',
+        propertyId: property.id,
+        label: 'Property-wide holder check card',
+      },
+    );
+    await issueAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T11:21:00.000Z' },
+      },
+      actor,
+      holderCard.id,
+      {
+        tenancyId: activeA.id,
+        occurredAt: '2026-09-19T11:21:00.000Z',
+      },
+    );
+
+    await expect(
+      sql`
+        insert into public.access_item_transactions (
+          id, access_item_id, tenancy_id, type, sequence,
+          occurred_at, recorded_at, recorded_by_user_id
+        ) values (
+          'aef00000-0000-4000-8000-000000000005',
+          ${holderCard.id},
+          ${activeB.id},
+          'returned',
+          2,
+          '2026-09-19T11:22:00.000Z',
+          '2026-09-19T11:22:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'access_item_transaction_tenancy_mismatch',
+    });
+
+    await expect(
+      sql`
+        update public.access_item_transactions
+        set note = 'rewrite custody history'
+        where id = ${issued.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'access_item_transaction_immutable',
+    });
+
+    const correctedUnitKey = await updateAccessItemLabelCommand(
+      { accessItemRepository },
+      actor,
+      unitKey.id,
+      unitKey.version,
+      'Unit A entrance key — corrected label',
+    );
+    expect(correctedUnitKey).toMatchObject({
+      label: 'Unit A entrance key — corrected label',
+      version: 2,
+    });
+
+    await expect(
+      sql`
+        update public.access_items
+        set unit_id = ${unitB.id},
+            version = version + 1
+        where id = ${unitKey.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'access_item_immutable',
+    });
+
+    const retirementCard = await createAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T11:30:00.000Z' },
+      },
+      actor,
+      {
+        code: 'CARD-ACCESS-RETIRE',
+        kind: 'card',
+        propertyId: property.id,
+        label: 'Credential to retire while issued',
+      },
+    );
+
+    const retirementIssued = await issueAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T11:31:00.000Z' },
+      },
+      actor,
+      retirementCard.id,
+      {
+        tenancyId: activeA.id,
+        occurredAt: '2026-09-19T11:31:00.000Z',
+      },
+    );
+    expect(retirementIssued.sequence).toBe(1);
+
+    await expect(
+      sql`
+        update public.access_items
+        set status = 'retired',
+            retired_at = '2026-09-19T11:30:30.000Z',
+            retired_by_user_id = ${actor.userId},
+            retirement_reason = 'Backdated invalid retirement',
+            version = version + 1
+        where id = ${retirementCard.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'access_item_retirement_before_custody',
+    });
+
+    const retiredWhileIssued = await retireAccessItemCommand(
+      {
+        accessItemRepository,
+        clock: { now: () => '2026-09-19T11:32:00.000Z' },
+      },
+      actor,
+      retirementCard.id,
+      retirementCard.version,
+      'Credential permanently disabled',
+    );
+    expect(retiredWhileIssued).toMatchObject({
+      status: 'retired',
+      version: 2,
+      retirementReason: 'Credential permanently disabled',
+    });
+
+    await expect(
+      issueAccessItemCommand(
+        {
+          ...accessDeps,
+          clock: { now: () => '2026-09-19T11:33:00.000Z' },
+        },
+        actor,
+        retirementCard.id,
+        {
+          tenancyId: activeA.id,
+          occurredAt: '2026-09-19T11:33:00.000Z',
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'ACCESS_ITEM_RETIRED' });
+
+    const retirementReturned = await returnAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T11:34:00.000Z' },
+      },
+      actor,
+      retirementCard.id,
+      {
+        occurredAt: '2026-09-19T11:34:00.000Z',
+        note: 'Returned after credential was disabled',
+      },
+    );
+    expect(retirementReturned).toMatchObject({
+      type: 'returned',
+      sequence: 2,
+      tenancyId: activeA.id,
+    });
+
+    await expect(
+      sql`
+        insert into public.access_item_transactions (
+          id, access_item_id, tenancy_id, type, sequence,
+          occurred_at, recorded_at, recorded_by_user_id
+        ) values (
+          'aef20000-0000-4000-8000-000000000003',
+          ${retirementCard.id},
+          ${activeA.id},
+          'issued',
+          3,
+          '2026-09-19T11:35:00.000Z',
+          '2026-09-19T11:35:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'access_item_transaction_item_not_active',
+    });
+
+    const correctedRetiredCard = await updateAccessItemLabelCommand(
+      { accessItemRepository },
+      actor,
+      retirementCard.id,
+      retiredWhileIssued.version,
+      'Disabled building credential',
+    );
+    expect(correctedRetiredCard).toMatchObject({
+      status: 'retired',
+      label: 'Disabled building credential',
+      version: 3,
+    });
+
+    const raceKey = await createAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T12:00:00.000Z' },
+      },
+      actor,
+      {
+        code: 'KEY-ACCESS-RACE',
+        kind: 'key',
+        propertyId: property.id,
+        unitId: unitA.id,
+        label: 'Concurrent issue key',
+      },
+    );
+
+    const blocker = postgres(connectionString, { max: 1 });
+    const contender = postgres(connectionString, { max: 1 });
+    let releaseIssue!: () => void;
+    const holdIssue = new Promise<void>((resolve) => {
+      releaseIssue = resolve;
+    });
+    let issueInsertedResolve!: () => void;
+    const issueInserted = new Promise<void>((resolve) => {
+      issueInsertedResolve = resolve;
+    });
+
+    try {
+      const firstIssue = blocker.begin(async (tx) => {
+        await tx`
+          insert into public.access_item_transactions (
+            id, access_item_id, tenancy_id, type, sequence,
+            occurred_at, recorded_at, recorded_by_user_id
+          ) values (
+            'aef10000-0000-4000-8000-000000000001',
+            ${raceKey.id},
+            ${activeA.id},
+            'issued',
+            1,
+            '2026-09-19T12:01:00.000Z',
+            '2026-09-19T12:01:00.000Z',
+            ${actor.userId}
+          )
+        `;
+        issueInsertedResolve();
+        await holdIssue;
+      });
+
+      await issueInserted;
+
+      await expect(
+        contender.begin(async (tx) => {
+          await tx.unsafe("set local lock_timeout = '250ms'");
+          await tx`
+            insert into public.access_item_transactions (
+              id, access_item_id, tenancy_id, type, sequence,
+              occurred_at, recorded_at, recorded_by_user_id
+            ) values (
+              'aef10000-0000-4000-8000-000000000002',
+              ${raceKey.id},
+              ${activeA.id},
+              'issued',
+              1,
+              '2026-09-19T12:01:00.000Z',
+              '2026-09-19T12:01:00.000Z',
+              ${actor.userId}
+            )
+          `;
+        }),
+      ).rejects.toMatchObject({ code: '55P03' });
+
+      releaseIssue();
+      await firstIssue;
+
+      await expect(
+        contender`
+          insert into public.access_item_transactions (
+            id, access_item_id, tenancy_id, type, sequence,
+            occurred_at, recorded_at, recorded_by_user_id
+          ) values (
+            'aef10000-0000-4000-8000-000000000002',
+            ${raceKey.id},
+            ${activeA.id},
+            'issued',
+            1,
+            '2026-09-19T12:01:00.000Z',
+            '2026-09-19T12:01:00.000Z',
+            ${actor.userId}
+          )
+        `,
+      ).rejects.toMatchObject({
+        code: '23514',
+        constraint_name: 'access_item_transaction_sequence_invalid',
+      });
+    } finally {
+      releaseIssue();
+      await Promise.all([blocker.end(), contender.end()]);
+    }
+
+    expect(await accessItemRepository.listTransactions(raceKey.id)).toHaveLength(1);
+
+    const retireRaceKey = await createAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T12:10:00.000Z' },
+      },
+      actor,
+      {
+        code: 'KEY-ACCESS-RETIRE-RACE',
+        kind: 'key',
+        propertyId: property.id,
+        unitId: unitA.id,
+        label: 'Retirement serialization key',
+      },
+    );
+
+    const retireBlocker = postgres(connectionString, { max: 1 });
+    const retireContender = postgres(connectionString, { max: 1 });
+    let releaseRetirement!: () => void;
+    const holdRetirement = new Promise<void>((resolve) => {
+      releaseRetirement = resolve;
+    });
+    let retirementUpdatedResolve!: () => void;
+    const retirementUpdated = new Promise<void>((resolve) => {
+      retirementUpdatedResolve = resolve;
+    });
+
+    try {
+      const retirementWrite = retireBlocker.begin(async (tx) => {
+        await tx`
+          update public.access_items
+          set status = 'retired',
+              retired_at = '2026-09-19T12:11:00.000Z',
+              retired_by_user_id = ${actor.userId},
+              retirement_reason = 'Concurrent retirement',
+              version = version + 1
+          where id = ${retireRaceKey.id}
+        `;
+        retirementUpdatedResolve();
+        await holdRetirement;
+      });
+
+      await retirementUpdated;
+
+      await expect(
+        retireContender.begin(async (tx) => {
+          await tx.unsafe("set local lock_timeout = '250ms'");
+          await tx`
+            insert into public.access_item_transactions (
+              id, access_item_id, tenancy_id, type, sequence,
+              occurred_at, recorded_at, recorded_by_user_id
+            ) values (
+              'aef30000-0000-4000-8000-000000000001',
+              ${retireRaceKey.id},
+              ${activeA.id},
+              'issued',
+              1,
+              '2026-09-19T12:12:00.000Z',
+              '2026-09-19T12:12:00.000Z',
+              ${actor.userId}
+            )
+          `;
+        }),
+      ).rejects.toMatchObject({ code: '55P03' });
+
+      releaseRetirement();
+      await retirementWrite;
+
+      await expect(
+        retireContender`
+          insert into public.access_item_transactions (
+            id, access_item_id, tenancy_id, type, sequence,
+            occurred_at, recorded_at, recorded_by_user_id
+          ) values (
+            'aef30000-0000-4000-8000-000000000001',
+            ${retireRaceKey.id},
+            ${activeA.id},
+            'issued',
+            1,
+            '2026-09-19T12:12:00.000Z',
+            '2026-09-19T12:12:00.000Z',
+            ${actor.userId}
+          )
+        `,
+      ).rejects.toMatchObject({
+        code: '23514',
+        constraint_name: 'access_item_transaction_item_not_active',
+      });
+    } finally {
+      releaseRetirement();
+      await Promise.all([retireBlocker.end(), retireContender.end()]);
+    }
+
+    const retireRaceLoaded = await accessItemRepository.getItemById(retireRaceKey.id);
+    expect(retireRaceLoaded).toMatchObject({
+      status: 'retired',
+      version: 2,
+      retirementReason: 'Concurrent retirement',
+    });
+    expect(
+      await accessItemRepository.listTransactions(retireRaceKey.id),
+    ).toHaveLength(0);
+
+    const endedA = await endTenancyCommand(
+      { tenancyRepository },
+      actor,
+      activeA.id,
+      activeA.version,
+      '2026-09-19',
+    );
+    expect(endedA.status).toBe('ended');
+
+    const returnedAfterTenancyEnd = await returnAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-19T13:00:00.000Z' },
+      },
+      actor,
+      holderCard.id,
+      {
+        occurredAt: '2026-09-19T13:00:00.000Z',
+        note: 'Returned during final post-tenancy reconciliation',
+      },
+    );
+    expect(returnedAfterTenancyEnd).toMatchObject({
+      type: 'returned',
+      tenancyId: activeA.id,
+    });
+
+    await expect(
+      issueAccessItemCommand(
+        {
+          ...accessDeps,
+          clock: { now: () => '2026-09-19T13:05:00.000Z' },
+        },
+        actor,
+        emptyKey.id,
+        {
+          tenancyId: endedA.id,
+          occurredAt: '2026-09-19T13:05:00.000Z',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'ACCESS_ITEM_TENANCY_NOT_ELIGIBLE',
+    });
   });
 
 

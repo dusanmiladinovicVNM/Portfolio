@@ -3,6 +3,7 @@ import postgres from 'postgres';
 import type { FileStoragePort } from '@portfolio/application';
 import { createPortfolioHttpHandler } from '@portfolio/http';
 import {
+  PostgresAccessItemRepository,
   PostgresAssetInventoryRepository,
   PostgresAssetRepository,
   PostgresAssetServiceRepository,
@@ -40,6 +41,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
   });
 
   const portfolioRepository = new PostgresPortfolioRepository(sql);
+  const accessItemRepository = new PostgresAccessItemRepository(sql);
   const assetRepository = new PostgresAssetRepository(sql);
   const assetInventoryRepository = new PostgresAssetInventoryRepository(sql);
   const assetServiceRepository = new PostgresAssetServiceRepository(sql);
@@ -56,6 +58,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
 
   const applicationHandler = createPortfolioHttpHandler(
     {
+      accessItemRepository,
       assetRepository,
       assetInventoryRepository,
       assetServiceRepository,

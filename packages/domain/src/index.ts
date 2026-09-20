@@ -27,3 +27,5 @@ export * from './improvements/improvement.js';
 export * from './costs/cost.js';
 
 export * from './maintenance/maintenance.js';
+
+export * from './access/access-item.js';

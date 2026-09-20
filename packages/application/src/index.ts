@@ -52,3 +52,7 @@ export * from './costs/cost-queries.js';
 export * from './maintenance/maintenance-repository.js';
 export * from './maintenance/maintenance-commands.js';
 export * from './maintenance/maintenance-queries.js';
+
+export * from './access/access-item-repository.js';
+export * from './access/access-item-commands.js';
+export * from './access/access-item-queries.js';

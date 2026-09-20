@@ -115,7 +115,7 @@ Service history must reference the exact physical Asset identity.
 
 Cost is a financial projection/fact, not a substitute for its source business entity.
 
-### PR #19 — Maintenance (IN PROGRESS)
+### PR #19 — Maintenance (DONE)
 
 - Issue
 - WorkOrder
@@ -123,7 +123,7 @@ Cost is a financial projection/fact, not a substitute for its source business en
 - Inspection finding → Issue linkage
 - Asset/Service/Cost links
 
-### PR #20 — Keys + Access
+### PR #20 — Keys + Access (IN PROGRESS)
 
 - keys
 - cards

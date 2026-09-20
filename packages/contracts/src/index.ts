@@ -13,3 +13,5 @@ export * from './improvements.js';
 export * from './costs.js';
 
 export * from './maintenance.js';
+
+export * from './access-items.js';

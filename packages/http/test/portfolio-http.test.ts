@@ -46,6 +46,7 @@ import {
 import { InMemoryImprovementRepository } from './improvement-test-deps.js';
 import { InMemoryCostRepository } from './cost-test-deps.js';
 import { InMemoryMaintenanceRepository } from './maintenance-test-deps.js';
+import { InMemoryAccessItemRepository } from './access-item-test-deps.js';
 
 const adminIdentity: VerifiedIdentity = {
   provider: 'supabase',
@@ -310,6 +311,7 @@ function buildHandler(
   clock: ClockPort = new FixedClock(),
 ) {
   return createPortfolioHttpHandler({
+    accessItemRepository: new InMemoryAccessItemRepository(),
     assetRepository: new InMemoryAssetRepository(),
     assetInventoryRepository: new InMemoryAssetInventoryRepository(),
     assetServiceRepository: new InMemoryAssetServiceRepository(),
@@ -2106,6 +2108,7 @@ describe('Portfolio HTTP boundary', () => {
   it('supports a configurable host base path without leaking provider details', async () => {
     const handler = createPortfolioHttpHandler(
       {
+        accessItemRepository: new InMemoryAccessItemRepository(),
         assetRepository: new InMemoryAssetRepository(),
     assetInventoryRepository: new InMemoryAssetInventoryRepository(),
         assetServiceRepository: new InMemoryAssetServiceRepository(),
