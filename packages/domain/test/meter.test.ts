@@ -128,6 +128,58 @@ describe('Meter domain', () => {
     expect(moveOut.tenancyId).not.toBe(moveIn.tenancyId);
   });
 
+  it('allows historical occurrence but never recording provenance before Meter registration', () => {
+    expect(() =>
+      createMeterReading({
+        id: asMeterReadingId('44444444-4444-4444-8444-444444444448'),
+        meter: meter(),
+        value: '42',
+        readAt: '2026-02-01T08:00:00.000Z',
+        recordedAt: '2026-02-01T08:05:00.000Z',
+        recordedByUserId: actor,
+      }),
+    ).toThrowError(
+      expect.objectContaining({ code: 'METER_TIMESTAMP_ORDER_INVALID' }),
+    );
+
+    expect(
+      createMeterReading({
+        id: asMeterReadingId('44444444-4444-4444-8444-444444444449'),
+        meter: meter(),
+        value: '42',
+        readAt: '2026-02-01T08:00:00.000Z',
+        recordedAt: '2026-09-20T08:00:00.000Z',
+        recordedByUserId: actor,
+      }),
+    ).toMatchObject({
+      readAt: '2026-02-01T08:00:00.000Z',
+      recordedAt: '2026-09-20T08:00:00.000Z',
+    });
+
+    expect(() =>
+      retireMeter(meter(), {
+        retiredAt: '2026-02-01T08:00:00.000Z',
+        recordedAt: '2026-03-01T08:00:00.000Z',
+        retiredByUserId: actor,
+        retirementReason: 'Historical retirement entered too early',
+      }),
+    ).toThrowError(
+      expect.objectContaining({ code: 'METER_TIMESTAMP_ORDER_INVALID' }),
+    );
+
+    expect(
+      retireMeter(meter(), {
+        retiredAt: '2026-02-01T08:00:00.000Z',
+        recordedAt: '2026-09-20T08:00:00.000Z',
+        retiredByUserId: actor,
+        retirementReason: 'Historical retirement backfill',
+      }),
+    ).toMatchObject({
+      retiredAt: '2026-02-01T08:00:00.000Z',
+      retirementRecordedAt: '2026-09-20T08:00:00.000Z',
+    });
+  });
+
   it('allows historical backfill while preventing readings outside physical lifetime', () => {
     const retired = retireMeter(meter(), {
       retiredAt: '2026-09-20T10:00:00.000Z',
