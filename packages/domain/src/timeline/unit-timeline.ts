@@ -309,9 +309,20 @@ export function createUnitTimelineEvent(
           'UNIT_TIMELINE_INVALID_EVENT',
         );
 
+  const sourceId = required(input.sourceId, 'sourceId');
+  const eventKey = required(input.eventKey, 'eventKey');
+  const expectedEventKey = `${eventType}:${sourceId}`;
+
+  if (eventKey !== expectedEventKey) {
+    throw new DomainError(
+      'UNIT_TIMELINE_INVALID_EVENT',
+      `eventKey must equal ${expectedEventKey}.`,
+    );
+  }
+
   return {
     ...input,
-    eventKey: required(input.eventKey, 'eventKey'),
+    eventKey,
     category: input.category as UnitTimelineCategory,
     eventType,
     precision: input.precision as UnitTimelineTemporalPrecision,
@@ -319,7 +330,7 @@ export function createUnitTimelineEvent(
     occurredAt,
     recordedAt,
     sourceType: input.sourceType as UnitTimelineSourceType,
-    sourceId: required(input.sourceId, 'sourceId'),
+    sourceId,
     relatedEntityType:
       input.relatedEntityType === null
         ? null
