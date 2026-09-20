@@ -1,6 +1,7 @@
 export * from './shared/date-only.js';
 export * from './shared/domain-error.js';
 export * from './shared/entity-id.js';
+export * from './shared/instant.js';
 export * from './shared/money.js';
 export * from './portfolio/property.js';
 export * from './portfolio/unit.js';
