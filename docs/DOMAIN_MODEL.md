@@ -300,6 +300,71 @@ Inspection form answers remain Inspection evidence. Creating a canonical MeterRe
 
 Canonical #21 does not model utility accounts, providers, tariffs, billing, invoices, Property-level meters, meter movement history, replacement lineage, multi-register meters, reset/rollover semantics, reading correction lineage or cross-Meter consumption stitching.
 
+## Business Events + Unit Timeline
+
+Canonical #22 introduces a **read-only business-event projection** over existing
+canonical write models.
+
+```text
+Tenancy / Lease / Document / Inspection / Asset / Service
+Improvement / Cost / Maintenance / Access / Meter
+                         ↓
+                unit_business_events
+                         ↓
+                GET /units/:id/timeline
+```
+
+There is no writable `domain_events` table and application commands do not
+dual-write events. Source domain rows remain authoritative.
+
+A projected event has stable identity:
+
+```text
+eventKey = deterministic eventType + canonical source identity
+```
+
+Repeated reads and different filters therefore return the same event identity.
+
+Timeline chronology preserves source precision:
+
+```text
+date fact:
+  precision = date
+  occurredOn = YYYY-MM-DD
+  occurredAt = null
+
+instant fact:
+  precision = instant
+  occurredAt = canonical UTC instant
+  occurredOn = UTC date(occurredAt)
+```
+
+Date-only Tenancy, lease and Cost facts are never converted into fake midnight
+instants.
+
+Ordering is deterministic by business date, temporal precision, exact instant,
+event type and event key. When a date-only event and an exact instant share the
+same calendar date, deterministic display order does not imply a real
+before/after relationship.
+
+Unit attribution is conservative. Direct Unit relationships are used when the
+source stores them. Access custody follows Tenancy Unit even for
+Property-scoped AccessItems. Asset condition and ServiceEvent history resolves
+through `AssetLocationHistory` at the exact event occurrence, so a later Asset
+move cannot rewrite historical Unit chronology. Property-wide or otherwise
+ambiguous facts are omitted rather than copied or guessed.
+
+The projection does not reconstruct historical state transitions from current
+`status` or generic `updatedAt` fields. A transition appears only when the
+source domain retained a durable business occurrence.
+
+The JSON `details` payload contains small display-supporting copies of
+canonical facts such as codes, exact decimal strings, condition or description.
+It is a read-model convenience and cannot be written back to domain state.
+
+Technical request/security/audit logging remains a separate concern from this
+business chronology.
+
 ### Cost
 
 Canonical #18 defines Cost as one append-only positive monetary allocation to exactly one typed business source. Cost is a financial fact/projection and never substitutes for the source entity's own state or lifecycle.
