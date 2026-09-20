@@ -100,8 +100,7 @@ events as (
     null::text as related_entity_type,
     null::text as related_entity_id,
     jsonb_build_object(
-      'code', t.code,
-      'status', t.status
+      'code', t.code
     ) as details
   from public.tenancies t
 
@@ -641,7 +640,6 @@ events as (
     'asset',
     w.asset_id::text,
     jsonb_build_object(
-      'status', c.status,
       'providerReference', c.provider_reference
     )
   from public.asset_warranty_claims c
@@ -668,7 +666,7 @@ events as (
     c.id::text,
     'asset',
     w.asset_id::text,
-    jsonb_build_object('status', c.status)
+    '{}'::jsonb
   from public.asset_warranty_claims c
   join public.asset_warranties w on w.id = c.warranty_id
   join public.asset_location_history h
@@ -693,7 +691,7 @@ events as (
     c.id::text,
     'asset',
     w.asset_id::text,
-    jsonb_build_object('status', c.status)
+    '{}'::jsonb
   from public.asset_warranty_claims c
   join public.asset_warranties w on w.id = c.warranty_id
   join public.asset_location_history h
@@ -718,7 +716,7 @@ events as (
     c.id::text,
     'asset',
     w.asset_id::text,
-    jsonb_build_object('status', c.status)
+    '{}'::jsonb
   from public.asset_warranty_claims c
   join public.asset_warranties w on w.id = c.warranty_id
   join public.asset_location_history h
