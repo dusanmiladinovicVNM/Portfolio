@@ -1,4 +1,5 @@
 import { DomainError } from '../shared/domain-error.js';
+import { asInstant } from '../shared/instant.js';
 import type {
   DocumentVersionId,
   InspectionEvidenceId,
@@ -112,13 +113,7 @@ function requiredText(value: string, field: string): string {
 }
 
 function instant(value: string, field: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}T/.test(value) || Number.isNaN(Date.parse(value))) {
-    throw new DomainError(
-      'INSPECTION_EVIDENCE_INVALID_TIMESTAMP',
-      `${field} must be a valid ISO timestamp.`,
-    );
-  }
-  return value;
+  return asInstant(value, field, 'INSPECTION_EVIDENCE_INVALID_TIMESTAMP');
 }
 
 export function createInspectionEvidence(
