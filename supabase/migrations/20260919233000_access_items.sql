@@ -100,6 +100,21 @@ as $access_item_guard$
 declare
   latest_custody_occurred_at timestamptz;
 begin
+  if tg_op = 'INSERT' then
+    if new.status <> 'active'
+       or new.version <> 1
+       or new.retired_at is not null
+       or new.retired_by_user_id is not null
+       or new.retirement_reason is not null
+    then
+      raise exception 'New AccessItem must start active at version 1 without retirement provenance.'
+        using errcode = '23514',
+              constraint = 'access_item_initial_state';
+    end if;
+
+    return new;
+  end if;
+
   if tg_op = 'DELETE' then
     raise exception 'AccessItem identity cannot be deleted.'
       using errcode = '23514',
@@ -187,7 +202,7 @@ end;
 $access_item_guard$;
 
 create trigger access_item_guard_trg
-before update or delete on public.access_items
+before insert or update or delete on public.access_items
 for each row execute function public.guard_access_item_mutation();
 
 create or replace function public.guard_access_item_transaction_insert()
