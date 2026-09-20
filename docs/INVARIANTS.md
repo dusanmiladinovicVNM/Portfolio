@@ -24,14 +24,14 @@ These rules are architecture gates, not optional implementation notes.
 ## Tenancy and contracts
 
 14. Tenancy and LeaseAgreement are different concepts.
-15. A Tenancy belongs to exactly one Unit and survives agreement amendments.
+15. A Tenancy belongs to exactly one Unit and survives agreement amendments. `Tenancy.unitId` is immutable after creation.
 16. TenancyParty references Party; tenant identity is never copied into Tenancy columns.
 17. Until TenancyParty becomes temporal, party composition may only change while Tenancy is draft/planned.
 18. An active Tenancy requires at least one tenant/co-tenant.
 19. Only one primary tenant/co-tenant may exist in a Tenancy.
 20. Tenancy lifecycle changes occur through explicit transitions, not arbitrary status writes.
 21. Ended and cancelled Tenancies are terminal.
-22. Planned reservation and actual occupancy are different temporal concepts.
+22. Planned reservation and actual occupancy are different temporal concepts. `actualStart` is established when actual occupancy begins and is immutable once non-null.
 23. Planned reservations for the same Unit never overlap.
 24. Actual occupancy periods for the same Unit never overlap.
 25. A new planned reservation cannot overlap known actual occupancy.
@@ -162,7 +162,7 @@ These rules are architecture gates, not optional implementation notes.
 
 126. AccessItem is one exact physical key/card/remote. Property is required; Unit is optional; Space requires Unit. Unit must belong to Property and Space to Unit. Scope is inventory association, not exact lock/door/electronic permission truth.
 127. AccessItem code, physical identity, kind, Property/Unit/Space scope and original recording provenance are immutable. `label` is correctable metadata through optimistic versioning.
-128. AccessItem lifecycle is independent from custody: `active -> retired` is terminal and records immutable `retiredAt/retiredByUserId/retirementReason`. Retirement may occur while custody is available/issued/lost, but cannot predate AccessItem recording or the latest existing custody occurrence.
+128. Every new AccessItem starts `active` at version 1 with null retirement provenance. Lifecycle is independent from custody: `active -> retired` is terminal and records immutable `retiredAt/retiredByUserId/retirementReason`. At the moment that retirement transition is written, `retiredAt` cannot predate AccessItem recording or the latest custody occurrence that already exists then; later `returned/lost` events may occur after `retiredAt`.
 129. AccessItemTransaction is append-only custody history. Per AccessItem, sequence starts at 1 and advances exactly by one; updates/deletes are forbidden.
 130. Current custody state is derived only from the latest transaction: no transaction or `returned` = available; `issued` = held by that Tenancy; `lost` = unavailable and still associated with that holding Tenancy. There is no parallel mutable current-holder truth.
 131. New `issued` requires an `active` AccessItem and Tenancy in `active|notice_given|move_out_pending`. The UTC calendar date of `issued.occurredAt` must be >= `Tenancy.actualStart`; PostgreSQL must use `(timezone('UTC', occurred_at))::date`, never session-local `occurred_at::date`. Property-scoped item may serve any Tenancy in that Property; Unit/Space-scoped item requires that exact Tenancy Unit.
