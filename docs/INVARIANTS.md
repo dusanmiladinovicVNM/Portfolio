@@ -187,3 +187,15 @@ These rules are architecture gates, not optional implementation notes.
 146. Inspector may read Meter history and append MeterReading/MeterReadingBoundary facts, but Meter master creation/metadata/lifecycle mutation requires `meters:write`.
 
 147. Every canonical field that represents an instant requires an explicit `Z` or numeric UTC offset at domain/API input and is normalized to UTC ISO; offset-less local datetime strings are invalid. Date-only business fields are not affected by this rule.
+
+
+## Business Events + Unit Timeline
+
+148. Unit Timeline is a read-only projection of canonical domain tables. No `domain_events` write table or command-side dual-write may become competing business truth.
+149. Every projected event has a deterministic stable `eventKey` derived from event type and canonical source identity; filtering, pagination and repeated reads must not change that identity.
+150. Timeline temporal precision is explicit. Date-only facts have `precision = date`, `occurredAt = null` and retain the exact business date. Instant facts have canonical UTC `occurredAt`, `precision = instant`, and `occurredOn = UTC date(occurredAt)`.
+151. Timeline ordering is deterministic but must not imply false intra-day chronology between a date-only event and an exact instant on the same calendar date.
+152. An event may enter a Unit timeline only through a deterministic source relationship. Asset/Service attribution uses historical AssetLocationHistory at event occurrence; Property-wide or otherwise ambiguous sources are omitted rather than guessed or copied to every Unit.
+153. Current `status` and generic `updatedAt` must not be used to invent a historical transition whose canonical occurrence was not retained by the source domain.
+154. Timeline `details` are denormalized read-model display facts only. They are never accepted as commands and never override source entities.
+155. Unit Timeline reads require `portfolio:read`. Technical audit/security/request logging remains separate from business-event chronology.
