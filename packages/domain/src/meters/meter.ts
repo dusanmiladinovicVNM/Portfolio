@@ -46,6 +46,7 @@ export interface Meter {
   readonly installedAt: string;
   readonly status: MeterStatus;
   readonly retiredAt: string | null;
+  readonly retirementRecordedAt: string | null;
   readonly retiredByUserId: UserId | null;
   readonly retirementReason: string | null;
   readonly version: number;
@@ -209,6 +210,7 @@ export function createMeter(input: {
     installedAt,
     status: 'active',
     retiredAt: null,
+    retirementRecordedAt: null,
     retiredByUserId: null,
     retirementReason: null,
     version: 1,
@@ -262,6 +264,7 @@ export function retireMeter(
     ...meter,
     status: 'retired',
     retiredAt,
+    retirementRecordedAt: recordedAt,
     retiredByUserId: input.retiredByUserId,
     retirementReason: required(input.retirementReason, 'retirementReason'),
     version: meter.version + 1,
