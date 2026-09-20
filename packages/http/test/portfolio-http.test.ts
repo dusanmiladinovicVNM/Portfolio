@@ -12,7 +12,9 @@ import {
   type VerifiedIdentity,
 } from '@portfolio/application';
 import {
+  asUnitId,
   asUserId,
+  createUnitTimelineEvent,
   type DateOnly,
   type LeaseAgreement,
   type LeaseAgreementId,
@@ -311,18 +313,24 @@ function buildHandler(
     '33333333-3333-4333-8333-333333333333',
   ],
   clock: ClockPort = new FixedClock(),
+  overrides: {
+    readonly portfolioRepository?: InMemoryPortfolioRepository;
+    readonly unitTimelineRepository?: InMemoryUnitTimelineRepository;
+  } = {},
 ) {
   return createPortfolioHttpHandler({
     accessItemRepository: new InMemoryAccessItemRepository(),
     meterRepository: new InMemoryMeterRepository(),
-    unitTimelineRepository: new InMemoryUnitTimelineRepository(),
+    unitTimelineRepository:
+      overrides.unitTimelineRepository ?? new InMemoryUnitTimelineRepository(),
     assetRepository: new InMemoryAssetRepository(),
     assetInventoryRepository: new InMemoryAssetInventoryRepository(),
     assetServiceRepository: new InMemoryAssetServiceRepository(),
     improvementRepository: new InMemoryImprovementRepository(),
     costRepository: new InMemoryCostRepository(),
     maintenanceRepository: new InMemoryMaintenanceRepository(),
-    portfolioRepository: new InMemoryPortfolioRepository(),
+    portfolioRepository:
+      overrides.portfolioRepository ?? new InMemoryPortfolioRepository(),
     partyRepository: new InMemoryPartyRepository(),
     ownershipRepository: new InMemoryOwnershipRepository(),
     tenancyRepository: new InMemoryTenancyRepository(),
@@ -388,6 +396,172 @@ describe('Portfolio HTTP boundary', () => {
     expect(await listed.json()).toMatchObject({
       data: { items: [{ code: 'PROP-0001' }] },
     });
+  });
+
+  it('returns deterministic Unit timeline ordering and filters projected events', async () => {
+    const portfolioRepository = new InMemoryPortfolioRepository();
+    const unitTimelineRepository = new InMemoryUnitTimelineRepository();
+    const handler = buildHandler(
+      [
+        '71000000-0000-4000-8000-000000000001',
+        '71000000-0000-4000-8000-000000000002',
+      ],
+      new FixedClock(),
+      { portfolioRepository, unitTimelineRepository },
+    );
+
+    const propertyResponse = await handler(
+      new Request('https://portfolio.test/properties', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ...propertyBody,
+          code: 'PROP-TIMELINE',
+        }),
+      }),
+      adminIdentity,
+    );
+    const property = (await propertyResponse.json()).data;
+
+    const unitResponse = await handler(
+      new Request('https://portfolio.test/units', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          propertyId: property.id,
+          code: 'UNIT-TIMELINE',
+          unitNumber: 'TL-1',
+          unitType: 'apartment',
+        }),
+      }),
+      adminIdentity,
+    );
+    const unit = (await unitResponse.json()).data;
+    const unitId = asUnitId(unit.id);
+
+    unitTimelineRepository.events.push(
+      createUnitTimelineEvent({
+        eventKey: 'tenancy.started:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+        unitId,
+        category: 'tenancy',
+        eventType: 'tenancy.started',
+        precision: 'date',
+        occurredOn: '2026-09-20',
+        occurredAt: null,
+        recordedAt: null,
+        recordedByUserId: null,
+        sourceType: 'tenancy',
+        sourceId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+        relatedEntityType: null,
+        relatedEntityId: null,
+        details: { code: 'TEN-TIMELINE' },
+      }),
+      createUnitTimelineEvent({
+        eventKey: 'meter.reading:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
+        unitId,
+        category: 'meter',
+        eventType: 'meter.reading',
+        precision: 'instant',
+        occurredOn: '2026-09-20',
+        occurredAt: '2026-09-20T12:00:00.000Z',
+        recordedAt: '2026-09-20T12:05:00.000Z',
+        recordedByUserId: asUserId(
+          'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        ),
+        sourceType: 'meter_reading',
+        sourceId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
+        relatedEntityType: 'meter',
+        relatedEntityId: 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1',
+        details: { value: '100.000000', measurementUnit: 'kwh' },
+      }),
+      createUnitTimelineEvent({
+        eventKey:
+          'asset.condition_assessed:dddddddd-dddd-4ddd-8ddd-ddddddddddd1',
+        unitId,
+        category: 'asset',
+        eventType: 'asset.condition_assessed',
+        precision: 'instant',
+        occurredOn: '2026-09-19',
+        occurredAt: '2026-09-19T18:00:00.000Z',
+        recordedAt: '2026-09-19T18:00:00.000Z',
+        recordedByUserId: asUserId(
+          'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        ),
+        sourceType: 'asset_condition_assessment',
+        sourceId: 'dddddddd-dddd-4ddd-8ddd-ddddddddddd1',
+        relatedEntityType: 'asset',
+        relatedEntityId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1',
+        details: { condition: 'good' },
+      }),
+      createUnitTimelineEvent({
+        eventKey: 'meter.reading:ffffffff-ffff-4fff-8fff-fffffffffff1',
+        unitId: asUnitId('99999999-9999-4999-8999-999999999999'),
+        category: 'meter',
+        eventType: 'meter.reading',
+        precision: 'instant',
+        occurredOn: '2026-09-21',
+        occurredAt: '2026-09-21T12:00:00.000Z',
+        recordedAt: '2026-09-21T12:01:00.000Z',
+        recordedByUserId: null,
+        sourceType: 'meter_reading',
+        sourceId: 'ffffffff-ffff-4fff-8fff-fffffffffff1',
+        relatedEntityType: 'meter',
+        relatedEntityId: 'ffffffff-ffff-4fff-8fff-fffffffffff2',
+        details: { value: '999.000000' },
+      }),
+    );
+
+    const timeline = await handler(
+      new Request(`https://portfolio.test/units/${unit.id}/timeline`),
+      inspectorIdentity,
+    );
+    expect(timeline.status).toBe(200);
+    expect(await timeline.json()).toMatchObject({
+      data: {
+        items: [
+          {
+            eventType: 'meter.reading',
+            precision: 'instant',
+            occurredOn: '2026-09-20',
+          },
+          {
+            eventType: 'tenancy.started',
+            precision: 'date',
+            occurredOn: '2026-09-20',
+            occurredAt: null,
+          },
+          {
+            eventType: 'asset.condition_assessed',
+            occurredOn: '2026-09-19',
+          },
+        ],
+        limit: 100,
+        offset: 0,
+      },
+    });
+
+    const filtered = await handler(
+      new Request(
+        `https://portfolio.test/units/${unit.id}/timeline?category=meter&from=2026-09-20&to=2026-09-20&limit=1&offset=0`,
+      ),
+      inspectorIdentity,
+    );
+    expect(filtered.status).toBe(200);
+    expect(await filtered.json()).toMatchObject({
+      data: {
+        items: [{ eventType: 'meter.reading' }],
+        limit: 1,
+        offset: 0,
+      },
+    });
+
+    const invalidRange = await handler(
+      new Request(
+        `https://portfolio.test/units/${unit.id}/timeline?from=2026-09-21&to=2026-09-20`,
+      ),
+      inspectorIdentity,
+    );
+    expect(invalidRange.status).toBe(400);
   });
 
   it('runs Asset Registry create, lifecycle and replacement through HTTP', async () => {
