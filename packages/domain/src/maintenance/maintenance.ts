@@ -1,4 +1,5 @@
 import { DomainError } from '../shared/domain-error.js';
+import { asInstant } from '../shared/instant.js';
 import type {
   AssetId,
   InspectionFindingId,
@@ -103,13 +104,7 @@ function optional(value: string | null | undefined): string | null {
 }
 
 function instant(value: string, field: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}T/.test(value) || Number.isNaN(Date.parse(value))) {
-    throw new DomainError(
-      'MAINTENANCE_INVALID_TIMESTAMP',
-      `${field} must be a valid ISO timestamp.`,
-    );
-  }
-  return value;
+  return asInstant(value, field, 'MAINTENANCE_INVALID_TIMESTAMP');
 }
 
 function assertNotBefore(
