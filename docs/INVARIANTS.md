@@ -31,7 +31,7 @@ These rules are architecture gates, not optional implementation notes.
 19. Only one primary tenant/co-tenant may exist in a Tenancy.
 20. Tenancy lifecycle changes occur through explicit transitions, not arbitrary status writes.
 21. Ended and cancelled Tenancies are terminal.
-22. Planned reservation and actual occupancy are different temporal concepts. `actualStart` is established when actual occupancy begins and is immutable once non-null.
+22. Planned reservation and actual occupancy are different temporal concepts. `actualStart` is established when actual occupancy begins and is immutable once non-null; `actualEnd` is established when actual occupancy ends and is immutable once non-null.
 23. Planned reservations for the same Unit never overlap.
 24. Actual occupancy periods for the same Unit never overlap.
 25. A new planned reservation cannot overlap known actual occupancy.
@@ -170,3 +170,18 @@ These rules are architecture gates, not optional implementation notes.
 133. AccessItem transaction time is monotonic: `item.recordedAt <= occurredAt <= recordedAt`; later transactions cannot move either occurrence or recording time before the previous transaction. Equality is legal because sequence provides deterministic order.
 134. Ending a Tenancy does not rewrite outstanding AccessItem custody. Return/loss may close an existing custody chain after Tenancy end, while a new issue to ended/cancelled/draft/planned Tenancy is forbidden.
 135. PostgreSQL transaction insertion and AccessItem lifecycle/metadata updates serialize through the same AccessItem row lock. PostgreSQL independently revalidates active-item issuance, next sequence, Tenancy scope/state, UTC `actualStart` boundary, holder, custody transition and retirement temporal rules; concurrent issue/issue and retire/issue attempts therefore cannot both create contradictory truth.
+
+
+## Meters + Utilities
+
+136. Meter is one exact physical cumulative utility meter for exactly one Unit and optional Space of that Unit. Code, serial number, utility type, measurement unit, Unit/Space placement, installedAt and original recording provenance are immutable; label is correctable metadata through optimistic versioning.
+137. Every new Meter starts active at version 1 with null retirement provenance. Lifecycle is terminal `active -> retired`; retirement records distinct `retiredAt` occurrence and `retirementRecordedAt/retiredByUserId/retirementReason` provenance.
+138. At the moment Meter retirement is written, `retiredAt` cannot predate installation or any reading occurrence already persisted. Later historical backfill remains legal only for `readAt <= retiredAt`; no reading may occur after retirement.
+139. MeterReading is one append-only physical observation. Its value is an exact non-negative decimal with at most 18 whole digits and six decimal places; PostgreSQL must reject excess scale/range without typmod rounding.
+140. MeterReading occurrence may predate system registration but cannot predate Meter installation; `recordedAt >= readAt`. One exact Meter+readAt occurrence is unique.
+141. MeterReading carries no Tenancy/context role. MeterReadingBoundary separately links a reading to one Tenancy as `move_in|move_out`, allowing one physical observation to serve multiple business boundaries without duplicate observations.
+142. MeterReadingBoundary requires exact Meter/Tenancy Unit parity. Move-in requires UTC date(readAt) = immutable Tenancy.actualStart; move-out requires UTC date(readAt) = immutable Tenancy.actualEnd. Session timezone must never determine this comparison.
+143. One exact Meter+Tenancy+boundary type may exist at most once. Boundary insertion serializes on the Meter row before checking this cross-row uniqueness rule.
+144. Meter reading INSERT share-locks the Meter while retirement UPDATE locks the same row; a retirement/read race cannot commit a reading whose occurrence is after the committed retirement boundary.
+145. Historical consumption basis is calculated only between consecutive readings of the same exact Meter. If the later register value is lower, consumption is null and continuity is `decrease_detected`; the system must not invent negative usage or guess reset/rollover semantics.
+146. Inspector may read Meter history and append MeterReading/MeterReadingBoundary facts, but Meter master creation/metadata/lifecycle mutation requires `meters:write`.
