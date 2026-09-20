@@ -351,7 +351,7 @@ begin
         using errcode = '23514',
               constraint = 'meter_boundary_move_in_date_mismatch';
     end if;
-  else
+  elsif new.boundary_type = 'move_out' then
     if tenancy_actual_end is null then
       raise exception 'Move-out reading requires Tenancy actualEnd.'
         using errcode = '23514',
@@ -363,6 +363,8 @@ begin
         using errcode = '23514',
               constraint = 'meter_boundary_move_out_date_mismatch';
     end if;
+  else
+    return new;
   end if;
 
   if exists (
