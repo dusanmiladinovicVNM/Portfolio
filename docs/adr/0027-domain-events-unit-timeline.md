@@ -45,8 +45,14 @@ request trace is not automatically a business timeline event.
 
 ### Stable projected identity
 
-Every projected event has a deterministic `eventKey` composed from its
-event type and canonical source identity.
+Every projected event has the exact deterministic identity:
+
+```text
+eventKey = eventType + ":" + sourceId
+```
+
+The domain projection factory validates this formula at runtime, so SQL/view
+drift such as a valid event type plus an unrelated event key fails loudly.
 
 The same source state queried twice therefore returns the same event identity.
 
@@ -106,6 +112,18 @@ Examples:
 - MaintenanceIssue -> explicit Unit snapshot;
 - Unit/Space/Unit-scoped Improvement Cost -> deterministic Unit.
 
+Those parent paths are durable business identity, not merely current
+application convention:
+
+- `Space.unitId` is immutable after Space creation;
+- `Tenancy.unitId` is immutable;
+- `LeaseAgreement.tenancyId` is immutable from creation, even while draft;
+- `LeaseAmendment.agreementId` is immutable from creation;
+- `DocumentLink` is append-once and cannot be retargeted/deleted.
+
+These database invariants prevent an already-projected event from migrating
+between Unit timelines without changing its own occurrence/source identity.
+
 Property-wide events are not copied into every Unit timeline.
 
 A source whose Unit can only be guessed from current mutable state is omitted
@@ -159,7 +177,10 @@ A timeline event contains:
 - small JSON details payload containing display-supporting canonical facts.
 
 The details payload is a read-model convenience, never authoritative business
-state.
+state. A historical event does not expose mutable current lifecycle state under
+a field name that could be mistaken for an event-time snapshot. Current state
+belongs in current-state projections; event details contain only facts whose
+display semantics remain valid for that historical event.
 
 ## Acceptance
 
@@ -179,7 +200,15 @@ Canonical #22 must prove at minimum:
 11. Cost exact amounts are returned as strings;
 12. category/date filtering does not change event identity;
 13. API requires `portfolio:read`;
-14. technical audit is not represented as Unit business history.
+14. technical audit is not represented as Unit business history;
+15. Space, LeaseAgreement and LeaseAmendment parent identity cannot be mutated
+    to move existing events between Unit timelines;
+16. every DocumentLink is append-once, so `document.linked` cannot be
+    retargeted or deleted;
+17. the runtime projection boundary rejects any `eventKey` not equal to
+    `eventType + ":" + sourceId`;
+18. historical details do not expose mutable current lifecycle status as an
+    event-time snapshot.
 
 ## Deferred
 
