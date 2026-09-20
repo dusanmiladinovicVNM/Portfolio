@@ -1,6 +1,7 @@
 import { DomainError } from '../shared/domain-error.js';
 import type {
   MeterId,
+  MeterReadingBoundaryId,
   MeterReadingId,
   SpaceId,
   TenancyId,
@@ -19,16 +20,13 @@ export const METER_UTILITY_TYPES = [
 
 export const METER_MEASUREMENT_UNITS = ['kwh', 'm3'] as const;
 export const METER_STATUSES = ['active', 'retired'] as const;
-export const METER_READING_CONTEXTS = [
-  'regular',
-  'move_in',
-  'move_out',
-] as const;
+export const METER_READING_BOUNDARY_TYPES = ['move_in', 'move_out'] as const;
 
 export type MeterUtilityType = (typeof METER_UTILITY_TYPES)[number];
 export type MeterMeasurementUnit = (typeof METER_MEASUREMENT_UNITS)[number];
 export type MeterStatus = (typeof METER_STATUSES)[number];
-export type MeterReadingContext = (typeof METER_READING_CONTEXTS)[number];
+export type MeterReadingBoundaryType =
+  (typeof METER_READING_BOUNDARY_TYPES)[number];
 
 export type MeterReadingValue = string & {
   readonly [meterReadingValueBrand]: 'MeterReadingValue';
@@ -58,12 +56,19 @@ export interface MeterReading {
   readonly id: MeterReadingId;
   readonly meterId: MeterId;
   readonly value: MeterReadingValue;
-  readonly context: MeterReadingContext;
-  readonly tenancyId: TenancyId | null;
   readonly readAt: string;
   readonly recordedAt: string;
   readonly recordedByUserId: UserId;
   readonly note: string | null;
+}
+
+export interface MeterReadingBoundary {
+  readonly id: MeterReadingBoundaryId;
+  readonly readingId: MeterReadingId;
+  readonly tenancyId: TenancyId;
+  readonly type: MeterReadingBoundaryType;
+  readonly recordedAt: string;
+  readonly recordedByUserId: UserId;
 }
 
 export interface MeterConsumptionInterval {
@@ -275,8 +280,6 @@ export function createMeterReading(input: {
   readonly id: MeterReadingId;
   readonly meter: Meter;
   readonly value: string;
-  readonly context: MeterReadingContext;
-  readonly tenancyId?: TenancyId | null;
   readonly readAt: string;
   readonly recordedAt: string;
   readonly recordedByUserId: UserId;
@@ -299,31 +302,40 @@ export function createMeterReading(input: {
     );
   }
 
-  const tenancyId = input.tenancyId ?? null;
-  if (input.context === 'regular' && tenancyId !== null) {
-    throw new DomainError(
-      'METER_READING_CONTEXT_INVALID',
-      'Regular Meter reading cannot carry a Tenancy boundary reference.',
-    );
-  }
-
-  if (input.context !== 'regular' && tenancyId === null) {
-    throw new DomainError(
-      'METER_READING_TENANCY_REQUIRED',
-      'Move-in and move-out readings require a Tenancy.',
-    );
-  }
-
   return {
     id: input.id,
     meterId: input.meter.id,
     value: asMeterReadingValue(input.value),
-    context: input.context,
-    tenancyId,
     readAt,
     recordedAt,
     recordedByUserId: input.recordedByUserId,
     note: optional(input.note),
+  };
+}
+
+export function createMeterReadingBoundary(input: {
+  readonly id: MeterReadingBoundaryId;
+  readonly reading: MeterReading;
+  readonly tenancyId: TenancyId;
+  readonly type: MeterReadingBoundaryType;
+  readonly recordedAt: string;
+  readonly recordedByUserId: UserId;
+}): MeterReadingBoundary {
+  const recordedAt = instant(input.recordedAt, 'recordedAt');
+  assertNotBefore(
+    recordedAt,
+    input.reading.recordedAt,
+    'recordedAt',
+    'MeterReading.recordedAt',
+  );
+
+  return {
+    id: input.id,
+    readingId: input.reading.id,
+    tenancyId: input.tenancyId,
+    type: input.type,
+    recordedAt,
+    recordedByUserId: input.recordedByUserId,
   };
 }
 
