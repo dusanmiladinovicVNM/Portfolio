@@ -53,6 +53,8 @@ export type MaintenanceIssueId = EntityId<'MaintenanceIssue'>;
 export type MaintenanceWorkOrderId = EntityId<'MaintenanceWorkOrder'>;
 export type AccessItemId = EntityId<'AccessItem'>;
 export type AccessItemTransactionId = EntityId<'AccessItemTransaction'>;
+export type MeterId = EntityId<'Meter'>;
+export type MeterReadingId = EntityId<'MeterReading'>;
 
 export const asUserId = (value: string): UserId => value as UserId;
 export const asPropertyId = (value: string): PropertyId => value as PropertyId;
@@ -103,3 +105,5 @@ export const asMaintenanceIssueId = (value: string): MaintenanceIssueId => value
 export const asMaintenanceWorkOrderId = (value: string): MaintenanceWorkOrderId => value as MaintenanceWorkOrderId;
 export const asAccessItemId = (value: string): AccessItemId => value as AccessItemId;
 export const asAccessItemTransactionId = (value: string): AccessItemTransactionId => value as AccessItemTransactionId;
+export const asMeterId = (value: string): MeterId => value as MeterId;
+export const asMeterReadingId = (value: string): MeterReadingId => value as MeterReadingId;
