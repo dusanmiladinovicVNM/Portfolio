@@ -127,6 +127,7 @@ import {
   PostgresPartyRepository,
   PostgresPortfolioRepository,
   PostgresTenancyRepository,
+  PostgresUnitTimelineRepository,
   PostgresUserAccessRepository,
 } from '../../src/index.js';
 
@@ -152,6 +153,7 @@ const inspectionRepository = new PostgresInspectionRepository(sql);
 const improvementRepository = new PostgresImprovementRepository(sql);
 const maintenanceRepository = new PostgresMaintenanceRepository(sql);
 const meterRepository = new PostgresMeterRepository(sql);
+const unitTimelineRepository = new PostgresUnitTimelineRepository(sql);
 
 class SequenceIds implements IdGenerator {
   private index = 0;
