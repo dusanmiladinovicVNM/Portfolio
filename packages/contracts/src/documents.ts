@@ -6,6 +6,7 @@ import {
   DOCUMENT_TARGET_TYPES,
   DOCUMENT_VERSION_STATUSES,
 } from '@portfolio/domain';
+import { instantSchema } from './api.js';
 import { entityIdSchema } from './portfolio.js';
 
 export const createDocumentRequestSchema = z.object({
@@ -40,7 +41,7 @@ export const documentVersionResponseSchema = z.object({
   byteSize: z.number().int().positive(),
   sha256: z.string().regex(/^[0-9a-f]{64}$/),
   status: z.enum(DOCUMENT_VERSION_STATUSES),
-  finalizedAt: z.string().nullable(),
+  finalizedAt: instantSchema.nullable(),
 });
 
 export const documentLinkResponseSchema = z.object({

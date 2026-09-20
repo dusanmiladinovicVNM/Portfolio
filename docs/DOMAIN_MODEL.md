@@ -268,6 +268,38 @@ PostgreSQL row-locks the AccessItem during transaction insertion; AccessItem lif
 
 Canonical #20 does not yet model AccessPoint/door topology, master-key hierarchy, credential secrets, electronic permission schedules, per-Person custody, lost-key billing or historical pre-registration import.
 
+## Meters + Utilities
+
+Canonical #21 models physical utility measurement truth, not provider billing.
+
+All canonical timestamp instants require an explicit `Z` or numeric UTC offset and are normalized to UTC ISO through the shared Instant parser. Offset-less local datetimes are invalid. Date-only business fields remain separate.
+
+```text
+Unit
+  └─ Meter
+       ├─ MeterReading[]
+       │    └─ MeterReadingBoundary[] -> Tenancy
+       └─ lifecycle: active -> retired
+```
+
+A Meter is one exact physical cumulative utility meter for one Unit and optional Space. Supported utility classifications are electricity, gas, water and heat; measurement is exact `kwh` or `m3` according to the utility/measurement pair. Code, serial, utility classification, Unit/Space placement, installation occurrence and original recording provenance are immutable. Label is correctable metadata through optimistic versioning.
+
+Meter placement is deliberately immutable in canonical #21. Historical readings must not be reinterpreted by a later mutable Unit/Space change. Physical relocation requires a future placement-history model rather than rewriting current identity.
+
+A Meter starts active at version 1 and may transition once to terminal retired. `retiredAt` is physical/business occurrence; `retirementRecordedAt` is recording provenance. Historical `retiredAt` may predate Meter registration, but `retirementRecordedAt >= Meter.recordedAt`. Retirement cannot be written before reading occurrences already present at that moment. Historical readings may still be backfilled after retirement when their `readAt` lies inside `[installedAt, retiredAt]`; no reading may occur after retirement.
+
+MeterReading is an append-only physical observation with exact decimal value, `readAt`, immutable recorder provenance and optional note. Historical `readAt` may predate Meter registration, but `MeterReading.recordedAt >= Meter.recordedAt` and `recordedAt >= readAt`. Domain/API use canonical decimal strings with at most 18 whole digits and six decimal places; PostgreSQL keeps exact numeric input until explicit scale/range checks reject invalid values.
+
+Move-in/out semantics are not columns on MeterReading. `MeterReadingBoundary` is a separate append-only relation from one physical reading to one Tenancy and boundary type `move_in|move_out`. This preserves the correct grain when the same physical observation has more than one business role.
+
+A boundary requires exact Meter/Tenancy Unit parity. The UTC calendar date of a move-in reading equals immutable `Tenancy.actualStart`; move-out equals immutable `Tenancy.actualEnd`. Canonical #21 therefore extends Tenancy parent hardening so `actualEnd` becomes immutable once established.
+
+Historical consumption basis is derived only between consecutive readings of the same exact Meter. Non-decreasing register values produce an exact decimal difference. A decrease is preserved as evidence with `continuity = decrease_detected` and null consumption; canonical #21 does not guess reset/rollover/replacement/correction semantics.
+
+Inspection form answers remain Inspection evidence. Creating a canonical MeterReading requires an explicit Meter application command; no InspectionResponse is silently promoted.
+
+Canonical #21 does not model utility accounts, providers, tariffs, billing, invoices, Property-level meters, meter movement history, replacement lineage, multi-register meters, reset/rollover semantics, reading correction lineage or cross-Meter consumption stitching.
+
 ### Cost
 
 Canonical #18 defines Cost as one append-only positive monetary allocation to exactly one typed business source. Cost is a financial fact/projection and never substitutes for the source entity's own state or lifecycle.

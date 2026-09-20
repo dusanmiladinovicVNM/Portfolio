@@ -1,4 +1,5 @@
 import { DomainError } from '../shared/domain-error.js';
+import { asInstant } from '../shared/instant.js';
 import type {
   DocumentId,
   DocumentLinkId,
@@ -137,13 +138,11 @@ function normalizedSha256(value: string): string {
 }
 
 function assertInstant(value: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}T/.test(value) || Number.isNaN(Date.parse(value))) {
-    throw new DomainError(
-      'DOCUMENT_INVALID_FINALIZED_AT',
-      'finalizedAt must be a valid ISO timestamp.',
-    );
-  }
-  return value;
+  return asInstant(
+    value,
+    'finalizedAt',
+    'DOCUMENT_INVALID_FINALIZED_AT',
+  );
 }
 
 export function createDocument(input: CreateDocumentInput): Document {

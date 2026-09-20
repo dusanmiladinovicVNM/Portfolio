@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import { COST_REPORTING_CLASSES, COST_SUPPORTED_CURRENCIES } from '@portfolio/domain';
+import { instantSchema } from './api.js';
 import { entityIdSchema } from './portfolio.js';
 
 const dateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-const timestampSchema = z.string().min(1);
 const moneySchema = z
   .string()
   .trim()
@@ -77,7 +77,7 @@ export const costResponseSchema = z.object({
   reportingClass: z.enum(COST_REPORTING_CLASSES),
   supplierPartyId: entityIdSchema.nullable(),
   invoiceReference: z.string().nullable(),
-  recordedAt: timestampSchema,
+  recordedAt: instantSchema,
   recordedByUserId: entityIdSchema,
 });
 
@@ -86,7 +86,7 @@ export const costReversalResponseSchema = z.object({
   costId: entityIdSchema,
   replacementCostId: entityIdSchema.nullable(),
   reason: z.string(),
-  recordedAt: timestampSchema,
+  recordedAt: instantSchema,
   recordedByUserId: entityIdSchema,
 });
 

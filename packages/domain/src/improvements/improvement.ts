@@ -1,5 +1,6 @@
 import { asDateOnly, type DateOnly } from '../shared/date-only.js';
 import { DomainError } from '../shared/domain-error.js';
+import { asInstant } from '../shared/instant.js';
 import type {
   AssetId,
   ImprovementProjectId,
@@ -144,13 +145,7 @@ function optional(value: string | null | undefined): string | null {
 }
 
 function instant(value: string, field: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}T/.test(value) || Number.isNaN(Date.parse(value))) {
-    throw new DomainError(
-      'IMPROVEMENT_INVALID_TIMESTAMP',
-      `${field} must be a valid ISO timestamp.`,
-    );
-  }
-  return value;
+  return asInstant(value, field, 'IMPROVEMENT_INVALID_TIMESTAMP');
 }
 
 function assertTimestampOrder(

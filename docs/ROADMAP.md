@@ -123,7 +123,7 @@ Cost is a financial projection/fact, not a substitute for its source business en
 - Inspection finding → Issue linkage
 - Asset/Service/Cost links
 
-### PR #20 — Keys + Access (IN PROGRESS)
+### PR #20 — Keys + Access (DONE)
 
 - keys
 - cards
@@ -132,7 +132,7 @@ Cost is a financial projection/fact, not a substitute for its source business en
 - Tenancy assignments
 - immutable access-item transactions
 
-### PR #21 — Meters + Utilities
+### PR #21 — Meters + Utilities (IN PROGRESS)
 
 - meter identity
 - Unit/Space placement

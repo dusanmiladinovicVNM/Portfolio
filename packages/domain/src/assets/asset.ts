@@ -1,4 +1,5 @@
 import { DomainError } from '../shared/domain-error.js';
+import { asInstant } from '../shared/instant.js';
 import type {
   AssetId,
   AssetIdentifierId,
@@ -317,6 +318,6 @@ export function createAssetReplacement(input: {
     replacedAssetId: input.replacedAsset.id,
     replacementAssetId: input.replacementAsset.id,
     replacedByUserId: input.replacedByUserId,
-    replacedAt: input.replacedAt,
+    replacedAt: asInstant(input.replacedAt, 'replacedAt', 'ASSET_INVALID_TIMESTAMP'),
   };
 }

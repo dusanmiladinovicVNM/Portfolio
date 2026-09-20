@@ -47,6 +47,7 @@ import { InMemoryImprovementRepository } from './improvement-test-deps.js';
 import { InMemoryCostRepository } from './cost-test-deps.js';
 import { InMemoryMaintenanceRepository } from './maintenance-test-deps.js';
 import { InMemoryAccessItemRepository } from './access-item-test-deps.js';
+import { InMemoryMeterRepository } from './meter-test-deps.js';
 
 const adminIdentity: VerifiedIdentity = {
   provider: 'supabase',
@@ -280,9 +281,11 @@ function buildHandler() {
   const partyRepository = new InMemoryPartyRepository();
   const tenancyRepository = new InMemoryTenancyRepository();
   const accessItemRepository = new InMemoryAccessItemRepository();
+  const meterRepository = new InMemoryMeterRepository();
 
   const handler = createPortfolioHttpHandler({
     accessItemRepository,
+    meterRepository,
     assetRepository: new InMemoryAssetRepository(),
     assetInventoryRepository: new InMemoryAssetInventoryRepository(),
     assetServiceRepository: new InMemoryAssetServiceRepository(),
@@ -313,6 +316,26 @@ function buildHandler() {
       '10000000-0000-4000-8000-000000000010',
       '10000000-0000-4000-8000-000000000011',
       '10000000-0000-4000-8000-000000000012',
+      '10000000-0000-4000-8000-000000000013',
+      '10000000-0000-4000-8000-000000000014',
+      '10000000-0000-4000-8000-000000000015',
+      '10000000-0000-4000-8000-000000000016',
+      '10000000-0000-4000-8000-000000000017',
+      '10000000-0000-4000-8000-000000000018',
+      '10000000-0000-4000-8000-000000000019',
+      '10000000-0000-4000-8000-000000000020',
+      '10000000-0000-4000-8000-000000000021',
+      '10000000-0000-4000-8000-000000000022',
+      '10000000-0000-4000-8000-000000000023',
+      '10000000-0000-4000-8000-000000000024',
+      '10000000-0000-4000-8000-000000000025',
+      '10000000-0000-4000-8000-000000000026',
+      '10000000-0000-4000-8000-000000000027',
+      '10000000-0000-4000-8000-000000000028',
+      '10000000-0000-4000-8000-000000000029',
+      '10000000-0000-4000-8000-000000000030',
+      '10000000-0000-4000-8000-000000000031',
+      '10000000-0000-4000-8000-000000000032',
     ]),
   });
 
@@ -322,6 +345,7 @@ function buildHandler() {
     partyRepository,
     tenancyRepository,
     accessItemRepository,
+    meterRepository,
   };
 }
 
@@ -369,6 +393,255 @@ async function seedUnitAndTenant(handler: ReturnType<typeof buildHandler>['handl
     adminIdentity,
   );
 }
+
+describe('Meter HTTP lifecycle and boundary readings', () => {
+  it('separates physical readings from Tenancy boundaries and preserves consumption history', async () => {
+    const { handler } = buildHandler();
+    await seedUnitAndTenant(handler);
+
+    const createdTenancy = await handler(
+      new Request(
+        'https://portfolio.test/units/10000000-0000-4000-8000-000000000002/tenancies',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            code: 'TEN-METER-1',
+            parties: [
+              {
+                partyId: '10000000-0000-4000-8000-000000000003',
+                role: 'tenant',
+                isPrimary: true,
+              },
+            ],
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(createdTenancy.status).toBe(201);
+    const tenancyId = (await createdTenancy.json()).data.id as string;
+
+    await handler(
+      new Request(`https://portfolio.test/tenancies/${tenancyId}/plan`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 1,
+          plannedStart: '2026-09-18',
+        }),
+      }),
+      adminIdentity,
+    );
+
+    await handler(
+      new Request(`https://portfolio.test/tenancies/${tenancyId}/activate`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 2,
+          actualStart: '2026-09-18',
+        }),
+      }),
+      adminIdentity,
+    );
+
+    await handler(
+      new Request(`https://portfolio.test/tenancies/${tenancyId}/end`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 3,
+          actualEnd: '2026-09-18',
+        }),
+      }),
+      adminIdentity,
+    );
+
+    const inspectorCreate = await handler(
+      new Request('https://portfolio.test/meters', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'MTR-INSPECTOR-DENIED',
+          serialNumber: 'SER-DENIED',
+          utilityType: 'electricity',
+          measurementUnit: 'kwh',
+          unitId: '10000000-0000-4000-8000-000000000002',
+          label: 'Denied',
+          installedAt: '2026-01-01T00:00:00.000Z',
+        }),
+      }),
+      inspectorIdentity,
+    );
+    expect(inspectorCreate.status).toBe(403);
+
+    const createdMeter = await handler(
+      new Request('https://portfolio.test/meters', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'MTR-HTTP-1',
+          serialNumber: 'SER-HTTP-1',
+          utilityType: 'electricity',
+          measurementUnit: 'kwh',
+          unitId: '10000000-0000-4000-8000-000000000002',
+          label: 'Apartment electricity',
+          installedAt: '2026-01-01T00:00:00.000Z',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(createdMeter.status).toBe(201);
+    const meterBody = await createdMeter.json();
+    const meterId = meterBody.data.id as string;
+    expect(meterBody).toMatchObject({
+      data: { status: 'active', version: 1, measurementUnit: 'kwh' },
+    });
+
+    const boundaryReading = await handler(
+      new Request(`https://portfolio.test/meters/${meterId}/readings`, {
+        method: 'POST',
+        body: JSON.stringify({
+          value: '100.25',
+          readAt: '2026-09-18T12:00:00.000Z',
+          note: 'Handover observation',
+        }),
+      }),
+      inspectorIdentity,
+    );
+    expect(boundaryReading.status).toBe(201);
+    const readingId = (await boundaryReading.json()).data.id as string;
+
+    const moveIn = await handler(
+      new Request(
+        `https://portfolio.test/meter-readings/${readingId}/boundaries`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ tenancyId, type: 'move_in' }),
+        },
+      ),
+      inspectorIdentity,
+    );
+    expect(moveIn.status).toBe(201);
+
+    const moveOut = await handler(
+      new Request(
+        `https://portfolio.test/meter-readings/${readingId}/boundaries`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ tenancyId, type: 'move_out' }),
+        },
+      ),
+      inspectorIdentity,
+    );
+    expect(moveOut.status).toBe(201);
+
+    const regular = await handler(
+      new Request(`https://portfolio.test/meters/${meterId}/readings`, {
+        method: 'POST',
+        body: JSON.stringify({
+          value: '110.375',
+          readAt: '2026-09-18T18:00:00.000Z',
+        }),
+      }),
+      inspectorIdentity,
+    );
+    expect(regular.status).toBe(201);
+
+    const detail = await handler(
+      new Request(`https://portfolio.test/meters/${meterId}`),
+      inspectorIdentity,
+    );
+    expect(detail.status).toBe(200);
+    expect(await detail.json()).toMatchObject({
+      data: {
+        meter: { id: meterId, status: 'active' },
+        readings: [
+          { id: readingId, value: '100.250000' },
+          { value: '110.375000' },
+        ],
+        boundaries: [
+          { readingId, tenancyId, type: 'move_in' },
+          { readingId, tenancyId, type: 'move_out' },
+        ],
+        consumptionIntervals: [
+          {
+            fromValue: '100.250000',
+            toValue: '110.375000',
+            consumption: '10.125000',
+            continuity: 'continuous',
+          },
+        ],
+      },
+    });
+
+    const retired = await handler(
+      new Request(`https://portfolio.test/meters/${meterId}/retire`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 1,
+          retiredAt: '2026-09-18T19:00:00.000Z',
+          retirementReason: 'Meter replaced',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(retired.status).toBe(200);
+    expect(await retired.json()).toMatchObject({
+      data: {
+        status: 'retired',
+        version: 2,
+        retiredAt: '2026-09-18T19:00:00.000Z',
+        retirementRecordedAt: '2026-09-18T20:00:00.000Z',
+      },
+    });
+
+    const backfill = await handler(
+      new Request(`https://portfolio.test/meters/${meterId}/readings`, {
+        method: 'POST',
+        body: JSON.stringify({
+          value: '111',
+          readAt: '2026-09-18T18:30:00.000Z',
+          note: 'Late-entered historical observation',
+        }),
+      }),
+      inspectorIdentity,
+    );
+    expect(backfill.status).toBe(201);
+
+    const afterRetirement = await handler(
+      new Request(`https://portfolio.test/meters/${meterId}/readings`, {
+        method: 'POST',
+        body: JSON.stringify({
+          value: '112',
+          readAt: '2026-09-18T19:00:01.000Z',
+        }),
+      }),
+      inspectorIdentity,
+    );
+    expect(afterRetirement.status).toBe(422);
+    expect(await afterRetirement.json()).toMatchObject({
+      error: { code: 'METER_READING_AFTER_RETIREMENT' },
+    });
+
+    const tenancyBoundaries = await handler(
+      new Request(
+        `https://portfolio.test/tenancies/${tenancyId}/meter-reading-boundaries`,
+      ),
+      inspectorIdentity,
+    );
+    expect(tenancyBoundaries.status).toBe(200);
+    expect(await tenancyBoundaries.json()).toMatchObject({
+      data: {
+        entries: [
+          {
+            boundary: { type: 'move_in', readingId },
+            reading: { id: readingId, value: '100.250000' },
+          },
+          {
+            boundary: { type: 'move_out', readingId },
+            reading: { id: readingId, value: '100.250000' },
+          },
+        ],
+      },
+    });
+  });
+});
 
 describe('AccessItem HTTP custody lifecycle', () => {
   it('runs create -> issue -> loss -> return -> reissue with Tenancy-grained custody', async () => {

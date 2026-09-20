@@ -10,6 +10,7 @@ import {
   INSPECTION_TYPES,
   type InspectionCondition,
 } from '@portfolio/domain';
+import { instantSchema } from './api.js';
 import { entityIdSchema } from './portfolio.js';
 
 const dateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -119,10 +120,10 @@ export const inspectionResponseSchema = z.object({
   createdByUserId: entityIdSchema,
   scheduledFor: dateOnlySchema.nullable(),
   status: z.enum(INSPECTION_STATUSES),
-  startedAt: z.string().nullable(),
-  lockedAt: z.string().nullable(),
-  finalizedAt: z.string().nullable(),
-  cancelledAt: z.string().nullable(),
+  startedAt: instantSchema.nullable(),
+  lockedAt: instantSchema.nullable(),
+  finalizedAt: instantSchema.nullable(),
+  cancelledAt: instantSchema.nullable(),
   version: z.number().int().positive(),
   contentRevision: z.number().int().nonnegative(),
 });
@@ -168,7 +169,7 @@ export const inspectionItemResponseSchema = z.object({
   value: z.union([z.string(), z.boolean(), z.array(z.string())]),
   comment: z.string().nullable(),
   updatedByUserId: entityIdSchema,
-  updatedAt: z.string(),
+  updatedAt: instantSchema,
 });
 
 export const inspectionFindingResponseSchema = z.object({
@@ -180,7 +181,7 @@ export const inspectionFindingResponseSchema = z.object({
   title: z.string(),
   description: z.string().nullable(),
   createdByUserId: entityIdSchema,
-  createdAt: z.string(),
+  createdAt: instantSchema,
 });
 
 export const inspectionSectionStateResponseSchema = z.object({
@@ -236,7 +237,7 @@ export const inspectionEvidenceResponseSchema = z.object({
   kind: z.enum(INSPECTION_EVIDENCE_KINDS),
   caption: z.string().nullable(),
   createdByUserId: entityIdSchema,
-  createdAt: z.string(),
+  createdAt: instantSchema,
 });
 
 export const inspectionSignatureResponseSchema = z.object({
@@ -247,8 +248,8 @@ export const inspectionSignatureResponseSchema = z.object({
   signerName: z.string(),
   signatureDocumentVersionId: entityIdSchema,
   signedByUserId: entityIdSchema,
-  signedAt: z.string(),
-  invalidatedAt: z.string().nullable(),
+  signedAt: instantSchema,
+  invalidatedAt: instantSchema.nullable(),
   invalidationReason: z.string().nullable(),
 });
 
@@ -259,7 +260,7 @@ export const inspectionFinalSnapshotResponseSchema = z.object({
   inspectionVersion: z.number().int().positive(),
   contentRevision: z.number().int().nonnegative(),
   createdByUserId: entityIdSchema,
-  createdAt: z.string(),
+  createdAt: instantSchema,
 });
 
 export type InspectionEvidenceResponse = z.infer<

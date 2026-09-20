@@ -56,3 +56,7 @@ export * from './maintenance/maintenance-queries.js';
 export * from './access/access-item-repository.js';
 export * from './access/access-item-commands.js';
 export * from './access/access-item-queries.js';
+
+export * from './meters/meter-repository.js';
+export * from './meters/meter-commands.js';
+export * from './meters/meter-queries.js';

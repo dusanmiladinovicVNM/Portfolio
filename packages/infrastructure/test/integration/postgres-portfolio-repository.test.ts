@@ -10,6 +10,11 @@ import {
   retireAccessItemCommand,
   returnAccessItemCommand,
   updateAccessItemLabelCommand,
+  createMeterCommand,
+  linkMeterReadingBoundaryCommand,
+  recordMeterReadingCommand,
+  retireMeterCommand,
+  updateMeterLabelCommand,
   changeAssetStatusCommand,
   changeImprovementProjectStatusCommand,
   changeWorkItemStatusCommand,
@@ -117,6 +122,7 @@ import {
   PostgresInspectionRepository,
   PostgresLeaseRepository,
   PostgresMaintenanceRepository,
+  PostgresMeterRepository,
   PostgresOwnershipRepository,
   PostgresPartyRepository,
   PostgresPortfolioRepository,
@@ -145,6 +151,7 @@ const costRepository = new PostgresCostRepository(sql);
 const inspectionRepository = new PostgresInspectionRepository(sql);
 const improvementRepository = new PostgresImprovementRepository(sql);
 const maintenanceRepository = new PostgresMaintenanceRepository(sql);
+const meterRepository = new PostgresMeterRepository(sql);
 
 class SequenceIds implements IdGenerator {
   private index = 0;
@@ -162,6 +169,9 @@ class SequenceIds implements IdGenerator {
 async function resetAndMigrate(): Promise<void> {
   await sql.unsafe(
     `drop table if exists
+      public.meter_reading_boundaries,
+      public.meter_readings,
+      public.meters,
       public.access_item_transactions,
       public.access_items,
       public.cost_reversals,
@@ -268,6 +278,9 @@ beforeAll(async () => {
 afterAll(async () => {
   await sql.unsafe(
     `drop table if exists
+      public.meter_reading_boundaries,
+      public.meter_readings,
+      public.meters,
       public.access_item_transactions,
       public.access_items,
       public.cost_reversals,
@@ -8606,6 +8619,734 @@ describe('PostgreSQL infrastructure', () => {
     ).rejects.toMatchObject({
       code: 'ACCESS_ITEM_TENANCY_NOT_ELIGIBLE',
     });
+  });
+
+
+  it('persists Meter measurement truth and rejects lifecycle, boundary and concurrency bypasses', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+
+    const ids = new SequenceIds([
+      'c9000000-0000-4000-8000-000000000001',
+      'c9000000-0000-4000-8000-000000000002',
+      'c9000000-0000-4000-8000-000000000003',
+      'c9000000-0000-4000-8000-000000000004',
+      'c9000000-0000-4000-8000-000000000005',
+      'c9000000-0000-4000-8000-000000000006',
+      'c9000000-0000-4000-8000-000000000007',
+      'c9000000-0000-4000-8000-000000000008',
+      'c9000000-0000-4000-8000-000000000009',
+      'c9000000-0000-4000-8000-000000000010',
+      'c9000000-0000-4000-8000-000000000011',
+      'c9000000-0000-4000-8000-000000000012',
+      'c9000000-0000-4000-8000-000000000013',
+      'c9000000-0000-4000-8000-000000000014',
+      'c9000000-0000-4000-8000-000000000015',
+      'c9000000-0000-4000-8000-000000000016',
+      'c9000000-0000-4000-8000-000000000017',
+      'c9000000-0000-4000-8000-000000000018',
+      'c9000000-0000-4000-8000-000000000019',
+      'c9000000-0000-4000-8000-000000000020',
+      'c9000000-0000-4000-8000-000000000021',
+      'c9000000-0000-4000-8000-000000000022',
+      'c9000000-0000-4000-8000-000000000023',
+      'c9000000-0000-4000-8000-000000000024',
+    ]);
+
+    const property = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-METER-INT',
+        name: 'Meter Integration Property',
+        propertyType: 'apartment_building',
+        street: 'Meter Street',
+        houseNumber: '21',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+
+    const unitA = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-METER-A',
+        unitNumber: 'M-A',
+        unitType: 'apartment',
+      },
+    );
+
+    const unitB = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-METER-B',
+        unitNumber: 'M-B',
+        unitType: 'apartment',
+      },
+    );
+
+    const party = await createPartyCommand(
+      { partyRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PTY-METER',
+        partyType: 'person',
+        firstName: 'Meter',
+        lastName: 'Tenant',
+      },
+    );
+
+    const tenancy = await createTenancyCommand(
+      {
+        tenancyRepository,
+        portfolioRepository,
+        partyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        unitId: unitA.id,
+        code: 'TEN-METER-A',
+        parties: [
+          { partyId: party.id, role: 'tenant', isPrimary: true },
+        ],
+      },
+    );
+    const planned = await planTenancyCommand(
+      { tenancyRepository },
+      actor,
+      tenancy.id,
+      tenancy.version,
+      '2026-09-20',
+    );
+    const active = await activateTenancyCommand(
+      { tenancyRepository },
+      actor,
+      planned.id,
+      planned.version,
+      '2026-09-20',
+    );
+    const ended = await endTenancyCommand(
+      { tenancyRepository },
+      actor,
+      active.id,
+      active.version,
+      '2026-09-20',
+    );
+
+    await expect(
+      sql`
+        insert into public.meters (
+          id, code, serial_number, utility_type, measurement_unit,
+          unit_id, label, installed_at, status,
+          retired_at, retirement_recorded_at, retired_by_user_id,
+          retirement_reason, version, recorded_at, recorded_by_user_id
+        ) values (
+          'cf000000-0000-4000-8000-000000000001',
+          'MTR-ILLEGAL-RETIRED',
+          'SER-ILLEGAL-RETIRED',
+          'electricity',
+          'kwh',
+          ${unitA.id},
+          'Illegal retired Meter',
+          '2026-01-01T00:00:00.000Z',
+          'retired',
+          '2026-09-20T10:00:00.000Z',
+          '2026-09-20T11:00:00.000Z',
+          ${actor.userId},
+          'Must transition from active',
+          1,
+          '2026-09-20T09:00:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'meter_initial_state',
+    });
+
+    await expect(
+      sql`
+        insert into public.meters (
+          id, code, serial_number, utility_type, measurement_unit,
+          unit_id, label, installed_at, status, version,
+          recorded_at, recorded_by_user_id
+        ) values (
+          'cf000000-0000-4000-8000-000000000002',
+          'MTR-ILLEGAL-VERSION',
+          'SER-ILLEGAL-VERSION',
+          'electricity',
+          'kwh',
+          ${unitA.id},
+          'Illegal version Meter',
+          '2026-01-01T00:00:00.000Z',
+          'active',
+          2,
+          '2026-09-20T09:00:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'meter_initial_state',
+    });
+
+    const meterDeps = {
+      meterRepository,
+      portfolioRepository,
+      tenancyRepository,
+      idGenerator: ids,
+      clock: { now: () => '2026-09-20T13:00:00.000Z' },
+    };
+
+    const meter = await createMeterCommand(
+      meterDeps,
+      actor,
+      {
+        code: 'MTR-INT-A',
+        serialNumber: 'SER-INT-A',
+        utilityType: 'electricity',
+        measurementUnit: 'kwh',
+        unitId: unitA.id,
+        label: 'Unit A electricity',
+        installedAt: '2026-01-01T00:00:00.000Z',
+      },
+    );
+
+    await expect(
+      sql`
+        insert into public.meter_readings (
+          id, meter_id, value, read_at, recorded_at,
+          recorded_by_user_id
+        ) values (
+          'cf500000-0000-4000-8000-000000000001',
+          ${meter.id},
+          1,
+          '2026-02-01T08:00:00.000Z',
+          '2026-02-01T08:05:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'meter_reading_recorded_before_meter_registration',
+    });
+
+    await sql`
+      insert into public.meters (
+        id, code, serial_number, utility_type, measurement_unit,
+        unit_id, label, installed_at, status, version,
+        recorded_at, recorded_by_user_id
+      ) values (
+        'cf500000-0000-4000-8000-000000000002',
+        'MTR-HIST-RETIRE',
+        'SER-HIST-RETIRE',
+        'water',
+        'm3',
+        ${unitA.id},
+        'Historical retirement provenance meter',
+        '2026-01-01T00:00:00.000Z',
+        'active',
+        1,
+        '2026-09-20T13:00:00.000Z',
+        ${actor.userId}
+      )
+    `;
+
+    await expect(
+      sql`
+        update public.meters
+        set status = 'retired',
+            retired_at = '2026-02-01T08:00:00.000Z',
+            retirement_recorded_at = '2026-03-01T08:00:00.000Z',
+            retired_by_user_id = ${actor.userId},
+            retirement_reason = 'Historical retirement',
+            version = version + 1
+        where id = 'cf500000-0000-4000-8000-000000000002'
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'meters_retirement_recorded_after_registration',
+    });
+
+    await sql`
+      update public.meters
+      set status = 'retired',
+          retired_at = '2026-02-01T08:00:00.000Z',
+          retirement_recorded_at = '2026-09-20T13:00:00.000Z',
+          retired_by_user_id = ${actor.userId},
+          retirement_reason = 'Historical retirement backfilled after registration',
+          version = version + 1
+      where id = 'cf500000-0000-4000-8000-000000000002'
+    `;
+
+    const corrected = await updateMeterLabelCommand(
+      { meterRepository },
+      actor,
+      meter.id,
+      meter.version,
+      'Unit A main electricity register',
+    );
+    expect(corrected).toMatchObject({
+      version: 2,
+      label: 'Unit A main electricity register',
+    });
+
+    const preStartReading = await recordMeterReadingCommand(
+      meterDeps,
+      actor,
+      meter.id,
+      {
+        value: '90',
+        readAt: '2026-09-19T23:59:59.000Z',
+      },
+    );
+
+    await expect(
+      sql`
+        insert into public.meter_reading_boundaries (
+          id, reading_id, tenancy_id, boundary_type,
+          recorded_at, recorded_by_user_id
+        ) values (
+          'cf100000-0000-4000-8000-000000000001',
+          ${preStartReading.id},
+          ${ended.id},
+          'move_in',
+          '2026-09-20T13:00:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'meter_boundary_move_in_date_mismatch',
+    });
+
+    const boundaryReading = await recordMeterReadingCommand(
+      meterDeps,
+      actor,
+      meter.id,
+      {
+        value: '100.25',
+        readAt: '2026-09-20T10:00:00.000Z',
+        note: 'Tenancy boundary observation',
+      },
+    );
+
+    const moveIn = await linkMeterReadingBoundaryCommand(
+      meterDeps,
+      actor,
+      boundaryReading.id,
+      {
+        tenancyId: ended.id,
+        type: 'move_in',
+      },
+    );
+    const moveOut = await linkMeterReadingBoundaryCommand(
+      meterDeps,
+      actor,
+      boundaryReading.id,
+      {
+        tenancyId: ended.id,
+        type: 'move_out',
+      },
+    );
+    expect(moveIn.readingId).toBe(boundaryReading.id);
+    expect(moveOut.readingId).toBe(boundaryReading.id);
+
+    const secondReading = await recordMeterReadingCommand(
+      meterDeps,
+      actor,
+      meter.id,
+      {
+        value: '110.375',
+        readAt: '2026-09-20T11:00:00.000Z',
+      },
+    );
+
+    await expect(
+      sql`
+        insert into public.meter_reading_boundaries (
+          id, reading_id, tenancy_id, boundary_type,
+          recorded_at, recorded_by_user_id
+        ) values (
+          'cf100000-0000-4000-8000-000000000002',
+          ${secondReading.id},
+          ${ended.id},
+          'move_in',
+          '2026-09-20T13:00:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'meter_boundary_already_exists',
+    });
+
+    await expect(
+      sql`
+        insert into public.meter_readings (
+          id, meter_id, value, read_at, recorded_at,
+          recorded_by_user_id
+        ) values (
+          'cf200000-0000-4000-8000-000000000001',
+          ${meter.id},
+          1.1234567,
+          '2026-09-20T11:30:00.000Z',
+          '2026-09-20T13:00:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'meter_readings_value_scale_valid',
+    });
+
+    await expect(
+      sql`
+        update public.meter_readings
+        set note = 'rewrite historical observation'
+        where id = ${boundaryReading.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'meter_reading_immutable',
+    });
+
+    await expect(
+      sql`
+        update public.tenancies
+        set actual_end = '2026-09-21',
+            version = version + 1,
+            updated_at = now()
+        where id = ${ended.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'tenancy_actual_end_immutable',
+    });
+
+    await expect(
+      sql`
+        update public.meters
+        set status = 'retired',
+            retired_at = '2026-09-20T10:30:00.000Z',
+            retirement_recorded_at = '2026-09-20T13:00:00.000Z',
+            retired_by_user_id = ${actor.userId},
+            retirement_reason = 'Backdated retirement',
+            version = version + 1
+        where id = ${meter.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'meter_retirement_before_reading',
+    });
+
+    const retired = await retireMeterCommand(
+      {
+        meterRepository,
+        clock: { now: () => '2026-09-20T13:00:00.000Z' },
+      },
+      actor,
+      meter.id,
+      {
+        expectedVersion: corrected.version,
+        retiredAt: '2026-09-20T12:00:00.000Z',
+        retirementReason: 'Meter replaced',
+      },
+    );
+    expect(retired).toMatchObject({
+      status: 'retired',
+      version: 3,
+      retirementRecordedAt: '2026-09-20T13:00:00.000Z',
+    });
+
+    const backfill = await recordMeterReadingCommand(
+      meterDeps,
+      actor,
+      meter.id,
+      {
+        value: '111',
+        readAt: '2026-09-20T11:30:00.000Z',
+        note: 'Late historical backfill',
+      },
+    );
+    expect(backfill.value).toBe('111.000000');
+
+    await expect(
+      recordMeterReadingCommand(
+        meterDeps,
+        actor,
+        meter.id,
+        {
+          value: '112',
+          readAt: '2026-09-20T12:00:01.000Z',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'METER_READING_AFTER_RETIREMENT',
+    });
+
+    await expect(
+      sql`
+        update public.meters
+        set unit_id = ${unitB.id},
+            version = version + 1
+        where id = ${meter.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'meter_identity_immutable',
+    });
+
+    const tenancyB = await createTenancyCommand(
+      {
+        tenancyRepository,
+        portfolioRepository,
+        partyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        unitId: unitB.id,
+        code: 'TEN-METER-B',
+        parties: [{ partyId: party.id, role: 'tenant', isPrimary: true }],
+      },
+    );
+    const plannedB = await planTenancyCommand(
+      { tenancyRepository },
+      actor,
+      tenancyB.id,
+      tenancyB.version,
+      '2026-09-20',
+    );
+    const activeB = await activateTenancyCommand(
+      { tenancyRepository },
+      actor,
+      plannedB.id,
+      plannedB.version,
+      '2026-09-20',
+    );
+
+    await expect(
+      sql`
+        insert into public.meter_reading_boundaries (
+          id, reading_id, tenancy_id, boundary_type,
+          recorded_at, recorded_by_user_id
+        ) values (
+          'cf100000-0000-4000-8000-000000000003',
+          ${boundaryReading.id},
+          ${activeB.id},
+          'move_in',
+          '2026-09-20T13:00:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'meter_boundary_tenancy_unit_mismatch',
+    });
+
+    const retireRaceMeter = await createMeterCommand(
+      meterDeps,
+      actor,
+      {
+        code: 'MTR-RETIRE-RACE',
+        serialNumber: 'SER-RETIRE-RACE',
+        utilityType: 'water',
+        measurementUnit: 'm3',
+        unitId: unitA.id,
+        label: 'Retire race meter',
+        installedAt: '2026-01-01T00:00:00.000Z',
+      },
+    );
+
+    const retireBlocker = postgres(connectionString, { max: 1 });
+    const readingContender = postgres(connectionString, { max: 1 });
+    let releaseRetirement!: () => void;
+    const holdRetirement = new Promise<void>((resolve) => {
+      releaseRetirement = resolve;
+    });
+    let retirementUpdatedResolve!: () => void;
+    const retirementUpdated = new Promise<void>((resolve) => {
+      retirementUpdatedResolve = resolve;
+    });
+
+    try {
+      const retirementWrite = retireBlocker.begin(async (tx) => {
+        await tx`
+          update public.meters
+          set status = 'retired',
+              retired_at = '2026-09-20T14:00:00.000Z',
+              retirement_recorded_at = '2026-09-20T14:05:00.000Z',
+              retired_by_user_id = ${actor.userId},
+              retirement_reason = 'Concurrent retirement',
+              version = version + 1
+          where id = ${retireRaceMeter.id}
+        `;
+        retirementUpdatedResolve();
+        await holdRetirement;
+      });
+
+      await retirementUpdated;
+
+      await expect(
+        readingContender.begin(async (tx) => {
+          await tx.unsafe("set local lock_timeout = '250ms'");
+          await tx`
+            insert into public.meter_readings (
+              id, meter_id, value, read_at, recorded_at, recorded_by_user_id
+            ) values (
+              'cf300000-0000-4000-8000-000000000001',
+              ${retireRaceMeter.id},
+              1,
+              '2026-09-20T14:00:01.000Z',
+              '2026-09-20T14:06:00.000Z',
+              ${actor.userId}
+            )
+          `;
+        }),
+      ).rejects.toMatchObject({ code: '55P03' });
+
+      releaseRetirement();
+      await retirementWrite;
+
+      await expect(
+        readingContender`
+          insert into public.meter_readings (
+            id, meter_id, value, read_at, recorded_at, recorded_by_user_id
+          ) values (
+            'cf300000-0000-4000-8000-000000000001',
+            ${retireRaceMeter.id},
+            1,
+            '2026-09-20T14:00:01.000Z',
+            '2026-09-20T14:06:00.000Z',
+            ${actor.userId}
+          )
+        `,
+      ).rejects.toMatchObject({
+        code: '23514',
+        constraint_name: 'meter_reading_after_retirement',
+      });
+    } finally {
+      releaseRetirement();
+      await Promise.all([retireBlocker.end(), readingContender.end()]);
+    }
+
+    const boundaryRaceMeter = await createMeterCommand(
+      meterDeps,
+      actor,
+      {
+        code: 'MTR-BOUNDARY-RACE',
+        serialNumber: 'SER-BOUNDARY-RACE',
+        utilityType: 'gas',
+        measurementUnit: 'm3',
+        unitId: unitA.id,
+        label: 'Boundary race meter',
+        installedAt: '2026-01-01T00:00:00.000Z',
+      },
+    );
+    const boundaryRaceReadingA = await recordMeterReadingCommand(
+      meterDeps,
+      actor,
+      boundaryRaceMeter.id,
+      {
+        value: '10',
+        readAt: '2026-09-20T08:00:00.000Z',
+      },
+    );
+    const boundaryRaceReadingB = await recordMeterReadingCommand(
+      meterDeps,
+      actor,
+      boundaryRaceMeter.id,
+      {
+        value: '11',
+        readAt: '2026-09-20T09:00:00.000Z',
+      },
+    );
+
+    const boundaryBlocker = postgres(connectionString, { max: 1 });
+    const boundaryContender = postgres(connectionString, { max: 1 });
+    let releaseBoundary!: () => void;
+    const holdBoundary = new Promise<void>((resolve) => {
+      releaseBoundary = resolve;
+    });
+    let boundaryInsertedResolve!: () => void;
+    const boundaryInserted = new Promise<void>((resolve) => {
+      boundaryInsertedResolve = resolve;
+    });
+
+    try {
+      const firstBoundary = boundaryBlocker.begin(async (tx) => {
+        await tx`
+          insert into public.meter_reading_boundaries (
+            id, reading_id, tenancy_id, boundary_type,
+            recorded_at, recorded_by_user_id
+          ) values (
+            'cf400000-0000-4000-8000-000000000001',
+            ${boundaryRaceReadingA.id},
+            ${ended.id},
+            'move_in',
+            '2026-09-20T13:00:00.000Z',
+            ${actor.userId}
+          )
+        `;
+        boundaryInsertedResolve();
+        await holdBoundary;
+      });
+
+      await boundaryInserted;
+
+      await expect(
+        boundaryContender.begin(async (tx) => {
+          await tx.unsafe("set local lock_timeout = '250ms'");
+          await tx`
+            insert into public.meter_reading_boundaries (
+              id, reading_id, tenancy_id, boundary_type,
+              recorded_at, recorded_by_user_id
+            ) values (
+              'cf400000-0000-4000-8000-000000000002',
+              ${boundaryRaceReadingB.id},
+              ${ended.id},
+              'move_in',
+              '2026-09-20T13:00:00.000Z',
+              ${actor.userId}
+            )
+          `;
+        }),
+      ).rejects.toMatchObject({ code: '55P03' });
+
+      releaseBoundary();
+      await firstBoundary;
+
+      await expect(
+        boundaryContender`
+          insert into public.meter_reading_boundaries (
+            id, reading_id, tenancy_id, boundary_type,
+            recorded_at, recorded_by_user_id
+          ) values (
+            'cf400000-0000-4000-8000-000000000002',
+            ${boundaryRaceReadingB.id},
+            ${ended.id},
+            'move_in',
+            '2026-09-20T13:00:00.000Z',
+            ${actor.userId}
+          )
+        `,
+      ).rejects.toMatchObject({
+        code: '23514',
+        constraint_name: 'meter_boundary_already_exists',
+      });
+    } finally {
+      releaseBoundary();
+      await Promise.all([boundaryBlocker.end(), boundaryContender.end()]);
+    }
   });
 
 

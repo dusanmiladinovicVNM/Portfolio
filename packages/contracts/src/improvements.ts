@@ -5,10 +5,10 @@ import {
   WORK_ITEM_STATUSES,
   WORK_MATERIAL_UNITS,
 } from '@portfolio/domain';
+import { instantSchema } from './api.js';
 import { entityIdSchema } from './portfolio.js';
 
 const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-const timestampSchema = z.string().min(1);
 const quantitySchema = z
   .string()
   .trim()
@@ -71,7 +71,7 @@ export const projectAssetRequestSchema = z.object({
 });
 
 export const recordWorkRequestSchema = z.object({
-  performedAt: timestampSchema,
+  performedAt: instantSchema,
   contractorPartyId: entityIdSchema.nullable().optional(),
   description: z.string().trim().min(1),
   reference: z.string().trim().min(1).nullable().optional(),
@@ -90,12 +90,12 @@ export const improvementProjectResponseSchema = z.object({
   plannedStartOn: isoDateSchema.nullable(),
   plannedEndOn: isoDateSchema.nullable(),
   status: z.enum(IMPROVEMENT_PROJECT_STATUSES),
-  plannedAt: timestampSchema.nullable(),
-  startedAt: timestampSchema.nullable(),
-  completedAt: timestampSchema.nullable(),
-  cancelledAt: timestampSchema.nullable(),
+  plannedAt: instantSchema.nullable(),
+  startedAt: instantSchema.nullable(),
+  completedAt: instantSchema.nullable(),
+  cancelledAt: instantSchema.nullable(),
   version: z.number().int().positive(),
-  createdAt: timestampSchema,
+  createdAt: instantSchema,
   createdByUserId: entityIdSchema,
 });
 
@@ -106,11 +106,11 @@ export const workItemResponseSchema = z.object({
   title: z.string(),
   description: z.string().nullable(),
   status: z.enum(WORK_ITEM_STATUSES),
-  startedAt: timestampSchema.nullable(),
-  completedAt: timestampSchema.nullable(),
-  cancelledAt: timestampSchema.nullable(),
+  startedAt: instantSchema.nullable(),
+  completedAt: instantSchema.nullable(),
+  cancelledAt: instantSchema.nullable(),
   version: z.number().int().positive(),
-  createdAt: timestampSchema,
+  createdAt: instantSchema,
   createdByUserId: entityIdSchema,
 });
 
@@ -137,12 +137,12 @@ export const workRecordResponseSchema = z.object({
   projectId: entityIdSchema,
   workItemId: entityIdSchema,
   contractorPartyId: entityIdSchema.nullable(),
-  performedAt: timestampSchema,
+  performedAt: instantSchema,
   description: z.string(),
   reference: z.string().nullable(),
   materials: z.array(workMaterialResponseSchema),
   assets: z.array(projectAssetResponseSchema),
-  recordedAt: timestampSchema,
+  recordedAt: instantSchema,
   recordedByUserId: entityIdSchema,
 });
 

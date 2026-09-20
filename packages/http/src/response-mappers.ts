@@ -29,6 +29,9 @@ import type {
   LeaseAmendmentResponse,
   MaintenanceIssueResponse,
   MaintenanceWorkOrderResponse,
+  MeterReadingBoundaryResponse,
+  MeterReadingResponse,
+  MeterResponse,
   OwnershipPeriodResponse,
   PartyResponse,
   PropertyResponse,
@@ -68,6 +71,9 @@ import type {
   LeaseAmendment,
   MaintenanceIssue,
   MaintenanceWorkOrder,
+  Meter,
+  MeterReading,
+  MeterReadingBoundary,
   OwnershipPeriod,
   Party,
   Property,
@@ -776,5 +782,55 @@ export function toAccessItemTransactionResponse(
     recordedAt: transaction.recordedAt,
     recordedByUserId: transaction.recordedByUserId,
     note: transaction.note,
+  };
+}
+
+
+export function toMeterResponse(meter: Meter): MeterResponse {
+  return {
+    id: meter.id,
+    code: meter.code,
+    serialNumber: meter.serialNumber,
+    utilityType: meter.utilityType,
+    measurementUnit: meter.measurementUnit,
+    unitId: meter.unitId,
+    spaceId: meter.spaceId,
+    label: meter.label,
+    installedAt: meter.installedAt,
+    status: meter.status,
+    retiredAt: meter.retiredAt,
+    retirementRecordedAt: meter.retirementRecordedAt,
+    retiredByUserId: meter.retiredByUserId,
+    retirementReason: meter.retirementReason,
+    version: meter.version,
+    recordedAt: meter.recordedAt,
+    recordedByUserId: meter.recordedByUserId,
+  };
+}
+
+export function toMeterReadingResponse(
+  reading: MeterReading,
+): MeterReadingResponse {
+  return {
+    id: reading.id,
+    meterId: reading.meterId,
+    value: reading.value,
+    readAt: reading.readAt,
+    recordedAt: reading.recordedAt,
+    recordedByUserId: reading.recordedByUserId,
+    note: reading.note,
+  };
+}
+
+export function toMeterReadingBoundaryResponse(
+  boundary: MeterReadingBoundary,
+): MeterReadingBoundaryResponse {
+  return {
+    id: boundary.id,
+    readingId: boundary.readingId,
+    tenancyId: boundary.tenancyId,
+    type: boundary.type,
+    recordedAt: boundary.recordedAt,
+    recordedByUserId: boundary.recordedByUserId,
   };
 }

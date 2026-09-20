@@ -7,6 +7,7 @@ import {
   TENANCY_ASSET_PHASES,
   TENANCY_ASSET_PRESENCE,
 } from '@portfolio/domain';
+import { instantSchema } from './api.js';
 import { entityIdSchema } from './portfolio.js';
 
 const mutableAssetStatusSchema = z.enum(['active', 'inactive', 'retired']);
@@ -107,7 +108,7 @@ export const assetReplacementResponseSchema = z.object({
   replacedAssetId: entityIdSchema,
   replacementAssetId: entityIdSchema,
   replacedByUserId: entityIdSchema,
-  replacedAt: z.string(),
+  replacedAt: instantSchema,
 });
 
 export const assetLocationHistoryResponseSchema = z.object({
@@ -116,8 +117,8 @@ export const assetLocationHistoryResponseSchema = z.object({
   propertyId: entityIdSchema,
   unitId: entityIdSchema.nullable(),
   spaceId: entityIdSchema.nullable(),
-  validFrom: z.string(),
-  validTo: z.string().nullable(),
+  validFrom: instantSchema,
+  validTo: instantSchema.nullable(),
   changeType: z.enum(ASSET_LOCATION_CHANGE_TYPES),
   changedByUserId: entityIdSchema.nullable(),
   reason: z.string().nullable(),
@@ -127,7 +128,7 @@ export const assetConditionAssessmentResponseSchema = z.object({
   id: entityIdSchema,
   assetId: entityIdSchema,
   condition: z.enum(ASSET_CONDITIONS),
-  assessedAt: z.string(),
+  assessedAt: instantSchema,
   assessedByUserId: entityIdSchema,
   notes: z.string().nullable(),
 });
@@ -136,7 +137,7 @@ export const tenancyAssetInventorySnapshotResponseSchema = z.object({
   phase: z.enum(TENANCY_ASSET_PHASES),
   presence: z.enum(TENANCY_ASSET_PRESENCE),
   conditionAssessmentId: entityIdSchema.nullable(),
-  recordedAt: z.string(),
+  recordedAt: instantSchema,
   recordedByUserId: entityIdSchema,
   notes: z.string().nullable(),
 });
@@ -145,7 +146,7 @@ export const tenancyAssetAssignmentResponseSchema = z.object({
   id: entityIdSchema,
   tenancyId: entityIdSchema,
   assetId: entityIdSchema,
-  assignedAt: z.string(),
+  assignedAt: instantSchema,
   assignedByUserId: entityIdSchema,
   version: z.number().int().positive(),
   moveIn: tenancyAssetInventorySnapshotResponseSchema.nullable(),
