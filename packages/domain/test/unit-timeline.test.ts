@@ -68,6 +68,29 @@ describe('Unit timeline event model', () => {
     );
   });
 
+  it('rejects eventKey drift from eventType plus canonical source identity', () => {
+    expect(() =>
+      createUnitTimelineEvent({
+        eventKey: 'nonsense',
+        unitId,
+        category: 'meter',
+        eventType: 'meter.reading',
+        precision: 'instant',
+        occurredOn: '2026-09-20',
+        occurredAt: '2026-09-20T10:00:00Z',
+        recordedAt: '2026-09-20T10:01:00Z',
+        recordedByUserId: actor,
+        sourceType: 'meter_reading',
+        sourceId: '44444444-4444-4444-8444-444444444444',
+        relatedEntityType: 'meter',
+        relatedEntityId: '55555555-5555-4555-8555-555555555555',
+        details: {},
+      }),
+    ).toThrowError(
+      expect.objectContaining({ code: 'UNIT_TIMELINE_INVALID_EVENT' }),
+    );
+  });
+
   it('rejects event type/category drift and fake date-only instants', () => {
     expect(() =>
       createUnitTimelineEvent({
