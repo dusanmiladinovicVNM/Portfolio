@@ -19,10 +19,15 @@ export async function getMeterQuery(
     throw new DomainError('METER_NOT_FOUND', 'Meter not found.');
   }
 
-  const readings = await repository.listReadings(meterId);
+  const [readings, boundaries] = await Promise.all([
+    repository.listReadings(meterId),
+    repository.listBoundariesByMeter(meterId),
+  ]);
+
   return {
     meter,
     readings,
+    boundaries,
     consumptionIntervals: buildMeterConsumptionIntervals(readings),
   };
 }
@@ -36,11 +41,23 @@ export async function listMetersByUnitQuery(
   return repository.listMetersByUnit(unitId);
 }
 
-export async function listMeterBoundaryReadingsByTenancyQuery(
+export async function listMeterReadingBoundariesByTenancyQuery(
   repository: MeterRepository,
   actor: Actor,
   tenancyId: TenancyId,
 ) {
   requireCapability(actor, 'meters:read');
-  return repository.listBoundaryReadingsByTenancy(tenancyId);
+  const boundaries = await repository.listBoundariesByTenancy(tenancyId);
+  return Promise.all(
+    boundaries.map(async (boundary) => {
+      const reading = await repository.getReadingById(boundary.readingId);
+      if (!reading) {
+        throw new DomainError(
+          'METER_READING_NOT_FOUND',
+          'Meter reading boundary references a missing reading.',
+        );
+      }
+      return { boundary, reading };
+    }),
+  );
 }
