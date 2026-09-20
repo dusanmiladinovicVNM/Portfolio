@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   asMeterId,
+  asMeterReadingBoundaryId,
   asMeterReadingId,
   asSpaceId,
   asTenancyId,
@@ -10,6 +11,7 @@ import {
   buildMeterConsumptionIntervals,
   createMeter,
   createMeterReading,
+  createMeterReadingBoundary,
   retireMeter,
   updateMeterLabel,
 } from '../src/index.js';
@@ -33,6 +35,22 @@ function meter() {
   });
 }
 
+function reading(
+  id: string,
+  value: string,
+  readAt: string,
+  recordedAt = readAt,
+) {
+  return createMeterReading({
+    id: asMeterReadingId(id),
+    meter: meter(),
+    value,
+    readAt,
+    recordedAt,
+    recordedByUserId: actor,
+  });
+}
+
 describe('Meter domain', () => {
   it('creates exact physical meter identity with canonical lifecycle start', () => {
     expect(meter()).toMatchObject({
@@ -41,6 +59,7 @@ describe('Meter domain', () => {
       status: 'active',
       version: 1,
       retiredAt: null,
+      retirementRecordedAt: null,
       spaceId: null,
     });
   });
@@ -72,35 +91,41 @@ describe('Meter domain', () => {
     );
   });
 
-  it('keeps regular readings meter-only and handover readings Tenancy-bound', () => {
-    expect(() =>
-      createMeterReading({
-        id: asMeterReadingId('44444444-4444-4444-8444-444444444441'),
-        meter: meter(),
-        value: '100',
-        context: 'regular',
-        tenancyId,
-        readAt: '2026-09-20T09:00:00.000Z',
-        recordedAt: '2026-09-20T09:00:00.000Z',
-        recordedByUserId: actor,
-      }),
-    ).toThrowError(
-      expect.objectContaining({ code: 'METER_READING_CONTEXT_INVALID' }),
+  it('keeps physical observation separate from move-in/out boundary role', () => {
+    const observed = reading(
+      '44444444-4444-4444-8444-444444444441',
+      '100',
+      '2026-09-20T09:00:00.000Z',
     );
 
-    expect(() =>
-      createMeterReading({
-        id: asMeterReadingId('44444444-4444-4444-8444-444444444442'),
-        meter: meter(),
-        value: '100',
-        context: 'move_in',
-        readAt: '2026-09-20T09:00:00.000Z',
-        recordedAt: '2026-09-20T09:00:00.000Z',
-        recordedByUserId: actor,
-      }),
-    ).toThrowError(
-      expect.objectContaining({ code: 'METER_READING_TENANCY_REQUIRED' }),
+    const moveOut = createMeterReadingBoundary({
+      id: asMeterReadingBoundaryId(
+        '55555555-5555-4555-8555-555555555551',
+      ),
+      reading: observed,
+      tenancyId,
+      type: 'move_out',
+      recordedAt: '2026-09-20T09:05:00.000Z',
+      recordedByUserId: actor,
+    });
+
+    const nextTenancy = asTenancyId(
+      '22222222-2222-4222-8222-222222222223',
     );
+    const moveIn = createMeterReadingBoundary({
+      id: asMeterReadingBoundaryId(
+        '55555555-5555-4555-8555-555555555552',
+      ),
+      reading: observed,
+      tenancyId: nextTenancy,
+      type: 'move_in',
+      recordedAt: '2026-09-20T09:05:00.000Z',
+      recordedByUserId: actor,
+    });
+
+    expect(moveOut.readingId).toBe(observed.id);
+    expect(moveIn.readingId).toBe(observed.id);
+    expect(moveOut.tenancyId).not.toBe(moveIn.tenancyId);
   });
 
   it('allows historical backfill while preventing readings outside physical lifetime', () => {
@@ -117,7 +142,6 @@ describe('Meter domain', () => {
         id: asMeterReadingId('44444444-4444-4444-8444-444444444443'),
         meter: retired,
         value: '150',
-        context: 'regular',
         readAt: '2026-09-20T09:30:00.000Z',
         recordedAt: '2026-09-20T12:00:00.000Z',
         recordedByUserId: actor,
@@ -129,7 +153,6 @@ describe('Meter domain', () => {
         id: asMeterReadingId('44444444-4444-4444-8444-444444444444'),
         meter: retired,
         value: '151',
-        context: 'regular',
         readAt: '2026-09-20T10:00:01.000Z',
         recordedAt: '2026-09-20T12:00:00.000Z',
         recordedByUserId: actor,
@@ -153,7 +176,11 @@ describe('Meter domain', () => {
       retiredByUserId: actor,
       retirementReason: 'Replaced',
     });
-    expect(retired).toMatchObject({ status: 'retired', version: 3 });
+    expect(retired).toMatchObject({
+      status: 'retired',
+      version: 3,
+      retirementRecordedAt: '2026-09-20T10:05:00.000Z',
+    });
 
     expect(() =>
       retireMeter(retired, {
@@ -166,34 +193,21 @@ describe('Meter domain', () => {
   });
 
   it('builds exact consumption intervals without inventing negative consumption', () => {
-    const first = createMeterReading({
-      id: asMeterReadingId('44444444-4444-4444-8444-444444444445'),
-      meter: meter(),
-      value: '100.25',
-      context: 'move_in',
-      tenancyId,
-      readAt: '2026-09-20T08:00:00.000Z',
-      recordedAt: '2026-09-20T08:00:00.000Z',
-      recordedByUserId: actor,
-    });
-    const second = createMeterReading({
-      id: asMeterReadingId('44444444-4444-4444-8444-444444444446'),
-      meter: meter(),
-      value: '110.375',
-      context: 'regular',
-      readAt: '2026-09-20T09:00:00.000Z',
-      recordedAt: '2026-09-20T09:00:00.000Z',
-      recordedByUserId: actor,
-    });
-    const third = createMeterReading({
-      id: asMeterReadingId('44444444-4444-4444-8444-444444444447'),
-      meter: meter(),
-      value: '3',
-      context: 'regular',
-      readAt: '2026-09-20T10:00:00.000Z',
-      recordedAt: '2026-09-20T10:00:00.000Z',
-      recordedByUserId: actor,
-    });
+    const first = reading(
+      '44444444-4444-4444-8444-444444444445',
+      '100.25',
+      '2026-09-20T08:00:00.000Z',
+    );
+    const second = reading(
+      '44444444-4444-4444-8444-444444444446',
+      '110.375',
+      '2026-09-20T09:00:00.000Z',
+    );
+    const third = reading(
+      '44444444-4444-4444-8444-444444444447',
+      '3',
+      '2026-09-20T10:00:00.000Z',
+    );
 
     expect(buildMeterConsumptionIntervals([third, first, second])).toEqual([
       expect.objectContaining({
