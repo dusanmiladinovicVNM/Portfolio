@@ -4,9 +4,8 @@ import {
   ACCESS_ITEM_STATUSES,
   ACCESS_ITEM_TRANSACTION_TYPES,
 } from '@portfolio/domain';
+import { instantSchema } from './api.js';
 import { entityIdSchema } from './portfolio.js';
-
-const timestampSchema = z.string().min(1);
 
 export const createAccessItemRequestSchema = z.object({
   code: z.string().trim().min(1),
@@ -19,7 +18,7 @@ export const createAccessItemRequestSchema = z.object({
 
 export const issueAccessItemRequestSchema = z.object({
   tenancyId: entityIdSchema,
-  occurredAt: timestampSchema,
+  occurredAt: instantSchema,
   note: z.string().trim().min(1).nullable().optional(),
 });
 
@@ -34,7 +33,7 @@ export const retireAccessItemRequestSchema = z.object({
 });
 
 export const accessItemCustodyEventRequestSchema = z.object({
-  occurredAt: timestampSchema,
+  occurredAt: instantSchema,
   note: z.string().trim().min(1).nullable().optional(),
 });
 
@@ -47,11 +46,11 @@ export const accessItemResponseSchema = z.object({
   spaceId: entityIdSchema.nullable(),
   label: z.string(),
   status: z.enum(ACCESS_ITEM_STATUSES),
-  retiredAt: timestampSchema.nullable(),
+  retiredAt: instantSchema.nullable(),
   retiredByUserId: entityIdSchema.nullable(),
   retirementReason: z.string().nullable(),
   version: z.number().int().positive(),
-  recordedAt: timestampSchema,
+  recordedAt: instantSchema,
   recordedByUserId: entityIdSchema,
 });
 
@@ -61,8 +60,8 @@ export const accessItemTransactionResponseSchema = z.object({
   tenancyId: entityIdSchema,
   type: z.enum(ACCESS_ITEM_TRANSACTION_TYPES),
   sequence: z.number().int().positive(),
-  occurredAt: timestampSchema,
-  recordedAt: timestampSchema,
+  occurredAt: instantSchema,
+  recordedAt: instantSchema,
   recordedByUserId: entityIdSchema,
   note: z.string().nullable(),
 });
