@@ -65,9 +65,19 @@ returns trigger
 language plpgsql
 as $document_link_guard$
 begin
-  if old.relation = 'signed_original'
-     or (tg_op = 'UPDATE' and new.relation = 'signed_original')
-  then
+  if tg_op = 'DELETE' then
+    if old.relation = 'signed_original' then
+      raise exception 'signed_original document links are immutable.'
+        using errcode = '23514',
+              constraint = 'document_links_signed_original_immutable';
+    end if;
+
+    raise exception 'Document links are append-only relationship facts.'
+      using errcode = '23514',
+            constraint = 'document_links_immutable';
+  end if;
+
+  if old.relation = 'signed_original' or new.relation = 'signed_original' then
     raise exception 'signed_original document links are immutable.'
       using errcode = '23514',
             constraint = 'document_links_signed_original_immutable';
