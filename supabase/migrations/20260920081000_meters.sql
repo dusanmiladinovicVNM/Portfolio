@@ -47,6 +47,10 @@ create table public.meters (
       and retirement_recorded_at >= retired_at
     )
   ),
+  constraint meters_retirement_recorded_after_registration check (
+    retirement_recorded_at is null
+    or retirement_recorded_at >= recorded_at
+  ),
   constraint meters_lifecycle_shape check (
     (
       status = 'active'
@@ -239,9 +243,10 @@ declare
   meter_installed_at timestamptz;
   meter_status text;
   meter_retired_at timestamptz;
+  meter_recorded_at timestamptz;
 begin
-  select installed_at, status, retired_at
-    into meter_installed_at, meter_status, meter_retired_at
+  select installed_at, status, retired_at, recorded_at
+    into meter_installed_at, meter_status, meter_retired_at, meter_recorded_at
   from public.meters
   where id = new.meter_id
   for share;
@@ -256,6 +261,12 @@ begin
     raise exception 'Meter reading cannot predate Meter installation.'
       using errcode = '23514',
             constraint = 'meter_reading_before_installation';
+  end if;
+
+  if new.recorded_at < meter_recorded_at then
+    raise exception 'Meter reading cannot be recorded before its parent Meter was registered.'
+      using errcode = '23514',
+            constraint = 'meter_reading_recorded_before_meter_registration';
   end if;
 
   if meter_status = 'retired'
