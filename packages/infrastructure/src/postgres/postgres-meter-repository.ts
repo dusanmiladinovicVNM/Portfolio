@@ -177,6 +177,12 @@ function translate(error: unknown): DomainError | null {
         'METER_RETIREMENT_BEFORE_READING',
         'Meter retirement cannot predate existing reading history.',
       );
+    case 'meters_retirement_recorded_after_registration':
+    case 'meter_reading_recorded_before_meter_registration':
+      return new DomainError(
+        'METER_TIMESTAMP_ORDER_INVALID',
+        'Meter recording provenance cannot predate parent Meter registration.',
+      );
     case 'meter_retirement_immutable':
       return new DomainError(
         'METER_ALREADY_RETIRED',
