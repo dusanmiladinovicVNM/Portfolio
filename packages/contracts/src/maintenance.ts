@@ -4,9 +4,9 @@ import {
   MAINTENANCE_ISSUE_STATUSES,
   MAINTENANCE_WORK_ORDER_STATUSES,
 } from '@portfolio/domain';
+import { instantSchema } from './api.js';
 import { entityIdSchema } from './portfolio.js';
 
-const timestampSchema = z.string().min(1);
 
 export const maintenanceAssigneeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('user'), userId: entityIdSchema }),
@@ -23,7 +23,7 @@ export const createMaintenanceIssueRequestSchema = z.object({
   title: z.string().trim().min(1),
   description: z.string().trim().min(1).nullable().optional(),
   priority: z.enum(MAINTENANCE_ISSUE_PRIORITIES),
-  reportedAt: timestampSchema.optional(),
+  reportedAt: instantSchema.optional(),
 });
 
 export const updateMaintenanceIssueRequestSchema = z.object({
@@ -76,11 +76,11 @@ export const maintenanceIssueResponseSchema = z.object({
   description: z.string().nullable(),
   priority: z.enum(MAINTENANCE_ISSUE_PRIORITIES),
   status: z.enum(MAINTENANCE_ISSUE_STATUSES),
-  reportedAt: timestampSchema,
-  resolvedAt: timestampSchema.nullable(),
-  cancelledAt: timestampSchema.nullable(),
+  reportedAt: instantSchema,
+  resolvedAt: instantSchema.nullable(),
+  cancelledAt: instantSchema.nullable(),
   version: z.number().int().positive(),
-  recordedAt: timestampSchema,
+  recordedAt: instantSchema,
   recordedByUserId: entityIdSchema,
 });
 
@@ -92,12 +92,12 @@ export const maintenanceWorkOrderResponseSchema = z.object({
   description: z.string().nullable(),
   assignee: maintenanceAssigneeSchema.nullable(),
   status: z.enum(MAINTENANCE_WORK_ORDER_STATUSES),
-  assignedAt: timestampSchema.nullable(),
-  startedAt: timestampSchema.nullable(),
-  completedAt: timestampSchema.nullable(),
-  cancelledAt: timestampSchema.nullable(),
+  assignedAt: instantSchema.nullable(),
+  startedAt: instantSchema.nullable(),
+  completedAt: instantSchema.nullable(),
+  cancelledAt: instantSchema.nullable(),
   version: z.number().int().positive(),
-  createdAt: timestampSchema,
+  createdAt: instantSchema,
   createdByUserId: entityIdSchema,
 });
 
