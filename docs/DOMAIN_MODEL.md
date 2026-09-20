@@ -58,7 +58,7 @@ Time-bounded relationship between a Party and a Unit.
 
 ### Tenancy
 
-The operational occupancy/rental relationship for a Unit over time. It is not the legal document itself.
+The operational occupancy/rental relationship for one Unit over time. It is not the legal document itself. `Tenancy.unitId` is aggregate identity and is immutable after creation. `actualStart` is established once when actual occupancy begins and is immutable thereafter; downstream historical domains may safely rely on both values as authoritative parent truth.
 
 ### LeaseAgreement
 
@@ -254,7 +254,7 @@ AccessItem
 
 AccessItem is one exact physical `key`, `card` or `remote`. It has immutable Property/optional Unit/Space inventory scope, stable code, kind and original recording provenance. `label` is correctable descriptive metadata through optimistic versioning. Scope is inventory association, not authoritative door/lock/programming permission truth.
 
-AccessItem lifecycle is separate from custody. An active item may transition once to terminal `retired`, recording `retiredAt`, `retiredByUserId` and `retirementReason`. Retirement may happen while custody is available, issued or lost, but cannot be backdated before existing custody occurrence. Retirement never creates a custody event and never silently returns an item.
+Every AccessItem starts `active` at version 1 with no retirement provenance. AccessItem lifecycle is separate from custody. An active item may transition once to terminal `retired`, recording `retiredAt`, `retiredByUserId` and `retirementReason`. At that transition, retirement cannot be backdated before custody history that already exists. Later return/loss events may occur after retirement because retirement never creates a custody event and never silently returns an item.
 
 AccessItemTransaction is the append-only custody source of truth. Supported events are `issued`, `returned` and `lost`. Current custody is derived from the latest per-item sequence: no history or returned means available; issued means held by that Tenancy; lost means unavailable under that Tenancy's responsibility. There is deliberately no mutable current-holder column or parallel assignment table.
 
