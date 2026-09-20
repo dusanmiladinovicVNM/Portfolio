@@ -32,7 +32,19 @@ Canonical #20 does not model AccessPoint, lock cylinders, master-key systems, ca
 
 ### Item lifecycle is separate from custody
 
-AccessItem lifecycle is:
+Every newly created AccessItem starts canonically as:
+
+```text
+status = active
+version = 1
+retiredAt = null
+retiredByUserId = null
+retirementReason = null
+```
+
+PostgreSQL enforces that initial shape independently; direct SQL cannot create a pre-retired item or skip the initial aggregate version.
+
+AccessItem lifecycle is then:
 
 ```text
 active -> retired
@@ -68,7 +80,7 @@ A retired item can never receive a new `issued` transaction.
 
 Retirement is allowed while an item is still issued or lost. This represents real cases such as a card being administratively disabled before the tenant returns it or a physical key becoming obsolete when a lock is replaced.
 
-`retiredAt` cannot predate AccessItem recording or the latest existing custody occurrence. Retirement provenance is immutable after the transition.
+At the moment the retirement transition is written, `retiredAt` cannot predate AccessItem recording or the latest custody occurrence that already exists at that moment. Later `returned` or `lost` events may legally occur after `retiredAt`; this rule is deliberately **not** `retiredAt >= max(all custody ever)`. Retirement provenance is immutable after the transition.
 
 ### Custody is an append-only transaction ledger
 
