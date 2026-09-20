@@ -29,3 +29,5 @@ export * from './costs/cost.js';
 export * from './maintenance/maintenance.js';
 
 export * from './access/access-item.js';
+
+export * from './meters/meter.js';
