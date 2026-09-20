@@ -8721,97 +8721,6 @@ describe('PostgreSQL infrastructure', () => {
         ],
       },
     );
-    const tenancyB = await createTenancyCommand(
-      {
-        tenancyRepository,
-        portfolioRepository,
-        partyRepository,
-        idGenerator: ids,
-      },
-      actor,
-      {
-        unitId: unitB.id,
-        code: 'TEN-TIMELINE-B',
-        parties: [{ partyId: tenant.id, role: 'tenant', isPrimary: true }],
-      },
-    );
-
-    await sql`
-      insert into public.lease_agreements (
-        id, tenancy_id, code, agreement_type, effective_from,
-        status, version, created_at, updated_at
-      ) values
-      (
-        'd8f10000-0000-4000-8000-000000000001',
-        ${tenancy.id},
-        'AGR-TIMELINE-A',
-        'initial',
-        '2026-10-01',
-        'draft',
-        1,
-        '2026-09-20T08:00:00.000Z',
-        '2026-09-20T08:00:00.000Z'
-      ),
-      (
-        'd8f10000-0000-4000-8000-000000000002',
-        ${tenancyB.id},
-        'AGR-TIMELINE-B',
-        'initial',
-        '2026-10-01',
-        'draft',
-        1,
-        '2026-09-20T08:05:00.000Z',
-        '2026-09-20T08:05:00.000Z'
-      )
-    `;
-
-    await sql`
-      insert into public.lease_amendments (
-        id, agreement_id, code, title, effective_from,
-        status, version, created_at, updated_at
-      ) values (
-        'd8f20000-0000-4000-8000-000000000001',
-        'd8f10000-0000-4000-8000-000000000001',
-        'AMD-TIMELINE-A',
-        'Timeline amendment',
-        '2026-11-01',
-        'draft',
-        1,
-        '2026-09-20T08:10:00.000Z',
-        '2026-09-20T08:10:00.000Z'
-      )
-    `;
-
-    await sql`
-      insert into public.documents (
-        id, code, title, category, status,
-        latest_version_number, revision, created_at, updated_at
-      ) values (
-        'd8f30000-0000-4000-8000-000000000001',
-        'DOC-TIMELINE-A',
-        'Timeline supporting document',
-        'other',
-        'active',
-        0,
-        1,
-        '2026-09-20T08:15:00.000Z',
-        '2026-09-20T08:15:00.000Z'
-      )
-    `;
-
-    await sql`
-      insert into public.document_links (
-        id, document_id, relation, target_type, unit_id, created_at
-      ) values (
-        'd8f30000-0000-4000-8000-000000000002',
-        'd8f30000-0000-4000-8000-000000000001',
-        'supporting',
-        'unit',
-        ${unitA.id},
-        '2026-09-20T08:16:00.000Z'
-      )
-    `;
-
     const planned = await planTenancyCommand(
       { tenancyRepository },
       actor,
@@ -9565,6 +9474,97 @@ describe('PostgreSQL infrastructure', () => {
         parties: [{ partyId: tenant.id, role: 'tenant', isPrimary: true }],
       },
     );
+    const tenancyB = await createTenancyCommand(
+      {
+        tenancyRepository,
+        portfolioRepository,
+        partyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        unitId: unitB.id,
+        code: 'TEN-TIMELINE-B',
+        parties: [{ partyId: tenant.id, role: 'tenant', isPrimary: true }],
+      },
+    );
+
+    await sql`
+      insert into public.lease_agreements (
+        id, tenancy_id, code, agreement_type, effective_from,
+        status, version, created_at, updated_at
+      ) values
+      (
+        'd8f10000-0000-4000-8000-000000000001',
+        ${tenancy.id},
+        'AGR-TIMELINE-A',
+        'initial',
+        '2026-10-01',
+        'draft',
+        1,
+        '2026-09-20T08:00:00.000Z',
+        '2026-09-20T08:00:00.000Z'
+      ),
+      (
+        'd8f10000-0000-4000-8000-000000000002',
+        ${tenancyB.id},
+        'AGR-TIMELINE-B',
+        'initial',
+        '2026-10-01',
+        'draft',
+        1,
+        '2026-09-20T08:05:00.000Z',
+        '2026-09-20T08:05:00.000Z'
+      )
+    `;
+
+    await sql`
+      insert into public.lease_amendments (
+        id, agreement_id, code, title, effective_from,
+        status, version, created_at, updated_at
+      ) values (
+        'd8f20000-0000-4000-8000-000000000001',
+        'd8f10000-0000-4000-8000-000000000001',
+        'AMD-TIMELINE-A',
+        'Timeline amendment',
+        '2026-11-01',
+        'draft',
+        1,
+        '2026-09-20T08:10:00.000Z',
+        '2026-09-20T08:10:00.000Z'
+      )
+    `;
+
+    await sql`
+      insert into public.documents (
+        id, code, title, category, status,
+        latest_version_number, revision, created_at, updated_at
+      ) values (
+        'd8f30000-0000-4000-8000-000000000001',
+        'DOC-TIMELINE-A',
+        'Timeline supporting document',
+        'other',
+        'active',
+        0,
+        1,
+        '2026-09-20T08:15:00.000Z',
+        '2026-09-20T08:15:00.000Z'
+      )
+    `;
+
+    await sql`
+      insert into public.document_links (
+        id, document_id, relation, target_type, unit_id, created_at
+      ) values (
+        'd8f30000-0000-4000-8000-000000000002',
+        'd8f30000-0000-4000-8000-000000000001',
+        'supporting',
+        'unit',
+        ${unitA.id},
+        '2026-09-20T08:16:00.000Z'
+      )
+    `;
+
     const planned = await planTenancyCommand(
       { tenancyRepository },
       actor,
