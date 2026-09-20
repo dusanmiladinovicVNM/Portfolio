@@ -149,6 +149,11 @@ function translateTenancyError(error: unknown): DomainError | null {
           'TENANCY_ACTUAL_START_IMMUTABLE',
           'Tenancy actualStart is immutable once set.',
         );
+      case 'tenancy_actual_end_immutable':
+        return new DomainError(
+          'TENANCY_ACTUAL_END_IMMUTABLE',
+          'Tenancy actualEnd is immutable once set.',
+        );
       default:
         break;
     }
