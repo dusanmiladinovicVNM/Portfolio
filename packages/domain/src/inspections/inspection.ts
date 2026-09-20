@@ -1,4 +1,5 @@
 import { DomainError } from '../shared/domain-error.js';
+import { asInstant } from '../shared/instant.js';
 import { asDateOnly, type DateOnly } from '../shared/date-only.js';
 import type {
   InspectionFindingId,
@@ -120,13 +121,7 @@ function required(value: string, field: string): string {
 }
 
 function instant(value: string, field: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}T/.test(value) || Number.isNaN(Date.parse(value))) {
-    throw new DomainError(
-      'INSPECTION_INVALID_TIMESTAMP',
-      `${field} must be a valid ISO timestamp.`,
-    );
-  }
-  return value;
+  return asInstant(value, field, 'INSPECTION_INVALID_TIMESTAMP');
 }
 
 export function createInspection(input: CreateInspectionInput): Inspection {
