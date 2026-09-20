@@ -272,6 +272,8 @@ Canonical #20 does not yet model AccessPoint/door topology, master-key hierarchy
 
 Canonical #21 models physical utility measurement truth, not provider billing.
 
+All canonical timestamp instants require an explicit `Z` or numeric UTC offset and are normalized to UTC ISO through the shared Instant parser. Offset-less local datetimes are invalid. Date-only business fields remain separate.
+
 ```text
 Unit
   └─ Meter
@@ -284,9 +286,9 @@ A Meter is one exact physical cumulative utility meter for one Unit and optional
 
 Meter placement is deliberately immutable in canonical #21. Historical readings must not be reinterpreted by a later mutable Unit/Space change. Physical relocation requires a future placement-history model rather than rewriting current identity.
 
-A Meter starts active at version 1 and may transition once to terminal retired. `retiredAt` is physical/business occurrence; `retirementRecordedAt` is recording provenance. Retirement cannot be written before reading occurrences already present at that moment. Historical readings may still be backfilled after retirement when their `readAt` lies inside `[installedAt, retiredAt]`; no reading may occur after retirement.
+A Meter starts active at version 1 and may transition once to terminal retired. `retiredAt` is physical/business occurrence; `retirementRecordedAt` is recording provenance. Historical `retiredAt` may predate Meter registration, but `retirementRecordedAt >= Meter.recordedAt`. Retirement cannot be written before reading occurrences already present at that moment. Historical readings may still be backfilled after retirement when their `readAt` lies inside `[installedAt, retiredAt]`; no reading may occur after retirement.
 
-MeterReading is an append-only physical observation with exact decimal value, `readAt`, immutable recorder provenance and optional note. Domain/API use canonical decimal strings with at most 18 whole digits and six decimal places; PostgreSQL keeps exact numeric input until explicit scale/range checks reject invalid values.
+MeterReading is an append-only physical observation with exact decimal value, `readAt`, immutable recorder provenance and optional note. Historical `readAt` may predate Meter registration, but `MeterReading.recordedAt >= Meter.recordedAt` and `recordedAt >= readAt`. Domain/API use canonical decimal strings with at most 18 whole digits and six decimal places; PostgreSQL keeps exact numeric input until explicit scale/range checks reject invalid values.
 
 Move-in/out semantics are not columns on MeterReading. `MeterReadingBoundary` is a separate append-only relation from one physical reading to one Tenancy and boundary type `move_in|move_out`. This preserves the correct grain when the same physical observation has more than one business role.
 
