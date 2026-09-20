@@ -1,4 +1,5 @@
 import { DomainError } from '../shared/domain-error.js';
+import { asInstant } from '../shared/instant.js';
 import type {
   MeterId,
   MeterReadingBoundaryId,
@@ -99,16 +100,6 @@ function optional(value: string | null | undefined): string | null {
   return normalized || null;
 }
 
-function instant(value: string, field: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}T/.test(value) || Number.isNaN(Date.parse(value))) {
-    throw new DomainError(
-      'METER_INVALID_TIMESTAMP',
-      `${field} must be a valid ISO timestamp.`,
-    );
-  }
-  return value;
-}
-
 function assertNotBefore(
   value: string,
   notBefore: string,
@@ -139,7 +130,7 @@ function allowedMeasurementUnit(
 }
 
 export function meterUtcCalendarDate(value: string, field: string): string {
-  const parsed = instant(value, field);
+  const parsed = asInstant(value, field, 'METER_INVALID_TIMESTAMP');
   return new Date(parsed).toISOString().slice(0, 10);
 }
 
@@ -199,8 +190,8 @@ export function createMeter(input: {
     );
   }
 
-  const installedAt = instant(input.installedAt, 'installedAt');
-  const recordedAt = instant(input.recordedAt, 'recordedAt');
+  const installedAt = asInstant(input.installedAt, 'installedAt', 'METER_INVALID_TIMESTAMP');
+  const recordedAt = asInstant(input.recordedAt, 'recordedAt', 'METER_INVALID_TIMESTAMP');
   assertNotBefore(recordedAt, installedAt, 'recordedAt', 'installedAt');
 
   return {
@@ -248,11 +239,17 @@ export function retireMeter(
     throw new DomainError('METER_ALREADY_RETIRED', 'Meter is already retired.');
   }
 
-  const retiredAt = instant(input.retiredAt, 'retiredAt');
-  const recordedAt = instant(input.recordedAt, 'recordedAt');
+  const retiredAt = asInstant(input.retiredAt, 'retiredAt', 'METER_INVALID_TIMESTAMP');
+  const recordedAt = asInstant(input.recordedAt, 'recordedAt', 'METER_INVALID_TIMESTAMP');
 
   assertNotBefore(retiredAt, meter.installedAt, 'retiredAt', 'installedAt');
   assertNotBefore(recordedAt, retiredAt, 'recordedAt', 'retiredAt');
+  assertNotBefore(
+    recordedAt,
+    meter.recordedAt,
+    'recordedAt',
+    'Meter.recordedAt',
+  );
 
   if (
     input.latestExistingReadingAt !== undefined &&
@@ -285,11 +282,17 @@ export function createMeterReading(input: {
   readonly recordedByUserId: UserId;
   readonly note?: string | null;
 }): MeterReading {
-  const readAt = instant(input.readAt, 'readAt');
-  const recordedAt = instant(input.recordedAt, 'recordedAt');
+  const readAt = asInstant(input.readAt, 'readAt', 'METER_INVALID_TIMESTAMP');
+  const recordedAt = asInstant(input.recordedAt, 'recordedAt', 'METER_INVALID_TIMESTAMP');
 
   assertNotBefore(readAt, input.meter.installedAt, 'readAt', 'installedAt');
   assertNotBefore(recordedAt, readAt, 'recordedAt', 'readAt');
+  assertNotBefore(
+    recordedAt,
+    input.meter.recordedAt,
+    'recordedAt',
+    'Meter.recordedAt',
+  );
 
   if (
     input.meter.status === 'retired' &&
@@ -321,7 +324,7 @@ export function createMeterReadingBoundary(input: {
   readonly recordedAt: string;
   readonly recordedByUserId: UserId;
 }): MeterReadingBoundary {
-  const recordedAt = instant(input.recordedAt, 'recordedAt');
+  const recordedAt = asInstant(input.recordedAt, 'recordedAt', 'METER_INVALID_TIMESTAMP');
   assertNotBefore(
     recordedAt,
     input.reading.recordedAt,
