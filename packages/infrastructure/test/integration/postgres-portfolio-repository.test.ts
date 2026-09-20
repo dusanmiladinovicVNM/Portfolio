@@ -10,6 +10,11 @@ import {
   retireAccessItemCommand,
   returnAccessItemCommand,
   updateAccessItemLabelCommand,
+  createMeterCommand,
+  linkMeterReadingBoundaryCommand,
+  recordMeterReadingCommand,
+  retireMeterCommand,
+  updateMeterLabelCommand,
   changeAssetStatusCommand,
   changeImprovementProjectStatusCommand,
   changeWorkItemStatusCommand,
@@ -117,6 +122,7 @@ import {
   PostgresInspectionRepository,
   PostgresLeaseRepository,
   PostgresMaintenanceRepository,
+  PostgresMeterRepository,
   PostgresOwnershipRepository,
   PostgresPartyRepository,
   PostgresPortfolioRepository,
@@ -145,6 +151,7 @@ const costRepository = new PostgresCostRepository(sql);
 const inspectionRepository = new PostgresInspectionRepository(sql);
 const improvementRepository = new PostgresImprovementRepository(sql);
 const maintenanceRepository = new PostgresMaintenanceRepository(sql);
+const meterRepository = new PostgresMeterRepository(sql);
 
 class SequenceIds implements IdGenerator {
   private index = 0;
@@ -162,6 +169,9 @@ class SequenceIds implements IdGenerator {
 async function resetAndMigrate(): Promise<void> {
   await sql.unsafe(
     `drop table if exists
+      public.meter_reading_boundaries,
+      public.meter_readings,
+      public.meters,
       public.access_item_transactions,
       public.access_items,
       public.cost_reversals,
@@ -268,6 +278,9 @@ beforeAll(async () => {
 afterAll(async () => {
   await sql.unsafe(
     `drop table if exists
+      public.meter_reading_boundaries,
+      public.meter_readings,
+      public.meters,
       public.access_item_transactions,
       public.access_items,
       public.cost_reversals,
