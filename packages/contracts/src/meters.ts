@@ -5,9 +5,8 @@ import {
   METER_STATUSES,
   METER_UTILITY_TYPES,
 } from '@portfolio/domain';
+import { instantSchema } from './api.js';
 import { entityIdSchema } from './portfolio.js';
-
-const timestampSchema = z.string().min(1);
 
 export const createMeterRequestSchema = z.object({
   code: z.string().trim().min(1),
@@ -17,7 +16,7 @@ export const createMeterRequestSchema = z.object({
   unitId: entityIdSchema,
   spaceId: entityIdSchema.nullable().optional(),
   label: z.string().trim().min(1),
-  installedAt: timestampSchema,
+  installedAt: instantSchema,
 });
 
 export const updateMeterRequestSchema = z.object({
@@ -27,13 +26,13 @@ export const updateMeterRequestSchema = z.object({
 
 export const retireMeterRequestSchema = z.object({
   expectedVersion: z.number().int().positive(),
-  retiredAt: timestampSchema,
+  retiredAt: instantSchema,
   retirementReason: z.string().trim().min(1),
 });
 
 export const recordMeterReadingRequestSchema = z.object({
   value: z.string().trim().min(1),
-  readAt: timestampSchema,
+  readAt: instantSchema,
   note: z.string().trim().min(1).nullable().optional(),
 });
 
@@ -51,14 +50,14 @@ export const meterResponseSchema = z.object({
   unitId: entityIdSchema,
   spaceId: entityIdSchema.nullable(),
   label: z.string(),
-  installedAt: timestampSchema,
+  installedAt: instantSchema,
   status: z.enum(METER_STATUSES),
-  retiredAt: timestampSchema.nullable(),
-  retirementRecordedAt: timestampSchema.nullable(),
+  retiredAt: instantSchema.nullable(),
+  retirementRecordedAt: instantSchema.nullable(),
   retiredByUserId: entityIdSchema.nullable(),
   retirementReason: z.string().nullable(),
   version: z.number().int().positive(),
-  recordedAt: timestampSchema,
+  recordedAt: instantSchema,
   recordedByUserId: entityIdSchema,
 });
 
@@ -66,8 +65,8 @@ export const meterReadingResponseSchema = z.object({
   id: entityIdSchema,
   meterId: entityIdSchema,
   value: z.string(),
-  readAt: timestampSchema,
-  recordedAt: timestampSchema,
+  readAt: instantSchema,
+  recordedAt: instantSchema,
   recordedByUserId: entityIdSchema,
   note: z.string().nullable(),
 });
@@ -77,15 +76,15 @@ export const meterReadingBoundaryResponseSchema = z.object({
   readingId: entityIdSchema,
   tenancyId: entityIdSchema,
   type: z.enum(METER_READING_BOUNDARY_TYPES),
-  recordedAt: timestampSchema,
+  recordedAt: instantSchema,
   recordedByUserId: entityIdSchema,
 });
 
 export const meterConsumptionIntervalResponseSchema = z.object({
   fromReadingId: entityIdSchema,
   toReadingId: entityIdSchema,
-  fromReadAt: timestampSchema,
-  toReadAt: timestampSchema,
+  fromReadAt: instantSchema,
+  toReadAt: instantSchema,
   fromValue: z.string(),
   toValue: z.string(),
   consumption: z.string().nullable(),
