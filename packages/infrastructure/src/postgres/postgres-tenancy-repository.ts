@@ -132,14 +132,26 @@ function translateTenancyError(error: unknown): DomainError | null {
     }
   }
 
-  if (
-    pg.code === '23514' &&
-    pg.constraint_name === 'tenancy_parties_change_state_guard'
-  ) {
-    return new DomainError(
-      'TENANCY_PARTY_CHANGE_NOT_ALLOWED',
-      'Parties may only be changed while a tenancy is draft or planned.',
-    );
+  if (pg.code === '23514') {
+    switch (pg.constraint_name) {
+      case 'tenancy_parties_change_state_guard':
+        return new DomainError(
+          'TENANCY_PARTY_CHANGE_NOT_ALLOWED',
+          'Parties may only be changed while a tenancy is draft or planned.',
+        );
+      case 'tenancy_unit_immutable':
+        return new DomainError(
+          'TENANCY_UNIT_IMMUTABLE',
+          'Tenancy Unit is immutable.',
+        );
+      case 'tenancy_actual_start_immutable':
+        return new DomainError(
+          'TENANCY_ACTUAL_START_IMMUTABLE',
+          'Tenancy actualStart is immutable once set.',
+        );
+      default:
+        break;
+    }
   }
 
   if (pg.code === '23505') {
