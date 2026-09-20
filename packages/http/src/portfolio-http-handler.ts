@@ -14,6 +14,7 @@ import {
   type InspectionRepository,
   type LeaseRepository,
   type MaintenanceRepository,
+  type MeterRepository,
   type OwnershipRepository,
   type PartyRepository,
   type PortfolioRepository,
@@ -33,6 +34,7 @@ import { handleImprovementHttp } from './improvement-http-routes.js';
 import { handleInspectionHttp } from './inspection-http-routes.js';
 import { handleLeaseHttp } from './lease-http-routes.js';
 import { handleMaintenanceHttp } from './maintenance-http-routes.js';
+import { handleMeterHttp } from './meter-http-routes.js';
 import { handleOwnershipHttp } from './ownership-http-routes.js';
 import { handlePartyHttp } from './party-http-routes.js';
 import { handlePortfolioHttp } from './portfolio-http-routes.js';
@@ -53,6 +55,7 @@ export interface PortfolioHttpDependencies {
   readonly improvementRepository: ImprovementRepository;
   readonly costRepository: CostRepository;
   readonly maintenanceRepository: MaintenanceRepository;
+  readonly meterRepository: MeterRepository;
   readonly staffDirectoryRepository: StaffDirectoryRepository;
   readonly fileStorage: FileStoragePort;
   readonly clock: ClockPort;
@@ -121,7 +124,8 @@ function errorStatus(code: string): number {
     code === 'ACCESS_ITEM_TRANSACTION_CONFLICT' ||
     code === 'ACCESS_ITEM_NOT_AVAILABLE' ||
     code === 'ACCESS_ITEM_RETIRED' ||
-    code === 'ACCESS_ITEM_ALREADY_RETIRED'
+    code === 'ACCESS_ITEM_ALREADY_RETIRED' ||
+    code === 'METER_ALREADY_RETIRED'
   ) {
     return 409;
   }
@@ -152,6 +156,19 @@ export function createPortfolioHttpHandler(
       const actor = await resolveActor(deps.userAccessRepository, identity);
 
       const handlers = [
+        () =>
+          handleMeterHttp(
+            {
+              meterRepository: deps.meterRepository,
+              portfolioRepository: deps.portfolioRepository,
+              tenancyRepository: deps.tenancyRepository,
+              idGenerator: deps.idGenerator,
+              clock: deps.clock,
+            },
+            actor,
+            request,
+            path,
+          ),
         () =>
           handleAccessItemHttp(
             {
