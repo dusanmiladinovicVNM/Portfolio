@@ -182,6 +182,11 @@ function translate(error: unknown): DomainError | null {
         'ACCESS_ITEM_TRANSACTION_IMMUTABLE',
         'AccessItem transactions are append-only.',
       );
+    case 'access_item_initial_state':
+      return new DomainError(
+        'ACCESS_ITEM_INVALID_INITIAL_STATE',
+        'AccessItem must start active at version 1 without retirement provenance.',
+      );
     case 'access_item_retirement_before_custody':
       return new DomainError(
         'ACCESS_ITEM_RETIREMENT_BEFORE_CUSTODY',
