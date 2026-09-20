@@ -7705,6 +7705,85 @@ describe('PostgreSQL infrastructure', () => {
       clock: { now: () => '2026-09-19T10:00:00.000Z' },
     };
 
+    await expect(
+      sql`
+        insert into public.access_items (
+          id, code, kind, property_id, unit_id, label,
+          status, retired_at, retired_by_user_id, retirement_reason, version,
+          recorded_at, recorded_by_user_id
+        ) values (
+          'aef40000-0000-4000-8000-000000000001',
+          'KEY-ACCESS-ILLEGAL-RETIRED',
+          'key',
+          ${property.id},
+          ${unitA.id},
+          'Illegal retired creation',
+          'retired',
+          '2026-09-19T09:00:00.000Z',
+          ${actor.userId},
+          'Must pass through lifecycle transition',
+          1,
+          '2026-09-19T09:00:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'access_item_initial_state',
+    });
+
+    await expect(
+      sql`
+        insert into public.access_items (
+          id, code, kind, property_id, unit_id, label,
+          status, version, recorded_at, recorded_by_user_id
+        ) values (
+          'aef40000-0000-4000-8000-000000000002',
+          'KEY-ACCESS-ILLEGAL-VERSION',
+          'key',
+          ${property.id},
+          ${unitA.id},
+          'Illegal initial version',
+          'active',
+          2,
+          '2026-09-19T09:00:00.000Z',
+          ${actor.userId}
+        )
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'access_item_initial_state',
+    });
+
+    await sql`
+      insert into public.access_items (
+        id, code, kind, property_id, unit_id, label,
+        status, version, recorded_at, recorded_by_user_id
+      ) values (
+        'aef40000-0000-4000-8000-000000000003',
+        'KEY-ACCESS-VALID-INITIAL',
+        'key',
+        ${property.id},
+        ${unitA.id},
+        'Valid direct initial state',
+        'active',
+        1,
+        '2026-09-19T09:00:00.000Z',
+        ${actor.userId}
+      )
+    `;
+
+    expect(
+      await accessItemRepository.getItemById(
+        'aef40000-0000-4000-8000-000000000003' as import('@portfolio/domain').AccessItemId,
+      ),
+    ).toMatchObject({
+      status: 'active',
+      version: 1,
+      retiredAt: null,
+      retirementReason: null,
+    });
+
     const tenancyStartBoundaryKey = await createAccessItemCommand(
       {
         ...accessDeps,
@@ -7810,6 +7889,37 @@ describe('PostgreSQL infrastructure', () => {
       type: 'issued',
       sequence: 1,
       tenancyId: activeA.id,
+    });
+
+    await expect(
+      sql`
+        update public.tenancies
+        set actual_start = '2026-09-20',
+            version = version + 1,
+            updated_at = now()
+        where id = ${activeA.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'tenancy_actual_start_immutable',
+    });
+
+    await expect(
+      sql`
+        update public.tenancies
+        set unit_id = ${unitB.id},
+            version = version + 1,
+            updated_at = now()
+        where id = ${activeA.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'tenancy_unit_immutable',
+    });
+
+    expect(await tenancyRepository.getById(activeA.id)).toMatchObject({
+      unitId: unitA.id,
+      actualStart: '2026-09-19',
     });
 
     const lost = await reportAccessItemLostCommand(
