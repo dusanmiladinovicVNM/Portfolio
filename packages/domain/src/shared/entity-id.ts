@@ -55,6 +55,7 @@ export type AccessItemId = EntityId<'AccessItem'>;
 export type AccessItemTransactionId = EntityId<'AccessItemTransaction'>;
 export type MeterId = EntityId<'Meter'>;
 export type MeterReadingId = EntityId<'MeterReading'>;
+export type MeterReadingBoundaryId = EntityId<'MeterReadingBoundary'>;
 
 export const asUserId = (value: string): UserId => value as UserId;
 export const asPropertyId = (value: string): PropertyId => value as PropertyId;
@@ -107,3 +108,4 @@ export const asAccessItemId = (value: string): AccessItemId => value as AccessIt
 export const asAccessItemTransactionId = (value: string): AccessItemTransactionId => value as AccessItemTransactionId;
 export const asMeterId = (value: string): MeterId => value as MeterId;
 export const asMeterReadingId = (value: string): MeterReadingId => value as MeterReadingId;
+export const asMeterReadingBoundaryId = (value: string): MeterReadingBoundaryId => value as MeterReadingBoundaryId;
