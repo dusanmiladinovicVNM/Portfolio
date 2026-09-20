@@ -8629,30 +8629,30 @@ describe('PostgreSQL infrastructure', () => {
     });
 
     const ids = new SequenceIds([
-      'b1000000-0000-4000-8000-000000000001',
-      'b1000000-0000-4000-8000-000000000002',
-      'b1000000-0000-4000-8000-000000000003',
-      'b1000000-0000-4000-8000-000000000004',
-      'b1000000-0000-4000-8000-000000000005',
-      'b1000000-0000-4000-8000-000000000006',
-      'b1000000-0000-4000-8000-000000000007',
-      'b1000000-0000-4000-8000-000000000008',
-      'b1000000-0000-4000-8000-000000000009',
-      'b1000000-0000-4000-8000-000000000010',
-      'b1000000-0000-4000-8000-000000000011',
-      'b1000000-0000-4000-8000-000000000012',
-      'b1000000-0000-4000-8000-000000000013',
-      'b1000000-0000-4000-8000-000000000014',
-      'b1000000-0000-4000-8000-000000000015',
-      'b1000000-0000-4000-8000-000000000016',
-      'b1000000-0000-4000-8000-000000000017',
-      'b1000000-0000-4000-8000-000000000018',
-      'b1000000-0000-4000-8000-000000000019',
-      'b1000000-0000-4000-8000-000000000020',
-      'b1000000-0000-4000-8000-000000000021',
-      'b1000000-0000-4000-8000-000000000022',
-      'b1000000-0000-4000-8000-000000000023',
-      'b1000000-0000-4000-8000-000000000024',
+      'c9000000-0000-4000-8000-000000000001',
+      'c9000000-0000-4000-8000-000000000002',
+      'c9000000-0000-4000-8000-000000000003',
+      'c9000000-0000-4000-8000-000000000004',
+      'c9000000-0000-4000-8000-000000000005',
+      'c9000000-0000-4000-8000-000000000006',
+      'c9000000-0000-4000-8000-000000000007',
+      'c9000000-0000-4000-8000-000000000008',
+      'c9000000-0000-4000-8000-000000000009',
+      'c9000000-0000-4000-8000-000000000010',
+      'c9000000-0000-4000-8000-000000000011',
+      'c9000000-0000-4000-8000-000000000012',
+      'c9000000-0000-4000-8000-000000000013',
+      'c9000000-0000-4000-8000-000000000014',
+      'c9000000-0000-4000-8000-000000000015',
+      'c9000000-0000-4000-8000-000000000016',
+      'c9000000-0000-4000-8000-000000000017',
+      'c9000000-0000-4000-8000-000000000018',
+      'c9000000-0000-4000-8000-000000000019',
+      'c9000000-0000-4000-8000-000000000020',
+      'c9000000-0000-4000-8000-000000000021',
+      'c9000000-0000-4000-8000-000000000022',
+      'c9000000-0000-4000-8000-000000000023',
+      'c9000000-0000-4000-8000-000000000024',
     ]);
 
     const property = await createPropertyCommand(
@@ -8749,7 +8749,7 @@ describe('PostgreSQL infrastructure', () => {
           retired_at, retirement_recorded_at, retired_by_user_id,
           retirement_reason, version, recorded_at, recorded_by_user_id
         ) values (
-          'bf000000-0000-4000-8000-000000000001',
+          'cf000000-0000-4000-8000-000000000001',
           'MTR-ILLEGAL-RETIRED',
           'SER-ILLEGAL-RETIRED',
           'electricity',
@@ -8779,7 +8779,7 @@ describe('PostgreSQL infrastructure', () => {
           unit_id, label, installed_at, status, version,
           recorded_at, recorded_by_user_id
         ) values (
-          'bf000000-0000-4000-8000-000000000002',
+          'cf000000-0000-4000-8000-000000000002',
           'MTR-ILLEGAL-VERSION',
           'SER-ILLEGAL-VERSION',
           'electricity',
@@ -8848,7 +8848,7 @@ describe('PostgreSQL infrastructure', () => {
           id, reading_id, tenancy_id, boundary_type,
           recorded_at, recorded_by_user_id
         ) values (
-          'bf100000-0000-4000-8000-000000000001',
+          'cf100000-0000-4000-8000-000000000001',
           ${preStartReading.id},
           ${ended.id},
           'move_in',
@@ -8909,7 +8909,7 @@ describe('PostgreSQL infrastructure', () => {
           id, reading_id, tenancy_id, boundary_type,
           recorded_at, recorded_by_user_id
         ) values (
-          'bf100000-0000-4000-8000-000000000002',
+          'cf100000-0000-4000-8000-000000000002',
           ${secondReading.id},
           ${ended.id},
           'move_in',
@@ -8928,7 +8928,7 @@ describe('PostgreSQL infrastructure', () => {
           id, meter_id, value, read_at, recorded_at,
           recorded_by_user_id
         ) values (
-          'bf200000-0000-4000-8000-000000000001',
+          'cf200000-0000-4000-8000-000000000001',
           ${meter.id},
           1.1234567,
           '2026-09-20T11:30:00.000Z',
@@ -9073,7 +9073,7 @@ describe('PostgreSQL infrastructure', () => {
           id, reading_id, tenancy_id, boundary_type,
           recorded_at, recorded_by_user_id
         ) values (
-          'bf100000-0000-4000-8000-000000000003',
+          'cf100000-0000-4000-8000-000000000003',
           ${boundaryReading.id},
           ${activeB.id},
           'move_in',
@@ -9136,7 +9136,7 @@ describe('PostgreSQL infrastructure', () => {
             insert into public.meter_readings (
               id, meter_id, value, read_at, recorded_at, recorded_by_user_id
             ) values (
-              'bf300000-0000-4000-8000-000000000001',
+              'cf300000-0000-4000-8000-000000000001',
               ${retireRaceMeter.id},
               1,
               '2026-09-20T14:00:01.000Z',
@@ -9155,7 +9155,7 @@ describe('PostgreSQL infrastructure', () => {
           insert into public.meter_readings (
             id, meter_id, value, read_at, recorded_at, recorded_by_user_id
           ) values (
-            'bf300000-0000-4000-8000-000000000001',
+            'cf300000-0000-4000-8000-000000000001',
             ${retireRaceMeter.id},
             1,
             '2026-09-20T14:00:01.000Z',
@@ -9222,7 +9222,7 @@ describe('PostgreSQL infrastructure', () => {
             id, reading_id, tenancy_id, boundary_type,
             recorded_at, recorded_by_user_id
           ) values (
-            'bf400000-0000-4000-8000-000000000001',
+            'cf400000-0000-4000-8000-000000000001',
             ${boundaryRaceReadingA.id},
             ${ended.id},
             'move_in',
@@ -9244,7 +9244,7 @@ describe('PostgreSQL infrastructure', () => {
               id, reading_id, tenancy_id, boundary_type,
               recorded_at, recorded_by_user_id
             ) values (
-              'bf400000-0000-4000-8000-000000000002',
+              'cf400000-0000-4000-8000-000000000002',
               ${boundaryRaceReadingB.id},
               ${ended.id},
               'move_in',
@@ -9264,7 +9264,7 @@ describe('PostgreSQL infrastructure', () => {
             id, reading_id, tenancy_id, boundary_type,
             recorded_at, recorded_by_user_id
           ) values (
-            'bf400000-0000-4000-8000-000000000002',
+            'cf400000-0000-4000-8000-000000000002',
             ${boundaryRaceReadingB.id},
             ${ended.id},
             'move_in',
