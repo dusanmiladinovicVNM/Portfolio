@@ -90,6 +90,7 @@ describe('Reporting projections', () => {
         },
         contract: {
           coverageStatus: 'effective',
+          currentDraftAgreementCount: 0,
           agreementId,
           agreementCode: 'AGR-1',
           agreementCurrentStatus: 'signed',
@@ -132,6 +133,96 @@ describe('Reporting projections', () => {
     });
   });
 
+  it('separates current draft workflow from legal as-of coverage', () => {
+    expect(
+      createUnitReportingOverview({
+        asOf: '2026-09-21',
+        unitId,
+        propertyId,
+        propertyCode: 'PROP-1',
+        propertyName: 'Main Property',
+        unitCode: 'UNIT-1',
+        unitNumber: '1A',
+        unitType: 'apartment',
+        floor: null,
+        areaM2: null,
+        rooms: null,
+        occupancyStatus: 'occupied',
+        tenancy: {
+          id: tenancyId,
+          code: 'TEN-1',
+          currentStatus: 'active',
+          plannedStart: null,
+          plannedEnd: null,
+          actualStart: '2026-09-01',
+          actualEnd: null,
+        },
+        contract: {
+          coverageStatus: 'missing',
+          currentDraftAgreementCount: 1,
+          agreementId: null,
+          agreementCode: null,
+          agreementCurrentStatus: null,
+          effectiveFrom: null,
+          effectiveTo: null,
+          signedAt: null,
+          effectiveTerms: null,
+        },
+        currentOperations: emptyOps,
+        unitAttributedCostsByCurrency: [],
+      }),
+    ).toMatchObject({
+      contract: {
+        coverageStatus: 'missing',
+        currentDraftAgreementCount: 1,
+        agreementId: null,
+      },
+    });
+  });
+
+  it('rejects legal coverage whose dates contradict asOf', () => {
+    expect(() =>
+      createUnitReportingOverview({
+        asOf: '2026-09-21',
+        unitId,
+        propertyId,
+        propertyCode: 'PROP-1',
+        propertyName: 'Main Property',
+        unitCode: 'UNIT-1',
+        unitNumber: '1A',
+        unitType: 'apartment',
+        floor: null,
+        areaM2: null,
+        rooms: null,
+        occupancyStatus: 'occupied',
+        tenancy: {
+          id: tenancyId,
+          code: 'TEN-1',
+          currentStatus: 'active',
+          plannedStart: null,
+          plannedEnd: null,
+          actualStart: '2026-09-01',
+          actualEnd: null,
+        },
+        contract: {
+          coverageStatus: 'future_signed',
+          currentDraftAgreementCount: 0,
+          agreementId,
+          agreementCode: 'AGR-1',
+          agreementCurrentStatus: 'signed',
+          effectiveFrom: '2026-09-20',
+          effectiveTo: null,
+          signedAt: '2026-09-10',
+          effectiveTerms: null,
+        },
+        currentOperations: emptyOps,
+        unitAttributedCostsByCurrency: [],
+      }),
+    ).toThrowError(
+      expect.objectContaining({ code: 'REPORTING_INVALID_PROJECTION' }),
+    );
+  });
+
   it('rejects vacant Unit carrying a selected Tenancy', () => {
     expect(() =>
       createUnitReportingOverview({
@@ -158,6 +249,7 @@ describe('Reporting projections', () => {
         },
         contract: {
           coverageStatus: 'missing',
+          currentDraftAgreementCount: 0,
           agreementId: null,
           agreementCode: null,
           agreementCurrentStatus: null,
