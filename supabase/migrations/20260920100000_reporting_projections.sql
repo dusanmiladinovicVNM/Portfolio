@@ -21,6 +21,7 @@ returns table (
   tenancy_actual_start date,
   tenancy_actual_end date,
   contract_coverage_status text,
+  current_draft_agreement_count bigint,
   agreement_id uuid,
   agreement_code text,
   agreement_status text,
@@ -117,7 +118,16 @@ contract_selection as (
     agreement.effective_from as agreement_effective_from,
     agreement.effective_to as agreement_effective_to,
     agreement.signed_at as agreement_signed_at,
-    coalesce(agreement.coverage_status, 'missing') as contract_coverage_status
+    coalesce(agreement.coverage_status, 'missing') as contract_coverage_status,
+    case
+      when st.tenancy_id is null then 0::bigint
+      else (
+        select count(*)::bigint
+        from public.lease_agreements draft
+        where draft.tenancy_id = st.tenancy_id
+          and draft.status = 'draft'
+      )
+    end as current_draft_agreement_count
   from selected_tenancy st
   left join lateral (
     select
@@ -128,48 +138,32 @@ contract_selection as (
       a.effective_to,
       a.signed_at,
       case
-        when a.signed_at is not null
-          and a.effective_from <= p_as_of
-          and (a.effective_to is null or a.effective_to >= p_as_of)
-          and a.status in ('signed', 'superseded', 'terminated')
+        when a.effective_from <= p_as_of
           then 'effective'
-        when a.status = 'signed'
-          and a.signed_at is not null
-          and a.effective_from > p_as_of
-          then 'future_signed'
-        when a.status = 'draft'
-          then 'draft_only'
-        else null
+        else 'future_signed'
       end as coverage_status,
       case
-        when a.signed_at is not null
-          and a.effective_from <= p_as_of
-          and (a.effective_to is null or a.effective_to >= p_as_of)
-          and a.status in ('signed', 'superseded', 'terminated')
-          then 1
-        when a.status = 'signed'
-          and a.signed_at is not null
-          and a.effective_from > p_as_of
-          then 2
-        when a.status = 'draft'
-          then 3
-        else 99
+        when a.effective_from <= p_as_of then 1
+        else 2
       end as coverage_rank
     from public.lease_agreements a
     where a.tenancy_id = st.tenancy_id
+      and a.signed_at is not null
+      and a.status in ('signed', 'superseded', 'terminated')
       and (
         (
-          a.signed_at is not null
-          and a.effective_from <= p_as_of
+          a.effective_from <= p_as_of
           and (a.effective_to is null or a.effective_to >= p_as_of)
-          and a.status in ('signed', 'superseded', 'terminated')
+          and not exists (
+            select 1
+            from public.lease_agreements successor
+            where successor.predecessor_agreement_id = a.id
+              and successor.signed_at is not null
+              and successor.status in ('signed', 'superseded', 'terminated')
+              and successor.effective_from <= p_as_of
+          )
         )
-        or (
-          a.status = 'signed'
-          and a.signed_at is not null
-          and a.effective_from > p_as_of
-        )
-        or a.status = 'draft'
+        or a.effective_from > p_as_of
       )
     order by
       coverage_rank,
@@ -299,6 +293,7 @@ select
   wt.tenancy_actual_start,
   wt.tenancy_actual_end,
   wt.contract_coverage_status,
+  wt.current_draft_agreement_count,
   wt.agreement_id,
   wt.agreement_code,
   wt.agreement_status,
