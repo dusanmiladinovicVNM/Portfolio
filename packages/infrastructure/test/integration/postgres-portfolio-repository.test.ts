@@ -126,6 +126,7 @@ import {
   PostgresOwnershipRepository,
   PostgresPartyRepository,
   PostgresPortfolioRepository,
+  PostgresReportingRepository,
   PostgresTenancyRepository,
   PostgresUnitTimelineRepository,
   PostgresUserAccessRepository,
@@ -154,6 +155,7 @@ const improvementRepository = new PostgresImprovementRepository(sql);
 const maintenanceRepository = new PostgresMaintenanceRepository(sql);
 const meterRepository = new PostgresMeterRepository(sql);
 const unitTimelineRepository = new PostgresUnitTimelineRepository(sql);
+const reportingRepository = new PostgresReportingRepository(sql);
 
 class SequenceIds implements IdGenerator {
   private index = 0;
