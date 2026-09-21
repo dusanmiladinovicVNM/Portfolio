@@ -205,6 +205,7 @@ export function inspectionDraftResetKey(
 export function mergeInspectionStart(
   current: InspectionBundleResponse,
   targetInspectionId: string,
+  expectedVersion: number,
   inspection: InspectionResponseDto,
 ): InspectionBundleResponse {
   if (inspection.id !== targetInspectionId) {
@@ -212,7 +213,12 @@ export function mergeInspectionStart(
       'Inspection start response crossed its aggregate ownership boundary.',
     );
   }
-  if (current.inspection.id !== targetInspectionId) return current;
+  if (
+    current.inspection.id !== targetInspectionId ||
+    current.inspection.version !== expectedVersion
+  ) {
+    return current;
+  }
   return { ...current, inspection };
 }
 
@@ -220,9 +226,15 @@ export function mergeInspectionSectionSave(
   current: InspectionBundleResponse,
   targetInspectionId: string,
   targetSectionId: string,
+  expectedRevision: number,
   saved: SaveInspectionSectionResponse,
 ): InspectionBundleResponse {
-  if (current.inspection.id !== targetInspectionId) return current;
+  if (
+    current.inspection.id !== targetInspectionId ||
+    sectionRevision(current, targetSectionId) !== expectedRevision
+  ) {
+    return current;
+  }
 
   for (const response of saved.responses) {
     if (
@@ -649,6 +661,7 @@ export function UnitInspections({
           ? mergeInspectionStart(
               current,
               targetInspectionId,
+              expectedVersion,
               inspection,
             )
           : current,
@@ -698,6 +711,7 @@ export function UnitInspections({
               current,
               targetInspectionId,
               targetSectionId,
+              requestPatch.expectedRevision,
               saved,
             )
           : current,

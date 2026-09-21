@@ -100,7 +100,7 @@ describe('Inspection async ownership', () => {
     const pending = deferred<InspectionResponseDto>();
 
     const completion = pending.promise.then((result) => {
-      current = mergeInspectionStart(current, inspectionA, result);
+      current = mergeInspectionStart(current, inspectionA, 1, result);
     });
 
     current = bundle(inspectionB);
@@ -127,6 +127,7 @@ describe('Inspection async ownership', () => {
         current,
         inspectionA,
         section1,
+        0,
         saved,
       );
       if (inspectionDraftResetKey(current, section2) !== section2KeyBefore) {
@@ -167,6 +168,7 @@ describe('Inspection async ownership', () => {
       current,
       inspectionA,
       section1,
+      0,
       {
         revision: 1,
         contentRevision: 1,
@@ -180,6 +182,53 @@ describe('Inspection async ownership', () => {
       current.sectionStates.find((state) => state.sectionId === section1)
         ?.revision,
     ).toBe(1);
+  });
+
+
+  it('ignores a late Start result if the same Inspection was reloaded at a newer lifecycle version', () => {
+    const current = {
+      ...bundle(inspectionA),
+      inspection: {
+        ...inspection(inspectionA, 'in_progress'),
+        version: 3,
+      },
+    };
+
+    const merged = mergeInspectionStart(
+      current,
+      inspectionA,
+      1,
+      {
+        ...inspection(inspectionA, 'in_progress'),
+        version: 2,
+      },
+    );
+
+    expect(merged).toBe(current);
+    expect(merged.inspection.version).toBe(3);
+  });
+
+  it('ignores a late section-save result if that section already has a newer canonical revision', () => {
+    const current = bundle(inspectionA, [2, 0]);
+
+    const merged = mergeInspectionSectionSave(
+      current,
+      inspectionA,
+      section1,
+      0,
+      {
+        revision: 1,
+        contentRevision: 1,
+        responses: [],
+        clearedItemIds: [],
+      },
+    );
+
+    expect(merged).toBe(current);
+    expect(
+      merged.sectionStates.find((state) => state.sectionId === section1)
+        ?.revision,
+    ).toBe(2);
   });
 
 });
