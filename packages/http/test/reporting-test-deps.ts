@@ -9,6 +9,9 @@ import type {
 export class InMemoryReportingRepository implements ReportingRepository {
   readonly unitOverviews = new Map<UnitId, UnitReportingOverview>();
 
+  lastUnitAsOf: DateOnly | null = null;
+  lastDashboardAsOf: DateOnly | null = null;
+
   dashboard: PortfolioDashboard = {
     asOf: '2026-09-21' as DateOnly,
     propertyCount: 0,
@@ -35,12 +38,14 @@ export class InMemoryReportingRepository implements ReportingRepository {
     unitId: UnitId,
     _asOf: DateOnly,
   ): Promise<UnitReportingOverview | null> {
+    this.lastUnitAsOf = _asOf;
     return this.unitOverviews.get(unitId) ?? null;
   }
 
   async getPortfolioDashboard(
     _asOf: DateOnly,
   ): Promise<PortfolioDashboard> {
+    this.lastDashboardAsOf = _asOf;
     return this.dashboard;
   }
 }
