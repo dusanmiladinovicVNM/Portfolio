@@ -49,3 +49,12 @@ export function partiesByIdsPath(ids: readonly string[]): string {
   }
   return `/parties?${search.toString()}`;
 }
+
+
+export function agreementDocumentsPath(agreementId: string): string {
+  return `/agreements/${encodeURIComponent(agreementId)}/documents`;
+}
+
+export function amendmentDocumentsPath(amendmentId: string): string {
+  return `/amendments/${encodeURIComponent(amendmentId)}/documents`;
+}

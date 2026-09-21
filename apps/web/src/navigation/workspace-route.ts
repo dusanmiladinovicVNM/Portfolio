@@ -25,7 +25,20 @@ export type WorkspaceRoute =
       readonly asOf: string;
       readonly tenancyId?: string;
       readonly agreementId?: string;
+      readonly amendmentId?: string;
     };
+
+export function isWorkspaceAsOf(value: string): boolean {
+  return reportingAsOfQuerySchema.safeParse({ asOf: value }).success;
+}
+
+function requireWorkspaceAsOf(value: string): string {
+  const parsed = reportingAsOfQuerySchema.safeParse({ asOf: value });
+  if (!parsed.success) {
+    throw new Error('Workspace asOf must be a valid DateOnly value.');
+  }
+  return parsed.data.asOf;
+}
 
 function readAsOf(search: URLSearchParams, fallback: string): string {
   const parsed = reportingAsOfQuerySchema.safeParse({
@@ -56,19 +69,24 @@ function readEntityId(value: string | undefined): string | null {
 }
 
 export function dashboardRoute(asOf: string): WorkspaceRoute {
-  return { kind: 'dashboard', asOf };
+  return { kind: 'dashboard', asOf: requireWorkspaceAsOf(asOf) };
 }
 
 export function propertyRoute(
   propertyId: string,
   asOf: string,
 ): WorkspaceRoute {
-  return { kind: 'property', propertyId, asOf };
+  return {
+    kind: 'property',
+    propertyId,
+    asOf: requireWorkspaceAsOf(asOf),
+  };
 }
 
 export interface UnitRouteSelection {
   readonly tenancyId?: string;
   readonly agreementId?: string;
+  readonly amendmentId?: string;
 }
 
 export function unitRoute(
@@ -82,15 +100,20 @@ export function unitRoute(
     tab === 'contracts' ? selection.tenancyId : undefined;
   const agreementId =
     tab === 'contracts' && tenancyId ? selection.agreementId : undefined;
+  const amendmentId =
+    tab === 'contracts' && tenancyId && agreementId
+      ? selection.amendmentId
+      : undefined;
 
   return {
     kind: 'unit',
     propertyId,
     unitId,
     tab,
-    asOf,
+    asOf: requireWorkspaceAsOf(asOf),
     ...(tenancyId ? { tenancyId } : {}),
     ...(agreementId ? { agreementId } : {}),
+    ...(amendmentId ? { amendmentId } : {}),
   };
 }
 
@@ -122,10 +145,15 @@ export function parseWorkspaceLocation(
         tab === 'contracts' && tenancyId
           ? readEntityId(search.get('agreementId') ?? undefined)
           : null;
+      const amendmentId =
+        tab === 'contracts' && tenancyId && agreementId
+          ? readEntityId(search.get('amendmentId') ?? undefined)
+          : null;
 
       return unitRoute(propertyId, unitId, asOf, tab, {
         ...(tenancyId ? { tenancyId } : {}),
         ...(agreementId ? { agreementId } : {}),
+        ...(amendmentId ? { amendmentId } : {}),
       });
     }
   }
@@ -147,6 +175,9 @@ export function workspaceRouteHref(route: WorkspaceRoute): string {
       search.set('tenancyId', route.tenancyId);
       if (route.agreementId) {
         search.set('agreementId', route.agreementId);
+        if (route.amendmentId) {
+          search.set('amendmentId', route.amendmentId);
+        }
       }
     }
   }

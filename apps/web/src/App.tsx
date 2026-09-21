@@ -165,6 +165,15 @@ function AuthenticatedShell({
                 route.unitId,
                 route.asOf,
                 route.tab,
+                {
+                  ...(route.tenancyId ? { tenancyId: route.tenancyId } : {}),
+                  ...(route.agreementId
+                    ? { agreementId: route.agreementId }
+                    : {}),
+                  ...(route.amendmentId
+                    ? { amendmentId: route.amendmentId }
+                    : {}),
+                },
               )}
             >
               Unit dossier
@@ -210,6 +219,7 @@ function AuthenticatedShell({
             tab={route.tab}
             tenancyId={route.tenancyId}
             agreementId={route.agreementId}
+            amendmentId={route.amendmentId}
             unitId={route.unitId}
           />
         ) : null}

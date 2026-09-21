@@ -1,9 +1,13 @@
 import {
+  leaseAgreementDocumentListResponseSchema,
   leaseAgreementListResponseSchema,
+  leaseAmendmentDocumentListResponseSchema,
   leaseAmendmentListResponseSchema,
   tenancyListResponseSchema,
   tenancyTermVersionResponseSchema,
+  type LeaseAgreementDocumentReferenceResponse,
   type LeaseAgreementResponse,
+  type LeaseAmendmentDocumentReferenceResponse,
   type LeaseAmendmentResponse,
   type TenancyResponse,
   type TenancyTermVersionResponse,
@@ -11,6 +15,8 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import {
   agreementAmendmentsPath,
+  agreementDocumentsPath,
+  amendmentDocumentsPath,
   tenancyAgreementsPath,
   tenancyTermsPath,
   unitTenanciesPath,
@@ -20,7 +26,10 @@ import {
   type PortfolioApi,
 } from '../api/portfolio-api.js';
 import { WorkspaceLink } from '../navigation/WorkspaceLink.js';
-import { unitRoute } from '../navigation/workspace-route.js';
+import {
+  isWorkspaceAsOf,
+  unitRoute,
+} from '../navigation/workspace-route.js';
 import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
 import {
   formatDetailKey,
@@ -38,6 +47,7 @@ interface UnitContractsProps {
   readonly asOf: string;
   readonly tenancyId?: string | undefined;
   readonly agreementId?: string | undefined;
+  readonly amendmentId?: string | undefined;
   readonly navigate: NavigateWorkspace;
 }
 
@@ -47,6 +57,10 @@ type TermsState =
   | { readonly kind: 'missing' }
   | { readonly kind: 'ready'; readonly value: TenancyTermVersionResponse }
   | { readonly kind: 'error'; readonly message: string };
+
+type LegalDocumentReference =
+  | LeaseAgreementDocumentReferenceResponse
+  | LeaseAmendmentDocumentReferenceResponse;
 
 function tenancyPeriod(tenancy: TenancyResponse): string {
   if (tenancy.actualStart) {
@@ -152,10 +166,103 @@ function TermsPanel({
   );
 }
 
+function LegalDocuments({
+  label,
+  items,
+  error,
+}: {
+  readonly label: string;
+  readonly items: readonly LegalDocumentReference[] | null;
+  readonly error: string | null;
+}) {
+  return (
+    <div className="legal-documents">
+      <div className="legal-documents-heading">
+        <div>
+          <p className="eyebrow">{label}</p>
+          <h3>Linked Documents</h3>
+        </div>
+        <span className="section-note">
+          Metadata only · binary access remains behind Portfolio HTTP/storage
+        </span>
+      </div>
+
+      {error ? (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {!error && items === null ? (
+        <p className="muted" aria-live="polite">
+          Loading linked Documents…
+        </p>
+      ) : null}
+      {items?.length === 0 ? (
+        <p className="muted">No Documents are linked to this legal record.</p>
+      ) : null}
+
+      {items && items.length > 0 ? (
+        <div className="legal-document-list">
+          {items.map((reference) => (
+            <article className="legal-document-card" key={reference.link.id}>
+              <div>
+                <span className="legal-document-relation">
+                  {reference.link.relation === 'signed_original'
+                    ? 'Signed original'
+                    : formatDetailKey(reference.link.relation)}
+                </span>
+                <strong>
+                  {reference.linkedVersion?.fileName ?? reference.document.title}
+                </strong>
+                <small>
+                  {reference.document.code} · {reference.document.title}
+                </small>
+              </div>
+              <div className="legal-document-version">
+                {reference.linkedVersion ? (
+                  <>
+                    <strong>
+                      v{reference.linkedVersion.versionNumber} ·{' '}
+                      {reference.linkedVersion.status}
+                    </strong>
+                    <small>{reference.linkedVersion.mimeType}</small>
+                  </>
+                ) : (
+                  <>
+                    <strong>Document-level link</strong>
+                    <small>
+                      Latest registered version:{' '}
+                      {reference.document.latestVersionNumber}
+                    </small>
+                  </>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function Amendments({
   items,
+  propertyId,
+  unitId,
+  asOf,
+  tenancyId,
+  agreementId,
+  amendmentId,
+  navigate,
 }: {
   readonly items: readonly LeaseAmendmentResponse[] | null;
+  readonly propertyId: string;
+  readonly unitId: string;
+  readonly asOf: string;
+  readonly tenancyId: string;
+  readonly agreementId: string;
+  readonly amendmentId?: string | undefined;
+  readonly navigate: NavigateWorkspace;
 }) {
   if (items === null) {
     return <p className="muted" aria-live="polite">Loading Amendments…</p>;
@@ -168,7 +275,19 @@ function Amendments({
   return (
     <div className="amendment-list">
       {items.map((amendment) => (
-        <article key={amendment.id}>
+        <WorkspaceLink
+          ariaCurrent={amendment.id === amendmentId ? 'page' : undefined}
+          className={`amendment-card ${
+            amendment.id === amendmentId ? 'amendment-card-active' : ''
+          }`}
+          key={amendment.id}
+          navigate={navigate}
+          route={unitRoute(propertyId, unitId, asOf, 'contracts', {
+            tenancyId,
+            agreementId,
+            amendmentId: amendment.id,
+          })}
+        >
           <div>
             <strong>{amendment.code}</strong>
             <span>{amendment.title}</span>
@@ -178,7 +297,7 @@ function Amendments({
             <div><dt>Effective</dt><dd>{amendment.effectiveFrom}</dd></div>
             <div><dt>Signed</dt><dd>{amendment.signedAt ?? '—'}</dd></div>
           </dl>
-        </article>
+        </WorkspaceLink>
       ))}
     </div>
   );
@@ -191,6 +310,7 @@ export function UnitContracts({
   asOf,
   tenancyId,
   agreementId,
+  amendmentId,
   navigate,
 }: UnitContractsProps) {
   const [tenancies, setTenancies] =
@@ -202,6 +322,14 @@ export function UnitContracts({
   const [amendments, setAmendments] =
     useState<readonly LeaseAmendmentResponse[] | null>(null);
   const [amendmentError, setAmendmentError] = useState<string | null>(null);
+  const [agreementDocuments, setAgreementDocuments] =
+    useState<readonly LeaseAgreementDocumentReferenceResponse[] | null>(null);
+  const [agreementDocumentsError, setAgreementDocumentsError] =
+    useState<string | null>(null);
+  const [amendmentDocuments, setAmendmentDocuments] =
+    useState<readonly LeaseAmendmentDocumentReferenceResponse[] | null>(null);
+  const [amendmentDocumentsError, setAmendmentDocumentsError] =
+    useState<string | null>(null);
   const [termsState, setTermsState] = useState<TermsState>({ kind: 'idle' });
 
   useEffect(() => {
@@ -303,9 +431,15 @@ export function UnitContracts({
   useEffect(() => {
     setAmendments(null);
     setAmendmentError(null);
+    setAgreementDocuments(null);
+    setAgreementDocumentsError(null);
+    setAmendmentDocuments(null);
+    setAmendmentDocumentsError(null);
+
     if (!selectedAgreement) return;
 
     const controller = new AbortController();
+
     void api
       .get(
         agreementAmendmentsPath(selectedAgreement.id),
@@ -322,8 +456,58 @@ export function UnitContracts({
         );
       });
 
+    void api
+      .get(
+        agreementDocumentsPath(selectedAgreement.id),
+        leaseAgreementDocumentListResponseSchema,
+        { signal: controller.signal },
+      )
+      .then((response) => setAgreementDocuments(response.items))
+      .catch((cause: unknown) => {
+        if (controller.signal.aborted) return;
+        setAgreementDocumentsError(
+          cause instanceof Error
+            ? cause.message
+            : 'Agreement Documents could not be loaded.',
+        );
+      });
+
     return () => controller.abort();
   }, [api, selectedAgreement]);
+
+  const selectedAmendment = useMemo(
+    () => amendments?.find((item) => item.id === amendmentId) ?? null,
+    [amendments, amendmentId],
+  );
+  const amendmentSelectionInvalid =
+    amendments !== null &&
+    amendmentId !== undefined &&
+    selectedAmendment === null;
+
+  useEffect(() => {
+    setAmendmentDocuments(null);
+    setAmendmentDocumentsError(null);
+    if (!selectedAmendment) return;
+
+    const controller = new AbortController();
+    void api
+      .get(
+        amendmentDocumentsPath(selectedAmendment.id),
+        leaseAmendmentDocumentListResponseSchema,
+        { signal: controller.signal },
+      )
+      .then((response) => setAmendmentDocuments(response.items))
+      .catch((cause: unknown) => {
+        if (controller.signal.aborted) return;
+        setAmendmentDocumentsError(
+          cause instanceof Error
+            ? cause.message
+            : 'Amendment Documents could not be loaded.',
+        );
+      });
+
+    return () => controller.abort();
+  }, [api, selectedAmendment]);
 
   return (
     <div className="contract-stack">
@@ -339,21 +523,26 @@ export function UnitContracts({
           Terms as of
           <input
             aria-label="Contract effective terms business date"
-            onChange={(event) =>
+            onChange={(event) => {
+              const nextAsOf = event.currentTarget.value;
+              if (!isWorkspaceAsOf(nextAsOf)) return;
+
               navigate(
                 unitRoute(
                   propertyId,
                   unitId,
-                  event.currentTarget.value,
+                  nextAsOf,
                   'contracts',
                   {
                     ...(tenancyId ? { tenancyId } : {}),
                     ...(agreementId ? { agreementId } : {}),
+                    ...(amendmentId ? { amendmentId } : {}),
                   },
                 ),
                 { replace: true },
-              )
-            }
+              );
+            }}
+            required
             type="date"
             value={asOf}
           />
@@ -506,21 +695,75 @@ export function UnitContracts({
       ) : null}
 
       {selectedAgreement ? (
+        <>
+          <section className="panel">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Step 3 · Agreement Documents</p>
+                <h2>{selectedAgreement.code}</h2>
+              </div>
+              <span className="section-note">
+                Canonical links targeted to this Agreement
+              </span>
+            </div>
+            <LegalDocuments
+              error={agreementDocumentsError}
+              items={agreementDocuments}
+              label="Agreement legal record"
+            />
+          </section>
+
+          <section className="panel">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Step 4 · Amendments</p>
+                <h2>{selectedAgreement.code}</h2>
+              </div>
+              <span className="section-note">
+                Select an Amendment to inspect its own Documents
+              </span>
+            </div>
+
+            {amendmentError ? (
+              <p className="form-error" role="alert">{amendmentError}</p>
+            ) : null}
+            {!amendmentError ? (
+              <Amendments
+                agreementId={selectedAgreement.id}
+                amendmentId={amendmentId}
+                asOf={asOf}
+                items={amendments}
+                navigate={navigate}
+                propertyId={propertyId}
+                tenancyId={selectedTenancy!.id}
+                unitId={unitId}
+              />
+            ) : null}
+            {amendmentSelectionInvalid ? (
+              <p className="form-error" role="alert">
+                The selected Amendment does not belong to the selected Agreement.
+              </p>
+            ) : null}
+          </section>
+        </>
+      ) : null}
+
+      {selectedAmendment ? (
         <section className="panel">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">Step 3 · Amendments</p>
-              <h2>{selectedAgreement.code}</h2>
+              <p className="eyebrow">Step 5 · Amendment Documents</p>
+              <h2>{selectedAmendment.code}</h2>
             </div>
             <span className="section-note">
-              Current amendment lifecycle records
+              Canonical links targeted to this Amendment
             </span>
           </div>
-
-          {amendmentError ? (
-            <p className="form-error" role="alert">{amendmentError}</p>
-          ) : null}
-          {!amendmentError ? <Amendments items={amendments} /> : null}
+          <LegalDocuments
+            error={amendmentDocumentsError}
+            items={amendmentDocuments}
+            label="Amendment legal record"
+          />
         </section>
       ) : null}
     </div>

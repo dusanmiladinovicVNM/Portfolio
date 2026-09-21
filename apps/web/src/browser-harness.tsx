@@ -14,6 +14,12 @@ const landlordPartyId = '88888888-8888-4888-8888-888888888888';
 const tenantPartyId = '99999999-9999-4999-8999-999999999999';
 const termId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const amendmentId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const agreementDocumentId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const agreementVersionId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+const agreementDocumentLinkId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+const amendmentDocumentId = 'f1111111-1111-4111-8111-111111111111';
+const amendmentVersionId = 'f2222222-2222-4222-8222-222222222222';
+const amendmentDocumentLinkId = 'f3333333-3333-4333-8333-333333333333';
 
 const operations = {
   openMaintenanceIssueCount: 0,
@@ -133,6 +139,68 @@ const amendment = {
   status: 'signed',
   signedAt: '2025-06-15',
   version: 2,
+};
+
+const agreementDocumentReference = {
+  document: {
+    id: agreementDocumentId,
+    code: 'DOC-AGR-BRW',
+    title: 'Signed lease original',
+    category: 'legal',
+    status: 'active',
+    latestVersionNumber: 3,
+    revision: 4,
+  },
+  link: {
+    id: agreementDocumentLinkId,
+    documentId: agreementDocumentId,
+    documentVersionId: agreementVersionId,
+    relation: 'signed_original',
+    targetType: 'lease_agreement',
+    targetId: agreementId,
+  },
+  linkedVersion: {
+    id: agreementVersionId,
+    documentId: agreementDocumentId,
+    versionNumber: 3,
+    fileName: 'LEASE-2026.pdf',
+    mimeType: 'application/pdf',
+    byteSize: 2048,
+    sha256: 'c'.repeat(64),
+    status: 'final',
+    finalizedAt: '2024-12-20T12:00:00.000Z',
+  },
+};
+
+const amendmentDocumentReference = {
+  document: {
+    id: amendmentDocumentId,
+    code: 'DOC-AMD-BRW',
+    title: 'Signed amendment original',
+    category: 'legal',
+    status: 'active',
+    latestVersionNumber: 2,
+    revision: 3,
+  },
+  link: {
+    id: amendmentDocumentLinkId,
+    documentId: amendmentDocumentId,
+    documentVersionId: amendmentVersionId,
+    relation: 'signed_original',
+    targetType: 'lease_amendment',
+    targetId: amendmentId,
+  },
+  linkedVersion: {
+    id: amendmentVersionId,
+    documentId: amendmentDocumentId,
+    versionNumber: 2,
+    fileName: 'LEASE-AMENDMENT-2026.pdf',
+    mimeType: 'application/pdf',
+    byteSize: 1024,
+    sha256: 'd'.repeat(64),
+    status: 'final',
+    finalizedAt: '2025-06-15T12:00:00.000Z',
+  },
 };
 
 const parties = [
@@ -297,6 +365,14 @@ globalThis.fetch = async (input: RequestInfo | URL): Promise<Response> => {
 
   if (path === `/agreements/${agreementId}/amendments`) {
     return json({ items: [amendment] });
+  }
+
+  if (path === `/agreements/${agreementId}/documents`) {
+    return json({ items: [agreementDocumentReference] });
+  }
+
+  if (path === `/amendments/${amendmentId}/documents`) {
+    return json({ items: [amendmentDocumentReference] });
   }
 
   if (path === '/parties') {

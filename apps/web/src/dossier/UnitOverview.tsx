@@ -5,6 +5,7 @@ import {
 import { useEffect, useState } from 'react';
 import { unitOverviewPath } from '../api/paths.js';
 import type { PortfolioApi } from '../api/portfolio-api.js';
+import { isWorkspaceAsOf } from '../navigation/workspace-route.js';
 import { formatExactMoney } from '../presentation/format.js';
 
 interface UnitOverviewProps {
@@ -75,7 +76,12 @@ export function UnitOverview({
           Overview as of
           <input
             aria-label="Unit overview business date"
-            onChange={(event) => onAsOfChange(event.currentTarget.value)}
+            onChange={(event) => {
+              const nextAsOf = event.currentTarget.value;
+              if (!isWorkspaceAsOf(nextAsOf)) return;
+              onAsOfChange(nextAsOf);
+            }}
+            required
             type="date"
             value={asOf}
           />

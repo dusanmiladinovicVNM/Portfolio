@@ -9,6 +9,7 @@ const propertyId = '11111111-1111-4111-8111-111111111111';
 const unitId = '22222222-2222-4222-8222-222222222222';
 const tenancyId = '33333333-3333-4333-8333-333333333333';
 const agreementId = '55555555-5555-4555-8555-555555555555';
+const amendmentId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
 const logs = [];
 
@@ -102,6 +103,14 @@ async function waitForElement(sessionId, using, value, timeoutMs = 10000) {
 async function clickXpath(sessionId, xpath) {
   const id = await waitForElement(sessionId, 'xpath', xpath);
   await webdriver(`/session/${sessionId}/element/${id}/click`, {
+    method: 'POST',
+    body: {},
+  });
+}
+
+async function clearXpath(sessionId, xpath) {
+  const id = await waitForElement(sessionId, 'xpath', xpath);
+  await webdriver(`/session/${sessionId}/element/${id}/clear`, {
     method: 'POST',
     body: {},
   });
@@ -283,20 +292,66 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[.//p[normalize-space()='Step 3 · Amendments']]//h2[normalize-space()='AGR-BRW']",
+    "//section[.//p[normalize-space()='Step 3 · Agreement Documents']]//h2[normalize-space()='AGR-BRW']",
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//strong[normalize-space()='AMD-BRW']",
+    "//strong[normalize-space()='LEASE-2026.pdf']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'amendment-card')][.//strong[normalize-space()='AMD-BRW']]",
   );
 
-  const expectedDeepLink =
+  const agreementDeepLink =
     `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=contracts&tenancyId=${tenancyId}&agreementId=${agreementId}&asOf=2025-06-30`;
   assertEqual(
     await currentUrl(sessionId),
+    agreementDeepLink,
+    'Agreement contract deep-link URL',
+  );
+
+  await clickXpath(sessionId, "//aside//a[normalize-space()='Unit dossier']");
+  assertEqual(
+    await currentUrl(sessionId),
+    agreementDeepLink,
+    'Active Unit dossier link preserves Contract selection',
+  );
+
+  await clearXpath(
+    sessionId,
+    "//input[@aria-label='Contract effective terms business date']",
+  );
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  assertEqual(
+    await currentUrl(sessionId),
+    agreementDeepLink,
+    'Empty Contract date does not create an invalid route',
+  );
+
+  await clickXpath(
+    sessionId,
+    "//a[contains(@class,'amendment-card')][.//strong[normalize-space()='AMD-BRW']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[.//p[normalize-space()='Step 5 · Amendment Documents']]//h2[normalize-space()='AMD-BRW']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//strong[normalize-space()='LEASE-AMENDMENT-2026.pdf']",
+  );
+
+  const expectedDeepLink =
+    `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=contracts&tenancyId=${tenancyId}&agreementId=${agreementId}&amendmentId=${amendmentId}&asOf=2025-06-30`;
+  assertEqual(
+    await currentUrl(sessionId),
     expectedDeepLink,
-    'Contract deep-link URL',
+    'Amendment contract deep-link URL',
   );
 
   await webdriver(`/session/${sessionId}/refresh`, {
@@ -306,12 +361,17 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[.//p[normalize-space()='Step 3 · Amendments']]//h2[normalize-space()='AGR-BRW']",
+    "//section[.//p[normalize-space()='Step 5 · Amendment Documents']]//h2[normalize-space()='AMD-BRW']",
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//strong[normalize-space()='AMD-BRW']",
+    "//strong[normalize-space()='LEASE-2026.pdf']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//strong[normalize-space()='LEASE-AMENDMENT-2026.pdf']",
   );
   await waitForElement(
     sessionId,
@@ -325,7 +385,7 @@ try {
   );
 
   process.stdout.write(
-    'Browser workflow PASS: Dashboard → Property → Unit → Contracts → Tenancy → Agreement → refresh\n',
+    'Browser workflow PASS: Dashboard → Property → Unit → Contracts → Tenancy → Agreement → Amendment → refresh\n',
   );
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.stack : error}\n`);

@@ -6,7 +6,11 @@ import { useEffect, useState } from 'react';
 import { reportingDashboardPath } from '../api/paths.js';
 import type { PortfolioApi } from '../api/portfolio-api.js';
 import { WorkspaceLink } from '../navigation/WorkspaceLink.js';
-import { propertyRoute } from '../navigation/workspace-route.js';
+import {
+  dashboardRoute,
+  isWorkspaceAsOf,
+  propertyRoute,
+} from '../navigation/workspace-route.js';
 import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
 import { formatExactMoney } from '../presentation/format.js';
 
@@ -81,12 +85,12 @@ export function PortfolioDashboard({
           As of
           <input
             aria-label="Reporting business date"
-            onChange={(event) =>
-              navigate(
-                { kind: 'dashboard', asOf: event.currentTarget.value },
-                { replace: true },
-              )
-            }
+            onChange={(event) => {
+              const nextAsOf = event.currentTarget.value;
+              if (!isWorkspaceAsOf(nextAsOf)) return;
+              navigate(dashboardRoute(nextAsOf), { replace: true });
+            }}
+            required
             type="date"
             value={asOf}
           />

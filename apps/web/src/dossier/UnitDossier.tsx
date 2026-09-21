@@ -27,6 +27,7 @@ interface UnitDossierProps {
   readonly asOf: string;
   readonly tenancyId?: string | undefined;
   readonly agreementId?: string | undefined;
+  readonly amendmentId?: string | undefined;
   readonly navigate: NavigateWorkspace;
 }
 
@@ -38,6 +39,7 @@ export function UnitDossier({
   asOf,
   tenancyId,
   agreementId,
+  amendmentId,
   navigate,
 }: UnitDossierProps) {
   const [unit, setUnit] = useState<UnitResponse | null>(null);
@@ -137,6 +139,7 @@ export function UnitDossier({
               route={unitRoute(propertyId, unitId, asOf, 'contracts', {
                 ...(tenancyId ? { tenancyId } : {}),
                 ...(agreementId ? { agreementId } : {}),
+                ...(amendmentId ? { amendmentId } : {}),
               })}
             >
               Contracts
@@ -197,6 +200,7 @@ export function UnitDossier({
               asOf={asOf}
               tenancyId={tenancyId}
               agreementId={agreementId}
+              amendmentId={amendmentId}
               navigate={navigate}
             />
           ) : null}
