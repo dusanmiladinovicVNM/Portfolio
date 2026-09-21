@@ -4,6 +4,7 @@ export interface CreateSubmissionGuard {
   readonly tryStart: () => boolean;
   readonly finish: () => void;
   readonly isMounted: () => boolean;
+  readonly isInFlight: () => boolean;
 }
 
 export function useCreateSubmissionGuard(): CreateSubmissionGuard {
@@ -28,6 +29,7 @@ export function useCreateSubmissionGuard(): CreateSubmissionGuard {
   }, []);
 
   const isMounted = useCallback(() => mountedRef.current, []);
+  const isInFlight = useCallback(() => inFlightRef.current, []);
 
-  return { tryStart, finish, isMounted };
+  return { tryStart, finish, isMounted, isInFlight };
 }
