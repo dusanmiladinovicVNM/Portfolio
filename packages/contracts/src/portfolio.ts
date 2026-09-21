@@ -79,9 +79,24 @@ export const spaceResponseSchema = z.object({
   active: z.boolean(),
 });
 
+export const propertyListResponseSchema = z.object({
+  items: z.array(propertyResponseSchema),
+});
+
+export const unitListResponseSchema = z.object({
+  items: z.array(unitResponseSchema),
+});
+
+export const spaceListResponseSchema = z.object({
+  items: z.array(spaceResponseSchema),
+});
+
 export type CreatePropertyRequest = z.infer<typeof createPropertyRequestSchema>;
 export type CreateUnitRequest = z.infer<typeof createUnitRequestSchema>;
 export type CreateSpaceRequest = z.infer<typeof createSpaceRequestSchema>;
 export type PropertyResponse = z.infer<typeof propertyResponseSchema>;
 export type UnitResponse = z.infer<typeof unitResponseSchema>;
 export type SpaceResponse = z.infer<typeof spaceResponseSchema>;
+export type PropertyListResponse = z.infer<typeof propertyListResponseSchema>;
+export type UnitListResponse = z.infer<typeof unitListResponseSchema>;
+export type SpaceListResponse = z.infer<typeof spaceListResponseSchema>;

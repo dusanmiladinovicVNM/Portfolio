@@ -86,6 +86,38 @@ export class InMemoryDocumentRepository implements DocumentRepository {
   async listLinksByDocument(documentId: DocumentId) {
     return this.links.filter((link) => link.documentId === documentId);
   }
+
+  async listTargetDocuments(
+    target: import('@portfolio/application').DocumentReadTarget,
+  ) {
+    return this.links
+      .filter(
+        (link) =>
+          link.targetType === target.targetType &&
+          link.targetId === target.targetId,
+      )
+      .map((link) => {
+        const document = this.documents.get(link.documentId);
+        if (!document) {
+          throw new Error(
+            'In-memory document link references a missing document.',
+          );
+        }
+
+        const linkedVersion =
+          link.documentVersionId === null
+            ? null
+            : this.versions.get(link.documentVersionId) ?? null;
+
+        if (link.documentVersionId !== null && linkedVersion === null) {
+          throw new Error(
+            'In-memory document link references a missing document version.',
+          );
+        }
+
+        return { document, link, linkedVersion };
+      });
+  }
 }
 
 export class MemoryFileStorage implements FileStoragePort {

@@ -24,3 +24,28 @@ export function listPartiesQuery(
   requireCapability(actor, 'parties:read');
   return repository.list();
 }
+
+
+export async function listPartiesByIdsQuery(
+  repository: PartyRepository,
+  actor: Actor,
+  ids: readonly PartyId[],
+): Promise<readonly Party[]> {
+  requireCapability(actor, 'parties:read');
+
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length === 0) return [];
+
+  const parties = await repository.getByIds(uniqueIds);
+  const loadedIds = new Set(parties.map((party) => party.id));
+  const missing = uniqueIds.find((id) => !loadedIds.has(id));
+
+  if (missing) {
+    throw new DomainError(
+      'PARTY_NOT_FOUND',
+      'One or more requested Parties were not found.',
+    );
+  }
+
+  return parties;
+}

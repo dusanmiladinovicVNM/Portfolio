@@ -56,6 +56,7 @@ class FailingDocumentRepository implements DocumentRepository {
   ): Promise<StorageObjectReference | null> { return null; }
   async insertLink(_link: DocumentLink) {}
   async listLinksByDocument(): Promise<readonly DocumentLink[]> { return []; }
+  async listTargetDocuments() { return []; }
 }
 
 class TrackingStorage implements FileStoragePort {

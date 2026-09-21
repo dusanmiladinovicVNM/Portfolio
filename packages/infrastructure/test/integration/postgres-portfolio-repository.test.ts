@@ -73,6 +73,9 @@ import {
   listPropertiesQuery,
   listSpacesByUnitQuery,
   listTenanciesByUnitQuery,
+  listLeaseAgreementDocumentsQuery,
+  listLeaseAmendmentDocumentsQuery,
+  listUnitDocumentsQuery,
   listUnitsByPropertyQuery,
   listAssetsByPropertyQuery,
   listAssetsByUnitQuery,
@@ -99,6 +102,7 @@ import {
   asCostId,
   asCostReversalId,
   asDocumentVersionId,
+  asLeaseAmendmentId,
   asInspectionResponseId,
   asOwnershipPeriodId,
   asPropertyId,
@@ -2145,6 +2149,8 @@ describe('PostgreSQL infrastructure', () => {
       '61000000-0000-4000-8000-000000000011',
       '61000000-0000-4000-8000-000000000012',
       '61000000-0000-4000-8000-000000000013',
+      '61000000-0000-4000-8000-000000000014',
+      '61000000-0000-4000-8000-000000000015',
     ]);
 
     const property = await createPropertyCommand(
@@ -2375,6 +2381,29 @@ describe('PostgreSQL infrastructure', () => {
 
     expect(link.relation).toBe('signed_original');
 
+    const agreementDocuments = await listLeaseAgreementDocumentsQuery(
+      documentRepository,
+      leaseRepository,
+      actor,
+      agreement.id,
+    );
+    expect(agreementDocuments).toHaveLength(1);
+    expect(agreementDocuments[0]).toMatchObject({
+      document: { id: document.id, code: 'DOC-DOC-INT' },
+      link: {
+        id: link.id,
+        relation: 'signed_original',
+        targetType: 'lease_agreement',
+        targetId: agreement.id,
+      },
+      linkedVersion: {
+        id: final.id,
+        versionNumber: 1,
+        fileName: 'signed-lease.pdf',
+        status: 'final',
+      },
+    });
+
     await expect(
       sql`
         update public.document_links
@@ -2518,6 +2547,62 @@ describe('PostgreSQL infrastructure', () => {
     ).rejects.toMatchObject({
       code: '23514',
       constraint_name: 'document_links_signed_original_amendment_signed',
+    });
+
+    const signedAmendment = await signLeaseAmendmentCommand(
+      {
+        leaseRepository,
+        tenancyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      asLeaseAmendmentId('62000000-0000-4000-8000-000000000004'),
+      1,
+      '2026-10-20',
+      {
+        currency: 'EUR',
+        baseRent: '825',
+      },
+    );
+    expect(signedAmendment.status).toBe('signed');
+
+    const amendmentLink = await linkDocumentCommand(
+      {
+        documentRepository,
+        portfolioRepository,
+        partyRepository,
+        tenancyRepository,
+        leaseRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        documentId: document.id,
+        documentVersionId: final.id,
+        relation: 'signed_original',
+        targetType: 'lease_amendment',
+        targetId: signedAmendment.id,
+      },
+    );
+
+    const amendmentDocuments = await listLeaseAmendmentDocumentsQuery(
+      documentRepository,
+      leaseRepository,
+      actor,
+      signedAmendment.id,
+    );
+    expect(amendmentDocuments).toHaveLength(1);
+    expect(amendmentDocuments[0]).toMatchObject({
+      link: {
+        id: amendmentLink.id,
+        relation: 'signed_original',
+        targetType: 'lease_amendment',
+        targetId: signedAmendment.id,
+      },
+      linkedVersion: {
+        id: final.id,
+        status: 'final',
+      },
     });
 
     const currentDocument = await documentRepository.getDocumentById(document.id);
@@ -11417,5 +11502,180 @@ describe('PostgreSQL infrastructure', () => {
       await writerSql.end();
     }
   });
+
+  it('reads Unit document links at link grain with exact optional versions', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+    const ids = new SequenceIds([
+      'c9f70000-0000-4000-8000-000000000001',
+      'c9f70000-0000-4000-8000-000000000002',
+      'c9f70000-0000-4000-8000-000000000003',
+      'c9f70000-0000-4000-8000-000000000004',
+      'c9f70000-0000-4000-8000-000000000005',
+      'c9f70000-0000-4000-8000-000000000006',
+      'c9f70000-0000-4000-8000-000000000007',
+    ]);
+
+    const property = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-UNIT-DOC-INT',
+        name: 'Unit document integration',
+        propertyType: 'apartment_building',
+        street: 'Document Street',
+        houseNumber: '1',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+
+    const unit = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-DOC-READ-INT',
+        unitNumber: 'D-1',
+        unitType: 'apartment',
+      },
+    );
+
+    const document = await createDocumentCommand(
+      { documentRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'DOC-UNIT-INT',
+        title: 'Unit technical evidence',
+        category: 'technical',
+      },
+    );
+
+    const fileStorage = {
+      async put(input: { objectKey: string; content: Uint8Array }) {
+        return {
+          provider: 'integration-test',
+          objectId: 'unit-document-object',
+          objectKey: input.objectKey,
+          byteSize: input.content.byteLength,
+          sha256: 'f'.repeat(64),
+          disposition: 'created' as const,
+        };
+      },
+      async stat(
+        reference: import('@portfolio/application').StorageObjectReference,
+      ) {
+        return {
+          ...reference,
+          byteSize: 4,
+          sha256: 'f'.repeat(64),
+        };
+      },
+      async remove() {},
+    };
+
+    const version = await uploadDocumentVersionCommand(
+      { documentRepository, fileStorage, idGenerator: ids },
+      actor,
+      {
+        documentId: document.id,
+        fileName: 'unit-evidence.pdf',
+        mimeType: 'application/pdf',
+        content: new Uint8Array([1, 2, 3, 4]),
+      },
+    );
+
+    await linkDocumentCommand(
+      {
+        documentRepository,
+        portfolioRepository,
+        partyRepository,
+        tenancyRepository,
+        leaseRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        documentId: document.id,
+        documentVersionId: version.id,
+        relation: 'supporting',
+        targetType: 'unit',
+        targetId: unit.id,
+      },
+    );
+
+    await linkDocumentCommand(
+      {
+        documentRepository,
+        portfolioRepository,
+        partyRepository,
+        tenancyRepository,
+        leaseRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        documentId: document.id,
+        relation: 'other',
+        targetType: 'unit',
+        targetId: unit.id,
+      },
+    );
+
+    await linkDocumentCommand(
+      {
+        documentRepository,
+        portfolioRepository,
+        partyRepository,
+        tenancyRepository,
+        leaseRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        documentId: document.id,
+        relation: 'attachment',
+        targetType: 'property',
+        targetId: property.id,
+      },
+    );
+
+    const references = await listUnitDocumentsQuery(
+      documentRepository,
+      portfolioRepository,
+      actor,
+      unit.id,
+    );
+
+    expect(references).toHaveLength(2);
+    expect(
+      references.every(
+        (reference) =>
+          reference.link.targetType === 'unit' &&
+          reference.link.targetId === unit.id &&
+          reference.document.id === document.id,
+      ),
+    ).toBe(true);
+
+    const supporting = references.find(
+      (reference) => reference.link.relation === 'supporting',
+    );
+    const documentLevel = references.find(
+      (reference) => reference.link.relation === 'other',
+    );
+
+    expect(supporting?.linkedVersion).toMatchObject({
+      id: version.id,
+      documentId: document.id,
+      versionNumber: 1,
+      fileName: 'unit-evidence.pdf',
+    });
+    expect(documentLevel?.link.documentVersionId).toBeNull();
+    expect(documentLevel?.linkedVersion).toBeNull();
+  });
+
 
 });

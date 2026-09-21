@@ -103,6 +103,10 @@ export const assetResponseSchema = z.object({
   identifiers: z.array(assetIdentifierResponseSchema),
 });
 
+export const assetListResponseSchema = z.object({
+  items: z.array(assetResponseSchema),
+});
+
 export const assetReplacementResponseSchema = z.object({
   id: entityIdSchema,
   replacedAssetId: entityIdSchema,
@@ -162,6 +166,7 @@ export type AssessAssetConditionRequest = z.infer<typeof assessAssetConditionReq
 export type AssignTenancyAssetRequest = z.infer<typeof assignTenancyAssetRequestSchema>;
 export type RecordTenancyAssetInventoryRequest = z.infer<typeof recordTenancyAssetInventoryRequestSchema>;
 export type AssetResponse = z.infer<typeof assetResponseSchema>;
+export type AssetListResponse = z.infer<typeof assetListResponseSchema>;
 export type AssetReplacementResponse = z.infer<typeof assetReplacementResponseSchema>;
 export type AssetLocationHistoryResponse = z.infer<typeof assetLocationHistoryResponseSchema>;
 export type AssetConditionAssessmentResponse = z.infer<typeof assetConditionAssessmentResponseSchema>;

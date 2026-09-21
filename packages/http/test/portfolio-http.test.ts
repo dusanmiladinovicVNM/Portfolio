@@ -12,7 +12,13 @@ import {
   type VerifiedIdentity,
 } from '@portfolio/application';
 import {
+  asDocumentId,
+  asDocumentLinkId,
+  asDocumentVersionId,
+  asLeaseAgreementId,
+  asLeaseAmendmentId,
   asPropertyId,
+  asTenancyId,
   asUnitId,
   asUserId,
   createPortfolioDashboard,
@@ -275,7 +281,12 @@ class SequenceClock implements ClockPort {
 }
 
 class EmptyLeaseRepository implements LeaseRepository {
-  async getAgreementById(_id: LeaseAgreementId): Promise<LeaseAgreement | null> { return null; }
+  readonly agreements = new Map<LeaseAgreementId, LeaseAgreement>();
+  readonly amendments = new Map<LeaseAmendmentId, LeaseAmendment>();
+
+  async getAgreementById(id: LeaseAgreementId): Promise<LeaseAgreement | null> {
+    return this.agreements.get(id) ?? null;
+  }
   async listAgreementsByTenancy(_tenancyId: TenancyId): Promise<readonly LeaseAgreement[]> { return []; }
   async agreementCodeExists(_code: string): Promise<boolean> { return false; }
   async successorExists(_predecessorAgreementId: LeaseAgreementId): Promise<boolean> { return false; }
@@ -289,7 +300,9 @@ class EmptyLeaseRepository implements LeaseRepository {
     _agreement: LeaseAgreement,
     _expectedVersion: number,
   ): Promise<void> {}
-  async getAmendmentById(_id: LeaseAmendmentId): Promise<LeaseAmendment | null> { return null; }
+  async getAmendmentById(id: LeaseAmendmentId): Promise<LeaseAmendment | null> {
+    return this.amendments.get(id) ?? null;
+  }
   async listAmendmentsByAgreement(
     _agreementId: LeaseAgreementId,
   ): Promise<readonly LeaseAmendment[]> { return []; }
@@ -321,6 +334,8 @@ function buildHandler(
     readonly portfolioRepository?: InMemoryPortfolioRepository;
     readonly unitTimelineRepository?: InMemoryUnitTimelineRepository;
     readonly reportingRepository?: InMemoryReportingRepository;
+    readonly leaseRepository?: EmptyLeaseRepository;
+    readonly documentRepository?: InMemoryDocumentRepository;
   } = {},
 ) {
   return createPortfolioHttpHandler({
@@ -341,8 +356,9 @@ function buildHandler(
     partyRepository: new InMemoryPartyRepository(),
     ownershipRepository: new InMemoryOwnershipRepository(),
     tenancyRepository: new InMemoryTenancyRepository(),
-    leaseRepository: new EmptyLeaseRepository(),
-    documentRepository: new InMemoryDocumentRepository(),
+    leaseRepository: overrides.leaseRepository ?? new EmptyLeaseRepository(),
+    documentRepository:
+      overrides.documentRepository ?? new InMemoryDocumentRepository(),
     inspectionRepository: new InMemoryInspectionRepository(),
     staffDirectoryRepository: new InMemoryStaffDirectoryRepository(),
     fileStorage: new MemoryFileStorage(),
@@ -2855,5 +2871,375 @@ describe('Portfolio HTTP boundary', () => {
     );
     expect(inspectorWrite.status).toBe(403);
   });
+
+  it('returns Unit-scoped document links without leaking unrelated targets', async () => {
+    const ids = [
+      'a1000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000002',
+      'a1000000-0000-4000-8000-000000000003',
+      'a1000000-0000-4000-8000-000000000004',
+      'a1000000-0000-4000-8000-000000000005',
+      'a1000000-0000-4000-8000-000000000006',
+      'a1000000-0000-4000-8000-000000000007',
+    ];
+    const handler = buildHandler(ids);
+
+    const propertyResponse = await handler(
+      new Request('https://portfolio.test/properties', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...propertyBody,
+          code: 'PROP-UNIT-DOCS',
+          name: 'Unit documents property',
+        }),
+      }),
+      adminIdentity,
+    );
+    const property = (await propertyResponse.json()).data;
+
+    const unitResponse = await handler(
+      new Request('https://portfolio.test/units', {
+        method: 'POST',
+        body: JSON.stringify({
+          propertyId: property.id,
+          code: 'UNIT-DOCS',
+          unitNumber: 'D-1',
+          unitType: 'apartment',
+        }),
+      }),
+      adminIdentity,
+    );
+    const unit = (await unitResponse.json()).data;
+
+    const documentResponse = await handler(
+      new Request('https://portfolio.test/documents', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'DOC-UNIT-1',
+          title: 'Unit handover photo set',
+          category: 'photo',
+        }),
+      }),
+      adminIdentity,
+    );
+    const document = (await documentResponse.json()).data;
+
+    const versionResponse = await handler(
+      new Request(
+        `https://portfolio.test/documents/${document.id}/versions?fileName=handover.pdf`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/pdf' },
+          body: new Uint8Array([1, 2, 3]),
+        },
+      ),
+      adminIdentity,
+    );
+    const version = (await versionResponse.json()).data;
+
+    const unitLink = await handler(
+      new Request(`https://portfolio.test/documents/${document.id}/links`, {
+        method: 'POST',
+        body: JSON.stringify({
+          documentVersionId: version.id,
+          relation: 'supporting',
+          targetType: 'unit',
+          targetId: unit.id,
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(unitLink.status).toBe(201);
+
+    const currentDocumentResponse = await handler(
+      new Request(`https://portfolio.test/documents/${document.id}`),
+      inspectorIdentity,
+    );
+    const currentDocument = (await currentDocumentResponse.json()).data;
+
+    const unrelatedDocumentResponse = await handler(
+      new Request('https://portfolio.test/documents', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'DOC-PROPERTY-ONLY',
+          title: 'Property-only document',
+          category: 'technical',
+        }),
+      }),
+      adminIdentity,
+    );
+    const unrelatedDocument = (await unrelatedDocumentResponse.json()).data;
+
+    const propertyLink = await handler(
+      new Request(
+        `https://portfolio.test/documents/${unrelatedDocument.id}/links`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            relation: 'supporting',
+            targetType: 'property',
+            targetId: property.id,
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(propertyLink.status).toBe(201);
+
+    const listed = await handler(
+      new Request(`https://portfolio.test/units/${unit.id}/documents`),
+      inspectorIdentity,
+    );
+
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toEqual({
+      data: {
+        items: [
+          {
+            document: currentDocument,
+            link: {
+              id: ids[4],
+              documentId: document.id,
+              documentVersionId: version.id,
+              relation: 'supporting',
+              targetType: 'unit',
+              targetId: unit.id,
+            },
+            linkedVersion: version,
+          },
+        ],
+      },
+    });
+
+    const missing = await handler(
+      new Request(
+        'https://portfolio.test/units/a1000000-0000-4000-8000-000000000099/documents',
+      ),
+      inspectorIdentity,
+    );
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toMatchObject({
+      error: { code: 'UNIT_NOT_FOUND' },
+    });
+  });
+
+
+  it('batch-resolves Party identities for lifecycle surfaces without N+1 reads', async () => {
+    const handler = buildHandler([
+      'd7a10000-0000-4000-8000-000000000001',
+      'd7a10000-0000-4000-8000-000000000002',
+    ]);
+
+    const first = await handler(
+      new Request('https://portfolio.test/parties', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'PTY-BATCH-1',
+          partyType: 'person',
+          firstName: 'Ana',
+          lastName: 'Batch',
+        }),
+      }),
+      adminIdentity,
+    );
+    const firstParty = (await first.json()).data;
+
+    const second = await handler(
+      new Request('https://portfolio.test/parties', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'PTY-BATCH-2',
+          partyType: 'company',
+          legalName: 'Batch Property d.o.o.',
+        }),
+      }),
+      adminIdentity,
+    );
+    const secondParty = (await second.json()).data;
+
+    const response = await handler(
+      new Request(
+        `https://portfolio.test/parties?id=${firstParty.id}&id=${secondParty.id}&id=${firstParty.id}`,
+      ),
+      inspectorIdentity,
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.data.items).toHaveLength(2);
+    expect(
+      body.data.items.map((party: { id: string }) => party.id).sort(),
+    ).toEqual([firstParty.id, secondParty.id].sort());
+
+    const missing = await handler(
+      new Request(
+        'https://portfolio.test/parties?id=d7a10000-0000-4000-8000-000000000099',
+      ),
+      inspectorIdentity,
+    );
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toMatchObject({
+      error: { code: 'PARTY_NOT_FOUND' },
+    });
+  });
+
+
+  it('reads canonical Agreement and Amendment document targets without widening Unit Documents', async () => {
+    const leaseRepository = new EmptyLeaseRepository();
+    const documentRepository = new InMemoryDocumentRepository();
+    const agreementId = asLeaseAgreementId(
+      'e1000000-0000-4000-8000-000000000001',
+    );
+    const amendmentId = asLeaseAmendmentId(
+      'e1000000-0000-4000-8000-000000000002',
+    );
+    const documentId = asDocumentId(
+      'e1000000-0000-4000-8000-000000000003',
+    );
+    const versionId = asDocumentVersionId(
+      'e1000000-0000-4000-8000-000000000004',
+    );
+    const agreementLinkId = asDocumentLinkId(
+      'e1000000-0000-4000-8000-000000000005',
+    );
+    const amendmentLinkId = asDocumentLinkId(
+      'e1000000-0000-4000-8000-000000000006',
+    );
+    const tenancyId = asTenancyId(
+      'e1000000-0000-4000-8000-000000000007',
+    );
+
+    leaseRepository.agreements.set(agreementId, {
+      id: agreementId,
+      tenancyId,
+      code: 'AGR-DOC-HTTP',
+      agreementType: 'initial',
+      predecessorAgreementId: null,
+      effectiveFrom: '2025-01-01' as DateOnly,
+      effectiveTo: null,
+      status: 'signed',
+      signedAt: '2024-12-20' as DateOnly,
+      version: 2,
+      parties: [],
+    });
+    leaseRepository.amendments.set(amendmentId, {
+      id: amendmentId,
+      agreementId,
+      code: 'AMD-DOC-HTTP',
+      title: 'Signed change',
+      description: null,
+      effectiveFrom: '2025-06-01' as DateOnly,
+      status: 'signed',
+      signedAt: '2025-05-20' as DateOnly,
+      version: 2,
+    });
+
+    documentRepository.documents.set(documentId, {
+      id: documentId,
+      code: 'DOC-SIGNED-HTTP',
+      title: 'Signed lease PDF',
+      category: 'legal',
+      status: 'active',
+      latestVersionNumber: 3,
+      revision: 4,
+    });
+    documentRepository.versions.set(versionId, {
+      id: versionId,
+      documentId,
+      versionNumber: 3,
+      fileName: 'LEASE-2026.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 1234,
+      sha256: 'a'.repeat(64),
+      status: 'final',
+      finalizedAt: '2025-05-20T10:00:00.000Z',
+    });
+    documentRepository.links.push(
+      {
+        id: agreementLinkId,
+        documentId,
+        documentVersionId: versionId,
+        relation: 'signed_original',
+        targetType: 'lease_agreement',
+        targetId: agreementId,
+      },
+      {
+        id: amendmentLinkId,
+        documentId,
+        documentVersionId: versionId,
+        relation: 'signed_original',
+        targetType: 'lease_amendment',
+        targetId: amendmentId,
+      },
+    );
+
+    const handler = buildHandler([], new FixedClock(), {
+      leaseRepository,
+      documentRepository,
+    });
+
+    const agreementResponse = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreementId}/documents`,
+      ),
+      inspectorIdentity,
+    );
+    expect(agreementResponse.status).toBe(200);
+    expect(await agreementResponse.json()).toMatchObject({
+      data: {
+        items: [
+          {
+            document: { id: documentId, code: 'DOC-SIGNED-HTTP' },
+            link: {
+              id: agreementLinkId,
+              relation: 'signed_original',
+              targetType: 'lease_agreement',
+              targetId: agreementId,
+            },
+            linkedVersion: {
+              id: versionId,
+              fileName: 'LEASE-2026.pdf',
+              versionNumber: 3,
+              status: 'final',
+            },
+          },
+        ],
+      },
+    });
+
+    const amendmentResponse = await handler(
+      new Request(
+        `https://portfolio.test/amendments/${amendmentId}/documents`,
+      ),
+      inspectorIdentity,
+    );
+    expect(amendmentResponse.status).toBe(200);
+    expect(await amendmentResponse.json()).toMatchObject({
+      data: {
+        items: [
+          {
+            link: {
+              id: amendmentLinkId,
+              targetType: 'lease_amendment',
+              targetId: amendmentId,
+            },
+            linkedVersion: { id: versionId, status: 'final' },
+          },
+        ],
+      },
+    });
+
+    const missing = await handler(
+      new Request(
+        'https://portfolio.test/agreements/e1000000-0000-4000-8000-000000000099/documents',
+      ),
+      inspectorIdentity,
+    );
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toMatchObject({
+      error: { code: 'LEASE_AGREEMENT_NOT_FOUND' },
+    });
+  });
+
 
 });
