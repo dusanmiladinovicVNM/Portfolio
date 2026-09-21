@@ -153,4 +153,33 @@ describe('Inspection async ownership', () => {
         ?.revision,
     ).toBe(4);
   });
+
+  it('never regresses global contentRevision when section saves complete out of order', async () => {
+    let current = {
+      ...bundle(inspectionA, [0, 0]),
+      inspection: {
+        ...bundle(inspectionA, [0, 0]).inspection,
+        contentRevision: 2,
+      },
+    };
+
+    current = mergeInspectionSectionSave(
+      current,
+      inspectionA,
+      section1,
+      {
+        revision: 1,
+        contentRevision: 1,
+        responses: [],
+        clearedItemIds: [],
+      },
+    );
+
+    expect(current.inspection.contentRevision).toBe(2);
+    expect(
+      current.sectionStates.find((state) => state.sectionId === section1)
+        ?.revision,
+    ).toBe(1);
+  });
+
 });

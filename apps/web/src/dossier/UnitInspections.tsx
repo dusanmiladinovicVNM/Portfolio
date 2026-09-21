@@ -244,7 +244,10 @@ export function mergeInspectionSectionSave(
     ...current,
     inspection: {
       ...current.inspection,
-      contentRevision: saved.contentRevision,
+      contentRevision: Math.max(
+        current.inspection.contentRevision,
+        saved.contentRevision,
+      ),
     },
     sectionStates: current.sectionStates.map((state) =>
       state.sectionId === targetSectionId
