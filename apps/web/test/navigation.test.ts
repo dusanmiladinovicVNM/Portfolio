@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { unitOverviewPath } from '../src/api/paths.js';
 import {
   dashboardRoute,
+  partiesRoute,
   parseWorkspaceLocation,
   isWorkspaceAsOf,
   propertyRoute,
@@ -191,6 +192,49 @@ describe('workspace URL navigation', () => {
     ).toBe(
       `/properties/${propertyId}/units/${unitId}?tab=overview&asOf=2025-06-30`,
     );
+  });
+
+
+  it('round-trips the global Parties route with the reporting context', () => {
+    const route = partiesRoute('2025-06-30');
+    expect(workspaceRouteHref(route)).toBe('/parties?asOf=2025-06-30');
+    expect(
+      parseWorkspaceLocation(
+        '/parties',
+        '?asOf=2025-06-30',
+        '2026-09-21',
+      ),
+    ).toEqual({
+      kind: 'parties',
+      asOf: '2025-06-30',
+    });
+  });
+
+  it('round-trips the Unit Spaces setup tab', () => {
+    const route = unitRoute(
+      propertyId,
+      unitId,
+      '2025-06-30',
+      'spaces',
+    );
+    expect(workspaceRouteHref(route)).toBe(
+      '/properties/' + propertyId +
+        '/units/' + unitId +
+        '?tab=spaces&asOf=2025-06-30',
+    );
+    expect(
+      parseWorkspaceLocation(
+        '/properties/' + propertyId + '/units/' + unitId,
+        '?tab=spaces&asOf=2025-06-30',
+        '2026-09-21',
+      ),
+    ).toEqual({
+      kind: 'unit',
+      propertyId,
+      unitId,
+      tab: 'spaces',
+      asOf: '2025-06-30',
+    });
   });
 
 });

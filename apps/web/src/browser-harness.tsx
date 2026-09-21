@@ -28,6 +28,26 @@ const inspectionNotesItemId = 'a1000000-0000-4000-8000-000000000005';
 const inspectionUserId = 'a1000000-0000-4000-8000-000000000006';
 const inspectionConditionResponseId = 'a1000000-0000-4000-8000-000000000007';
 const inspectionNotesResponseId = 'a1000000-0000-4000-8000-000000000008';
+const setupPropertyId = 'b1000000-0000-4000-8000-000000000001';
+const setupUnitId = 'b1000000-0000-4000-8000-000000000002';
+const setupSpaceId = 'b1000000-0000-4000-8000-000000000003';
+const setupPartyId = 'b1000000-0000-4000-8000-000000000004';
+const setupPartyEmailId = 'b1000000-0000-4000-8000-000000000005';
+const setupPartyAddressId = 'b1000000-0000-4000-8000-000000000006';
+
+let setupProperty: typeof property | null = null;
+let setupUnit: typeof unit | null = null;
+let setupSpace: {
+  id: string;
+  unitId: string;
+  code: string;
+  name: string;
+  spaceType: string;
+  areaM2: number | null;
+  sortOrder: number;
+  active: boolean;
+} | null = null;
+let setupParty: (typeof parties)[number] | null = null;
 
 const operations = {
   openMaintenanceIssueCount: 0,
@@ -324,11 +344,15 @@ function inspectionBundle() {
   };
 }
 
-function requireInspectionAuth(init?: RequestInit) {
+function requirePortfolioAuth(init?: RequestInit) {
   const authorization = new Headers(init?.headers).get('authorization');
   if (authorization !== 'Bearer browser-workflow-token') {
-    throw new Error('Inspection mutation is missing Portfolio auth.');
+    throw new Error('Portfolio mutation is missing Portfolio auth.');
   }
+}
+
+function requireInspectionAuth(init?: RequestInit) {
+  requirePortfolioAuth(init);
 }
 
 const parties = [
@@ -393,6 +417,151 @@ globalThis.fetch = async (
 ): Promise<Response> => {
   const url = apiPath(input);
   const path = url.pathname;
+
+  if (path === '/properties' && init?.method === 'POST') {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as Omit<typeof property, 'id' | 'status'>;
+    setupProperty = {
+      ...body,
+      id: setupPropertyId,
+      status: 'active',
+      yearBuilt: body.yearBuilt ?? null,
+    };
+    return json(setupProperty, 201);
+  }
+
+  if (setupProperty && path === '/properties/' + setupPropertyId) {
+    return json(setupProperty);
+  }
+
+  if (setupProperty && path === '/properties/' + setupPropertyId + '/units') {
+    return json({ items: setupUnit ? [setupUnit] : [] });
+  }
+
+  if (path === '/units' && init?.method === 'POST') {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      propertyId: string;
+      code: string;
+      unitNumber: string;
+      unitType: string;
+      floor?: string | null;
+      areaM2?: number | null;
+      rooms?: number | null;
+      notes?: string;
+    };
+    if (body.propertyId !== setupPropertyId) {
+      throw new Error('Setup Unit was created for the wrong Property.');
+    }
+    setupUnit = {
+      id: setupUnitId,
+      propertyId: body.propertyId,
+      code: body.code,
+      unitNumber: body.unitNumber,
+      unitType: body.unitType,
+      floor: body.floor ?? null,
+      areaM2: body.areaM2 ?? null,
+      rooms: body.rooms ?? null,
+      status: 'active',
+      notes: body.notes ?? '',
+    };
+    return json(setupUnit, 201);
+  }
+
+  if (setupUnit && path === '/units/' + setupUnitId) {
+    return json(setupUnit);
+  }
+
+  if (setupUnit && path === '/units/' + setupUnitId + '/spaces') {
+    return json({ items: setupSpace ? [setupSpace] : [] });
+  }
+
+  if (path === '/spaces' && init?.method === 'POST') {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      unitId: string;
+      code: string;
+      name: string;
+      spaceType: string;
+      areaM2?: number | null;
+      sortOrder?: number;
+    };
+    if (body.unitId !== setupUnitId) {
+      throw new Error('Setup Space was created for the wrong Unit.');
+    }
+    setupSpace = {
+      id: setupSpaceId,
+      unitId: body.unitId,
+      code: body.code,
+      name: body.name,
+      spaceType: body.spaceType,
+      areaM2: body.areaM2 ?? null,
+      sortOrder: body.sortOrder ?? 0,
+      active: true,
+    };
+    return json(setupSpace, 201);
+  }
+
+  if (path === '/parties' && init?.method === 'POST') {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      code: string;
+      partyType: 'person' | 'company';
+      displayName?: string;
+      legalName?: string;
+      firstName?: string;
+      middleName?: string | null;
+      lastName?: string;
+      contactPoints?: Array<{
+        contactType: string;
+        value: string;
+        label?: string | null;
+        isPrimary?: boolean;
+      }>;
+      addresses?: Array<{
+        addressType: string;
+        line1: string;
+        line2?: string | null;
+        postalCode: string;
+        city: string;
+        region?: string | null;
+        countryCode: string;
+        isPrimary?: boolean;
+      }>;
+    };
+    if (body.partyType !== 'company' || !body.legalName) {
+      throw new Error('Browser setup expects a Company Party.');
+    }
+    setupParty = {
+      id: setupPartyId,
+      code: body.code,
+      displayName: body.displayName ?? body.legalName,
+      status: 'active',
+      contactPoints: (body.contactPoints ?? []).map((contact) => ({
+        id: setupPartyEmailId,
+        partyId: setupPartyId,
+        contactType: contact.contactType,
+        value: contact.value,
+        label: contact.label ?? null,
+        isPrimary: contact.isPrimary ?? false,
+      })),
+      addresses: (body.addresses ?? []).map((address) => ({
+        id: setupPartyAddressId,
+        partyId: setupPartyId,
+        addressType: address.addressType,
+        line1: address.line1,
+        line2: address.line2 ?? null,
+        postalCode: address.postalCode,
+        city: address.city,
+        region: address.region ?? null,
+        countryCode: address.countryCode,
+        isPrimary: address.isPrimary ?? false,
+      })),
+      partyType: 'company',
+      legalName: body.legalName,
+    };
+    return json(setupParty, 201);
+  }
 
   if (path === '/reporting/dashboard') {
     const asOf = url.searchParams.get('asOf');
@@ -647,8 +816,12 @@ globalThis.fetch = async (
 
   if (path === '/parties') {
     const ids = new Set(url.searchParams.getAll('id'));
+    const allParties = setupParty ? [...parties, setupParty] : parties;
     return json({
-      items: parties.filter((party) => ids.has(party.id)),
+      items:
+        ids.size === 0
+          ? allParties
+          : allParties.filter((party) => ids.has(party.id)),
     });
   }
 

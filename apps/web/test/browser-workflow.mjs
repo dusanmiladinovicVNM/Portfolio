@@ -12,6 +12,8 @@ const agreementId = '55555555-5555-4555-8555-555555555555';
 const amendmentId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const inspectionId = 'a1000000-0000-4000-8000-000000000001';
 const inspectionSectionId = 'a1000000-0000-4000-8000-000000000003';
+const setupPropertyId = 'b1000000-0000-4000-8000-000000000001';
+const setupUnitId = 'b1000000-0000-4000-8000-000000000002';
 
 const logs = [];
 
@@ -318,6 +320,199 @@ try {
     await currentUrl(sessionId),
     dashboardUrl,
     'Empty Dashboard date does not create an invalid route',
+  );
+
+  await clickXpath(sessionId, "//aside//a[normalize-space()='Parties']");
+  await waitForElement(sessionId, 'xpath', "//h1[normalize-space()='Parties']");
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl + '/parties?asOf=2025-06-30',
+    'Parties URL',
+  );
+  await selectOptionXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//select[@name='partyType']",
+    'company',
+  );
+  await typeXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//input[@name='code']",
+    'PTY-SETUP-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//input[@name='legalName']",
+    'Setup Service GmbH',
+  );
+  await typeXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//input[@name='email']",
+    'service@example.test',
+  );
+  await typeXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//input[@name='addressLine1']",
+    'Setup Street 10',
+  );
+  await typeXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//input[@name='postalCode']",
+    '8000',
+  );
+  await typeXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//input[@name='city']",
+    'Zürich',
+  );
+  await typeXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//input[@name='countryCode']",
+    'CH',
+  );
+  await clickXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//button[normalize-space()='Create Party']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'party-card')][.//h3[normalize-space()='Setup Service GmbH']]",
+  );
+
+  await clickXpath(sessionId, "//aside//a[normalize-space()='Overview']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//h1[normalize-space()='Portfolio picture']",
+  );
+
+  await typeXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//input[@name='code']",
+    'PROP-SETUP-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//input[@name='name']",
+    'Setup Browser Property',
+  );
+  await typeXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//input[@name='street']",
+    'Setup Avenue',
+  );
+  await typeXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//input[@name='houseNumber']",
+    '20',
+  );
+  await typeXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//input[@name='postalCode']",
+    '8001',
+  );
+  await typeXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//input[@name='city']",
+    'Zürich',
+  );
+  await clickXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//button[normalize-space()='Create Property']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//h1[normalize-space()='Setup Browser Property']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl + '/properties/' + setupPropertyId + '?asOf=2025-06-30',
+    'Created Property URL',
+  );
+
+  await typeXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//input[@name='code']",
+    'UNIT-SETUP-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//input[@name='unitNumber']",
+    '2B',
+  );
+  await typeXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//input[@name='floor']",
+    '2',
+  );
+  await typeXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//input[@name='areaM2']",
+    '64.5',
+  );
+  await clickXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//button[normalize-space()='Create Unit']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//h1[normalize-space()='Unit 2B']",
+  );
+  const setupUnitUrl =
+    baseUrl +
+    '/properties/' +
+    setupPropertyId +
+    '/units/' +
+    setupUnitId +
+    '?tab=spaces&asOf=2025-06-30';
+  assertEqual(
+    await currentUrl(sessionId),
+    setupUnitUrl,
+    'Created Unit Spaces URL',
+  );
+
+  await typeXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//input[@name='code']",
+    'BED-SETUP',
+  );
+  await typeXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//input[@name='name']",
+    'Setup Bedroom',
+  );
+  await typeXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//input[@name='areaM2']",
+    '14.5',
+  );
+  await typeXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//input[@name='sortOrder']",
+    '1',
+  );
+  await clickXpath(
+    sessionId,
+    "//form[contains(@class,'setup-form')]//button[normalize-space()='Create Space']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'space-card')][.//h3[normalize-space()='Setup Bedroom']]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    setupUnitUrl,
+    'Space creation keeps Unit Spaces context',
+  );
+
+  await clickXpath(sessionId, "//aside//a[normalize-space()='Overview']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//h1[normalize-space()='Portfolio picture']",
   );
 
   await clickXpath(
@@ -632,7 +827,7 @@ try {
   );
 
   process.stdout.write(
-    'Browser workflow PASS: Dashboard → Property → Unit → Contracts → documents → Inspection Start → edit → dirty guard → Save → conflict\n',
+    'Browser workflow PASS: Party + Property + Unit + Space setup → existing Contracts/documents → Inspection Start/edit/save/conflict\n',
   );
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.stack : error}\n`);
