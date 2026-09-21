@@ -633,7 +633,7 @@ export function createUnitReportingOverview(input: {
       ...contract,
       currentDraftAgreementCount,
     },
-    currentOperations,
+    currentOperations: normalizeOperations(input.currentOperations),
     unitAttributedCostsByCurrency: costs,
   };
 }
@@ -850,7 +850,7 @@ export function createPortfolioDashboard(input: {
     occupiedUnitCount,
     plannedUnitCount,
     vacantUnitCount,
-    currentOperations: normalizeOperations(input.currentOperations),
+    currentOperations,
     portfolioCostsByCurrency: costs,
     properties,
   };
