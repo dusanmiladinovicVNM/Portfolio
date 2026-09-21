@@ -30,7 +30,6 @@ export const REPORTING_OCCUPANCY_STATUSES = [
 export const REPORTING_CONTRACT_COVERAGE_STATUSES = [
   'effective',
   'future_signed',
-  'draft_only',
   'missing',
 ] as const;
 
@@ -75,6 +74,7 @@ export interface ReportingTermSummary {
 
 export interface ReportingContractSummary {
   readonly coverageStatus: ReportingContractCoverageStatus;
+  readonly currentDraftAgreementCount: number;
   readonly agreementId: LeaseAgreementId | null;
   readonly agreementCode: string | null;
   readonly agreementCurrentStatus: LeaseAgreementStatus | null;
@@ -333,6 +333,11 @@ export function createUnitReportingOverview(input: {
     );
   }
 
+  const currentDraftAgreementCount = nonNegativeInteger(
+    input.contract.currentDraftAgreementCount,
+    'contract.currentDraftAgreementCount',
+  );
+
   if (
     input.contract.coverageStatus !== 'missing' &&
     (input.contract.agreementId === null ||
@@ -344,6 +349,40 @@ export function createUnitReportingOverview(input: {
       'REPORTING_INVALID_PROJECTION',
       'Non-missing contract coverage requires an Agreement identity.',
     );
+  }
+
+  if (input.contract.coverageStatus === 'missing') {
+    if (
+      input.contract.agreementId !== null ||
+      input.contract.agreementCode !== null ||
+      input.contract.agreementCurrentStatus !== null ||
+      input.contract.effectiveFrom !== null ||
+      input.contract.effectiveTo !== null ||
+      input.contract.signedAt !== null ||
+      input.contract.effectiveTerms !== null
+    ) {
+      throw new DomainError(
+        'REPORTING_INVALID_PROJECTION',
+        'Missing contract coverage cannot carry an Agreement or effective terms.',
+      );
+    }
+  } else {
+    if (input.contract.signedAt === null) {
+      throw new DomainError(
+        'REPORTING_INVALID_PROJECTION',
+        'Signed contract coverage requires signedAt.',
+      );
+    }
+
+    if (
+      input.contract.agreementCurrentStatus === 'draft' ||
+      input.contract.agreementCurrentStatus === 'cancelled'
+    ) {
+      throw new DomainError(
+        'REPORTING_INVALID_PROJECTION',
+        'Signed contract coverage cannot select a draft/cancelled Agreement.',
+      );
+    }
   }
 
   if (
@@ -363,6 +402,34 @@ export function createUnitReportingOverview(input: {
     throw new DomainError(
       'REPORTING_INVALID_PROJECTION',
       'Non-effective contract coverage cannot expose effective Tenancy terms.',
+    );
+  }
+
+  if (
+    input.contract.coverageStatus === 'effective' &&
+    (
+      input.contract.effectiveFrom === null ||
+      input.contract.effectiveFrom > asOf ||
+      (input.contract.effectiveTo !== null &&
+        input.contract.effectiveTo < asOf)
+    )
+  ) {
+    throw new DomainError(
+      'REPORTING_INVALID_PROJECTION',
+      'Effective contract coverage must contain asOf inside its legal period.',
+    );
+  }
+
+  if (
+    input.contract.coverageStatus === 'future_signed' &&
+    (
+      input.contract.effectiveFrom === null ||
+      input.contract.effectiveFrom <= asOf
+    )
+  ) {
+    throw new DomainError(
+      'REPORTING_INVALID_PROJECTION',
+      'future_signed contract coverage must start after asOf.',
     );
   }
 
