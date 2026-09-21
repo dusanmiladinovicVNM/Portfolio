@@ -10450,6 +10450,10 @@ describe('PostgreSQL infrastructure', () => {
       subject: 'external-admin-subject',
     });
 
+    const dashboardBaseline = await reportingRepository.getPortfolioDashboard(
+      asDateOnly('2026-07-01'),
+    );
+
     const ids = new SequenceIds(
       Array.from(
         { length: 220 },
@@ -11046,61 +11050,112 @@ describe('PostgreSQL infrastructure', () => {
     );
 
     expect(dashboard).toMatchObject({
-      propertyCount: 2,
-      unitCount: 2,
+      propertyCount: dashboardBaseline.propertyCount + 2,
+      unitCount: dashboardBaseline.unitCount + 2,
+      occupiedUnitCount: dashboardBaseline.occupiedUnitCount + 1,
+      plannedUnitCount: dashboardBaseline.plannedUnitCount,
+      vacantUnitCount: dashboardBaseline.vacantUnitCount + 1,
+      currentOperations: {
+        openMaintenanceIssueCount:
+          dashboardBaseline.currentOperations.openMaintenanceIssueCount + 1,
+        urgentMaintenanceIssueCount:
+          dashboardBaseline.currentOperations.urgentMaintenanceIssueCount + 1,
+        openMaintenanceWorkOrderCount:
+          dashboardBaseline.currentOperations.openMaintenanceWorkOrderCount + 1,
+        locatedAssetCount:
+          dashboardBaseline.currentOperations.locatedAssetCount + 2,
+        activeAssetCount:
+          dashboardBaseline.currentOperations.activeAssetCount + 2,
+        inactiveAssetCount:
+          dashboardBaseline.currentOperations.inactiveAssetCount,
+        activeServicePlanCount:
+          dashboardBaseline.currentOperations.activeServicePlanCount + 1,
+        openWarrantyClaimCount:
+          dashboardBaseline.currentOperations.openWarrantyClaimCount + 1,
+        activeMeterCount:
+          dashboardBaseline.currentOperations.activeMeterCount + 1,
+      },
+    });
+
+    function cents(value: string): bigint {
+      return BigInt(value.replace('.', ''));
+    }
+
+    function costByCurrency(
+      rows: readonly { currency: string; capex: string; opex: string; unclassified: string; total: string }[],
+      currency: string,
+    ) {
+      return (
+        rows.find((row) => row.currency === currency) ?? {
+          currency,
+          capex: '0.00',
+          opex: '0.00',
+          unclassified: '0.00',
+          total: '0.00',
+        }
+      );
+    }
+
+    const baselineChf = costByCurrency(
+      dashboardBaseline.portfolioCostsByCurrency,
+      'CHF',
+    );
+    const dashboardChf = costByCurrency(
+      dashboard.portfolioCostsByCurrency,
+      'CHF',
+    );
+    expect(cents(dashboardChf.capex) - cents(baselineChf.capex)).toBe(10000n);
+    expect(cents(dashboardChf.opex) - cents(baselineChf.opex)).toBe(6550n);
+    expect(
+      cents(dashboardChf.unclassified) - cents(baselineChf.unclassified),
+    ).toBe(0n);
+    expect(cents(dashboardChf.total) - cents(baselineChf.total)).toBe(16550n);
+
+    const baselineEur = costByCurrency(
+      dashboardBaseline.portfolioCostsByCurrency,
+      'EUR',
+    );
+    const dashboardEur = costByCurrency(
+      dashboard.portfolioCostsByCurrency,
+      'EUR',
+    );
+    expect(cents(dashboardEur.capex) - cents(baselineEur.capex)).toBe(0n);
+    expect(cents(dashboardEur.opex) - cents(baselineEur.opex)).toBe(4000n);
+    expect(
+      cents(dashboardEur.unclassified) - cents(baselineEur.unclassified),
+    ).toBe(1000n);
+    expect(cents(dashboardEur.total) - cents(baselineEur.total)).toBe(5000n);
+
+    const reportingPropertyA = dashboard.properties.find(
+      (property) => property.propertyId === propertyA.id,
+    );
+    const reportingPropertyB = dashboard.properties.find(
+      (property) => property.propertyId === propertyB.id,
+    );
+
+    expect(reportingPropertyA).toMatchObject({
+      propertyId: propertyA.id,
+      unitCount: 1,
       occupiedUnitCount: 1,
       plannedUnitCount: 0,
+      vacantUnitCount: 0,
+      currentOpenMaintenanceIssueCount: 1,
+      currentUrgentMaintenanceIssueCount: 1,
+      currentLocatedAssetCount: 1,
+      currentActiveAssetCount: 1,
+      currentActiveMeterCount: 1,
+    });
+    expect(reportingPropertyB).toMatchObject({
+      propertyId: propertyB.id,
+      unitCount: 1,
+      occupiedUnitCount: 0,
+      plannedUnitCount: 0,
       vacantUnitCount: 1,
-      currentOperations: {
-        openMaintenanceIssueCount: 1,
-        urgentMaintenanceIssueCount: 1,
-        openMaintenanceWorkOrderCount: 1,
-        locatedAssetCount: 2,
-        activeAssetCount: 2,
-        activeServicePlanCount: 1,
-        openWarrantyClaimCount: 1,
-        activeMeterCount: 1,
-      },
-      portfolioCostsByCurrency: [
-        {
-          currency: 'CHF',
-          capex: '100.00',
-          opex: '65.50',
-          unclassified: '0.00',
-          total: '165.50',
-        },
-        {
-          currency: 'EUR',
-          capex: '0.00',
-          opex: '40.00',
-          unclassified: '10.00',
-          total: '50.00',
-        },
-      ],
-      properties: [
-        {
-          propertyId: propertyA.id,
-          unitCount: 1,
-          occupiedUnitCount: 1,
-          vacantUnitCount: 0,
-          currentOpenMaintenanceIssueCount: 1,
-          currentUrgentMaintenanceIssueCount: 1,
-          currentLocatedAssetCount: 1,
-          currentActiveAssetCount: 1,
-          currentActiveMeterCount: 1,
-        },
-        {
-          propertyId: propertyB.id,
-          unitCount: 1,
-          occupiedUnitCount: 0,
-          vacantUnitCount: 1,
-          currentOpenMaintenanceIssueCount: 0,
-          currentUrgentMaintenanceIssueCount: 0,
-          currentLocatedAssetCount: 1,
-          currentActiveAssetCount: 1,
-          currentActiveMeterCount: 0,
-        },
-      ],
+      currentOpenMaintenanceIssueCount: 0,
+      currentUrgentMaintenanceIssueCount: 0,
+      currentLocatedAssetCount: 1,
+      currentActiveAssetCount: 1,
+      currentActiveMeterCount: 0,
     });
 
     const relationCheck = await sql<{
