@@ -53,7 +53,22 @@ It does not use Google Drive file IDs as business primary keys.
 A future S3-compatible implementation can replace Google Drive without changing
 contract, tenancy, inspection or asset domain models.
 
-The current implementation buffers a complete DocumentVersion in memory while
-verifying SHA-256. If binary sizes grow materially, streaming delivery with
-incremental hashing can replace the adapter implementation without changing the
-DocumentVersion identity or authorization boundary.
+The current implementation is explicitly a bounded buffered capability.
+`MAX_BUFFERED_DOCUMENT_BINARY_BYTES` is 16 MiB. Canonical
+`DocumentVersion.byteSize` is checked before any storage read, and the storage
+adapter receives the same policy. Google Drive rejects oversized metadata before
+requesting media bytes and consumes the response body through a bounded reader,
+so a provider-side race cannot turn a small canonical record into an unbounded
+allocation.
+
+Documents above this ceiling receive
+`DOCUMENT_BINARY_DELIVERY_LIMIT_EXCEEDED`; they require the future streaming
+delivery path. Streaming with incremental hashing can replace the buffered
+adapter without changing DocumentVersion identity, authorization or browser API
+boundaries.
+
+Upload ingestion is a separate pre-existing hardening debt:
+`POST /documents/:id/versions` still buffers `request.arrayBuffer()` and the
+Google Drive multipart upload path creates additional copies. Production
+hardening must introduce an upload size ceiling and/or streaming upload without
+moving that older issue into this read-delivery PR.

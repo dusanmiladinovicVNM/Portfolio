@@ -1,4 +1,5 @@
 import type {
+  BufferedDocumentBinaryPolicy,
   ClockPort,
   DocumentRepository,
   FileStoragePort,
@@ -156,7 +157,10 @@ export class MemoryFileStorage implements FileStoragePort {
     };
   }
 
-  async read(reference: StorageObjectReference) {
+  async read(
+    reference: StorageObjectReference,
+    policy: BufferedDocumentBinaryPolicy,
+  ) {
     const stored = this.objects.get(reference.objectKey);
     const content = this.contents.get(reference.objectKey);
     if (
@@ -166,6 +170,13 @@ export class MemoryFileStorage implements FileStoragePort {
       stored.objectId !== reference.objectId
     ) {
       return null;
+    }
+
+    if (
+      stored.byteSize > policy.maxBytes ||
+      content.byteLength > policy.maxBytes
+    ) {
+      throw new Error('In-memory storage object exceeds buffered read limit.');
     }
 
     const copy = new Uint8Array(content.byteLength);

@@ -1,5 +1,6 @@
 import {
   createDocumentCommand,
+  DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
   finalizeDocumentVersionCommand,
   getDocumentQuery,
   getDocumentVersionContentQuery,
@@ -280,6 +281,7 @@ export async function handleDocumentHttp(
       {
         documentRepository: deps.documentRepository,
         fileStorage: deps.fileStorage,
+        binaryPolicy: DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
       },
       actor,
       asDocumentVersionId(parsedId.data),

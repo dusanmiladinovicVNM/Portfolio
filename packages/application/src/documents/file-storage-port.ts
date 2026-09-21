@@ -1,3 +1,5 @@
+import type { BufferedDocumentBinaryPolicy } from './document-binary-policy.js';
+
 export interface FileStoragePutInput {
   readonly objectKey: string;
   readonly fileName: string;
@@ -42,6 +44,7 @@ export interface FileStorageWritePort {
 export interface FileStorageReadPort {
   read(
     reference: StorageObjectReference,
+    policy: BufferedDocumentBinaryPolicy,
   ): Promise<StorageObjectContent | null>;
 }
 

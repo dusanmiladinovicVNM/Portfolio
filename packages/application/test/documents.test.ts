@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
   getDocumentVersionContentQuery,
   uploadDocumentVersionCommand,
   type Actor,
@@ -240,6 +241,7 @@ describe('Document application workflow', () => {
       {
         documentRepository: new ReadRepository(),
         fileStorage: storage,
+        binaryPolicy: DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
       },
       actor,
       versionId,
@@ -352,6 +354,61 @@ describe('Document application workflow', () => {
     ).rejects.toMatchObject({
       code: 'DOCUMENT_STORAGE_READ_FAILED',
     });
+  });
+
+
+  it('rejects an oversized canonical DocumentVersion before storage is read', async () => {
+    const repository = new FailingDocumentRepository();
+    const versionId =
+      '50000000-0000-4000-8000-000000000013' as DocumentVersionId;
+    const version: DocumentVersion = {
+      id: versionId,
+      documentId: repository.document.id,
+      versionNumber: 1,
+      fileName: 'oversized.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 17,
+      sha256: 'd'.repeat(64),
+      status: 'final',
+      finalizedAt: '2026-09-18T20:00:00.000Z',
+    };
+    const reference: StorageObjectReference = {
+      provider: 'test',
+      objectId: 'object-13',
+      objectKey: `document-version:${versionId}`,
+    };
+
+    class ReadRepository extends FailingDocumentRepository {
+      override async getVersionById(id: DocumentVersionId) {
+        return id === version.id ? version : null;
+      }
+      override async getStorageReference(id: DocumentVersionId) {
+        return id === version.id ? reference : null;
+      }
+    }
+
+    let readCalls = 0;
+    const storage: FileStorageReadPort = {
+      async read() {
+        readCalls += 1;
+        throw new Error('storage must not be touched');
+      },
+    };
+
+    await expect(
+      getDocumentVersionContentQuery(
+        {
+          documentRepository: new ReadRepository(),
+          fileStorage: storage,
+          binaryPolicy: { maxBytes: 16 },
+        },
+        actor,
+        versionId,
+      ),
+    ).rejects.toMatchObject({
+      code: 'DOCUMENT_BINARY_DELIVERY_LIMIT_EXCEEDED',
+    });
+    expect(readCalls).toBe(0);
   });
 
 });

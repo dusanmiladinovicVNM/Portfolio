@@ -187,6 +187,7 @@ Final MVP gate:
 - migration rehearsal
 - full lifecycle E2E
 - authorization/security gates
+- bounded/streaming document upload ingestion (pre-existing buffered request/multipart path)
 - audit checks
 - observability
 - deployment runbook

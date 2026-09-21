@@ -1,4 +1,5 @@
 import type {
+  BufferedDocumentBinaryPolicy,
   FileStoragePort,
   FileStoragePutInput,
   StorageObjectContent,
@@ -71,6 +72,46 @@ async function sha256Hex(
   return [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');
+}
+
+async function readBodyBounded(
+  response: Response,
+  maxBytes: number,
+): Promise<Uint8Array> {
+  const announcedLength = response.headers.get('content-length');
+  if (announcedLength !== null) {
+    const parsedLength = Number(announcedLength);
+    if (Number.isFinite(parsedLength) && parsedLength > maxBytes) {
+      throw new Error('Google Drive response exceeds buffered read limit.');
+    }
+  }
+
+  if (!response.body) return new Uint8Array();
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value || value.byteLength === 0) continue;
+
+      total += value.byteLength;
+      if (total > maxBytes) {
+        try {
+          await reader.cancel('buffered read limit exceeded');
+        } catch {}
+        throw new Error('Google Drive response exceeds buffered read limit.');
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return concatBytes(chunks);
 }
 
 async function readJson<T>(response: Response): Promise<T> {
@@ -230,9 +271,13 @@ export class GoogleDriveFileStorage implements FileStoragePort {
 
   async read(
     reference: StorageObjectReference,
+    policy: BufferedDocumentBinaryPolicy,
   ): Promise<StorageObjectContent | null> {
     const metadata = await this.stat(reference);
     if (!metadata) return null;
+    if (metadata.byteSize > policy.maxBytes) {
+      throw new Error('Google Drive object exceeds buffered read limit.');
+    }
 
     const token = await this.accessTokenProvider.getAccessToken();
     const url = new URL(
@@ -252,7 +297,7 @@ export class GoogleDriveFileStorage implements FileStoragePort {
       );
     }
 
-    const content = new Uint8Array(await response.arrayBuffer());
+    const content = await readBodyBounded(response, policy.maxBytes);
     const sha256 = await sha256Hex(this.cryptoImpl, content);
     if (
       metadata.byteSize !== content.byteLength ||

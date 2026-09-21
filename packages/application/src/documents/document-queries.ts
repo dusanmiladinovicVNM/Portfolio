@@ -20,6 +20,7 @@ import type { PortfolioRepository } from '../portfolio/portfolio-repository.js';
 import {
   assertStorageObjectMatchesVersion,
 } from './document-storage-integrity.js';
+import type { BufferedDocumentBinaryPolicy } from './document-binary-policy.js';
 import type { FileStorageReadPort } from './file-storage-port.js';
 
 export async function listDocumentsQuery(
@@ -134,6 +135,7 @@ export async function getDocumentVersionContentQuery(
   deps: {
     readonly documentRepository: DocumentRepository;
     readonly fileStorage: FileStorageReadPort;
+    readonly binaryPolicy: BufferedDocumentBinaryPolicy;
   },
   actor: Actor,
   versionId: DocumentVersionId,
@@ -148,6 +150,13 @@ export async function getDocumentVersionContentQuery(
     );
   }
 
+  if (version.byteSize > deps.binaryPolicy.maxBytes) {
+    throw new ApplicationError(
+      'DOCUMENT_BINARY_DELIVERY_LIMIT_EXCEEDED',
+      `Buffered binary delivery supports DocumentVersions up to ${deps.binaryPolicy.maxBytes} bytes.`,
+    );
+  }
+
   const reference =
     await deps.documentRepository.getStorageReference(version.id);
   if (!reference) {
@@ -159,7 +168,7 @@ export async function getDocumentVersionContentQuery(
 
   let stored;
   try {
-    stored = await deps.fileStorage.read(reference);
+    stored = await deps.fileStorage.read(reference, deps.binaryPolicy);
   } catch {
     throw new ApplicationError(
       'DOCUMENT_STORAGE_READ_FAILED',

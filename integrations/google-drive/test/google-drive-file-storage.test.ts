@@ -196,11 +196,14 @@ describe('GoogleDriveFileStorage', () => {
       },
     });
 
-    const result = await storage.read({
-      provider: 'google-drive',
-      objectId: 'drive-file-1',
-      objectKey: 'document-version:read-1',
-    });
+    const result = await storage.read(
+      {
+        provider: 'google-drive',
+        objectId: 'drive-file-1',
+        objectKey: 'document-version:read-1',
+      },
+      { maxBytes: 1024 },
+    );
 
     expect(result).not.toBeNull();
     expect(result).toMatchObject({
@@ -243,12 +246,85 @@ describe('GoogleDriveFileStorage', () => {
     });
 
     await expect(
-      storage.read({
-        provider: 'google-drive',
-        objectId: 'drive-file-1',
-        objectKey: 'document-version:read-2',
-      }),
+      storage.read(
+        {
+          provider: 'google-drive',
+          objectId: 'drive-file-1',
+          objectKey: 'document-version:read-2',
+        },
+        { maxBytes: 1024 },
+      ),
     ).rejects.toThrowError(/does not match file metadata/);
+  });
+
+
+  it('rejects oversized Drive metadata before requesting media bytes', async () => {
+    const requests: Request[] = [];
+    const storage = new GoogleDriveFileStorage({
+      folderId: 'folder-1',
+      accessTokenProvider: tokenProvider,
+      fetchImpl: async (input, init) => {
+        const request = new Request(input, init);
+        requests.push(request);
+        return Response.json({
+          id: 'drive-file-1',
+          size: '17',
+          sha256Checksum: 'a'.repeat(64),
+          appProperties: {
+            portfolioObjectKey: 'document-version:read-limit-1',
+          },
+        });
+      },
+    });
+
+    await expect(
+      storage.read(
+        {
+          provider: 'google-drive',
+          objectId: 'drive-file-1',
+          objectKey: 'document-version:read-limit-1',
+        },
+        { maxBytes: 16 },
+      ),
+    ).rejects.toThrowError(/exceeds buffered read limit/);
+
+    expect(requests).toHaveLength(1);
+    expect(new URL(requests[0]!.url).searchParams.get('alt')).not.toBe('media');
+  });
+
+  it('bounds the media body if Drive content grows after metadata was read', async () => {
+    const content = new Uint8Array([1, 2, 3, 4, 5, 6]);
+    const storage = new GoogleDriveFileStorage({
+      folderId: 'folder-1',
+      accessTokenProvider: tokenProvider,
+      fetchImpl: async (input) => {
+        const url = new URL(
+          input instanceof Request ? input.url : input.toString(),
+        );
+        if (url.searchParams.get('alt') === 'media') {
+          return new Response(content);
+        }
+        return Response.json({
+          id: 'drive-file-1',
+          size: '3',
+          sha256Checksum: 'a'.repeat(64),
+          appProperties: {
+            portfolioObjectKey: 'document-version:read-limit-2',
+          },
+        });
+      },
+    });
+
+    await expect(
+      storage.read(
+        {
+          provider: 'google-drive',
+          objectId: 'drive-file-1',
+          objectKey: 'document-version:read-limit-2',
+        },
+        { maxBytes: 4 },
+      ),
+    ).rejects.toThrowError(/exceeds buffered read limit/);
   });
 
 });

@@ -3259,4 +3259,57 @@ describe('Portfolio HTTP boundary', () => {
   });
 
 
+  it('rejects DocumentVersion binary delivery above the buffered size ceiling', async () => {
+    const documentRepository = new InMemoryDocumentRepository();
+    const documentId = asDocumentId(
+      'f1000000-0000-4000-8000-000000000001',
+    );
+    const versionId = asDocumentVersionId(
+      'f1000000-0000-4000-8000-000000000002',
+    );
+
+    documentRepository.documents.set(documentId, {
+      id: documentId,
+      code: 'DOC-OVERSIZED-HTTP',
+      title: 'Oversized binary',
+      category: 'legal',
+      status: 'active',
+      latestVersionNumber: 1,
+      revision: 2,
+    });
+    documentRepository.versions.set(versionId, {
+      id: versionId,
+      documentId,
+      versionNumber: 1,
+      fileName: 'oversized.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 16 * 1024 * 1024 + 1,
+      sha256: 'f'.repeat(64),
+      status: 'final',
+      finalizedAt: '2026-09-21T18:00:00.000Z',
+    });
+    documentRepository.storage.set(versionId, {
+      provider: 'memory',
+      objectId: 'oversized-object',
+      objectKey: `document-version:${versionId}`,
+    });
+
+    const handler = buildHandler([], new FixedClock(), {
+      documentRepository,
+    });
+
+    const response = await handler(
+      new Request(
+        `https://portfolio.test/document-versions/${versionId}/content`,
+      ),
+      inspectorIdentity,
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'DOCUMENT_BINARY_DELIVERY_LIMIT_EXCEEDED' },
+    });
+  });
+
+
 });
