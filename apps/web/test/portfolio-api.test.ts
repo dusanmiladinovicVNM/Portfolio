@@ -179,7 +179,7 @@ describe('Portfolio API client', () => {
     };
 
     const api = createPortfolioApi({
-      baseUrl: '/api',
+      baseUrl: 'https://portfolio.test/api',
       getAccessToken: () => 'token-123',
       fetchImpl: fetchImpl as typeof fetch,
     });
