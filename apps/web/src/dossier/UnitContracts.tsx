@@ -26,6 +26,10 @@ import {
   formatDetailKey,
   formatExactMoney,
 } from '../presentation/format.js';
+import {
+  partyDisplayName,
+  usePartyDirectory,
+} from '../parties/use-party-directory.js';
 
 interface UnitContractsProps {
   readonly api: PortfolioApi;
@@ -288,6 +292,14 @@ export function UnitContracts({
     agreementId !== undefined &&
     selectedAgreement === null;
 
+  const partyIds = [
+    ...(selectedTenancy?.parties.map((party) => party.partyId) ?? []),
+    ...(agreements?.flatMap((agreement) =>
+      agreement.parties.map((party) => party.partyId),
+    ) ?? []),
+  ];
+  const partyDirectory = usePartyDirectory(api, partyIds);
+
   useEffect(() => {
     setAmendments(null);
     setAmendmentError(null);
@@ -394,6 +406,11 @@ export function UnitContracts({
             The selected Tenancy does not belong to this Unit.
           </p>
         ) : null}
+        {partyDirectory.error ? (
+          <p className="form-error" role="alert">
+            Party details unavailable: {partyDirectory.error}
+          </p>
+        ) : null}
       </section>
 
       {selectedTenancy ? (
@@ -453,6 +470,23 @@ export function UnitContracts({
                       <div><dt>Predecessor</dt><dd>{agreement.predecessorAgreementId ?? '—'}</dd></div>
                       <div><dt>Parties</dt><dd>{agreement.parties.length}</dd></div>
                     </dl>
+                    {agreement.parties.length > 0 ? (
+                      <ul className="role-list contract-party-list">
+                        {agreement.parties.map((party) => (
+                          <li key={party.id}>
+                            <strong>
+                              {partyDirectory.loading
+                                ? 'Resolving Party…'
+                                : partyDisplayName(
+                                    partyDirectory,
+                                    party.partyId,
+                                  )}
+                            </strong>
+                            <span>{formatDetailKey(party.role)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </WorkspaceLink>
                 ))}
               </div>

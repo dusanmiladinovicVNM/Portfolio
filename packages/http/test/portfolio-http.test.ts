@@ -3008,4 +3008,64 @@ describe('Portfolio HTTP boundary', () => {
   });
 
 
+  it('batch-resolves Party identities for lifecycle surfaces without N+1 reads', async () => {
+    const handler = buildHandler([
+      'd7a10000-0000-4000-8000-000000000001',
+      'd7a10000-0000-4000-8000-000000000002',
+    ]);
+
+    const first = await handler(
+      new Request('https://portfolio.test/parties', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'PTY-BATCH-1',
+          partyType: 'person',
+          firstName: 'Ana',
+          lastName: 'Batch',
+        }),
+      }),
+      adminIdentity,
+    );
+    const firstParty = (await first.json()).data;
+
+    const second = await handler(
+      new Request('https://portfolio.test/parties', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'PTY-BATCH-2',
+          partyType: 'company',
+          legalName: 'Batch Property d.o.o.',
+        }),
+      }),
+      adminIdentity,
+    );
+    const secondParty = (await second.json()).data;
+
+    const response = await handler(
+      new Request(
+        `https://portfolio.test/parties?id=${firstParty.id}&id=${secondParty.id}&id=${firstParty.id}`,
+      ),
+      inspectorIdentity,
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.data.items).toHaveLength(2);
+    expect(
+      body.data.items.map((party: { id: string }) => party.id).sort(),
+    ).toEqual([firstParty.id, secondParty.id].sort());
+
+    const missing = await handler(
+      new Request(
+        'https://portfolio.test/parties?id=d7a10000-0000-4000-8000-000000000099',
+      ),
+      inspectorIdentity,
+    );
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toMatchObject({
+      error: { code: 'PARTY_NOT_FOUND' },
+    });
+  });
+
+
 });

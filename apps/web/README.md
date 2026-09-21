@@ -66,3 +66,11 @@ Rules:
   workspace from the URL.
 - Production hosting must rewrite these application routes to `index.html` so
   direct deep links load the Vite shell before client-side route restoration.
+
+
+## Party identity resolution
+
+Tenancy and Agreement records keep Party IDs as canonical references. The web
+client resolves the small set needed by the active lifecycle surface through a
+single batch `GET /parties?id=...&id=...` read. It does not fetch one Party per
+row and it does not load the global Party register merely to resolve names.

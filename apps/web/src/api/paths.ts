@@ -39,3 +39,13 @@ export function tenancyTermsPath(tenancyId: string, at: string): string {
 export function agreementAmendmentsPath(agreementId: string): string {
   return `/agreements/${encodeURIComponent(agreementId)}/amendments`;
 }
+
+
+export function partiesByIdsPath(ids: readonly string[]): string {
+  const uniqueIds = [...new Set(ids)].sort();
+  const search = new URLSearchParams();
+  for (const id of uniqueIds) {
+    search.append('id', id);
+  }
+  return `/parties?${search.toString()}`;
+}

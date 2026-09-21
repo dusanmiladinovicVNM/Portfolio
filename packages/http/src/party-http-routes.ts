@@ -1,6 +1,7 @@
 import {
   createPartyCommand,
   getPartyQuery,
+  listPartiesByIdsQuery,
   listPartiesQuery,
   type Actor,
   type CreatePartyCommandInput,
@@ -10,6 +11,7 @@ import {
 import {
   createPartyRequestSchema,
   entityIdSchema,
+  partyIdsQuerySchema,
 } from '@portfolio/contracts';
 import { asPartyId } from '@portfolio/domain';
 import {
@@ -33,6 +35,23 @@ export async function handlePartyHttp(
   const method = request.method.toUpperCase();
 
   if (method === 'GET' && path === '/parties') {
+    const requestedIds = new URL(request.url).searchParams.getAll('id');
+
+    if (requestedIds.length > 0) {
+      const parsed = partyIdsQuerySchema.safeParse({ ids: requestedIds });
+      if (!parsed.success) return validationFailure();
+
+      const parties = await listPartiesByIdsQuery(
+        deps.partyRepository,
+        actor,
+        parsed.data.ids.map(asPartyId),
+      );
+
+      return json({
+        data: { items: parties.map(toPartyResponse) },
+      });
+    }
+
     const parties = await listPartiesQuery(deps.partyRepository, actor);
     return json({
       data: { items: parties.map(toPartyResponse) },

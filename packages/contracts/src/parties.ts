@@ -93,5 +93,15 @@ export const partyResponseSchema = z.discriminatedUnion('partyType', [
   }),
 ]);
 
+export const partyIdsQuerySchema = z.object({
+  ids: z.array(entityIdSchema).min(1).max(100),
+});
+
+export const partyListResponseSchema = z.object({
+  items: z.array(partyResponseSchema),
+});
+
 export type CreatePartyRequest = z.infer<typeof createPartyRequestSchema>;
 export type PartyResponse = z.infer<typeof partyResponseSchema>;
+export type PartyIdsQuery = z.infer<typeof partyIdsQuerySchema>;
+export type PartyListResponse = z.infer<typeof partyListResponseSchema>;

@@ -9,6 +9,10 @@ import { WorkspaceLink } from '../navigation/WorkspaceLink.js';
 import { unitRoute } from '../navigation/workspace-route.js';
 import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
 import { formatDetailKey } from '../presentation/format.js';
+import {
+  partyDisplayName,
+  usePartyDirectory,
+} from '../parties/use-party-directory.js';
 
 interface UnitTenanciesProps {
   readonly api: PortfolioApi;
@@ -38,6 +42,11 @@ export function UnitTenancies({
   const [tenancies, setTenancies] =
     useState<readonly TenancyResponse[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const partyIds =
+    tenancies?.flatMap((tenancy) =>
+      tenancy.parties.map((party) => party.partyId),
+    ) ?? [];
+  const partyDirectory = usePartyDirectory(api, partyIds);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -74,6 +83,11 @@ export function UnitTenancies({
       </div>
 
       {error ? <p className="form-error" role="alert">{error}</p> : null}
+      {partyDirectory.error ? (
+        <p className="form-error" role="alert">
+          Party details unavailable: {partyDirectory.error}
+        </p>
+      ) : null}
       {!error && tenancies === null ? (
         <p className="muted" aria-live="polite">Loading Tenancies…</p>
       ) : null}
@@ -105,8 +119,15 @@ export function UnitTenancies({
                 <ul className="role-list" aria-label="Tenancy party roles">
                   {tenancy.parties.map((party) => (
                     <li key={party.id}>
-                      {formatDetailKey(party.role)}
-                      {party.isPrimary ? ' · primary' : ''}
+                      <strong>
+                        {partyDirectory.loading
+                          ? 'Resolving Party…'
+                          : partyDisplayName(partyDirectory, party.partyId)}
+                      </strong>
+                      <span>
+                        {formatDetailKey(party.role)}
+                        {party.isPrimary ? ' · primary' : ''}
+                      </span>
                     </li>
                   ))}
                 </ul>
