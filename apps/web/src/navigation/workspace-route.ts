@@ -4,7 +4,15 @@ import {
 } from '@portfolio/contracts';
 import { localDateOnly } from '../presentation/format.js';
 
-export const DOSSIER_TABS = ['overview', 'tenancies', 'contracts', 'timeline', 'documents', 'assets'] as const;
+export const DOSSIER_TABS = [
+  'overview',
+  'tenancies',
+  'contracts',
+  'inspections',
+  'timeline',
+  'documents',
+  'assets',
+] as const;
 export type DossierTab = (typeof DOSSIER_TABS)[number];
 
 export type WorkspaceRoute =
@@ -26,6 +34,7 @@ export type WorkspaceRoute =
       readonly tenancyId?: string;
       readonly agreementId?: string;
       readonly amendmentId?: string;
+      readonly inspectionId?: string;
     };
 
 export function isWorkspaceAsOf(value: string): boolean {
@@ -87,6 +96,7 @@ export interface UnitRouteSelection {
   readonly tenancyId?: string;
   readonly agreementId?: string;
   readonly amendmentId?: string;
+  readonly inspectionId?: string;
 }
 
 export function unitRoute(
@@ -104,6 +114,8 @@ export function unitRoute(
     tab === 'contracts' && tenancyId && agreementId
       ? selection.amendmentId
       : undefined;
+  const inspectionId =
+    tab === 'inspections' ? selection.inspectionId : undefined;
 
   return {
     kind: 'unit',
@@ -114,6 +126,7 @@ export function unitRoute(
     ...(tenancyId ? { tenancyId } : {}),
     ...(agreementId ? { agreementId } : {}),
     ...(amendmentId ? { amendmentId } : {}),
+    ...(inspectionId ? { inspectionId } : {}),
   };
 }
 
@@ -149,11 +162,16 @@ export function parseWorkspaceLocation(
         tab === 'contracts' && tenancyId && agreementId
           ? readEntityId(search.get('amendmentId') ?? undefined)
           : null;
+      const inspectionId =
+        tab === 'inspections'
+          ? readEntityId(search.get('inspectionId') ?? undefined)
+          : null;
 
       return unitRoute(propertyId, unitId, asOf, tab, {
         ...(tenancyId ? { tenancyId } : {}),
         ...(agreementId ? { agreementId } : {}),
         ...(amendmentId ? { amendmentId } : {}),
+        ...(inspectionId ? { inspectionId } : {}),
       });
     }
   }
@@ -179,6 +197,9 @@ export function workspaceRouteHref(route: WorkspaceRoute): string {
           search.set('amendmentId', route.amendmentId);
         }
       }
+    }
+    if (route.tab === 'inspections' && route.inspectionId) {
+      search.set('inspectionId', route.inspectionId);
     }
   }
   search.set('asOf', route.asOf);
