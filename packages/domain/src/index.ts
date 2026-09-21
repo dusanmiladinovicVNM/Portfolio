@@ -34,3 +34,5 @@ export * from './access/access-item.js';
 export * from './meters/meter.js';
 
 export * from './timeline/unit-timeline.js';
+
+export * from './reporting/reporting.js';
