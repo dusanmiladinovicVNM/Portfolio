@@ -101,6 +101,7 @@ import {
   asDocumentVersionId,
   asInspectionResponseId,
   asOwnershipPeriodId,
+  asPropertyId,
   asPartyAddressId,
   asPartyId,
   asTenancyId,
@@ -11211,6 +11212,210 @@ describe('PostgreSQL infrastructure', () => {
 
     // Reporting is a read model; nothing in this query path mutates source rows.
     expect(assetB.unitId).toBe(unitB.id);
+  });
+
+
+  it('accepts exact Portfolio money aggregates beyond the scalar MoneyAmount range', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+    const [propertyRow] = await sql<{ id: string }[]>\`
+      select id
+      from public.properties
+      order by id
+      limit 1
+    \`;
+    if (!propertyRow) throw new Error('Expected a Property for reporting aggregate test.');
+
+    const asOf = asDateOnly('2026-09-21');
+    const before = await reportingRepository.getPortfolioDashboard(asOf);
+    const ids = new SequenceIds([
+      'f2400000-0000-4000-8000-000000000001',
+      'f2400000-0000-4000-8000-000000000002',
+    ]);
+    const deps = {
+      costRepository,
+      portfolioRepository,
+      partyRepository,
+      assetRepository,
+      assetServiceRepository,
+      improvementRepository,
+      maintenanceRepository,
+      idGenerator: ids,
+      clock: { now: () => '2026-09-21T12:00:00.000Z' },
+    };
+    const propertyId = asPropertyId(propertyRow.id);
+
+    for (const description of ['Wide aggregate A', 'Wide aggregate B']) {
+      await createCostCommand(
+        deps,
+        actor,
+        {
+          source: { kind: 'property', propertyId },
+          description,
+          amount: '9999999999999999.99',
+          currency: 'CHF',
+          incurredOn: '2026-09-21',
+          reportingClass: 'capex',
+        },
+      );
+    }
+
+    const after = await reportingRepository.getPortfolioDashboard(asOf);
+    const beforeChf = before.portfolioCostsByCurrency.find(
+      (item) => item.currency === 'CHF',
+    );
+    const afterChf = after.portfolioCostsByCurrency.find(
+      (item) => item.currency === 'CHF',
+    );
+    if (!afterChf) throw new Error('Expected CHF Portfolio aggregate.');
+
+    const cents = (value: string): bigint => BigInt(value.replace('.', ''));
+    expect(
+      cents(afterChf.total) - cents(beforeChf?.total ?? '0.00'),
+    ).toBe(1999999999999999998n);
+    expect(
+      cents(afterChf.capex) - cents(beforeChf?.capex ?? '0.00'),
+    ).toBe(1999999999999999998n);
+  });
+
+  it('keeps one reporting response on one repeatable-read database snapshot', async () => {
+    const reportingSql = postgres(connectionString, { max: 1 });
+    const writerSql = postgres(connectionString, { max: 1 });
+    let releaseSnapshot!: () => void;
+    const snapshotEstablished = new Promise<void>((resolve) => {
+      releaseSnapshot = resolve;
+    });
+    let releaseReporting!: () => void;
+    const writerCommitted = new Promise<void>((resolve) => {
+      releaseReporting = resolve;
+    });
+
+    try {
+      const [propertyRow] = await writerSql<{ id: string }[]>\`
+        select id
+        from public.properties
+        order by id
+        limit 1
+      \`;
+      if (!propertyRow) throw new Error('Expected a Property for reporting snapshot test.');
+
+      const writerAccessRepository = new PostgresUserAccessRepository(writerSql);
+      const writerActor = await resolveActor(writerAccessRepository, {
+        provider: 'supabase',
+        subject: 'external-admin-subject',
+      });
+      const writerPortfolioRepository = new PostgresPortfolioRepository(writerSql);
+      const writerMaintenanceRepository = new PostgresMaintenanceRepository(writerSql);
+      const writerAssetRepository = new PostgresAssetRepository(writerSql);
+      const writerAssetServiceRepository = new PostgresAssetServiceRepository(writerSql);
+      const writerInspectionRepository = new PostgresInspectionRepository(writerSql);
+      const writerPartyRepository = new PostgresPartyRepository(writerSql);
+      const asOf = asDateOnly('2026-09-21');
+
+      const reportingRead = reportingSql.begin(
+        'isolation level repeatable read read only',
+        async (tx) => {
+          const [mode] = await tx<{
+            isolation_level: string;
+            read_only: string;
+          }[]>\`
+            select
+              current_setting('transaction_isolation') as isolation_level,
+              current_setting('transaction_read_only') as read_only
+          \`;
+          expect(mode).toEqual({
+            isolation_level: 'repeatable read',
+            read_only: 'on',
+          });
+
+          const propertyRows = await tx<{
+            current_open_maintenance_issue_count: string | number | bigint;
+          }[]>\`
+            select current_open_maintenance_issue_count
+            from public.reporting_property_summaries(${asOf}::date)
+          \`;
+          const propertyOpenIssues = propertyRows.reduce(
+            (sum, row) =>
+              sum + Number(row.current_open_maintenance_issue_count),
+            0,
+          );
+
+          releaseSnapshot();
+          await writerCommitted;
+
+          const [operations] = await tx<{
+            open_maintenance_issue_count: string | number | bigint;
+          }[]>\`
+            select count(*)::bigint as open_maintenance_issue_count
+            from public.maintenance_issues
+            where status = 'open'
+          \`;
+          if (!operations) {
+            throw new Error('Expected Portfolio operations row.');
+          }
+
+          expect(Number(operations.open_maintenance_issue_count)).toBe(
+            propertyOpenIssues,
+          );
+          return propertyOpenIssues;
+        },
+      );
+
+      await snapshotEstablished;
+
+      let writerFailure: unknown;
+      try {
+        await createMaintenanceIssueCommand(
+          {
+            maintenanceRepository: writerMaintenanceRepository,
+            portfolioRepository: writerPortfolioRepository,
+            assetRepository: writerAssetRepository,
+            assetServiceRepository: writerAssetServiceRepository,
+            inspectionRepository: writerInspectionRepository,
+            partyRepository: writerPartyRepository,
+            staffDirectoryRepository: writerAccessRepository,
+            idGenerator: new SequenceIds([
+              'f2400000-0000-4000-8000-000000000010',
+            ]),
+            clock: { now: () => '2026-09-21T12:30:00.000Z' },
+          },
+          writerActor,
+          {
+            code: 'MI-REPORT-SNAPSHOT-RACE',
+            propertyId: asPropertyId(propertyRow.id),
+            title: 'Concurrent reporting snapshot proof',
+            priority: 'normal',
+            reportedAt: '2026-09-21T12:30:00.000Z',
+          },
+        );
+      } catch (error) {
+        writerFailure = error;
+      } finally {
+        releaseReporting();
+      }
+
+      const preWriteOpenIssues = await reportingRead;
+      if (writerFailure !== undefined) throw writerFailure;
+
+      const fresh = await new PostgresReportingRepository(
+        reportingSql,
+      ).getPortfolioDashboard(asOf);
+      expect(fresh.currentOperations.openMaintenanceIssueCount).toBe(
+        preWriteOpenIssues + 1,
+      );
+      expect(
+        fresh.properties.reduce(
+          (sum, property) =>
+            sum + property.currentOpenMaintenanceIssueCount,
+          0,
+        ),
+      ).toBe(preWriteOpenIssues + 1);
+    } finally {
+      await reportingSql.end();
+      await writerSql.end();
+    }
   });
 
 });
