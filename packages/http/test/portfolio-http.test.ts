@@ -336,6 +336,7 @@ function buildHandler(
     readonly reportingRepository?: InMemoryReportingRepository;
     readonly leaseRepository?: EmptyLeaseRepository;
     readonly documentRepository?: InMemoryDocumentRepository;
+    readonly fileStorage?: MemoryFileStorage;
   } = {},
 ) {
   return createPortfolioHttpHandler({
@@ -361,7 +362,7 @@ function buildHandler(
       overrides.documentRepository ?? new InMemoryDocumentRepository(),
     inspectionRepository: new InMemoryInspectionRepository(),
     staffDirectoryRepository: new InMemoryStaffDirectoryRepository(),
-    fileStorage: new MemoryFileStorage(),
+    fileStorage: overrides.fileStorage ?? new MemoryFileStorage(),
     clock,
     userAccessRepository: new InMemoryAccessRepository(),
     idGenerator: new FixedIds(ids),
@@ -3308,6 +3309,74 @@ describe('Portfolio HTTP boundary', () => {
     expect(response.status).toBe(503);
     expect(await response.json()).toMatchObject({
       error: { code: 'DOCUMENT_BINARY_DELIVERY_LIMIT_EXCEEDED' },
+    });
+  });
+
+
+  it('maps DocumentVersion storage integrity mismatch to an upstream 502 failure', async () => {
+    const documentRepository = new InMemoryDocumentRepository();
+    const fileStorage = new MemoryFileStorage();
+    const documentId = asDocumentId(
+      'f2000000-0000-4000-8000-000000000001',
+    );
+    const versionId = asDocumentVersionId(
+      'f2000000-0000-4000-8000-000000000002',
+    );
+    const objectKey = `document-version:${versionId}`;
+
+    documentRepository.documents.set(documentId, {
+      id: documentId,
+      code: 'DOC-INTEGRITY-HTTP',
+      title: 'Integrity mismatch',
+      category: 'legal',
+      status: 'active',
+      latestVersionNumber: 1,
+      revision: 2,
+    });
+    documentRepository.versions.set(versionId, {
+      id: versionId,
+      documentId,
+      versionNumber: 1,
+      fileName: 'integrity.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 3,
+      sha256: 'a'.repeat(64),
+      status: 'final',
+      finalizedAt: '2026-09-21T18:00:00.000Z',
+    });
+    documentRepository.storage.set(versionId, {
+      provider: 'memory',
+      objectId: 'integrity-object',
+      objectKey,
+    });
+
+    fileStorage.objects.set(objectKey, {
+      provider: 'memory',
+      objectId: 'integrity-object',
+      objectKey,
+      byteSize: 3,
+      sha256: 'b'.repeat(64),
+      disposition: 'created',
+    });
+    fileStorage.contents.set(objectKey, new Uint8Array([1, 2, 3]));
+
+    const handler = buildHandler([], new FixedClock(), {
+      documentRepository,
+      fileStorage,
+    });
+
+    const response = await handler(
+      new Request(
+        `https://portfolio.test/document-versions/${versionId}/content`,
+      ),
+      inspectorIdentity,
+    );
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: 'DOCUMENT_BINARY_INTEGRITY_MISMATCH',
+      },
     });
   });
 
