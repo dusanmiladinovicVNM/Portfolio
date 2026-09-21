@@ -45,12 +45,35 @@ export type ReportingOccupancyStatus =
 export type ReportingContractCoverageStatus =
   (typeof REPORTING_CONTRACT_COVERAGE_STATUSES)[number];
 
+declare const reportingMoneyAmountBrand: unique symbol;
+
+export type ReportingMoneyAmount = string & {
+  readonly [reportingMoneyAmountBrand]: 'ReportingMoneyAmount';
+};
+
+const REPORTING_MONEY_PATTERN = /^(0|[1-9]\d*)(?:\.(\d{1,2}))?$/;
+
+export function asReportingMoneyAmount(value: string): ReportingMoneyAmount {
+  const normalized = value.trim();
+  const match = REPORTING_MONEY_PATTERN.exec(normalized);
+  if (!match) {
+    throw new DomainError(
+      'REPORTING_INVALID_PROJECTION',
+      'Reporting money aggregate must be a non-negative exact decimal with at most two decimal places.',
+    );
+  }
+
+  const whole = match[1]!;
+  const fraction = (match[2] ?? '').padEnd(2, '0');
+  return `${whole}.${fraction}` as ReportingMoneyAmount;
+}
+
 export interface ReportingCostSummary {
   readonly currency: CurrencyCode;
-  readonly capex: MoneyAmount;
-  readonly opex: MoneyAmount;
-  readonly unclassified: MoneyAmount;
-  readonly total: MoneyAmount;
+  readonly capex: ReportingMoneyAmount;
+  readonly opex: ReportingMoneyAmount;
+  readonly unclassified: ReportingMoneyAmount;
+  readonly total: ReportingMoneyAmount;
 }
 
 export interface ReportingTenancySummary {
@@ -73,7 +96,7 @@ export interface ReportingTermSummary {
   readonly utilitiesAdvance: MoneyAmount;
   readonly parkingRent: MoneyAmount;
   readonly otherRecurringCharge: MoneyAmount;
-  readonly recurringTotal: MoneyAmount;
+  readonly recurringTotal: ReportingMoneyAmount;
   readonly depositRequired: MoneyAmount;
   readonly billingFrequency: BillingFrequency;
 }
@@ -191,13 +214,15 @@ function nonNegativeInteger(value: number, field: string): number {
   return value;
 }
 
-function scaledMoney(value: MoneyAmount): bigint {
+function scaledMoney(value: string): bigint {
   return BigInt(value.replace('.', ''));
 }
 
-function moneyFromScaled(value: bigint): MoneyAmount {
+function reportingMoneyFromScaled(value: bigint): ReportingMoneyAmount {
   const raw = value.toString().padStart(3, '0');
-  return asMoneyAmount(`${raw.slice(0, -2) || '0'}.${raw.slice(-2)}`);
+  return asReportingMoneyAmount(
+    `${raw.slice(0, -2) || '0'}.${raw.slice(-2)}`,
+  );
 }
 
 function normalizeCostSummary(
@@ -210,11 +235,11 @@ function normalizeCostSummary(
   },
 ): ReportingCostSummary {
   const currency = asCurrencyCode(input.currency);
-  const capex = asMoneyAmount(input.capex);
-  const opex = asMoneyAmount(input.opex);
-  const unclassified = asMoneyAmount(input.unclassified);
-  const total = asMoneyAmount(input.total);
-  const expected = moneyFromScaled(
+  const capex = asReportingMoneyAmount(input.capex);
+  const opex = asReportingMoneyAmount(input.opex);
+  const unclassified = asReportingMoneyAmount(input.unclassified);
+  const total = asReportingMoneyAmount(input.total);
+  const expected = reportingMoneyFromScaled(
     scaledMoney(capex) + scaledMoney(opex) + scaledMoney(unclassified),
   );
 
@@ -247,8 +272,8 @@ export function createReportingTermSummary(input: {
   const utilitiesAdvance = asMoneyAmount(input.utilitiesAdvance);
   const parkingRent = asMoneyAmount(input.parkingRent);
   const otherRecurringCharge = asMoneyAmount(input.otherRecurringCharge);
-  const recurringTotal = asMoneyAmount(input.recurringTotal);
-  const expectedRecurring = moneyFromScaled(
+  const recurringTotal = asReportingMoneyAmount(input.recurringTotal);
+  const expectedRecurring = reportingMoneyFromScaled(
     scaledMoney(baseRent) +
       scaledMoney(serviceCharge) +
       scaledMoney(utilitiesAdvance) +
