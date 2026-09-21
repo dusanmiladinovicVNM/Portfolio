@@ -142,14 +142,14 @@ Cost is a financial projection/fact, not a substitute for its source business en
 
 ## Read models and product surface
 
-### PR #22 — Domain Events + Unit Timeline (IN PROGRESS)
+### PR #22 — Domain Events + Unit Timeline (DONE)
 
 - business-event projection
 - Unit dossier timeline
 - cross-context chronology
 - technical audit remains separate from domain timeline
 
-### PR #23 — Reporting / Portfolio projections
+### PR #23 — Reporting / Portfolio projections (IN PROGRESS)
 
 - Unit overview
 - occupancy/tenancy status
