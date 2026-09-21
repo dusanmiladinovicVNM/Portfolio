@@ -127,6 +127,7 @@ import {
   PostgresPartyRepository,
   PostgresPortfolioRepository,
   PostgresTenancyRepository,
+  PostgresUnitTimelineRepository,
   PostgresUserAccessRepository,
 } from '../../src/index.js';
 
@@ -152,6 +153,7 @@ const inspectionRepository = new PostgresInspectionRepository(sql);
 const improvementRepository = new PostgresImprovementRepository(sql);
 const maintenanceRepository = new PostgresMaintenanceRepository(sql);
 const meterRepository = new PostgresMeterRepository(sql);
+const unitTimelineRepository = new PostgresUnitTimelineRepository(sql);
 
 class SequenceIds implements IdGenerator {
   private index = 0;
@@ -9347,6 +9349,698 @@ describe('PostgreSQL infrastructure', () => {
       releaseBoundary();
       await Promise.all([boundaryBlocker.end(), boundaryContender.end()]);
     }
+  });
+
+
+  it('projects stable cross-context Unit business events without becoming a second write model', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+
+    const ids = new SequenceIds([
+      'd8000000-0000-4000-8000-000000000001',
+      'd8000000-0000-4000-8000-000000000002',
+      'd8000000-0000-4000-8000-000000000003',
+      'd8000000-0000-4000-8000-000000000004',
+      'd8000000-0000-4000-8000-000000000005',
+      'd8000000-0000-4000-8000-000000000006',
+      'd8000000-0000-4000-8000-000000000007',
+      'd8000000-0000-4000-8000-000000000008',
+      'd8000000-0000-4000-8000-000000000009',
+      'd8000000-0000-4000-8000-000000000010',
+      'd8000000-0000-4000-8000-000000000011',
+      'd8000000-0000-4000-8000-000000000012',
+      'd8000000-0000-4000-8000-000000000013',
+      'd8000000-0000-4000-8000-000000000014',
+      'd8000000-0000-4000-8000-000000000015',
+      'd8000000-0000-4000-8000-000000000016',
+      'd8000000-0000-4000-8000-000000000017',
+      'd8000000-0000-4000-8000-000000000018',
+      'd8000000-0000-4000-8000-000000000019',
+      'd8000000-0000-4000-8000-000000000020',
+      'd8000000-0000-4000-8000-000000000021',
+      'd8000000-0000-4000-8000-000000000022',
+      'd8000000-0000-4000-8000-000000000023',
+      'd8000000-0000-4000-8000-000000000024',
+      'd8000000-0000-4000-8000-000000000025',
+      'd8000000-0000-4000-8000-000000000026',
+      'd8000000-0000-4000-8000-000000000027',
+      'd8000000-0000-4000-8000-000000000028',
+      'd8000000-0000-4000-8000-000000000029',
+      'd8000000-0000-4000-8000-000000000030',
+      'd8000000-0000-4000-8000-000000000031',
+      'd8000000-0000-4000-8000-000000000032',
+      'd8000000-0000-4000-8000-000000000033',
+      'd8000000-0000-4000-8000-000000000034',
+      'd8000000-0000-4000-8000-000000000035',
+      'd8000000-0000-4000-8000-000000000036',
+      'd8000000-0000-4000-8000-000000000037',
+      'd8000000-0000-4000-8000-000000000038',
+      'd8000000-0000-4000-8000-000000000039',
+      'd8000000-0000-4000-8000-000000000040',
+    ]);
+
+    const property = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-TIMELINE-INT',
+        name: 'Timeline Integration Property',
+        propertyType: 'apartment_building',
+        street: 'Timeline Street',
+        houseNumber: '22',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+
+    const unitA = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-TIMELINE-A',
+        unitNumber: 'TL-A',
+        unitType: 'apartment',
+      },
+    );
+
+    const unitB = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-TIMELINE-B',
+        unitNumber: 'TL-B',
+        unitType: 'apartment',
+      },
+    );
+
+    const spaceA = await createSpaceCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        unitId: unitA.id,
+        code: 'TIMELINE-SPACE',
+        name: 'Timeline Space',
+        spaceType: 'other',
+      },
+    );
+
+    const tenant = await createPartyCommand(
+      { partyRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PTY-TIMELINE',
+        partyType: 'person',
+        firstName: 'Timeline',
+        lastName: 'Tenant',
+      },
+    );
+
+    const tenancy = await createTenancyCommand(
+      {
+        tenancyRepository,
+        portfolioRepository,
+        partyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        unitId: unitA.id,
+        code: 'TEN-TIMELINE-A',
+        parties: [{ partyId: tenant.id, role: 'tenant', isPrimary: true }],
+      },
+    );
+    const tenancyB = await createTenancyCommand(
+      {
+        tenancyRepository,
+        portfolioRepository,
+        partyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        unitId: unitB.id,
+        code: 'TEN-TIMELINE-B',
+        parties: [{ partyId: tenant.id, role: 'tenant', isPrimary: true }],
+      },
+    );
+
+    await sql`
+      insert into public.lease_agreements (
+        id, tenancy_id, code, agreement_type, effective_from,
+        status, version, created_at, updated_at
+      ) values
+      (
+        'd8f10000-0000-4000-8000-000000000001',
+        ${tenancy.id},
+        'AGR-TIMELINE-A',
+        'initial',
+        '2026-10-01',
+        'draft',
+        1,
+        '2026-09-20T08:00:00.000Z',
+        '2026-09-20T08:00:00.000Z'
+      ),
+      (
+        'd8f10000-0000-4000-8000-000000000002',
+        ${tenancyB.id},
+        'AGR-TIMELINE-B',
+        'initial',
+        '2026-10-01',
+        'draft',
+        1,
+        '2026-09-20T08:05:00.000Z',
+        '2026-09-20T08:05:00.000Z'
+      )
+    `;
+
+    await sql`
+      insert into public.lease_amendments (
+        id, agreement_id, code, title, effective_from,
+        status, version, created_at, updated_at
+      ) values (
+        'd8f20000-0000-4000-8000-000000000001',
+        'd8f10000-0000-4000-8000-000000000001',
+        'AMD-TIMELINE-A',
+        'Timeline amendment',
+        '2026-11-01',
+        'draft',
+        1,
+        '2026-09-20T08:10:00.000Z',
+        '2026-09-20T08:10:00.000Z'
+      )
+    `;
+
+    await sql`
+      insert into public.documents (
+        id, code, title, category, status,
+        latest_version_number, revision, created_at, updated_at
+      ) values (
+        'd8f30000-0000-4000-8000-000000000001',
+        'DOC-TIMELINE-A',
+        'Timeline supporting document',
+        'other',
+        'active',
+        0,
+        1,
+        '2026-09-20T08:15:00.000Z',
+        '2026-09-20T08:15:00.000Z'
+      )
+    `;
+
+    await sql`
+      insert into public.document_links (
+        id, document_id, relation, target_type, unit_id, created_at
+      ) values (
+        'd8f30000-0000-4000-8000-000000000002',
+        'd8f30000-0000-4000-8000-000000000001',
+        'supporting',
+        'unit',
+        ${unitA.id},
+        '2026-09-20T08:16:00.000Z'
+      )
+    `;
+
+    const planned = await planTenancyCommand(
+      { tenancyRepository },
+      actor,
+      tenancy.id,
+      tenancy.version,
+      '2026-09-20',
+    );
+    const active = await activateTenancyCommand(
+      { tenancyRepository },
+      actor,
+      planned.id,
+      planned.version,
+      '2026-09-20',
+    );
+
+    const accessDeps = {
+      accessItemRepository,
+      portfolioRepository,
+      tenancyRepository,
+      idGenerator: ids,
+      clock: { now: () => '2026-09-20T09:00:00.000Z' },
+    };
+    const propertyKey = await createAccessItemCommand(
+      accessDeps,
+      actor,
+      {
+        code: 'KEY-TIMELINE-PROPERTY',
+        kind: 'key',
+        propertyId: property.id,
+        label: 'Property-scope key attributed through Tenancy',
+      },
+    );
+    const issued = await issueAccessItemCommand(
+      {
+        ...accessDeps,
+        clock: { now: () => '2026-09-20T09:10:00.000Z' },
+      },
+      actor,
+      propertyKey.id,
+      {
+        tenancyId: active.id,
+        occurredAt: '2026-09-20T09:10:00.000Z',
+      },
+    );
+
+    const meterDeps = {
+      meterRepository,
+      portfolioRepository,
+      tenancyRepository,
+      idGenerator: ids,
+      clock: { now: () => '2026-09-20T09:20:00.000Z' },
+    };
+    const meter = await createMeterCommand(
+      meterDeps,
+      actor,
+      {
+        code: 'MTR-TIMELINE-A',
+        serialNumber: 'SER-TIMELINE-A',
+        utilityType: 'electricity',
+        measurementUnit: 'kwh',
+        unitId: unitA.id,
+        label: 'Timeline electricity meter',
+        installedAt: '2026-01-01T00:00:00.000Z',
+      },
+    );
+    const reading = await recordMeterReadingCommand(
+      {
+        ...meterDeps,
+        clock: { now: () => '2026-09-20T10:05:00.000Z' },
+      },
+      actor,
+      meter.id,
+      {
+        value: '123.400000',
+        readAt: '2026-09-20T10:00:00.000Z',
+      },
+    );
+    const moveInBoundary = await linkMeterReadingBoundaryCommand(
+      {
+        ...meterDeps,
+        clock: { now: () => '2026-09-20T10:10:00.000Z' },
+      },
+      actor,
+      reading.id,
+      { tenancyId: active.id, type: 'move_in' },
+    );
+
+    const ended = await endTenancyCommand(
+      { tenancyRepository },
+      actor,
+      active.id,
+      active.version,
+      '2026-09-20',
+    );
+    const moveOutBoundary = await linkMeterReadingBoundaryCommand(
+      {
+        ...meterDeps,
+        clock: { now: () => '2026-09-20T10:15:00.000Z' },
+      },
+      actor,
+      reading.id,
+      { tenancyId: ended.id, type: 'move_out' },
+    );
+
+    const asset = await createAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T08:00:00.000Z' },
+      },
+      actor,
+      {
+        code: 'ASSET-TIMELINE-A',
+        name: 'Timeline movable asset',
+        propertyId: property.id,
+        unitId: unitA.id,
+      },
+    );
+
+    const serviceEvent = await recordServiceEventCommand(
+      {
+        assetRepository,
+        assetServiceRepository,
+        partyRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T08:40:00.000Z' },
+      },
+      actor,
+      asset.id,
+      {
+        eventType: 'repair',
+        performedAt: '2026-09-19T08:30:00.000Z',
+        description: 'Service while Asset still belonged to Unit A',
+      },
+    );
+
+    await moveAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-19T09:00:00.000Z' },
+      },
+      actor,
+      asset.id,
+      {
+        expectedVersion: asset.version,
+        propertyId: property.id,
+        unitId: unitB.id,
+        reason: 'Moved after historical service',
+      },
+    );
+
+    const costDeps = {
+      costRepository,
+      portfolioRepository,
+      partyRepository,
+      assetRepository,
+      assetServiceRepository,
+      improvementRepository,
+      maintenanceRepository,
+      idGenerator: ids,
+      clock: { now: () => '2026-09-20T11:00:00.000Z' },
+    };
+    const unitCost = await createCostCommand(
+      costDeps,
+      actor,
+      {
+        source: { kind: 'unit', unitId: unitA.id },
+        description: 'Timeline Unit cost',
+        amount: '123.40',
+        currency: 'CHF',
+        incurredOn: '2026-09-20',
+        reportingClass: 'opex',
+      },
+    );
+    const spaceCost = await createCostCommand(
+      {
+        ...costDeps,
+        clock: { now: () => '2026-09-20T11:02:00.000Z' },
+      },
+      actor,
+      {
+        source: { kind: 'space', spaceId: spaceA.id },
+        description: 'Timeline Space cost',
+        amount: '45.60',
+        currency: 'CHF',
+        incurredOn: '2026-09-20',
+        reportingClass: 'opex',
+      },
+    );
+
+    const propertyCost = await createCostCommand(
+      {
+        ...costDeps,
+        clock: { now: () => '2026-09-20T11:05:00.000Z' },
+      },
+      actor,
+      {
+        source: { kind: 'property', propertyId: property.id },
+        description: 'Property-wide cost must not be copied to every Unit',
+        amount: '999.00',
+        currency: 'CHF',
+        incurredOn: '2026-09-20',
+        reportingClass: 'opex',
+      },
+    );
+
+    const beforeParentSabotage = await unitTimelineRepository.listByUnit(
+      unitA.id,
+      { limit: 500, offset: 0 },
+    );
+    expect(beforeParentSabotage).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventKey: `cost.incurred:${spaceCost.id}`,
+          sourceId: spaceCost.id,
+          unitId: unitA.id,
+        }),
+        expect.objectContaining({
+          eventKey:
+            'lease.created:d8f10000-0000-4000-8000-000000000001',
+          unitId: unitA.id,
+        }),
+        expect.objectContaining({
+          eventKey:
+            'lease_amendment.created:d8f20000-0000-4000-8000-000000000001',
+          unitId: unitA.id,
+        }),
+        expect.objectContaining({
+          eventKey:
+            'document.linked:d8f30000-0000-4000-8000-000000000002',
+          unitId: unitA.id,
+        }),
+      ]),
+    );
+
+    await expect(
+      sql`
+        update public.spaces
+        set unit_id = ${unitB.id}
+        where id = ${spaceA.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'spaces_unit_immutable',
+    });
+
+    await expect(
+      sql`
+        update public.lease_agreements
+        set tenancy_id = ${tenancyB.id}
+        where id = 'd8f10000-0000-4000-8000-000000000001'
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'lease_agreements_tenancy_immutable',
+    });
+
+    await expect(
+      sql`
+        update public.lease_amendments
+        set agreement_id = 'd8f10000-0000-4000-8000-000000000002'
+        where id = 'd8f20000-0000-4000-8000-000000000001'
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'lease_amendments_agreement_immutable',
+    });
+
+    await expect(
+      sql`
+        update public.document_links
+        set unit_id = ${unitB.id}
+        where id = 'd8f30000-0000-4000-8000-000000000002'
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'document_links_immutable',
+    });
+
+    await expect(
+      sql`
+        delete from public.document_links
+        where id = 'd8f30000-0000-4000-8000-000000000002'
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'document_links_immutable',
+    });
+
+    const allA = await unitTimelineRepository.listByUnit(unitA.id, {
+      limit: 500,
+      offset: 0,
+    });
+    const repeatedA = await unitTimelineRepository.listByUnit(unitA.id, {
+      limit: 500,
+      offset: 0,
+    });
+
+    expect(repeatedA.map((event) => event.eventKey)).toEqual(
+      allA.map((event) => event.eventKey),
+    );
+    expect(new Set(allA.map((event) => event.eventKey)).size).toBe(
+      allA.length,
+    );
+
+    expect(
+      allA.every(
+        (event) => event.eventKey === `${event.eventType}:${event.sourceId}`,
+      ),
+    ).toBe(true);
+
+    const tenancyCreated = allA.find(
+      (event) =>
+        event.eventType === 'tenancy.created' && event.sourceId === ended.id,
+    );
+    expect(tenancyCreated?.details).toEqual({ code: 'TEN-TIMELINE-A' });
+
+    expect(allA).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventKey: `cost.incurred:${spaceCost.id}`,
+          unitId: unitA.id,
+          relatedEntityType: 'space',
+          relatedEntityId: spaceA.id,
+        }),
+        expect.objectContaining({
+          eventKey:
+            'lease.created:d8f10000-0000-4000-8000-000000000001',
+          unitId: unitA.id,
+        }),
+        expect.objectContaining({
+          eventKey:
+            'lease_amendment.created:d8f20000-0000-4000-8000-000000000001',
+          unitId: unitA.id,
+        }),
+        expect.objectContaining({
+          eventKey:
+            'document.linked:d8f30000-0000-4000-8000-000000000002',
+          unitId: unitA.id,
+        }),
+      ]),
+    );
+
+    expect(allA).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventType: 'tenancy.started',
+          precision: 'date',
+          occurredOn: '2026-09-20',
+          occurredAt: null,
+          sourceId: ended.id,
+        }),
+        expect.objectContaining({
+          eventKey: `access.issued:${issued.id}`,
+          eventType: 'access.issued',
+          unitId: unitA.id,
+          relatedEntityId: propertyKey.id,
+        }),
+        expect.objectContaining({
+          eventKey: `meter.reading:${reading.id}`,
+          eventType: 'meter.reading',
+          details: expect.objectContaining({
+            value: '123.400000',
+            measurementUnit: 'kwh',
+          }),
+        }),
+        expect.objectContaining({
+          eventKey: `meter.boundary_move_in:${moveInBoundary.id}`,
+          eventType: 'meter.boundary_move_in',
+          relatedEntityId: ended.id,
+        }),
+        expect.objectContaining({
+          eventKey: `meter.boundary_move_out:${moveOutBoundary.id}`,
+          eventType: 'meter.boundary_move_out',
+          relatedEntityId: ended.id,
+        }),
+        expect.objectContaining({
+          eventKey: `service.performed:${serviceEvent.id}`,
+          eventType: 'service.performed',
+          unitId: unitA.id,
+          relatedEntityId: asset.id,
+        }),
+        expect.objectContaining({
+          eventKey: `cost.incurred:${unitCost.id}`,
+          eventType: 'cost.incurred',
+          precision: 'date',
+          details: expect.objectContaining({
+            amount: '123.40',
+            currency: 'CHF',
+          }),
+        }),
+      ]),
+    );
+
+    expect(
+      allA.some((event) => event.sourceId === propertyCost.id),
+    ).toBe(false);
+
+    const allB = await unitTimelineRepository.listByUnit(unitB.id, {
+      limit: 500,
+      offset: 0,
+    });
+    expect(
+      allB.some(
+        (event) =>
+          event.eventType === 'service.performed' &&
+          event.sourceId === serviceEvent.id,
+      ),
+    ).toBe(false);
+    expect(
+      allB.some(
+        (event) =>
+          event.eventType === 'asset.location_started' &&
+          event.relatedEntityId === asset.id,
+      ),
+    ).toBe(true);
+
+    expect(
+      allB.some(
+        (event) =>
+          event.sourceId === spaceCost.id ||
+          event.sourceId === 'd8f10000-0000-4000-8000-000000000001' ||
+          event.sourceId === 'd8f20000-0000-4000-8000-000000000001' ||
+          event.sourceId === 'd8f30000-0000-4000-8000-000000000002',
+      ),
+    ).toBe(false);
+
+    const meterOnly = await unitTimelineRepository.listByUnit(unitA.id, {
+      categories: ['meter'],
+      from: '2026-09-20' as import('@portfolio/domain').DateOnly,
+      to: '2026-09-20' as import('@portfolio/domain').DateOnly,
+      limit: 500,
+      offset: 0,
+    });
+    const readingFromAll = allA.find(
+      (event) => event.eventKey === `meter.reading:${reading.id}`,
+    );
+    const readingFromFilter = meterOnly.find(
+      (event) => event.eventKey === `meter.reading:${reading.id}`,
+    );
+    expect(readingFromFilter?.eventKey).toBe(readingFromAll?.eventKey);
+
+    const sameDay = await unitTimelineRepository.listByUnit(unitA.id, {
+      categories: ['meter', 'tenancy'],
+      from: '2026-09-20' as import('@portfolio/domain').DateOnly,
+      to: '2026-09-20' as import('@portfolio/domain').DateOnly,
+      limit: 500,
+      offset: 0,
+    });
+    const readingIndex = sameDay.findIndex(
+      (event) => event.eventKey === `meter.reading:${reading.id}`,
+    );
+    const tenancyStartIndex = sameDay.findIndex(
+      (event) => event.eventType === 'tenancy.started',
+    );
+    expect(readingIndex).toBeGreaterThanOrEqual(0);
+    expect(tenancyStartIndex).toBeGreaterThan(readingIndex);
+
+    const projectionMeta = await sql<{
+      is_insertable_into: string;
+      domain_events_relation: string | null;
+    }[]>`
+      select
+        v.is_insertable_into,
+        to_regclass('public.domain_events')::text as domain_events_relation
+      from information_schema.views v
+      where v.table_schema = 'public'
+        and v.table_name = 'unit_business_events'
+    `;
+    expect(projectionMeta[0]).toEqual({
+      is_insertable_into: 'NO',
+      domain_events_relation: null,
+    });
   });
 
 

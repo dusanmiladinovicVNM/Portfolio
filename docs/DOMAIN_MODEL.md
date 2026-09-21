@@ -44,7 +44,7 @@ A Unit survives changes of tenant, agreement and inspection.
 
 Grain: one named physical subdivision of a Unit, such as kitchen, bedroom, balcony, cellar or parking-related space.
 
-Space exists so inspections, assets, work and costs can later be localized without encoding room names in free text.
+Space exists so inspections, assets, work and costs can later be localized without encoding room names in free text. `Space.unitId` is physical parent identity and is immutable after creation; moving a Space between Units would rewrite every historical relationship that uses Space as scope.
 
 ## Planned model
 
@@ -62,7 +62,7 @@ The operational occupancy/rental relationship for one Unit over time. It is not 
 
 ### LeaseAgreement
 
-A legal agreement associated with a Tenancy. Signed versions are immutable. Changes are represented through amendments or successor agreements.
+A legal agreement associated with a Tenancy. `LeaseAgreement.tenancyId` is immutable from creation, including while draft; reparenting would rewrite the agreement's historical Unit attribution. Signed content is immutable. Changes are represented through amendments or successor agreements. `LeaseAmendment.agreementId` is likewise immutable from creation.
 
 ### Inspection
 
@@ -299,6 +299,81 @@ Historical consumption basis is derived only between consecutive readings of the
 Inspection form answers remain Inspection evidence. Creating a canonical MeterReading requires an explicit Meter application command; no InspectionResponse is silently promoted.
 
 Canonical #21 does not model utility accounts, providers, tariffs, billing, invoices, Property-level meters, meter movement history, replacement lineage, multi-register meters, reset/rollover semantics, reading correction lineage or cross-Meter consumption stitching.
+
+## Business Events + Unit Timeline
+
+Canonical #22 introduces a **read-only business-event projection** over existing
+canonical write models.
+
+```text
+Tenancy / Lease / Document / Inspection / Asset / Service
+Improvement / Cost / Maintenance / Access / Meter
+                         ↓
+                unit_business_events
+                         ↓
+                GET /units/:id/timeline
+```
+
+There is no writable `domain_events` table and application commands do not
+dual-write events. Source domain rows remain authoritative.
+
+A projected event has stable identity:
+
+```text
+eventKey = eventType + ":" + sourceId
+```
+
+The domain projection boundary validates this exact formula; a non-empty but mismatched key is invalid.
+
+Repeated reads and different filters therefore return the same event identity.
+
+Timeline chronology preserves source precision:
+
+```text
+date fact:
+  precision = date
+  occurredOn = YYYY-MM-DD
+  occurredAt = null
+
+instant fact:
+  precision = instant
+  occurredAt = canonical UTC instant
+  occurredOn = UTC date(occurredAt)
+```
+
+Date-only Tenancy, lease and Cost facts are never converted into fake midnight
+instants.
+
+Ordering is deterministic by business date, temporal precision, exact instant,
+event type and event key. When a date-only event and an exact instant share the
+same calendar date, deterministic display order does not imply a real
+before/after relationship.
+
+Unit attribution is conservative. Direct Unit relationships are used only when
+their parent identity is durable. `Space.unitId`,
+`LeaseAgreement.tenancyId`, `LeaseAmendment.agreementId` and
+`Tenancy.unitId` are database-immutable parent truth. `DocumentLink` is an
+append-once relationship fact, so a projected `document.linked` occurrence
+cannot be retargeted or deleted later. Access custody follows Tenancy Unit even
+for Property-scoped AccessItems. Asset condition and ServiceEvent history
+resolves through `AssetLocationHistory` at the exact event occurrence, so a
+later Asset move cannot rewrite historical Unit chronology. Property-wide or
+otherwise ambiguous facts are omitted rather than copied or guessed.
+
+The projection does not reconstruct historical state transitions from current
+`status` or generic `updatedAt` fields. A transition appears only when the
+source domain retained a durable business occurrence.
+
+The JSON `details` payload contains small display-supporting copies of
+canonical facts such as codes, exact decimal strings, condition or description.
+Historical event details must not expose a mutable current lifecycle field under
+a name that looks like an event-time snapshot. For example,
+`tenancy.created` does not carry today's Tenancy status, and WarrantyClaim
+historical events do not carry today's claim status. The payload is a read-model
+convenience and cannot be written back to domain state.
+
+Technical request/security/audit logging remains a separate concern from this
+business chronology.
 
 ### Cost
 

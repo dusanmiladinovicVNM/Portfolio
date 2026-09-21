@@ -132,7 +132,7 @@ Cost is a financial projection/fact, not a substitute for its source business en
 - Tenancy assignments
 - immutable access-item transactions
 
-### PR #21 — Meters + Utilities (IN PROGRESS)
+### PR #21 — Meters + Utilities (DONE)
 
 - meter identity
 - Unit/Space placement
@@ -142,7 +142,7 @@ Cost is a financial projection/fact, not a substitute for its source business en
 
 ## Read models and product surface
 
-### PR #22 — Domain Events + Unit Timeline
+### PR #22 — Domain Events + Unit Timeline (IN PROGRESS)
 
 - business-event projection
 - Unit dossier timeline

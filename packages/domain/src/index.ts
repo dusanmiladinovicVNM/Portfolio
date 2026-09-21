@@ -32,3 +32,5 @@ export * from './maintenance/maintenance.js';
 export * from './access/access-item.js';
 
 export * from './meters/meter.js';
+
+export * from './timeline/unit-timeline.js';

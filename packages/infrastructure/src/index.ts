@@ -19,3 +19,5 @@ export * from './postgres/postgres-maintenance-repository.js';
 export * from './postgres/postgres-access-item-repository.js';
 
 export * from './postgres/postgres-meter-repository.js';
+
+export * from './postgres/postgres-unit-timeline-repository.js';

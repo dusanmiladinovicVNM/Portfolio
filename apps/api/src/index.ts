@@ -18,6 +18,7 @@ import {
   PostgresPartyRepository,
   PostgresPortfolioRepository,
   PostgresTenancyRepository,
+  PostgresUnitTimelineRepository,
   PostgresUserAccessRepository,
   SystemClock,
   WebCryptoIdGenerator,
@@ -57,6 +58,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
   const improvementRepository = new PostgresImprovementRepository(sql);
   const maintenanceRepository = new PostgresMaintenanceRepository(sql);
   const meterRepository = new PostgresMeterRepository(sql);
+  const unitTimelineRepository = new PostgresUnitTimelineRepository(sql);
 
   const applicationHandler = createPortfolioHttpHandler(
     {
@@ -75,6 +77,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
       costRepository,
       maintenanceRepository,
       meterRepository,
+      unitTimelineRepository,
       staffDirectoryRepository: userAccessRepository,
       fileStorage: config.fileStorage,
       clock: new SystemClock(),

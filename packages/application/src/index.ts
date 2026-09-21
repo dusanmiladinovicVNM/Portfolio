@@ -60,3 +60,6 @@ export * from './access/access-item-queries.js';
 export * from './meters/meter-repository.js';
 export * from './meters/meter-commands.js';
 export * from './meters/meter-queries.js';
+
+export * from './timeline/unit-timeline-repository.js';
+export * from './timeline/unit-timeline-queries.js';

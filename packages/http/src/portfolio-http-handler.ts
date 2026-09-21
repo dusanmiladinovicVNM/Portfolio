@@ -20,6 +20,7 @@ import {
   type PortfolioRepository,
   type StaffDirectoryRepository,
   type TenancyRepository,
+  type UnitTimelineRepository,
   type UserAccessRepository,
   type VerifiedIdentity,
 } from '@portfolio/application';
@@ -39,6 +40,7 @@ import { handleOwnershipHttp } from './ownership-http-routes.js';
 import { handlePartyHttp } from './party-http-routes.js';
 import { handlePortfolioHttp } from './portfolio-http-routes.js';
 import { handleTenancyHttp } from './tenancy-http-routes.js';
+import { handleUnitTimelineHttp } from './unit-timeline-http-routes.js';
 
 export interface PortfolioHttpDependencies {
   readonly portfolioRepository: PortfolioRepository;
@@ -56,6 +58,7 @@ export interface PortfolioHttpDependencies {
   readonly costRepository: CostRepository;
   readonly maintenanceRepository: MaintenanceRepository;
   readonly meterRepository: MeterRepository;
+  readonly unitTimelineRepository: UnitTimelineRepository;
   readonly staffDirectoryRepository: StaffDirectoryRepository;
   readonly fileStorage: FileStoragePort;
   readonly clock: ClockPort;
@@ -156,6 +159,16 @@ export function createPortfolioHttpHandler(
       const actor = await resolveActor(deps.userAccessRepository, identity);
 
       const handlers = [
+        () =>
+          handleUnitTimelineHttp(
+            {
+              portfolioRepository: deps.portfolioRepository,
+              unitTimelineRepository: deps.unitTimelineRepository,
+            },
+            actor,
+            request,
+            path,
+          ),
         () =>
           handleMeterHttp(
             {
