@@ -519,6 +519,16 @@ export function UnitTenancies({
     }
   }
 
+  function reloadTenancies(): void {
+    if (
+      createSubmission.isInFlight() ||
+      pendingTenanciesRef.current.size > 0
+    ) {
+      return;
+    }
+    setReloadToken((value) => value + 1);
+  }
+
   async function createTenancy(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (tenancies === null || !createSubmission.tryStart()) return;
@@ -752,7 +762,7 @@ export function UnitTenancies({
             <button
               className="button-secondary"
               disabled={submittingCreate || pendingTenancies.size > 0}
-              onClick={() => setReloadToken((value) => value + 1)}
+              onClick={reloadTenancies}
               type="button"
             >
               {submittingCreate || pendingTenancies.size > 0
