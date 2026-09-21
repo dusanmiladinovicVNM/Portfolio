@@ -633,9 +633,58 @@ try {
     "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//form[@data-tenancy-form='activate']//input[@name='actualStart']",
     '2026-10-01',
   );
+  await executeScript(
+    sessionId,
+    'window.__portfolioHoldTenancyMutation = true; return true;',
+  );
   await clickXpath(
     sessionId,
     "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//form[@data-tenancy-form='activate']//button[normalize-space()='Activate Tenancy']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    'return window.__portfolioPendingTenancyMutation === true;',
+    'held Tenancy activation',
+  );
+
+  const existingUnitTenanciesPath =
+    '/properties/' + propertyId +
+    '/units/' + unitId +
+    '?tab=tenancies&asOf=2025-06-30';
+  await navigateWithPopState(sessionId, existingUnitTenanciesPath);
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'tenancy-card')][.//span[normalize-space()='TEN-BRW']]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioReleaseTenancyMutation();',
+    ),
+    true,
+    'Release held Tenancy activation',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl + existingUnitTenanciesPath,
+    'Late Tenancy completion keeps new Unit owner',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//article[contains(@class,'tenancy-card')][.//span[normalize-space()='TEN-SETUP-BRW']]",
+    ),
+    false,
+    'Late Tenancy completion cannot mutate the new Unit workspace',
+  );
+
+  await navigateWithPopState(
+    sessionId,
+    '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=tenancies&asOf=2025-06-30',
   );
   await waitForElement(
     sessionId,
