@@ -7,6 +7,7 @@ import { PROPERTY_TYPES } from '@portfolio/domain';
 import { type FormEvent, useState } from 'react';
 import { propertiesPath } from '../api/paths.js';
 import type { PortfolioApi } from '../api/portfolio-api.js';
+import { useCreateSubmissionGuard } from './use-create-submission-guard.js';
 import {
   contractErrorMessage,
   optionalNumber,
@@ -28,10 +29,11 @@ export function CreatePropertyForm({
 }: CreatePropertyFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const submission = useCreateSubmissionGuard();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (submitting) return;
+    if (!submission.tryStart()) return;
 
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
@@ -48,6 +50,7 @@ export function CreatePropertyForm({
     });
 
     if (!parsed.success) {
+      submission.finish();
       setError(contractErrorMessage());
       return;
     }
@@ -60,14 +63,19 @@ export function CreatePropertyForm({
         parsed.data,
         propertyResponseSchema,
       );
-      formElement.reset();
-      onCreated(created);
+      if (submission.isMounted()) {
+        formElement.reset();
+        onCreated(created);
+      }
     } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : 'Property could not be created.',
-      );
+      if (submission.isMounted()) {
+        setError(
+          cause instanceof Error ? cause.message : 'Property could not be created.',
+        );
+      }
     } finally {
-      setSubmitting(false);
+      submission.finish();
+      if (submission.isMounted()) setSubmitting(false);
     }
   }
 

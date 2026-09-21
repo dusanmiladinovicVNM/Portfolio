@@ -7,6 +7,7 @@ import { UNIT_TYPES } from '@portfolio/domain';
 import { type FormEvent, useState } from 'react';
 import { unitsPath } from '../api/paths.js';
 import type { PortfolioApi } from '../api/portfolio-api.js';
+import { useCreateSubmissionGuard } from '../admin/use-create-submission-guard.js';
 import {
   contractErrorMessage,
   optionalNumber,
@@ -31,10 +32,11 @@ export function CreateUnitForm({
 }: CreateUnitFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const submission = useCreateSubmissionGuard();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (submitting) return;
+    if (!submission.tryStart()) return;
 
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
@@ -50,6 +52,7 @@ export function CreateUnitForm({
     });
 
     if (!parsed.success) {
+      submission.finish();
       setError(contractErrorMessage());
       return;
     }
@@ -67,14 +70,19 @@ export function CreateUnitForm({
           'Created Unit does not belong to the Property encoded in the route.',
         );
       }
-      formElement.reset();
-      onCreated(created);
+      if (submission.isMounted()) {
+        formElement.reset();
+        onCreated(created);
+      }
     } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : 'Unit could not be created.',
-      );
+      if (submission.isMounted()) {
+        setError(
+          cause instanceof Error ? cause.message : 'Unit could not be created.',
+        );
+      }
     } finally {
-      setSubmitting(false);
+      submission.finish();
+      if (submission.isMounted()) setSubmitting(false);
     }
   }
 

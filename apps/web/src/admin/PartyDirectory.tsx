@@ -4,6 +4,7 @@ import {
   partyResponseSchema,
   type PartyResponse,
 } from '@portfolio/contracts';
+import { ADDRESS_TYPES } from '@portfolio/domain';
 import { type FormEvent, useEffect, useState } from 'react';
 import { partiesPath } from '../api/paths.js';
 import type { PortfolioApi } from '../api/portfolio-api.js';
@@ -12,6 +13,7 @@ import {
   optionalString,
   requiredString,
 } from './form-utils.js';
+import { useCreateSubmissionGuard } from './use-create-submission-guard.js';
 
 interface PartyDirectoryProps {
   readonly api: PortfolioApi;
@@ -24,6 +26,7 @@ export function PartyDirectory({ api, asOf }: PartyDirectoryProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const submission = useCreateSubmissionGuard();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -53,7 +56,7 @@ export function PartyDirectory({ api, asOf }: PartyDirectoryProps) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (submitting) return;
+    if (!submission.tryStart()) return;
 
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
@@ -79,10 +82,7 @@ export function PartyDirectory({ api, asOf }: PartyDirectoryProps) {
         addressLine1 || postalCode || city || countryCode
           ? {
               addresses: [{
-                addressType:
-                  partyType === 'person'
-                    ? ('residential' as const)
-                    : ('legal' as const),
+                addressType: requiredString(form, 'addressType'),
                 line1: addressLine1 ?? '',
                 postalCode: postalCode ?? '',
                 city: city ?? '',
@@ -111,6 +111,7 @@ export function PartyDirectory({ api, asOf }: PartyDirectoryProps) {
     );
 
     if (!parsed.success) {
+      submission.finish();
       setCreateError(contractErrorMessage());
       return;
     }
@@ -123,20 +124,25 @@ export function PartyDirectory({ api, asOf }: PartyDirectoryProps) {
         parsed.data,
         partyResponseSchema,
       );
-      setParties((current) =>
-        [created, ...(current ?? []).filter((item) => item.id !== created.id)]
-          .sort((left, right) =>
-            left.displayName.localeCompare(right.displayName),
-          ),
-      );
-      formElement.reset();
-      setPartyType('person');
+      if (submission.isMounted()) {
+        setParties((current) =>
+          [created, ...(current ?? []).filter((item) => item.id !== created.id)]
+            .sort((left, right) =>
+              left.displayName.localeCompare(right.displayName),
+            ),
+        );
+        formElement.reset();
+        setPartyType('person');
+      }
     } catch (cause) {
-      setCreateError(
-        cause instanceof Error ? cause.message : 'Party could not be created.',
-      );
+      if (submission.isMounted()) {
+        setCreateError(
+          cause instanceof Error ? cause.message : 'Party could not be created.',
+        );
+      }
     } finally {
-      setSubmitting(false);
+      submission.finish();
+      if (submission.isMounted()) setSubmitting(false);
     }
   }
 
@@ -233,6 +239,22 @@ export function PartyDirectory({ api, asOf }: PartyDirectoryProps) {
             <div className="setup-subsection">
               <h3>Primary address</h3>
               <div className="setup-form-grid">
+                <label>
+                  Address type
+                  <select
+                    defaultValue={
+                      partyType === 'company' ? 'legal' : 'residential'
+                    }
+                    key={partyType}
+                    name="addressType"
+                  >
+                    {ADDRESS_TYPES.map((value) => (
+                      <option key={value} value={value}>
+                        {value.replaceAll('_', ' ')}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <label>
                   Address line
                   <input name="addressLine1" />
