@@ -115,9 +115,11 @@ The selected agreement's current lifecycle status is returned as current
 metadata only; it does not replace legal successor-boundary semantics.
 
 The effective TenancyTermVersion follows the same canonical legal chain and the
-latest valid `effectiveFrom <= asOf`. Recurring charges remain exact strings
-and retain their source billing frequency; reporting does not invent monthly
-normalization.
+latest valid `effectiveFrom <= asOf` **whose source belongs to the selected
+governing LeaseAgreement**. A future amendment of a predecessor Agreement must
+not leak across a signed successor boundary after that predecessor stops
+governing. Recurring charges remain exact strings and retain their source
+billing frequency; reporting does not invent monthly normalization.
 
 ### Current operational state
 
@@ -222,8 +224,9 @@ Canonical #23 must prove at minimum:
    coverage before the successor boundary;
 8. draft agreements are exposed only as current workflow metadata
    (`currentDraftAgreementCount`), never as legal as-of coverage;
-9. effective terms use the latest valid `effectiveFrom <= asOf` under the same
-   legal chain;
+9. effective terms use the latest valid `effectiveFrom <= asOf` whose source
+   belongs to the selected governing Agreement; a predecessor's future
+   amendment cannot leak past a signed successor boundary;
 10. recurring money remains exact and frequency-aware;
 11. current operational counts are labeled current rather than historical;
 12. reversed Costs do not contribute to effective totals;
