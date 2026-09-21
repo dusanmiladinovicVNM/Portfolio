@@ -4,22 +4,13 @@ import {
 } from '@portfolio/contracts';
 import { useEffect, useState } from 'react';
 import type { PortfolioApi } from '../api/portfolio-api.js';
+import { formatExactMoney, localDateOnly } from '../presentation/format.js';
+
+type PropertySummary = PortfolioDashboardResponse['properties'][number];
 
 interface PortfolioDashboardProps {
   readonly api: PortfolioApi;
-}
-
-function localDateOnly(now = new Date()): string {
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function formatExactMoney(currency: string, amount: string): string {
-  const [whole = '0', fraction = '00'] = amount.split('.');
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, '’');
-  return `${currency} ${grouped}.${fraction}`;
+  readonly onSelectProperty: (property: PropertySummary) => void;
 }
 
 function occupancyRate(data: PortfolioDashboardResponse): string {
@@ -36,7 +27,10 @@ function LoadingState() {
   );
 }
 
-export function PortfolioDashboard({ api }: PortfolioDashboardProps) {
+export function PortfolioDashboard({
+  api,
+  onSelectProperty,
+}: PortfolioDashboardProps) {
   const [asOf, setAsOf] = useState(localDateOnly);
   const [data, setData] = useState<PortfolioDashboardResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -136,35 +130,15 @@ export function PortfolioDashboard({ api }: PortfolioDashboardProps) {
                 <p className="eyebrow">Current operations</p>
                 <h2>Operational attention</h2>
               </div>
-              <span className="section-note">
-                Current state · not rewound by as-of date
-              </span>
+              <span className="section-note">Current state · not rewound by as-of date</span>
             </div>
             <div className="operations-grid">
-              <div>
-                <span>Open maintenance</span>
-                <strong>{data.currentOperations.openMaintenanceIssueCount}</strong>
-              </div>
-              <div>
-                <span>Urgent maintenance</span>
-                <strong>{data.currentOperations.urgentMaintenanceIssueCount}</strong>
-              </div>
-              <div>
-                <span>Open work orders</span>
-                <strong>{data.currentOperations.openMaintenanceWorkOrderCount}</strong>
-              </div>
-              <div>
-                <span>Located assets</span>
-                <strong>{data.currentOperations.locatedAssetCount}</strong>
-              </div>
-              <div>
-                <span>Active service plans</span>
-                <strong>{data.currentOperations.activeServicePlanCount}</strong>
-              </div>
-              <div>
-                <span>Active meters</span>
-                <strong>{data.currentOperations.activeMeterCount}</strong>
-              </div>
+              <div><span>Open maintenance</span><strong>{data.currentOperations.openMaintenanceIssueCount}</strong></div>
+              <div><span>Urgent maintenance</span><strong>{data.currentOperations.urgentMaintenanceIssueCount}</strong></div>
+              <div><span>Open work orders</span><strong>{data.currentOperations.openMaintenanceWorkOrderCount}</strong></div>
+              <div><span>Located assets</span><strong>{data.currentOperations.locatedAssetCount}</strong></div>
+              <div><span>Active service plans</span><strong>{data.currentOperations.activeServicePlanCount}</strong></div>
+              <div><span>Active meters</span><strong>{data.currentOperations.activeMeterCount}</strong></div>
             </div>
           </section>
 
@@ -185,18 +159,9 @@ export function PortfolioDashboard({ api }: PortfolioDashboardProps) {
                     <span>{cost.currency}</span>
                     <strong>{formatExactMoney(cost.currency, cost.total)}</strong>
                     <dl>
-                      <div>
-                        <dt>CAPEX</dt>
-                        <dd>{formatExactMoney(cost.currency, cost.capex)}</dd>
-                      </div>
-                      <div>
-                        <dt>OPEX</dt>
-                        <dd>{formatExactMoney(cost.currency, cost.opex)}</dd>
-                      </div>
-                      <div>
-                        <dt>Unclassified</dt>
-                        <dd>{formatExactMoney(cost.currency, cost.unclassified)}</dd>
-                      </div>
+                      <div><dt>CAPEX</dt><dd>{formatExactMoney(cost.currency, cost.capex)}</dd></div>
+                      <div><dt>OPEX</dt><dd>{formatExactMoney(cost.currency, cost.opex)}</dd></div>
+                      <div><dt>Unclassified</dt><dd>{formatExactMoney(cost.currency, cost.unclassified)}</dd></div>
                     </dl>
                   </article>
                 ))}
@@ -210,9 +175,7 @@ export function PortfolioDashboard({ api }: PortfolioDashboardProps) {
                 <p className="eyebrow">Inventory</p>
                 <h2>Properties</h2>
               </div>
-              <span className="section-note">
-                Snapshot {data.asOf}
-              </span>
+              <span className="section-note">Snapshot {data.asOf}</span>
             </div>
             {data.properties.length === 0 ? (
               <p className="muted">No properties in the Portfolio projection.</p>
@@ -221,21 +184,22 @@ export function PortfolioDashboard({ api }: PortfolioDashboardProps) {
                 <table>
                   <thead>
                     <tr>
-                      <th>Property</th>
-                      <th>Units</th>
-                      <th>Occupied</th>
-                      <th>Planned</th>
-                      <th>Vacant</th>
-                      <th>Open issues</th>
-                      <th>Urgent</th>
+                      <th>Property</th><th>Units</th><th>Occupied</th><th>Planned</th>
+                      <th>Vacant</th><th>Open issues</th><th>Urgent</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.properties.map((property) => (
                       <tr key={property.propertyId}>
                         <td>
-                          <strong>{property.propertyCode}</strong>
-                          <span>{property.propertyName}</span>
+                          <button
+                            className="table-link"
+                            onClick={() => onSelectProperty(property)}
+                            type="button"
+                          >
+                            <strong>{property.propertyCode}</strong>
+                            <span>{property.propertyName}</span>
+                          </button>
                         </td>
                         <td>{property.unitCount}</td>
                         <td>{property.occupiedUnitCount}</td>

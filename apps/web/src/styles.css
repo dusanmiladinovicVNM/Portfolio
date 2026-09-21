@@ -112,3 +112,82 @@ tbody tr:last-child td { border-bottom: 0; }
 @media (max-width: 520px) {
   .metric-grid, .operations-grid { grid-template-columns: 1fr; }
 }
+
+.sidebar nav button {
+  width: 100%;
+  border: 0;
+  text-align: left;
+  background: transparent;
+  font: inherit;
+}
+.table-link {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.table-link:hover strong, .back-link:hover { text-decoration: underline; }
+.back-link {
+  margin: 0 0 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #596255;
+  font-size: .82rem;
+  font-weight: 700;
+}
+.page-panel { margin-top: 28px; }
+.unit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+.unit-card {
+  display: grid;
+  gap: 22px;
+  padding: 20px;
+  border: 1px solid #d7d1c5;
+  border-radius: 14px;
+  background: #fff;
+  color: inherit;
+  text-align: left;
+}
+.unit-card:hover { border-color: #899180; box-shadow: 0 8px 24px rgba(58, 52, 42, .08); }
+.unit-card strong { display: block; font-size: 1.35rem; }
+.unit-card dl, .detail-list { display: grid; gap: 8px; margin: 0; }
+.unit-card dl div, .detail-list div {
+  display: flex; justify-content: space-between; gap: 18px; padding-bottom: 7px;
+  border-bottom: 1px solid #eee9e0;
+}
+.unit-card dt, .detail-list dt { color: #777b71; font-size: .76rem; font-weight: 700; }
+.unit-card dd, .detail-list dd { margin: 0; text-align: right; }
+.open-label { color: #52604f; font-size: .8rem; font-weight: 800; }
+.dossier-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 20px 0 28px;
+  overflow-x: auto;
+}
+.dossier-tab {
+  padding: 9px 13px;
+  border-radius: 9px;
+  color: #777b71;
+  font-size: .82rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.dossier-tab-active { background: #dfe4d8; color: #263126; }
+.dossier-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.text-metric { font-size: 1.45rem !important; text-transform: capitalize; }
+.term-total {
+  display: grid; gap: 4px; margin-top: 22px; padding: 16px; border-radius: 11px; background: #eef0e9;
+}
+.term-total span, .term-total small { color: #6e7369; font-size: .76rem; font-weight: 700; }
+.term-total strong { font-size: 1.25rem; }
+@media (max-width: 840px) {
+  .dossier-grid { grid-template-columns: 1fr; }
+}
