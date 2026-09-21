@@ -48,6 +48,7 @@ interface UnitSnapshotRow {
   tenancy_actual_start: DateValue;
   tenancy_actual_end: DateValue;
   contract_coverage_status: ReportingContractCoverageStatus;
+  current_draft_agreement_count: NumericValue;
   agreement_id: string | null;
   agreement_code: string | null;
   agreement_status: LeaseAgreementStatus | null;
@@ -234,6 +235,7 @@ export class PostgresReportingRepository implements ReportingRepository {
       tenancy,
       contract: {
         coverageStatus: row.contract_coverage_status,
+        currentDraftAgreementCount: count(row.current_draft_agreement_count),
         agreementId:
           row.agreement_id === null
             ? null
