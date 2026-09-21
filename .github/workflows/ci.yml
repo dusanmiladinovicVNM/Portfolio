@@ -50,6 +50,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Web production build
+        run: pnpm --filter @portfolio/web build
+
       - name: Unit tests
         run: pnpm test
 

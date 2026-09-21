@@ -149,7 +149,7 @@ Cost is a financial projection/fact, not a substitute for its source business en
 - cross-context chronology
 - technical audit remains separate from domain timeline
 
-### PR #23 — Reporting / Portfolio projections (IN PROGRESS)
+### PR #23 — Reporting / Portfolio projections (DONE)
 
 - Unit overview
 - occupancy/tenancy status
@@ -159,7 +159,7 @@ Cost is a financial projection/fact, not a substitute for its source business en
 - asset/service summaries
 - portfolio dashboards
 
-### PR #24 — React/Vite PWA + Unit dossier
+### PR #24 — React/Vite PWA + Unit dossier (IN PROGRESS)
 
 - authenticated internal shell
 - navigation
