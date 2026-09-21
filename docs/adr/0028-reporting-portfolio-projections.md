@@ -83,27 +83,41 @@ It therefore must not be marketed as full historical BI.
 
 ### Contract coverage
 
-For the reporting Tenancy, contract coverage is:
+For the reporting Tenancy, **legal** contract coverage is:
 
 ```text
 effective
 future_signed
-draft_only
 missing
 ```
 
-An effective agreement has durable signed identity and an effective period that
-covers `asOf`.
+It is the **current canonical signed legal chain evaluated at `asOf`**, not a
+historical reconstruction of what Portfolio knew on that date.
 
-When no agreement covers `asOf`, a future signed agreement takes precedence
-over draft-only, otherwise coverage is missing.
+An effective agreement must have signed identity and a legal period covering
+`asOf`. A signed successor bounds its predecessor at the successor's
+`effectiveFrom`, even though canonical lease history deliberately does not
+rewrite the predecessor's original `effectiveTo`. Therefore a superseded
+agreement may still be the correct effective agreement for a date before its
+signed successor becomes effective.
 
-The agreement's current lifecycle status is returned as current metadata only;
-coverage is based on effective dates and signed identity.
+When no signed agreement governs `asOf`, the next signed agreement in the
+current canonical chain may be returned as `future_signed`.
 
-The latest TenancyTermVersion with `effectiveFrom <= asOf` is the effective
-commercial term snapshot. Recurring charges remain exact strings and keep their
-source billing frequency; reporting does not invent monthly normalization.
+Draft Agreements are **not** legal as-of coverage. They are current workflow
+state and are exposed separately as:
+
+```text
+currentDraftAgreementCount
+```
+
+The selected agreement's current lifecycle status is returned as current
+metadata only; it does not replace legal successor-boundary semantics.
+
+The effective TenancyTermVersion follows the same canonical legal chain and the
+latest valid `effectiveFrom <= asOf`. Recurring charges remain exact strings
+and retain their source billing frequency; reporting does not invent monthly
+normalization.
 
 ### Current operational state
 
@@ -202,21 +216,27 @@ Canonical #23 must prove at minimum:
 3. Unit occupancy comes from Tenancy temporal truth, not Unit status;
 4. actual occupancy takes precedence over planned reservation;
 5. date-only occupancy/contract facts remain date-only;
-6. effective agreement selection follows durable effective coverage;
-7. effective terms use latest `effectiveFrom <= asOf`;
-8. recurring money remains exact and frequency-aware;
-9. current operational counts are labeled current rather than historical;
-10. reversed Costs do not contribute to effective totals;
-11. replacement Costs contribute normally when not reversed;
-12. unlike currencies are never summed;
-13. Unit costs use only deterministic durable Unit attribution;
-14. Property-wide and ambiguous Asset/Service/Warranty Costs do not leak into
+6. effective agreement selection follows the canonical signed successor chain:
+   a predecessor governs only until a signed successor's effective boundary;
+7. superseded current status does not erase predecessor historical business-date
+   coverage before the successor boundary;
+8. draft agreements are exposed only as current workflow metadata
+   (`currentDraftAgreementCount`), never as legal as-of coverage;
+9. effective terms use the latest valid `effectiveFrom <= asOf` under the same
+   legal chain;
+10. recurring money remains exact and frequency-aware;
+11. current operational counts are labeled current rather than historical;
+12. reversed Costs do not contribute to effective totals;
+13. replacement Costs contribute normally when not reversed;
+14. unlike currencies are never summed;
+15. Unit costs use only deterministic durable Unit attribution;
+16. Property-wide and ambiguous Asset/Service/Warranty Costs do not leak into
     Unit totals;
-15. Portfolio cost totals include all effective Costs independent of Unit
+17. Portfolio cost totals include all effective Costs independent of Unit
     attribution;
-16. Property dashboard rows cannot leak another Property's Units;
-17. Reporting reads require `portfolio:read`;
-18. reporting projections are not accepted as write commands.
+18. Property dashboard rows cannot leak another Property's Units;
+19. Reporting reads require `portfolio:read`;
+20. reporting projections are not accepted as write commands.
 
 ## Deferred
 
