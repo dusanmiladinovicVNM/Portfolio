@@ -10620,6 +10620,31 @@ describe('PostgreSQL infrastructure', () => {
       },
     );
 
+    const supersededFutureAmendmentDraft =
+      await createLeaseAmendmentCommand(
+        { leaseRepository, idGenerator: ids },
+        actor,
+        {
+          agreementId: initial.id,
+          code: 'AMD-REPORT-OLD-FUTURE',
+          title: 'Future adjustment on predecessor',
+          effectiveFrom: '2026-08-01',
+        },
+      );
+
+    await signLeaseAmendmentCommand(
+      { leaseRepository, tenancyRepository, idGenerator: ids },
+      actor,
+      supersededFutureAmendmentDraft.id,
+      supersededFutureAmendmentDraft.version,
+      '2026-05-15',
+      {
+        currency: 'CHF',
+        baseRent: '9000',
+        serviceCharge: '100',
+      },
+    );
+
     const successorDraft = await createLeaseAgreementCommand(
       leaseDeps,
       actor,
@@ -11013,6 +11038,22 @@ describe('PostgreSQL infrastructure', () => {
           total: '10.00',
         },
       ],
+    });
+
+    const afterSupersededFutureAmendment =
+      await reportingRepository.getUnitOverview(
+        unitA.id,
+        asDateOnly('2026-08-01'),
+      );
+    expect(afterSupersededFutureAmendment).toMatchObject({
+      contract: {
+        coverageStatus: 'effective',
+        agreementId: successor.id,
+        effectiveTerms: {
+          baseRent: '1100.00',
+          recurringTotal: '1200.00',
+        },
+      },
     });
 
     const futureInitial = await reportingRepository.getUnitOverview(
