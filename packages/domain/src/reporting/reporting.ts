@@ -282,7 +282,7 @@ export function createReportingTermSummary(input: {
 function normalizeOperations(
   input: ReportingCurrentOperations,
 ): ReportingCurrentOperations {
-  return {
+  const normalized = {
     openMaintenanceIssueCount: nonNegativeInteger(
       input.openMaintenanceIssueCount,
       'openMaintenanceIssueCount',
@@ -320,6 +320,28 @@ function normalizeOperations(
       'activeMeterCount',
     ),
   };
+
+  if (
+    normalized.urgentMaintenanceIssueCount >
+    normalized.openMaintenanceIssueCount
+  ) {
+    throw new DomainError(
+      'REPORTING_INVALID_PROJECTION',
+      'Urgent Maintenance Issue count cannot exceed open Issue count.',
+    );
+  }
+
+  if (
+    normalized.activeAssetCount + normalized.inactiveAssetCount >
+    normalized.locatedAssetCount
+  ) {
+    throw new DomainError(
+      'REPORTING_INVALID_PROJECTION',
+      'Active + inactive Asset counts cannot exceed located Asset count.',
+    );
+  }
+
+  return normalized;
 }
 
 export function createReportingCostSummary(
@@ -611,7 +633,7 @@ export function createUnitReportingOverview(input: {
       ...contract,
       currentDraftAgreementCount,
     },
-    currentOperations: normalizeOperations(input.currentOperations),
+    currentOperations,
     unitAttributedCostsByCurrency: costs,
   };
 }
@@ -687,6 +709,40 @@ export function createPortfolioDashboard(input: {
         );
       }
 
+      const currentOpenMaintenanceIssueCount = nonNegativeInteger(
+        property.currentOpenMaintenanceIssueCount,
+        'property.currentOpenMaintenanceIssueCount',
+      );
+      const currentUrgentMaintenanceIssueCount = nonNegativeInteger(
+        property.currentUrgentMaintenanceIssueCount,
+        'property.currentUrgentMaintenanceIssueCount',
+      );
+      const currentLocatedAssetCount = nonNegativeInteger(
+        property.currentLocatedAssetCount,
+        'property.currentLocatedAssetCount',
+      );
+      const currentActiveAssetCount = nonNegativeInteger(
+        property.currentActiveAssetCount,
+        'property.currentActiveAssetCount',
+      );
+
+      if (
+        currentUrgentMaintenanceIssueCount >
+        currentOpenMaintenanceIssueCount
+      ) {
+        throw new DomainError(
+          'REPORTING_INVALID_PROJECTION',
+          'Property urgent Maintenance Issue count cannot exceed open Issue count.',
+        );
+      }
+
+      if (currentActiveAssetCount > currentLocatedAssetCount) {
+        throw new DomainError(
+          'REPORTING_INVALID_PROJECTION',
+          'Property active Asset count cannot exceed located Asset count.',
+        );
+      }
+
       return {
         ...property,
         propertyCode: required(property.propertyCode, 'propertyCode'),
@@ -695,22 +751,10 @@ export function createPortfolioDashboard(input: {
         occupiedUnitCount: occupied,
         plannedUnitCount: planned,
         vacantUnitCount: vacant,
-        currentOpenMaintenanceIssueCount: nonNegativeInteger(
-          property.currentOpenMaintenanceIssueCount,
-          'property.currentOpenMaintenanceIssueCount',
-        ),
-        currentUrgentMaintenanceIssueCount: nonNegativeInteger(
-          property.currentUrgentMaintenanceIssueCount,
-          'property.currentUrgentMaintenanceIssueCount',
-        ),
-        currentLocatedAssetCount: nonNegativeInteger(
-          property.currentLocatedAssetCount,
-          'property.currentLocatedAssetCount',
-        ),
-        currentActiveAssetCount: nonNegativeInteger(
-          property.currentActiveAssetCount,
-          'property.currentActiveAssetCount',
-        ),
+        currentOpenMaintenanceIssueCount,
+        currentUrgentMaintenanceIssueCount,
+        currentLocatedAssetCount,
+        currentActiveAssetCount,
         currentActiveMeterCount: nonNegativeInteger(
           property.currentActiveMeterCount,
           'property.currentActiveMeterCount',
@@ -723,6 +767,70 @@ export function createPortfolioDashboard(input: {
         ? byCode
         : left.propertyId.localeCompare(right.propertyId);
     });
+
+  const propertyTotals = properties.reduce(
+    (acc, property) => ({
+      unitCount: acc.unitCount + property.unitCount,
+      occupiedUnitCount:
+        acc.occupiedUnitCount + property.occupiedUnitCount,
+      plannedUnitCount: acc.plannedUnitCount + property.plannedUnitCount,
+      vacantUnitCount: acc.vacantUnitCount + property.vacantUnitCount,
+      openMaintenanceIssueCount:
+        acc.openMaintenanceIssueCount +
+        property.currentOpenMaintenanceIssueCount,
+      urgentMaintenanceIssueCount:
+        acc.urgentMaintenanceIssueCount +
+        property.currentUrgentMaintenanceIssueCount,
+      locatedAssetCount:
+        acc.locatedAssetCount + property.currentLocatedAssetCount,
+      activeAssetCount:
+        acc.activeAssetCount + property.currentActiveAssetCount,
+      activeMeterCount:
+        acc.activeMeterCount + property.currentActiveMeterCount,
+    }),
+    {
+      unitCount: 0,
+      occupiedUnitCount: 0,
+      plannedUnitCount: 0,
+      vacantUnitCount: 0,
+      openMaintenanceIssueCount: 0,
+      urgentMaintenanceIssueCount: 0,
+      locatedAssetCount: 0,
+      activeAssetCount: 0,
+      activeMeterCount: 0,
+    },
+  );
+
+  if (
+    propertyTotals.unitCount !== unitCount ||
+    propertyTotals.occupiedUnitCount !== occupiedUnitCount ||
+    propertyTotals.plannedUnitCount !== plannedUnitCount ||
+    propertyTotals.vacantUnitCount !== vacantUnitCount
+  ) {
+    throw new DomainError(
+      'REPORTING_INVALID_PROJECTION',
+      'Property occupancy summaries must roll up exactly to Portfolio totals.',
+    );
+  }
+
+  const currentOperations = normalizeOperations(input.currentOperations);
+  if (
+    propertyTotals.openMaintenanceIssueCount !==
+      currentOperations.openMaintenanceIssueCount ||
+    propertyTotals.urgentMaintenanceIssueCount !==
+      currentOperations.urgentMaintenanceIssueCount ||
+    propertyTotals.locatedAssetCount !==
+      currentOperations.locatedAssetCount ||
+    propertyTotals.activeAssetCount !==
+      currentOperations.activeAssetCount ||
+    propertyTotals.activeMeterCount !==
+      currentOperations.activeMeterCount
+  ) {
+    throw new DomainError(
+      'REPORTING_INVALID_PROJECTION',
+      'Property operational summaries must roll up to matching Portfolio current-operation totals.',
+    );
+  }
 
   const costs = input.portfolioCostsByCurrency
     .map(normalizeCostSummary)
