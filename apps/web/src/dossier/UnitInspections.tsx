@@ -165,7 +165,10 @@ function buildPatch(
 
     set.push({
       itemId: item.id,
-      value: Array.isArray(nextValue) ? [...nextValue] : nextValue,
+      value:
+        typeof nextValue === 'string' || typeof nextValue === 'boolean'
+          ? nextValue
+          : [...nextValue],
       comment: nextComment,
     });
   }
