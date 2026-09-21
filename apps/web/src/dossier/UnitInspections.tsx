@@ -7,12 +7,19 @@ import {
   type InspectionItemResponse,
   type InspectionResponseDto,
   type SaveInspectionSectionRequest,
+  type SaveInspectionSectionResponse,
 } from '@portfolio/contracts';
 import {
   evaluateInspectionCondition,
   type InspectionAnswerValue,
 } from '@portfolio/domain';
-import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import {
+  type FormEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   inspectionPath,
   inspectionSectionPath,
@@ -58,12 +65,10 @@ function answerEqual(
   right: InspectionAnswerValue | undefined,
 ): boolean {
   if (Array.isArray(left) || Array.isArray(right)) {
-    return (
-      Array.isArray(left) &&
-      Array.isArray(right) &&
-      left.length === right.length &&
-      left.every((value, index) => value === right[index])
-    );
+    if (!Array.isArray(left) || !Array.isArray(right)) return false;
+    if (left.length !== right.length) return false;
+    const rightValues = new Set(right);
+    return left.every((value) => rightValues.has(value));
   }
   return left === right;
 }
@@ -188,6 +193,57 @@ function sectionRevision(
     bundle.sectionStates.find((state) => state.sectionId === sectionId)
       ?.revision ?? 0
   );
+}
+
+export function inspectionDraftResetKey(
+  bundle: InspectionBundleResponse,
+  sectionId: string,
+): string {
+  return `${bundle.inspection.id}:${sectionId}:${sectionRevision(bundle, sectionId)}`;
+}
+
+export function mergeInspectionSectionSave(
+  current: InspectionBundleResponse,
+  targetInspectionId: string,
+  targetSectionId: string,
+  saved: SaveInspectionSectionResponse,
+): InspectionBundleResponse {
+  if (current.inspection.id !== targetInspectionId) return current;
+
+  for (const response of saved.responses) {
+    if (
+      response.inspectionId !== targetInspectionId ||
+      response.sectionId !== targetSectionId
+    ) {
+      throw new Error(
+        'Inspection section save response crossed its aggregate ownership boundary.',
+      );
+    }
+  }
+
+  const changedIds = new Set([
+    ...saved.responses.map((response) => response.itemId),
+    ...saved.clearedItemIds,
+  ]);
+
+  return {
+    ...current,
+    inspection: {
+      ...current.inspection,
+      contentRevision: saved.contentRevision,
+    },
+    sectionStates: current.sectionStates.map((state) =>
+      state.sectionId === targetSectionId
+        ? { ...state, revision: saved.revision }
+        : state,
+    ),
+    responses: [
+      ...current.responses.filter(
+        (response) => !changedIds.has(response.itemId),
+      ),
+      ...saved.responses,
+    ],
+  };
 }
 
 function Field({
@@ -353,10 +409,16 @@ export function UnitInspections({
   const [bundleError, setBundleError] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftByItem>({});
   const [touched, setTouched] = useState<TouchedByItem>({});
-  const [saving, setSaving] = useState(false);
-  const [starting, setStarting] = useState(false);
+  const [savingTarget, setSavingTarget] = useState<{
+    readonly inspectionId: string;
+    readonly sectionId: string;
+  } | null>(null);
+  const [startingInspectionId, setStartingInspectionId] =
+    useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
+  const activeInspectionIdRef = useRef(inspectionId);
+  activeInspectionIdRef.current = inspectionId;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -385,6 +447,11 @@ export function UnitInspections({
       inspectionPath(id),
       inspectionBundleResponseSchema,
     );
+    if (result.inspection.id !== id) {
+      throw new Error(
+        'Inspection endpoint returned a different aggregate identity.',
+      );
+    }
     if (result.inspection.unitId !== unitId) {
       throw new Error(
         'Inspection route does not belong to the Unit encoded in the URL.',
@@ -430,6 +497,19 @@ export function UnitInspections({
     );
   }, [bundle, inspectionSectionId]);
 
+  const activeSectionIdRef = useRef<string | undefined>(selectedSection?.id);
+  activeSectionIdRef.current = selectedSection?.id;
+
+  const selectedSectionRevision =
+    bundle && selectedSection
+      ? sectionRevision(bundle, selectedSection.id)
+      : null;
+
+  const draftResetKey =
+    bundle && selectedSection
+      ? inspectionDraftResetKey(bundle, selectedSection.id)
+      : null;
+
   useEffect(() => {
     if (!bundle || !inspectionId || !selectedSection) return;
     if (inspectionSectionId === selectedSection.id) return;
@@ -453,7 +533,7 @@ export function UnitInspections({
   ]);
 
   useEffect(() => {
-    if (!bundle || !selectedSection) {
+    if (!bundle || !selectedSection || draftResetKey === null) {
       setDraft({});
       setTouched({});
       return;
@@ -462,7 +542,7 @@ export function UnitInspections({
     setTouched({});
     setSaveError(null);
     setConflict(false);
-  }, [bundle, selectedSection?.id]);
+  }, [draftResetKey]);
 
   const localValues = useMemo(
     () =>
@@ -472,10 +552,7 @@ export function UnitInspections({
     [bundle, draft, selectedSection],
   );
 
-  const currentRevision =
-    bundle && selectedSection
-      ? sectionRevision(bundle, selectedSection.id)
-      : 0;
+  const currentRevision = selectedSectionRevision ?? 0;
 
   const patch =
     bundle && selectedSection
@@ -489,7 +566,31 @@ export function UnitInspections({
       : null;
 
   const editable = bundle?.inspection.status === 'in_progress';
+  const currentInspectionId = bundle?.inspection.id;
+  const currentSectionId = selectedSection?.id;
+  const starting =
+    currentInspectionId !== undefined &&
+    startingInspectionId === currentInspectionId;
+  const saving =
+    currentInspectionId !== undefined &&
+    currentSectionId !== undefined &&
+    savingTarget?.inspectionId === currentInspectionId &&
+    savingTarget.sectionId === currentSectionId;
   const hasUnsavedChanges = patch !== null;
+
+  function isActiveInspection(targetInspectionId: string): boolean {
+    return activeInspectionIdRef.current === targetInspectionId;
+  }
+
+  function isActiveEditorTarget(
+    targetInspectionId: string,
+    targetSectionId: string,
+  ): boolean {
+    return (
+      activeInspectionIdRef.current === targetInspectionId &&
+      activeSectionIdRef.current === targetSectionId
+    );
+  }
 
   useEffect(() => {
     if (!hasUnsavedChanges) {
@@ -514,28 +615,44 @@ export function UnitInspections({
 
   async function startInspection() {
     if (!bundle || starting) return;
-    setStarting(true);
+
+    const targetInspectionId = bundle.inspection.id;
+    const expectedVersion = bundle.inspection.version;
+    setStartingInspectionId(targetInspectionId);
     setSaveError(null);
+
     try {
       const inspection = await api.post(
-        inspectionStartPath(bundle.inspection.id),
-        { expectedVersion: bundle.inspection.version },
+        inspectionStartPath(targetInspectionId),
+        { expectedVersion },
         inspectionResponseSchema,
       );
-      setBundle((current) =>
-        current ? { ...current, inspection } : current,
-      );
+      if (inspection.id !== targetInspectionId) {
+        throw new Error(
+          'Inspection start response crossed its aggregate ownership boundary.',
+        );
+      }
+
+      setBundle((current) => {
+        if (!current || current.inspection.id !== targetInspectionId) {
+          return current;
+        }
+        return { ...current, inspection };
+      });
       setInspections((current) =>
         current?.map((item) =>
           item.id === inspection.id ? inspection : item,
         ) ?? current,
       );
     } catch (cause) {
+      if (!isActiveInspection(targetInspectionId)) return;
       setSaveError(
         cause instanceof Error ? cause.message : 'Inspection could not start.',
       );
     } finally {
-      setStarting(false);
+      setStartingInspectionId((current) =>
+        current === targetInspectionId ? null : current,
+      );
     }
   }
 
@@ -543,42 +660,37 @@ export function UnitInspections({
     event.preventDefault();
     if (!bundle || !selectedSection || !patch || saving) return;
 
-    setSaving(true);
+    const targetInspectionId = bundle.inspection.id;
+    const targetSectionId = selectedSection.id;
+    const requestPatch = patch;
+
+    setSavingTarget({
+      inspectionId: targetInspectionId,
+      sectionId: targetSectionId,
+    });
     setSaveError(null);
     setConflict(false);
 
     try {
       const saved = await api.patch(
-        inspectionSectionPath(bundle.inspection.id, selectedSection.id),
-        patch,
+        inspectionSectionPath(targetInspectionId, targetSectionId),
+        requestPatch,
         saveInspectionSectionResponseSchema,
       );
 
-      const changedIds = new Set([
-        ...saved.responses.map((response) => response.itemId),
-        ...saved.clearedItemIds,
-      ]);
-      const responses = [
-        ...bundle.responses.filter(
-          (response) => !changedIds.has(response.itemId),
-        ),
-        ...saved.responses,
-      ];
-
-      setBundle({
-        ...bundle,
-        inspection: {
-          ...bundle.inspection,
-          contentRevision: saved.contentRevision,
-        },
-        sectionStates: bundle.sectionStates.map((state) =>
-          state.sectionId === selectedSection.id
-            ? { ...state, revision: saved.revision }
-            : state,
-        ),
-        responses,
-      });
+      setBundle((current) =>
+        current
+          ? mergeInspectionSectionSave(
+              current,
+              targetInspectionId,
+              targetSectionId,
+              saved,
+            )
+          : current,
+      );
     } catch (cause) {
+      if (!isActiveEditorTarget(targetInspectionId, targetSectionId)) return;
+
       if (
         cause instanceof PortfolioApiError &&
         cause.code === 'INSPECTION_SECTION_REVISION_CONFLICT'
@@ -595,26 +707,45 @@ export function UnitInspections({
         );
       }
     } finally {
-      setSaving(false);
+      setSavingTarget((current) =>
+        current?.inspectionId === targetInspectionId &&
+        current.sectionId === targetSectionId
+          ? null
+          : current,
+      );
     }
   }
 
   async function reloadAfterConflict() {
-    if (!inspectionId) return;
-    setSaving(true);
+    if (!inspectionId || !selectedSection) return;
+
+    const targetInspectionId = inspectionId;
+    const targetSectionId = selectedSection.id;
+    setSavingTarget({
+      inspectionId: targetInspectionId,
+      sectionId: targetSectionId,
+    });
     setSaveError(null);
+
     try {
-      const fresh = await loadBundle(inspectionId);
+      const fresh = await loadBundle(targetInspectionId);
+      if (!isActiveEditorTarget(targetInspectionId, targetSectionId)) return;
       setBundle(fresh);
       setConflict(false);
     } catch (cause) {
+      if (!isActiveEditorTarget(targetInspectionId, targetSectionId)) return;
       setSaveError(
         cause instanceof Error
           ? cause.message
           : 'Inspection could not be reloaded.',
       );
     } finally {
-      setSaving(false);
+      setSavingTarget((current) =>
+        current?.inspectionId === targetInspectionId &&
+        current.sectionId === targetSectionId
+          ? null
+          : current,
+      );
     }
   }
 
