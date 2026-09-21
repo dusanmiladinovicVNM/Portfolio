@@ -347,6 +347,26 @@ export function createUnitReportingOverview(input: {
   }
 
   if (
+    input.contract.coverageStatus === 'effective' &&
+    input.contract.effectiveTerms === null
+  ) {
+    throw new DomainError(
+      'REPORTING_INVALID_PROJECTION',
+      'Effective contract coverage requires effective Tenancy terms.',
+    );
+  }
+
+  if (
+    input.contract.coverageStatus !== 'effective' &&
+    input.contract.effectiveTerms !== null
+  ) {
+    throw new DomainError(
+      'REPORTING_INVALID_PROJECTION',
+      'Non-effective contract coverage cannot expose effective Tenancy terms.',
+    );
+  }
+
+  if (
     input.contract.effectiveTerms !== null &&
     input.contract.effectiveTerms.effectiveFrom > asOf
   ) {
