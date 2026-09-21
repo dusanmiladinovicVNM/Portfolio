@@ -8,6 +8,7 @@ import {
   propertyRoute,
   unitRoute,
   workspaceRouteHref,
+  workspaceRouteOwnerKey,
 } from '../src/navigation/workspace-route.js';
 
 const propertyId = '11111111-1111-4111-8111-111111111111';
@@ -235,6 +236,47 @@ describe('workspace URL navigation', () => {
       tab: 'spaces',
       asOf: '2025-06-30',
     });
+  });
+
+
+  it('changes the React owner key when Property or Unit business ownership changes', () => {
+    const propertyA = propertyRoute(
+      propertyId,
+      '2025-06-30',
+    );
+    const propertyB = propertyRoute(
+      agreementId,
+      '2025-06-30',
+    );
+    expect(workspaceRouteOwnerKey(propertyA)).not.toBe(
+      workspaceRouteOwnerKey(propertyB),
+    );
+
+    const unitAOverview = unitRoute(
+      propertyId,
+      unitId,
+      '2025-06-30',
+      'overview',
+    );
+    const unitASpaces = unitRoute(
+      propertyId,
+      unitId,
+      '2025-06-30',
+      'spaces',
+    );
+    const unitBSpaces = unitRoute(
+      propertyId,
+      agreementId,
+      '2025-06-30',
+      'spaces',
+    );
+
+    expect(workspaceRouteOwnerKey(unitAOverview)).toBe(
+      workspaceRouteOwnerKey(unitASpaces),
+    );
+    expect(workspaceRouteOwnerKey(unitASpaces)).not.toBe(
+      workspaceRouteOwnerKey(unitBSpaces),
+    );
   });
 
 });

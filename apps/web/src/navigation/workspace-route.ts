@@ -43,6 +43,13 @@ export type WorkspaceRoute =
       readonly inspectionSectionId?: string;
     };
 
+export function workspaceRouteOwnerKey(route: WorkspaceRoute): string {
+  if (route.kind === 'dashboard') return 'dashboard';
+  if (route.kind === 'parties') return 'parties';
+  if (route.kind === 'property') return 'property:' + route.propertyId;
+  return 'unit:' + route.propertyId + ':' + route.unitId;
+}
+
 export function isWorkspaceAsOf(value: string): boolean {
   return reportingAsOfQuerySchema.safeParse({ asOf: value }).success;
 }

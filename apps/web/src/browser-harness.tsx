@@ -407,10 +407,65 @@ function apiPath(input: RequestInfo | URL): URL {
 
 type BrowserHarnessWindow = Window & {
   __portfolioBinaryReads?: number;
+  __portfolioHoldUnitCreate?: boolean;
+  __portfolioHoldSpaceCreate?: boolean;
+  __portfolioPendingUnitCreate?: boolean;
+  __portfolioPendingSpaceCreate?: boolean;
+  __portfolioReleaseUnitCreate?: () => boolean;
+  __portfolioReleaseSpaceCreate?: () => boolean;
 };
 
 const browserHarnessWindow = window as BrowserHarnessWindow;
 browserHarnessWindow.__portfolioBinaryReads = 0;
+
+let heldUnitCreate:
+  | { readonly response: Response; readonly resolve: (response: Response) => void }
+  | null = null;
+let heldSpaceCreate:
+  | { readonly response: Response; readonly resolve: (response: Response) => void }
+  | null = null;
+
+function maybeHoldUnitCreate(response: Response): Promise<Response> {
+  if (!browserHarnessWindow.__portfolioHoldUnitCreate) {
+    return Promise.resolve(response);
+  }
+
+  browserHarnessWindow.__portfolioPendingUnitCreate = true;
+  return new Promise<Response>((resolve) => {
+    heldUnitCreate = { response, resolve };
+  });
+}
+
+function maybeHoldSpaceCreate(response: Response): Promise<Response> {
+  if (!browserHarnessWindow.__portfolioHoldSpaceCreate) {
+    return Promise.resolve(response);
+  }
+
+  browserHarnessWindow.__portfolioPendingSpaceCreate = true;
+  return new Promise<Response>((resolve) => {
+    heldSpaceCreate = { response, resolve };
+  });
+}
+
+browserHarnessWindow.__portfolioReleaseUnitCreate = () => {
+  if (!heldUnitCreate) return false;
+  const held = heldUnitCreate;
+  heldUnitCreate = null;
+  browserHarnessWindow.__portfolioHoldUnitCreate = false;
+  browserHarnessWindow.__portfolioPendingUnitCreate = false;
+  held.resolve(held.response);
+  return true;
+};
+
+browserHarnessWindow.__portfolioReleaseSpaceCreate = () => {
+  if (!heldSpaceCreate) return false;
+  const held = heldSpaceCreate;
+  heldSpaceCreate = null;
+  browserHarnessWindow.__portfolioHoldSpaceCreate = false;
+  browserHarnessWindow.__portfolioPendingSpaceCreate = false;
+  held.resolve(held.response);
+  return true;
+};
 
 globalThis.fetch = async (
   input: RequestInfo | URL,
@@ -457,7 +512,7 @@ globalThis.fetch = async (
       status: 'active',
       notes: body.notes ?? '',
     };
-    return json(setupUnit, 201);
+    return maybeHoldUnitCreate(json(setupUnit, 201));
   }
 
   if (setupUnit && path === '/units/' + setupUnitId) {
@@ -466,6 +521,10 @@ globalThis.fetch = async (
 
   if (setupUnit && path === '/units/' + setupUnitId + '/spaces') {
     return json({ items: setupSpace ? [setupSpace] : [] });
+  }
+
+  if (path === '/units/' + unitId + '/spaces') {
+    return json({ items: [] });
   }
 
   if (path === '/spaces' && init?.method === 'POST') {
@@ -484,7 +543,7 @@ globalThis.fetch = async (
       sortOrder: body.sortOrder ?? 0,
       active: true,
     };
-    return json(setupSpace, 201);
+    return maybeHoldSpaceCreate(json(setupSpace, 201));
   }
 
   if (path === '/parties' && init?.method === 'POST') {

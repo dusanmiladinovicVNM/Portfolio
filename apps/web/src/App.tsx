@@ -11,6 +11,7 @@ import {
   partiesRoute,
   propertyRoute,
   unitRoute,
+  workspaceRouteOwnerKey,
 } from './navigation/workspace-route.js';
 import { useWorkspaceNavigation } from './navigation/use-workspace-navigation.js';
 
@@ -226,7 +227,7 @@ function AuthenticatedShell({
 
         {route.kind === 'property' ? (
           <PropertyUnits
-            key={route.propertyId}
+            key={workspaceRouteOwnerKey(route)}
             api={api}
             asOf={route.asOf}
             navigate={navigate}
@@ -236,7 +237,7 @@ function AuthenticatedShell({
 
         {route.kind === 'unit' ? (
           <UnitDossier
-            key={route.propertyId + ':' + route.unitId}
+            key={workspaceRouteOwnerKey(route)}
             api={api}
             asOf={route.asOf}
             navigate={navigate}
