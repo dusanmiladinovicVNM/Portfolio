@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   parseWorkspaceLocation,
   workspaceRouteHref,
@@ -14,6 +14,11 @@ export type NavigateWorkspace = (
   options?: NavigateWorkspaceOptions,
 ) => void;
 
+export type NavigationBlocker = (next: WorkspaceRoute) => boolean;
+export type SetNavigationBlocker = (
+  blocker: NavigationBlocker | null,
+) => void;
+
 function currentRoute(): WorkspaceRoute {
   return parseWorkspaceLocation(window.location.pathname, window.location.search);
 }
@@ -25,8 +30,19 @@ function currentHref(): string {
 export function useWorkspaceNavigation(): {
   readonly route: WorkspaceRoute;
   readonly navigate: NavigateWorkspace;
+  readonly setNavigationBlocker: SetNavigationBlocker;
 } {
   const [route, setRoute] = useState<WorkspaceRoute>(currentRoute);
+  const routeRef = useRef(route);
+  const blockerRef = useRef<NavigationBlocker | null>(null);
+
+  useEffect(() => {
+    routeRef.current = route;
+  }, [route]);
+
+  const setNavigationBlocker = useCallback<SetNavigationBlocker>((blocker) => {
+    blockerRef.current = blocker;
+  }, []);
 
   useEffect(() => {
     const canonicalHref = workspaceRouteHref(currentRoute());
@@ -34,20 +50,54 @@ export function useWorkspaceNavigation(): {
       window.history.replaceState(null, '', canonicalHref);
     }
 
-    const onPopState = () => setRoute(currentRoute());
+    const onPopState = () => {
+      const next = currentRoute();
+      const blocker = blockerRef.current;
+      if (blocker && !blocker(next)) {
+        window.history.pushState(
+          null,
+          '',
+          workspaceRouteHref(routeRef.current),
+        );
+        return;
+      }
+      routeRef.current = next;
+      setRoute(next);
+    };
+
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!blockerRef.current) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+
     window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+    };
   }, []);
 
   const navigate = useCallback<NavigateWorkspace>((next, options) => {
     const href = workspaceRouteHref(next);
+    if (href === currentHref()) {
+      routeRef.current = next;
+      setRoute(next);
+      return;
+    }
+
+    const blocker = blockerRef.current;
+    if (blocker && !blocker(next)) return;
+
     if (options?.replace) {
       window.history.replaceState(null, '', href);
     } else {
       window.history.pushState(null, '', href);
     }
+    routeRef.current = next;
     setRoute(next);
   }, []);
 
-  return { route, navigate };
+  return { route, navigate, setNavigationBlocker };
 }

@@ -25,7 +25,10 @@ import {
 } from '../api/portfolio-api.js';
 import { WorkspaceLink } from '../navigation/WorkspaceLink.js';
 import { unitRoute } from '../navigation/workspace-route.js';
-import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
+import type {
+  NavigateWorkspace,
+  SetNavigationBlocker,
+} from '../navigation/use-workspace-navigation.js';
 import { formatDetailKey } from '../presentation/format.js';
 
 type SchemaSection = InspectionBundleResponse['schema']['sections'][number];
@@ -47,6 +50,7 @@ interface UnitInspectionsProps {
   readonly inspectionId?: string | undefined;
   readonly inspectionSectionId?: string | undefined;
   readonly navigate: NavigateWorkspace;
+  readonly setNavigationBlocker: SetNavigationBlocker;
 }
 
 function answerEqual(
@@ -341,6 +345,7 @@ export function UnitInspections({
   inspectionId,
   inspectionSectionId,
   navigate,
+  setNavigationBlocker,
 }: UnitInspectionsProps) {
   const [inspections, setInspections] =
     useState<readonly InspectionResponseDto[] | null>(null);
@@ -485,6 +490,22 @@ export function UnitInspections({
       : null;
 
   const editable = bundle?.inspection.status === 'in_progress';
+  const hasUnsavedChanges = patch !== null;
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) {
+      setNavigationBlocker(null);
+      return;
+    }
+
+    setNavigationBlocker(() =>
+      window.confirm(
+        'This Inspection section has unsaved changes. Leave and discard them?',
+      ),
+    );
+
+    return () => setNavigationBlocker(null);
+  }, [hasUnsavedChanges, setNavigationBlocker]);
 
   function changeItem(itemId: string, entry: DraftEntry) {
     setDraft((current) => ({ ...current, [itemId]: entry }));

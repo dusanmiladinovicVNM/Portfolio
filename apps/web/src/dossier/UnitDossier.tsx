@@ -11,7 +11,10 @@ import {
   unitRoute,
   type DossierTab,
 } from '../navigation/workspace-route.js';
-import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
+import type {
+  NavigateWorkspace,
+  SetNavigationBlocker,
+} from '../navigation/use-workspace-navigation.js';
 import { UnitAssets } from './UnitAssets.js';
 import { UnitDocuments } from './UnitDocuments.js';
 import { UnitInspections } from './UnitInspections.js';
@@ -32,6 +35,7 @@ interface UnitDossierProps {
   readonly inspectionId?: string | undefined;
   readonly inspectionSectionId?: string | undefined;
   readonly navigate: NavigateWorkspace;
+  readonly setNavigationBlocker: SetNavigationBlocker;
 }
 
 export function UnitDossier({
@@ -46,6 +50,7 @@ export function UnitDossier({
   inspectionId,
   inspectionSectionId,
   navigate,
+  setNavigationBlocker,
 }: UnitDossierProps) {
   const [unit, setUnit] = useState<UnitResponse | null>(null);
   const [identityError, setIdentityError] = useState<string | null>(null);
@@ -205,6 +210,7 @@ export function UnitDossier({
             <UnitTenancies
               api={api}
               propertyId={propertyId}
+              setNavigationBlocker={setNavigationBlocker}
               unitId={unitId}
               asOf={asOf}
               navigate={navigate}

@@ -20,6 +20,14 @@ const agreementDocumentLinkId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 const amendmentDocumentId = 'f1111111-1111-4111-8111-111111111111';
 const amendmentVersionId = 'f2222222-2222-4222-8222-222222222222';
 const amendmentDocumentLinkId = 'f3333333-3333-4333-8333-333333333333';
+const inspectionId = 'a1000000-0000-4000-8000-000000000001';
+const inspectionSchemaVersionId = 'a1000000-0000-4000-8000-000000000002';
+const inspectionSectionId = 'a1000000-0000-4000-8000-000000000003';
+const inspectionConditionItemId = 'a1000000-0000-4000-8000-000000000004';
+const inspectionNotesItemId = 'a1000000-0000-4000-8000-000000000005';
+const inspectionUserId = 'a1000000-0000-4000-8000-000000000006';
+const inspectionConditionResponseId = 'a1000000-0000-4000-8000-000000000007';
+const inspectionNotesResponseId = 'a1000000-0000-4000-8000-000000000008';
 
 const operations = {
   openMaintenanceIssueCount: 0,
@@ -203,6 +211,126 @@ const amendmentDocumentReference = {
   },
 };
 
+let inspectionStatus: 'draft' | 'in_progress' = 'draft';
+let inspectionVersion = 1;
+let inspectionContentRevision = 0;
+let inspectionSectionRevision = 0;
+let inspectionResponses: Array<{
+  id: string;
+  inspectionId: string;
+  sectionId: string;
+  itemId: string;
+  value: string | boolean | string[];
+  comment: string | null;
+  updatedByUserId: string;
+  updatedAt: string;
+}> = [];
+
+const inspectionSchema = {
+  id: inspectionSchemaVersionId,
+  schemaCode: 'MOVE-IN-BRW',
+  versionNumber: 1,
+  inspectionType: 'move_in',
+  title: 'Browser move-in inspection',
+  status: 'published',
+  requiredSignatureRoles: [],
+  sections: [
+    {
+      id: inspectionSectionId,
+      key: 'general',
+      title: 'General condition',
+      description: 'Record the overall condition before handover.',
+      sortOrder: 0,
+      items: [
+        {
+          id: inspectionConditionItemId,
+          sectionId: inspectionSectionId,
+          key: 'condition',
+          type: 'select',
+          label: 'Condition',
+          required: true,
+          sortOrder: 0,
+          options: [
+            { value: 'good', label: 'Good' },
+            { value: 'damaged', label: 'Damaged' },
+          ],
+          visibleWhen: null,
+          requiredWhen: null,
+        },
+        {
+          id: inspectionNotesItemId,
+          sectionId: inspectionSectionId,
+          key: 'damage_notes',
+          type: 'text',
+          label: 'Damage notes',
+          required: false,
+          sortOrder: 1,
+          options: [],
+          visibleWhen: {
+            fieldKey: 'condition',
+            operator: 'equals',
+            value: 'damaged',
+          },
+          requiredWhen: {
+            fieldKey: 'condition',
+            operator: 'equals',
+            value: 'damaged',
+          },
+        },
+      ],
+    },
+  ],
+};
+
+function inspectionRecord() {
+  return {
+    id: inspectionId,
+    code: 'INS-BRW-001',
+    inspectionType: 'move_in',
+    unitId,
+    tenancyId,
+    schemaVersionId: inspectionSchemaVersionId,
+    assignedToUserId: inspectionUserId,
+    createdByUserId: inspectionUserId,
+    scheduledFor: '2025-06-30',
+    status: inspectionStatus,
+    startedAt:
+      inspectionStatus === 'in_progress'
+        ? '2025-06-30T08:00:00.000Z'
+        : null,
+    lockedAt: null,
+    finalizedAt: null,
+    cancelledAt: null,
+    version: inspectionVersion,
+    contentRevision: inspectionContentRevision,
+  };
+}
+
+function inspectionBundle() {
+  return {
+    inspection: inspectionRecord(),
+    schema: inspectionSchema,
+    sectionStates: [
+      {
+        sectionId: inspectionSectionId,
+        revision: inspectionSectionRevision,
+      },
+    ],
+    responses: inspectionResponses,
+    findings: [],
+    evidence: [],
+    signatures: [],
+    finalSnapshot: null,
+  };
+}
+
+function requireInspectionAuth(init?: RequestInit) {
+  const authorization = new Headers(init?.headers).get('authorization');
+  if (authorization !== 'Bearer browser-workflow-token') {
+    throw new Error('Inspection mutation is missing Portfolio auth.');
+  }
+}
+
 const parties = [
   {
     id: landlordPartyId,
@@ -358,6 +486,112 @@ globalThis.fetch = async (
       },
       currentOperations: operations,
       unitAttributedCostsByCurrency: [],
+    });
+  }
+
+  if (path === `/units/${unitId}/inspections`) {
+    return json({ items: [inspectionRecord()] });
+  }
+
+  if (path === `/inspections/${inspectionId}`) {
+    return json(inspectionBundle());
+  }
+
+  if (
+    path === `/inspections/${inspectionId}/start` &&
+    init?.method === 'POST'
+  ) {
+    requireInspectionAuth(init);
+    const body = JSON.parse(String(init.body)) as { expectedVersion: number };
+    if (body.expectedVersion !== inspectionVersion) {
+      return new Response(
+        JSON.stringify({
+          error: {
+            code: 'INSPECTION_VERSION_CONFLICT',
+            message: 'Inspection version conflict.',
+          },
+        }),
+        { status: 409, headers: { 'content-type': 'application/json' } },
+      );
+    }
+    inspectionStatus = 'in_progress';
+    inspectionVersion += 1;
+    return json(inspectionRecord());
+  }
+
+  if (
+    path ===
+      `/inspections/${inspectionId}/sections/${inspectionSectionId}` &&
+    init?.method === 'PATCH'
+  ) {
+    requireInspectionAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      expectedRevision: number;
+      set: Array<{
+        itemId: string;
+        value: string | boolean | string[];
+        comment?: string | null;
+      }>;
+      clear: string[];
+    };
+
+    const conflictRequested = body.set.some(
+      (item) =>
+        item.itemId === inspectionNotesItemId &&
+        item.value === 'conflict-edit',
+    );
+    if (
+      conflictRequested ||
+      body.expectedRevision !== inspectionSectionRevision
+    ) {
+      return new Response(
+        JSON.stringify({
+          error: {
+            code: 'INSPECTION_SECTION_REVISION_CONFLICT',
+            message: 'Inspection section was modified concurrently.',
+          },
+        }),
+        { status: 409, headers: { 'content-type': 'application/json' } },
+      );
+    }
+
+    inspectionSectionRevision += 1;
+    inspectionContentRevision += 1;
+    for (const itemId of body.clear) {
+      inspectionResponses = inspectionResponses.filter(
+        (response) => response.itemId !== itemId,
+      );
+    }
+
+    const persisted = body.set.map((item) => {
+      const existingId =
+        item.itemId === inspectionConditionItemId
+          ? inspectionConditionResponseId
+          : inspectionNotesResponseId;
+      const response = {
+        id: existingId,
+        inspectionId,
+        sectionId: inspectionSectionId,
+        itemId: item.itemId,
+        value: item.value,
+        comment: item.comment ?? null,
+        updatedByUserId: inspectionUserId,
+        updatedAt: '2025-06-30T08:05:00.000Z',
+      };
+      inspectionResponses = [
+        ...inspectionResponses.filter(
+          (candidate) => candidate.itemId !== item.itemId,
+        ),
+        response,
+      ];
+      return response;
+    });
+
+    return json({
+      revision: inspectionSectionRevision,
+      contentRevision: inspectionContentRevision,
+      responses: persisted,
+      clearedItemIds: body.clear,
     });
   }
 

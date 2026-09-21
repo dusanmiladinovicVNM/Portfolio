@@ -10,6 +10,8 @@ const unitId = '22222222-2222-4222-8222-222222222222';
 const tenancyId = '33333333-3333-4333-8333-333333333333';
 const agreementId = '55555555-5555-4555-8555-555555555555';
 const amendmentId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const inspectionId = 'a1000000-0000-4000-8000-000000000001';
+const inspectionSectionId = 'a1000000-0000-4000-8000-000000000003';
 
 const logs = [];
 
@@ -111,6 +113,45 @@ async function clickXpath(sessionId, xpath) {
 async function clearXpath(sessionId, xpath) {
   const id = await waitForElement(sessionId, 'xpath', xpath);
   await webdriver(`/session/${sessionId}/element/${id}/clear`, {
+    method: 'POST',
+    body: {},
+  });
+}
+
+async function setValueXpath(sessionId, xpath, value) {
+  const id = await waitForElement(sessionId, 'xpath', xpath);
+  const element = { 'element-6066-11e4-a52e-4f735466cecf': id };
+  await webdriver(`/session/${sessionId}/execute/sync`, {
+    method: 'POST',
+    body: {
+      script:
+        "arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('change', { bubbles: true }));",
+      args: [element, value],
+    },
+  });
+}
+
+async function elementValueXpath(sessionId, xpath) {
+  const id = await waitForElement(sessionId, 'xpath', xpath);
+  return webdriver(
+    `/session/${sessionId}/element/${id}/property/value`,
+  );
+}
+
+async function clickAndDismissConfirm(sessionId, xpath, expectedText) {
+  const id = await waitForElement(sessionId, 'xpath', xpath);
+  try {
+    await webdriver(`/session/${sessionId}/element/${id}/click`, {
+      method: 'POST',
+      body: {},
+    });
+  } catch (error) {
+    if (!String(error).includes('unexpected alert open')) throw error;
+  }
+
+  const text = await webdriver(`/session/${sessionId}/alert/text`);
+  assertEqual(text, expectedText, 'Unsaved Inspection confirmation');
+  await webdriver(`/session/${sessionId}/alert/dismiss`, {
     method: 'POST',
     body: {},
   });
@@ -486,8 +527,103 @@ try {
     'Deep link after browser refresh',
   );
 
+  await clickXpath(sessionId, "//a[normalize-space()='Inspections']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//h2[normalize-space()='Inspections']",
+  );
+  await clickXpath(
+    sessionId,
+    "//a[contains(@class,'inspection-card')][.//strong[normalize-space()='INS-BRW-001']]",
+  );
+
+  const inspectionUrl =
+    `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionId=${inspectionSectionId}&asOf=2025-06-30`;
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//button[normalize-space()='Start Inspection']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'Inspection section deep-link URL',
+  );
+
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Start Inspection']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//span[contains(@class,'status-chip')][normalize-space()='in_progress']",
+  );
+
+  const conditionSelect =
+    "//div[contains(@class,'inspection-item')][.//span[contains(normalize-space(),'Condition')]]//select";
+  await setValueXpath(sessionId, conditionSelect, 'damaged');
+
+  const notesInput =
+    "//div[contains(@class,'inspection-item')][.//span[contains(normalize-space(),'Damage notes')]]//input[@type='text']";
+  await waitForElement(sessionId, 'xpath', notesInput);
+  await setValueXpath(sessionId, notesInput, 'Window scratch');
+
+  await clickAndDismissConfirm(
+    sessionId,
+    "//a[normalize-space()='Timeline']",
+    'This Inspection section has unsaved changes. Leave and discard them?',
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'Dirty Inspection navigation remains blocked',
+  );
+  assertEqual(
+    await elementValueXpath(sessionId, notesInput),
+    'Window scratch',
+    'Dirty Inspection answer after cancelled navigation',
+  );
+
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Save section']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Section matches canonical server state')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'inspection-section-link')][.//small[normalize-space()='revision 1']]",
+  );
+
+  await setValueXpath(sessionId, notesInput, 'conflict-edit');
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Save section']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'This section changed on the server. Your local answers are still visible.')]",
+  );
+  assertEqual(
+    await elementValueXpath(sessionId, notesInput),
+    'conflict-edit',
+    'Local Inspection draft survives section revision conflict',
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'Inspection conflict keeps working URL context',
+  );
+
   process.stdout.write(
-    'Browser workflow PASS: Dashboard → Property → Unit → Contracts → Tenancy → Agreement → Amendment → refresh\n',
+    'Browser workflow PASS: Dashboard → Property → Unit → Contracts → documents → Inspection Start → edit → dirty guard → Save → conflict\n',
   );
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.stack : error}\n`);
