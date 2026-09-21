@@ -143,6 +143,25 @@ async function selectOptionXpath(sessionId, selectXpath, optionValue) {
   });
 }
 
+async function setInputValueXpath(sessionId, xpath, value) {
+  const id = await waitForElement(sessionId, 'xpath', xpath);
+  await webdriver(`/session/${sessionId}/execute/sync`, {
+    method: 'POST',
+    body: {
+      script:
+        'const element = arguments[0];' +
+        'element.value = arguments[1];' +
+        'element.dispatchEvent(new Event("input", { bubbles: true }));' +
+        'element.dispatchEvent(new Event("change", { bubbles: true }));' +
+        'return element.value;',
+      args: [
+        { 'element-6066-11e4-a52e-4f735466cecf': id },
+        value,
+      ],
+    },
+  });
+}
+
 async function elementValueXpath(sessionId, xpath) {
   const id = await waitForElement(sessionId, 'xpath', xpath);
   return webdriver(
@@ -608,12 +627,12 @@ try {
     "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//*[normalize-space()='Browser Tenant']",
   );
 
-  await typeXpath(
+  await setInputValueXpath(
     sessionId,
     "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//form[@data-tenancy-form='plan']//input[@name='plannedStart']",
     '2026-10-01',
   );
-  await typeXpath(
+  await setInputValueXpath(
     sessionId,
     "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//form[@data-tenancy-form='plan']//input[@name='plannedEnd']",
     '2027-09-30',
@@ -628,7 +647,7 @@ try {
     "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//span[contains(@class,'status-chip') and normalize-space()='planned']",
   );
 
-  await typeXpath(
+  await setInputValueXpath(
     sessionId,
     "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//form[@data-tenancy-form='activate']//input[@name='actualStart']",
     '2026-10-01',
@@ -692,12 +711,12 @@ try {
     "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//span[contains(@class,'status-chip') and normalize-space()='active']",
   );
 
-  await typeXpath(
+  await setInputValueXpath(
     sessionId,
     "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//form[@data-tenancy-form='notice']//input[@name='noticeGivenAt']",
     '2027-06-01',
   );
-  await typeXpath(
+  await setInputValueXpath(
     sessionId,
     "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//form[@data-tenancy-form='notice']//input[@name='terminationEffectiveAt']",
     '2027-09-30',
@@ -722,7 +741,7 @@ try {
     "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//span[contains(@class,'status-chip') and normalize-space()='move_out_pending']",
   );
 
-  await typeXpath(
+  await setInputValueXpath(
     sessionId,
     "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//form[@data-tenancy-form='end']//input[@name='actualEnd']",
     '2027-09-30',
