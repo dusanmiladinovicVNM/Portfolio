@@ -18,6 +18,15 @@ export function getPropertyQuery(
   return repository.getPropertyById(id);
 }
 
+export function getUnitQuery(
+  repository: PortfolioRepository,
+  actor: Actor,
+  id: UnitId,
+): Promise<Unit | null> {
+  requireCapability(actor, 'portfolio:read');
+  return repository.getUnitById(id);
+}
+
 export function listPropertiesQuery(
   repository: PortfolioRepository,
   actor: Actor,

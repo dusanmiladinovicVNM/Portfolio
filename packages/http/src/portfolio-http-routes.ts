@@ -3,6 +3,7 @@ import {
   createSpaceCommand,
   createUnitCommand,
   getPropertyQuery,
+  getUnitQuery,
   listPropertiesQuery,
   listSpacesByUnitQuery,
   listUnitsByPropertyQuery,
@@ -121,6 +122,27 @@ export async function handlePortfolioHttp(
     return json({
       data: { items: units.map(toUnitResponse) },
     });
+  }
+
+  const unitMatch = /^\/units\/([^/]+)$/.exec(path);
+  if (method === 'GET' && unitMatch) {
+    const parsedId = entityIdSchema.safeParse(unitMatch[1]);
+    if (!parsedId.success) return validationFailure();
+
+    const unit = await getUnitQuery(
+      deps.portfolioRepository,
+      actor,
+      asUnitId(parsedId.data),
+    );
+
+    if (!unit) {
+      return json(
+        { error: { code: 'UNIT_NOT_FOUND', message: 'Unit not found.' } },
+        404,
+      );
+    }
+
+    return json({ data: toUnitResponse(unit) });
   }
 
   if (method === 'POST' && path === '/units') {
