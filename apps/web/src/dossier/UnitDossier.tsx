@@ -210,7 +210,6 @@ export function UnitDossier({
             <UnitTenancies
               api={api}
               propertyId={propertyId}
-              setNavigationBlocker={setNavigationBlocker}
               unitId={unitId}
               asOf={asOf}
               navigate={navigate}
@@ -236,6 +235,7 @@ export function UnitDossier({
               inspectionSectionId={inspectionSectionId}
               navigate={navigate}
               propertyId={propertyId}
+              setNavigationBlocker={setNavigationBlocker}
               unitId={unitId}
             />
           ) : null}
