@@ -1,6 +1,7 @@
 import type {
   PropertyResponse,
   SpaceResponse,
+  TenancyResponse,
   UnitResponse,
 } from '@portfolio/contracts';
 
@@ -47,6 +48,42 @@ export function assertUnitSpacesOwner(
   if (spaces.some((space) => space.unitId !== unitId)) {
     throw new Error(
       'Unit Space list contains a Space owned by another Unit.',
+    );
+  }
+}
+
+export function assertUnitTenanciesOwner(
+  unitId: string,
+  tenancies: readonly TenancyResponse[],
+): void {
+  if (tenancies.some((tenancy) => tenancy.unitId !== unitId)) {
+    throw new Error(
+      'Unit Tenancy list contains a Tenancy owned by another Unit.',
+    );
+  }
+}
+
+export function assertTenancyMutationOwner(
+  unitId: string,
+  tenancyId: string,
+  expectedVersion: number,
+  tenancy: TenancyResponse,
+): void {
+  if (tenancy.id !== tenancyId) {
+    throw new Error(
+      'Tenancy mutation response does not match the command target.',
+    );
+  }
+
+  if (tenancy.unitId !== unitId) {
+    throw new Error(
+      'Tenancy mutation response belongs to another Unit.',
+    );
+  }
+
+  if (tenancy.version !== expectedVersion + 1) {
+    throw new Error(
+      'Tenancy mutation response does not advance the expected version.',
     );
   }
 }
