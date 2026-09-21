@@ -226,6 +226,7 @@ function AuthenticatedShell({
 
         {route.kind === 'property' ? (
           <PropertyUnits
+            key={route.propertyId}
             api={api}
             asOf={route.asOf}
             navigate={navigate}
@@ -235,6 +236,7 @@ function AuthenticatedShell({
 
         {route.kind === 'unit' ? (
           <UnitDossier
+            key={route.propertyId + ':' + route.unitId}
             api={api}
             asOf={route.asOf}
             navigate={navigate}

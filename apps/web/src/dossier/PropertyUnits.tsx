@@ -12,6 +12,7 @@ import {
 import type { PortfolioApi } from '../api/portfolio-api.js';
 import { WorkspaceLink } from '../navigation/WorkspaceLink.js';
 import { CreateUnitForm } from './CreateUnitForm.js';
+import { assertPropertyUnitsOwner } from './route-owner.js';
 import {
   dashboardRoute,
   unitRoute,
@@ -53,6 +54,7 @@ export function PropertyUnits({
       }),
     ])
       .then(([property, response]) => {
+        assertPropertyUnitsOwner(propertyId, property, response.items);
         setData({ property, units: response.items });
       })
       .catch((cause: unknown) => {

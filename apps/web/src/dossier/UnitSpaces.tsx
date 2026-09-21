@@ -14,6 +14,7 @@ import {
   optionalNumber,
   requiredString,
 } from '../admin/form-utils.js';
+import { assertUnitSpacesOwner } from './route-owner.js';
 
 interface UnitSpacesProps {
   readonly api: PortfolioApi;
@@ -48,7 +49,10 @@ export function UnitSpaces({ api, unitId }: UnitSpacesProps) {
       .get(unitSpacesPath(unitId), spaceListResponseSchema, {
         signal: controller.signal,
       })
-      .then((response) => setSpaces(sortSpaces(response.items)))
+      .then((response) => {
+        assertUnitSpacesOwner(unitId, response.items);
+        setSpaces(sortSpaces(response.items));
+      })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
         setLoadError(
