@@ -1,7 +1,9 @@
 import {
   createDocumentCommand,
+  DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
   finalizeDocumentVersionCommand,
   getDocumentQuery,
+  getDocumentVersionContentQuery,
   linkDocumentCommand,
   listDocumentLinksQuery,
   listDocumentsQuery,
@@ -55,6 +57,49 @@ export interface DocumentHttpDependencies {
   readonly tenancyRepository: TenancyRepository;
   readonly leaseRepository: LeaseRepository;
   readonly idGenerator: IdGenerator;
+}
+
+function encodeRfc5987ValueChars(value: string): string {
+  return encodeURIComponent(value).replace(
+    /['()*]/g,
+    (character) =>
+      `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+}
+
+function contentDisposition(fileName: string): string {
+  const normalized = fileName.replace(/[\r\n]/g, '').trim() || 'document';
+  const fallback = normalized
+    .replace(/[^\x20-\x7e]/g, '_')
+    .replace(/["\\]/g, '_');
+
+  return (
+    `attachment; filename="${fallback}"; filename*=UTF-8''` +
+    encodeRfc5987ValueChars(normalized)
+  );
+}
+
+function binaryResponse(
+  version: {
+    readonly fileName: string;
+    readonly mimeType: string;
+    readonly byteSize: number;
+  },
+  content: Uint8Array,
+): Response {
+  const copy = new Uint8Array(content.byteLength);
+  copy.set(content);
+
+  return new Response(copy.buffer, {
+    status: 200,
+    headers: {
+      'cache-control': 'private, no-store',
+      'content-disposition': contentDisposition(version.fileName),
+      'content-length': String(version.byteSize),
+      'content-type': version.mimeType,
+      'x-content-type-options': 'nosniff',
+    },
+  });
 }
 
 export async function handleDocumentHttp(
@@ -233,6 +278,24 @@ export async function handleDocumentHttp(
     }
 
     return null;
+  }
+
+  const contentMatch = /^\/document-versions\/([^/]+)\/content$/.exec(path);
+  if (method === 'GET' && contentMatch) {
+    const parsedId = entityIdSchema.safeParse(contentMatch[1]);
+    if (!parsedId.success) return validationFailure();
+
+    const result = await getDocumentVersionContentQuery(
+      {
+        documentRepository: deps.documentRepository,
+        fileStorage: deps.fileStorage,
+        binaryPolicy: DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
+      },
+      actor,
+      asDocumentVersionId(parsedId.data),
+    );
+
+    return binaryResponse(result.version, result.content);
   }
 
   const finalizeMatch = /^\/document-versions\/([^/]+)\/finalize$/.exec(path);

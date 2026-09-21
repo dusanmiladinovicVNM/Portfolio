@@ -664,3 +664,27 @@ input:focus-visible {
 .workspace:focus {
   outline: none;
 }
+
+.document-binary-actions {
+  display: grid;
+  gap: 7px;
+  margin-top: 9px;
+}
+.document-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.document-action-button {
+  min-width: 88px;
+  padding: 8px 11px;
+  font-size: .75rem;
+}
+.document-action-button:disabled {
+  cursor: progress;
+  opacity: .6;
+}
+.document-action-error {
+  max-width: 360px;
+  font-size: .75rem;
+}

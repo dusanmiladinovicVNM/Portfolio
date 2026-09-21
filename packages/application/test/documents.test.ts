@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
+  getDocumentVersionContentQuery,
   uploadDocumentVersionCommand,
   type Actor,
   type DocumentRepository,
-  type FileStoragePort,
+  type FileStorageReadPort,
+  type FileStorageWritePort,
   type IdGenerator,
   type StorageObjectReference,
 } from '../src/index.js';
@@ -59,7 +62,7 @@ class FailingDocumentRepository implements DocumentRepository {
   async listTargetDocuments() { return []; }
 }
 
-class TrackingStorage implements FileStoragePort {
+class TrackingStorage implements FileStorageWritePort {
   readonly removed: StorageObjectReference[] = [];
   constructor(private readonly removeFails = false) {}
 
@@ -192,4 +195,222 @@ describe('Document application workflow', () => {
       code: 'DOCUMENT_STORAGE_COMPENSATION_FAILED',
     });
   });
+
+  it('reads stored DocumentVersion bytes through the authorized storage reference', async () => {
+    const repository = new FailingDocumentRepository();
+    const versionId =
+      '50000000-0000-4000-8000-000000000010' as DocumentVersionId;
+    const version: DocumentVersion = {
+      id: versionId,
+      documentId: repository.document.id,
+      versionNumber: 1,
+      fileName: 'draft-lease.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 3,
+      sha256: 'b'.repeat(64),
+      status: 'stored',
+      finalizedAt: null,
+    };
+    const reference: StorageObjectReference = {
+      provider: 'test',
+      objectId: 'object-10',
+      objectKey: `document-version:${versionId}`,
+    };
+
+    class ReadRepository extends FailingDocumentRepository {
+      override async getVersionById(id: DocumentVersionId) {
+        return id === version.id ? version : null;
+      }
+      override async getStorageReference(id: DocumentVersionId) {
+        return id === version.id ? reference : null;
+      }
+    }
+
+    const storage: FileStorageReadPort = {
+      async read(requested) {
+        return {
+          ...requested,
+          byteSize: 3,
+          sha256: 'b'.repeat(64),
+          content: new Uint8Array([1, 2, 3]),
+        };
+      },
+    };
+
+    const result = await getDocumentVersionContentQuery(
+      {
+        documentRepository: new ReadRepository(),
+        fileStorage: storage,
+        binaryPolicy: DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
+      },
+      actor,
+      versionId,
+    );
+
+    expect(result.version.status).toBe('stored');
+    expect([...result.content]).toEqual([1, 2, 3]);
+  });
+
+  it('fails closed when storage bytes do not match canonical DocumentVersion metadata', async () => {
+    const repository = new FailingDocumentRepository();
+    const versionId =
+      '50000000-0000-4000-8000-000000000011' as DocumentVersionId;
+    const version: DocumentVersion = {
+      id: versionId,
+      documentId: repository.document.id,
+      versionNumber: 1,
+      fileName: 'lease.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 3,
+      sha256: 'b'.repeat(64),
+      status: 'final',
+      finalizedAt: '2026-09-18T20:00:00.000Z',
+    };
+    const reference: StorageObjectReference = {
+      provider: 'test',
+      objectId: 'object-11',
+      objectKey: `document-version:${versionId}`,
+    };
+
+    class ReadRepository extends FailingDocumentRepository {
+      override async getVersionById(id: DocumentVersionId) {
+        return id === version.id ? version : null;
+      }
+      override async getStorageReference(id: DocumentVersionId) {
+        return id === version.id ? reference : null;
+      }
+    }
+
+    const storage: FileStorageReadPort = {
+      async read(requested) {
+        return {
+          ...requested,
+          byteSize: 3,
+          sha256: 'c'.repeat(64),
+          content: new Uint8Array([1, 2, 3]),
+        };
+      },
+    };
+
+    await expect(
+      getDocumentVersionContentQuery(
+        {
+          documentRepository: new ReadRepository(),
+          fileStorage: storage,
+          binaryPolicy: DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
+        },
+        actor,
+        versionId,
+      ),
+    ).rejects.toMatchObject({
+      code: 'DOCUMENT_BINARY_INTEGRITY_MISMATCH',
+    });
+  });
+
+  it('maps provider read failures to a storage read application error', async () => {
+    const repository = new FailingDocumentRepository();
+    const versionId =
+      '50000000-0000-4000-8000-000000000012' as DocumentVersionId;
+    const version: DocumentVersion = {
+      id: versionId,
+      documentId: repository.document.id,
+      versionNumber: 1,
+      fileName: 'lease.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 3,
+      sha256: 'b'.repeat(64),
+      status: 'final',
+      finalizedAt: '2026-09-18T20:00:00.000Z',
+    };
+    const reference: StorageObjectReference = {
+      provider: 'test',
+      objectId: 'object-12',
+      objectKey: `document-version:${versionId}`,
+    };
+
+    class ReadRepository extends FailingDocumentRepository {
+      override async getVersionById(id: DocumentVersionId) {
+        return id === version.id ? version : null;
+      }
+      override async getStorageReference(id: DocumentVersionId) {
+        return id === version.id ? reference : null;
+      }
+    }
+
+    const storage: FileStorageReadPort = {
+      async read() {
+        throw new Error('provider unavailable');
+      },
+    };
+
+    await expect(
+      getDocumentVersionContentQuery(
+        {
+          documentRepository: new ReadRepository(),
+          fileStorage: storage,
+          binaryPolicy: DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
+        },
+        actor,
+        versionId,
+      ),
+    ).rejects.toMatchObject({
+      code: 'DOCUMENT_STORAGE_READ_FAILED',
+    });
+  });
+
+
+  it('rejects an oversized canonical DocumentVersion before storage is read', async () => {
+    const repository = new FailingDocumentRepository();
+    const versionId =
+      '50000000-0000-4000-8000-000000000013' as DocumentVersionId;
+    const version: DocumentVersion = {
+      id: versionId,
+      documentId: repository.document.id,
+      versionNumber: 1,
+      fileName: 'oversized.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 17,
+      sha256: 'd'.repeat(64),
+      status: 'final',
+      finalizedAt: '2026-09-18T20:00:00.000Z',
+    };
+    const reference: StorageObjectReference = {
+      provider: 'test',
+      objectId: 'object-13',
+      objectKey: `document-version:${versionId}`,
+    };
+
+    class ReadRepository extends FailingDocumentRepository {
+      override async getVersionById(id: DocumentVersionId) {
+        return id === version.id ? version : null;
+      }
+      override async getStorageReference(id: DocumentVersionId) {
+        return id === version.id ? reference : null;
+      }
+    }
+
+    let readCalls = 0;
+    const storage: FileStorageReadPort = {
+      async read() {
+        readCalls += 1;
+        throw new Error('storage must not be touched');
+      },
+    };
+
+    await expect(
+      getDocumentVersionContentQuery(
+        {
+          documentRepository: new ReadRepository(),
+          fileStorage: storage,
+          binaryPolicy: { maxBytes: 16 },
+        },
+        actor,
+        versionId,
+      ),
+    ).rejects.toMatchObject({
+      code: 'DOCUMENT_BINARY_DELIVERY_LIMIT_EXCEEDED',
+    });
+    expect(readCalls).toBe(0);
+  });
+
 });

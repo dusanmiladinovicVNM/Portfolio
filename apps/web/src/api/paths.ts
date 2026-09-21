@@ -58,3 +58,8 @@ export function agreementDocumentsPath(agreementId: string): string {
 export function amendmentDocumentsPath(amendmentId: string): string {
   return `/amendments/${encodeURIComponent(amendmentId)}/documents`;
 }
+
+
+export function documentVersionContentPath(versionId: string): string {
+  return `/document-versions/${encodeURIComponent(versionId)}/content`;
+}

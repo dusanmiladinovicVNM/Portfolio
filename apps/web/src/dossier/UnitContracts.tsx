@@ -31,6 +31,7 @@ import {
   unitRoute,
 } from '../navigation/workspace-route.js';
 import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
+import { DocumentBinaryActions } from '../documents/DocumentBinaryActions.js';
 import {
   formatDetailKey,
   formatExactMoney,
@@ -167,10 +168,12 @@ function TermsPanel({
 }
 
 function LegalDocuments({
+  api,
   label,
   items,
   error,
 }: {
+  readonly api: PortfolioApi;
   readonly label: string;
   readonly items: readonly LegalDocumentReference[] | null;
   readonly error: string | null;
@@ -183,7 +186,7 @@ function LegalDocuments({
           <h3>Linked Documents</h3>
         </div>
         <span className="section-note">
-          Metadata only · binary access remains behind Portfolio HTTP/storage
+          Binary access uses authorized Portfolio HTTP · storage stays private
         </span>
       </div>
 
@@ -226,6 +229,12 @@ function LegalDocuments({
                       {reference.linkedVersion.status}
                     </strong>
                     <small>{reference.linkedVersion.mimeType}</small>
+                    <DocumentBinaryActions
+                      api={api}
+                      fileName={reference.linkedVersion.fileName}
+                      mimeType={reference.linkedVersion.mimeType}
+                      versionId={reference.linkedVersion.id}
+                    />
                   </>
                 ) : (
                   <>
@@ -707,6 +716,7 @@ export function UnitContracts({
               </span>
             </div>
             <LegalDocuments
+              api={api}
               error={agreementDocumentsError}
               items={agreementDocuments}
               label="Agreement legal record"
@@ -760,6 +770,7 @@ export function UnitContracts({
             </span>
           </div>
           <LegalDocuments
+            api={api}
             error={amendmentDocumentsError}
             items={amendmentDocuments}
             label="Amendment legal record"

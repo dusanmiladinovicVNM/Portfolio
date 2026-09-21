@@ -125,6 +125,44 @@ async function activeElement(sessionId) {
   return elementId(value);
 }
 
+async function executeScript(sessionId, script) {
+  return webdriver(`/session/${sessionId}/execute/sync`, {
+    method: 'POST',
+    body: { script, args: [] },
+  });
+}
+
+async function waitForBinaryReads(sessionId, expected, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const count = await executeScript(
+      sessionId,
+      'return window.__portfolioBinaryReads || 0;',
+    );
+    if (count === expected) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Timed out waiting for ${expected} binary read(s).`);
+}
+
+async function waitForNewWindow(sessionId, previousHandles, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const handles = await webdriver(`/session/${sessionId}/window/handles`);
+    const added = handles.find((handle) => !previousHandles.includes(handle));
+    if (added) return added;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error('Timed out waiting for the document window.');
+}
+
+async function switchWindow(sessionId, handle) {
+  await webdriver(`/session/${sessionId}/window`, {
+    method: 'POST',
+    body: { handle },
+  });
+}
+
 async function assertActiveHeading(sessionId, expectedText, label) {
   const id = await activeElement(sessionId);
   const [name, text] = await Promise.all([
@@ -325,6 +363,42 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
+    "//article[.//strong[normalize-space()='LEASE-2026.pdf']]//button[normalize-space()='Open']",
+  );
+
+  const originalHandle = await webdriver(`/session/${sessionId}/window`);
+  const handlesBeforeOpen = await webdriver(
+    `/session/${sessionId}/window/handles`,
+  );
+  await clickXpath(
+    sessionId,
+    "//article[.//strong[normalize-space()='LEASE-2026.pdf']]//button[normalize-space()='Open']",
+  );
+  await waitForBinaryReads(sessionId, 1);
+  const documentHandle = await waitForNewWindow(
+    sessionId,
+    handlesBeforeOpen,
+  );
+  await switchWindow(sessionId, documentHandle);
+  const documentUrl = await currentUrl(sessionId);
+  if (!documentUrl.startsWith(`blob:${baseUrl}/`)) {
+    throw new Error(
+      `Open document URL: expected blob:${baseUrl}/..., got ${documentUrl}`,
+    );
+  }
+  await webdriver(`/session/${sessionId}/window`, {
+    method: 'DELETE',
+  });
+  await switchWindow(sessionId, originalHandle);
+
+  await clickXpath(
+    sessionId,
+    "//article[.//strong[normalize-space()='LEASE-2026.pdf']]//button[normalize-space()='Download']",
+  );
+  await waitForBinaryReads(sessionId, 2);
+  await waitForElement(
+    sessionId,
+    'xpath',
     "//a[contains(@class,'amendment-card')][.//strong[normalize-space()='AMD-BRW']]",
   );
 
@@ -368,6 +442,11 @@ try {
     'xpath',
     "//strong[normalize-space()='LEASE-AMENDMENT-2026.pdf']",
   );
+  await clickXpath(
+    sessionId,
+    "//article[.//strong[normalize-space()='LEASE-AMENDMENT-2026.pdf']]//button[normalize-space()='Download']",
+  );
+  await waitForBinaryReads(sessionId, 3);
 
   const expectedDeepLink =
     `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=contracts&tenancyId=${tenancyId}&agreementId=${agreementId}&amendmentId=${amendmentId}&asOf=2025-06-30`;

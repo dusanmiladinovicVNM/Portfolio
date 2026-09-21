@@ -218,3 +218,13 @@ These rules are architecture gates, not optional implementation notes.
 168. Reporting reads require `portfolio:read`. Reporting DTOs are outputs only and cannot be accepted as business write commands.
 169. `MoneyAmount` is the bounded scalar type for one canonical monetary fact; Reporting sums use `ReportingMoneyAmount`, an exact non-negative two-decimal aggregate whose whole-part range is not capped to the scalar 16-digit limit. A valid set of scalar facts must not become an invalid projection solely because its exact sum is wider.
 170. One Reporting response is one PostgreSQL observation. Every multi-statement Unit overview or Portfolio dashboard read runs inside one `REPEATABLE READ READ ONLY` transaction so all component queries share one snapshot; a concurrent commit becomes visible on the next request, never halfway through the current DTO.
+
+
+## Document binary delivery
+
+171. A DocumentVersion binary read is identified only by canonical DocumentVersionId. API/browser callers never choose storage provider, provider object id or storage object key; those are resolved from canonical persisted storage reference after Portfolio authorization.
+172. Document binary reads require documents:read. Both stored and final DocumentVersions are readable; final is an immutability/legal lifecycle status and must not be repurposed as an access-control classification.
+173. No binary bytes may be delivered unless the resolved storage reference, exact returned byte length and SHA-256 match the canonical DocumentVersion metadata. Missing storage reference/object, provider read failure or integrity mismatch fails closed and must never fall back to a direct provider URL.
+174. Browser binary access uses authenticated Portfolio HTTP. Storage-provider URLs/credentials remain outside browser business state. Inline Open is restricted to the explicit passive-format allowlist; other valid binaries remain download-only.
+
+175. Buffered DocumentVersion delivery has a hard 16 MiB ceiling. Canonical DocumentVersion.byteSize is rejected before storage I/O when above the ceiling, and FileStorageReadPort receives the same maxBytes capability so provider metadata and response-body consumption are bounded before full buffering. A provider-side size race must not create an unbounded allocation. Larger binaries require a future streaming delivery path.

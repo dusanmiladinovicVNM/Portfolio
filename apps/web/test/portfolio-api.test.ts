@@ -72,4 +72,85 @@ describe('Portfolio API client', () => {
       }),
     );
   });
+
+  it('fetches binary content with the same bearer-auth boundary', async () => {
+    const payload = new Uint8Array([1, 2, 3, 4]);
+    const fetchImpl = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        expect(init?.headers).toEqual({
+          Accept: 'application/octet-stream',
+          Authorization: 'Bearer token-123',
+        });
+        return new Response(payload, {
+          status: 200,
+          headers: { 'Content-Type': 'application/pdf' },
+        });
+      },
+    );
+
+    const api = createPortfolioApi({
+      baseUrl: '/api',
+      getAccessToken: () => 'token-123',
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+
+    const blob = await api.getBinary(
+      '/document-versions/11111111-1111-4111-8111-111111111111/content',
+    );
+    expect(blob.type).toBe('application/pdf');
+    expect([...new Uint8Array(await blob.arrayBuffer())]).toEqual([
+      1, 2, 3, 4,
+    ]);
+  });
+
+  it('maps binary API errors through the shared PortfolioApiError contract', async () => {
+    const api = createPortfolioApi({
+      baseUrl: '/api',
+      getAccessToken: () => 'token',
+      fetchImpl: (async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 'DOCUMENT_BINARY_MISSING',
+              message: 'Document binary is missing from storage.',
+            },
+          }),
+          {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )) as typeof fetch,
+    });
+
+    await expect(
+      api.getBinary(
+        '/document-versions/11111111-1111-4111-8111-111111111111/content',
+      ),
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<PortfolioApiError>>({
+        status: 404,
+        code: 'DOCUMENT_BINARY_MISSING',
+      }),
+    );
+  });
+
+  it('does not attempt a binary transport without an auth session', async () => {
+    const fetchImpl = vi.fn();
+    const api = createPortfolioApi({
+      baseUrl: '/api',
+      getAccessToken: () => null,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    await expect(
+      api.getBinary(
+        '/document-versions/11111111-1111-4111-8111-111111111111/content',
+      ),
+    ).rejects.toMatchObject({
+      status: 401,
+      code: 'AUTH_SESSION_REQUIRED',
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
 });

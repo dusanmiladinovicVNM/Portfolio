@@ -1,4 +1,5 @@
 import type {
+  BufferedDocumentBinaryPolicy,
   ClockPort,
   DocumentRepository,
   FileStoragePort,
@@ -123,6 +124,7 @@ export class InMemoryDocumentRepository implements DocumentRepository {
 export class MemoryFileStorage implements FileStoragePort {
   readonly removed: StorageObjectReference[] = [];
   readonly objects = new Map<string, StoredFile>();
+  readonly contents = new Map<string, Uint8Array>();
 
   async put(input: FileStoragePutInput): Promise<StoredFile> {
     const existing = this.objects.get(input.objectKey);
@@ -137,6 +139,9 @@ export class MemoryFileStorage implements FileStoragePort {
       disposition: 'created',
     };
     this.objects.set(input.objectKey, stored);
+    const content = new Uint8Array(input.content.byteLength);
+    content.set(input.content);
+    this.contents.set(input.objectKey, content);
     return stored;
   }
 
@@ -152,9 +157,44 @@ export class MemoryFileStorage implements FileStoragePort {
     };
   }
 
+  async read(
+    reference: StorageObjectReference,
+    policy: BufferedDocumentBinaryPolicy,
+  ) {
+    const stored = this.objects.get(reference.objectKey);
+    const content = this.contents.get(reference.objectKey);
+    if (
+      !stored ||
+      !content ||
+      stored.provider !== reference.provider ||
+      stored.objectId !== reference.objectId
+    ) {
+      return null;
+    }
+
+    if (
+      stored.byteSize > policy.maxBytes ||
+      content.byteLength > policy.maxBytes
+    ) {
+      throw new Error('In-memory storage object exceeds buffered read limit.');
+    }
+
+    const copy = new Uint8Array(content.byteLength);
+    copy.set(content);
+    return {
+      provider: stored.provider,
+      objectId: stored.objectId,
+      objectKey: stored.objectKey,
+      byteSize: stored.byteSize,
+      sha256: stored.sha256,
+      content: copy,
+    };
+  }
+
   async remove(reference: StorageObjectReference): Promise<void> {
     this.removed.push(reference);
     this.objects.delete(reference.objectKey);
+    this.contents.delete(reference.objectKey);
   }
 }
 

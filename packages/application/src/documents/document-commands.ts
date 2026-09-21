@@ -31,10 +31,15 @@ import type { PortfolioRepository } from '../portfolio/portfolio-repository.js';
 import type { TenancyRepository } from '../tenancy/tenancy-repository.js';
 import type { DocumentRepository } from './document-repository.js';
 import type {
-  FileStoragePort,
+  FileStorageWritePort,
   StorageObjectMetadata,
   StorageObjectReference,
 } from './file-storage-port.js';
+import {
+  assertStorageObjectMatchesVersion,
+  storageMatchesVersion,
+  storageReferenceMatches,
+} from './document-storage-integrity.js';
 
 export interface CreateDocumentCommandInput {
   readonly code: string;
@@ -88,12 +93,12 @@ interface DocumentDependencies {
 }
 
 export interface UploadDocumentVersionDependencies extends DocumentDependencies {
-  readonly fileStorage: FileStoragePort;
+  readonly fileStorage: FileStorageWritePort;
 }
 
 export interface FinalizeDocumentVersionDependencies {
   readonly documentRepository: DocumentRepository;
-  readonly fileStorage: FileStoragePort;
+  readonly fileStorage: Pick<FileStorageWritePort, 'stat'>;
   readonly clock: ClockPort;
 }
 
@@ -154,29 +159,11 @@ export async function createDocumentCommand(
   return document;
 }
 
-function storageMatchesVersion(
-  metadata: StorageObjectMetadata,
-  version: DocumentVersion,
-): boolean {
-  return (
-    metadata.byteSize === version.byteSize &&
-    metadata.sha256.toLowerCase() === version.sha256.toLowerCase()
-  );
-}
-
-function storageReferenceMatches(
-  left: StorageObjectReference,
-  right: StorageObjectReference,
-): boolean {
-  return (
-    left.provider === right.provider &&
-    left.objectId === right.objectId &&
-    left.objectKey === right.objectKey
-  );
-}
-
 export async function assertDocumentVersionStorageIntegrity(
-  deps: Pick<UploadDocumentVersionDependencies, 'documentRepository' | 'fileStorage'>,
+  deps: {
+    readonly documentRepository: DocumentRepository;
+    readonly fileStorage: Pick<FileStorageWritePort, 'stat'>;
+  },
   version: DocumentVersion,
 ): Promise<StorageObjectMetadata> {
   const reference = await deps.documentRepository.getStorageReference(version.id);
@@ -203,16 +190,7 @@ export async function assertDocumentVersionStorageIntegrity(
       'Document binary is missing from storage.',
     );
   }
-  if (
-    !storageReferenceMatches(metadata, reference) ||
-    !storageMatchesVersion(metadata, version)
-  ) {
-    throw new DomainError(
-      'DOCUMENT_BINARY_INTEGRITY_MISMATCH',
-      'Stored document binary no longer matches the immutable DocumentVersion metadata.',
-    );
-  }
-
+  assertStorageObjectMatchesVersion(metadata, reference, version);
   return metadata;
 }
 

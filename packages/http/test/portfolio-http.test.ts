@@ -336,6 +336,7 @@ function buildHandler(
     readonly reportingRepository?: InMemoryReportingRepository;
     readonly leaseRepository?: EmptyLeaseRepository;
     readonly documentRepository?: InMemoryDocumentRepository;
+    readonly fileStorage?: MemoryFileStorage;
   } = {},
 ) {
   return createPortfolioHttpHandler({
@@ -361,7 +362,7 @@ function buildHandler(
       overrides.documentRepository ?? new InMemoryDocumentRepository(),
     inspectionRepository: new InMemoryInspectionRepository(),
     staffDirectoryRepository: new InMemoryStaffDirectoryRepository(),
-    fileStorage: new MemoryFileStorage(),
+    fileStorage: overrides.fileStorage ?? new MemoryFileStorage(),
     clock,
     userAccessRepository: new InMemoryAccessRepository(),
     idGenerator: new FixedIds(ids),
@@ -2606,6 +2607,23 @@ describe('Portfolio HTTP boundary', () => {
       status: 'stored',
     });
 
+    const storedContent = await handler(
+      new Request(
+        `https://portfolio.test/document-versions/${version.id}/content`,
+      ),
+      inspectorIdentity,
+    );
+    expect(storedContent.status).toBe(200);
+    expect(storedContent.headers.get('content-type')).toBe('application/pdf');
+    expect(storedContent.headers.get('cache-control')).toBe('private, no-store');
+    expect(storedContent.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(storedContent.headers.get('content-disposition')).toContain(
+      'lease.pdf',
+    );
+    expect([...new Uint8Array(await storedContent.arrayBuffer())]).toEqual([
+      1, 2, 3, 4,
+    ]);
+
     const finalized = await handler(
       new Request(
         `https://portfolio.test/document-versions/${version.id}/finalize`,
@@ -3239,6 +3257,287 @@ describe('Portfolio HTTP boundary', () => {
     expect(await missing.json()).toMatchObject({
       error: { code: 'LEASE_AGREEMENT_NOT_FOUND' },
     });
+  });
+
+
+  it('rejects DocumentVersion binary delivery above the buffered size ceiling', async () => {
+    const documentRepository = new InMemoryDocumentRepository();
+    const documentId = asDocumentId(
+      'f1000000-0000-4000-8000-000000000001',
+    );
+    const versionId = asDocumentVersionId(
+      'f1000000-0000-4000-8000-000000000002',
+    );
+
+    documentRepository.documents.set(documentId, {
+      id: documentId,
+      code: 'DOC-OVERSIZED-HTTP',
+      title: 'Oversized binary',
+      category: 'legal',
+      status: 'active',
+      latestVersionNumber: 1,
+      revision: 2,
+    });
+    documentRepository.versions.set(versionId, {
+      id: versionId,
+      documentId,
+      versionNumber: 1,
+      fileName: 'oversized.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 16 * 1024 * 1024 + 1,
+      sha256: 'f'.repeat(64),
+      status: 'final',
+      finalizedAt: '2026-09-21T18:00:00.000Z',
+    });
+    documentRepository.storage.set(versionId, {
+      provider: 'memory',
+      objectId: 'oversized-object',
+      objectKey: `document-version:${versionId}`,
+    });
+
+    const handler = buildHandler([], new FixedClock(), {
+      documentRepository,
+    });
+
+    const response = await handler(
+      new Request(
+        `https://portfolio.test/document-versions/${versionId}/content`,
+      ),
+      inspectorIdentity,
+    );
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'DOCUMENT_BINARY_DELIVERY_LIMIT_EXCEEDED' },
+    });
+  });
+
+
+  it('maps DocumentVersion storage integrity mismatch to an upstream 502 failure', async () => {
+    const documentRepository = new InMemoryDocumentRepository();
+    const fileStorage = new MemoryFileStorage();
+    const documentId = asDocumentId(
+      'f2000000-0000-4000-8000-000000000001',
+    );
+    const versionId = asDocumentVersionId(
+      'f2000000-0000-4000-8000-000000000002',
+    );
+    const objectKey = `document-version:${versionId}`;
+
+    documentRepository.documents.set(documentId, {
+      id: documentId,
+      code: 'DOC-INTEGRITY-HTTP',
+      title: 'Integrity mismatch',
+      category: 'legal',
+      status: 'active',
+      latestVersionNumber: 1,
+      revision: 2,
+    });
+    documentRepository.versions.set(versionId, {
+      id: versionId,
+      documentId,
+      versionNumber: 1,
+      fileName: 'integrity.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 3,
+      sha256: 'a'.repeat(64),
+      status: 'final',
+      finalizedAt: '2026-09-21T18:00:00.000Z',
+    });
+    documentRepository.storage.set(versionId, {
+      provider: 'memory',
+      objectId: 'integrity-object',
+      objectKey,
+    });
+
+    fileStorage.objects.set(objectKey, {
+      provider: 'memory',
+      objectId: 'integrity-object',
+      objectKey,
+      byteSize: 3,
+      sha256: 'b'.repeat(64),
+      disposition: 'created',
+    });
+    fileStorage.contents.set(objectKey, new Uint8Array([1, 2, 3]));
+
+    const handler = buildHandler([], new FixedClock(), {
+      documentRepository,
+      fileStorage,
+    });
+
+    const response = await handler(
+      new Request(
+        `https://portfolio.test/document-versions/${versionId}/content`,
+      ),
+      inspectorIdentity,
+    );
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: 'DOCUMENT_BINARY_INTEGRITY_MISMATCH',
+      },
+    });
+  });
+
+
+  it('maps a missing storage binary to an upstream 502 failure', async () => {
+    const documentRepository = new InMemoryDocumentRepository();
+    const documentId = asDocumentId(
+      'f3000000-0000-4000-8000-000000000001',
+    );
+    const versionId = asDocumentVersionId(
+      'f3000000-0000-4000-8000-000000000002',
+    );
+
+    documentRepository.documents.set(documentId, {
+      id: documentId,
+      code: 'DOC-MISSING-BINARY-HTTP',
+      title: 'Missing storage binary',
+      category: 'legal',
+      status: 'active',
+      latestVersionNumber: 1,
+      revision: 2,
+    });
+    documentRepository.versions.set(versionId, {
+      id: versionId,
+      documentId,
+      versionNumber: 1,
+      fileName: 'missing.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 3,
+      sha256: 'a'.repeat(64),
+      status: 'final',
+      finalizedAt: '2026-09-21T18:00:00.000Z',
+    });
+    documentRepository.storage.set(versionId, {
+      provider: 'memory',
+      objectId: 'missing-object',
+      objectKey: `document-version:${versionId}`,
+    });
+
+    const response = await buildHandler([], new FixedClock(), {
+      documentRepository,
+      fileStorage: new MemoryFileStorage(),
+    })(
+      new Request(
+        `https://portfolio.test/document-versions/${versionId}/content`,
+      ),
+      inspectorIdentity,
+    );
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'DOCUMENT_BINARY_MISSING' },
+    });
+  });
+
+  it('maps a missing DocumentVersion storage reference to an upstream 502 failure', async () => {
+    const documentRepository = new InMemoryDocumentRepository();
+    const documentId = asDocumentId(
+      'f3000000-0000-4000-8000-000000000003',
+    );
+    const versionId = asDocumentVersionId(
+      'f3000000-0000-4000-8000-000000000004',
+    );
+
+    documentRepository.documents.set(documentId, {
+      id: documentId,
+      code: 'DOC-MISSING-REF-HTTP',
+      title: 'Missing storage reference',
+      category: 'legal',
+      status: 'active',
+      latestVersionNumber: 1,
+      revision: 2,
+    });
+    documentRepository.versions.set(versionId, {
+      id: versionId,
+      documentId,
+      versionNumber: 1,
+      fileName: 'missing-reference.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 3,
+      sha256: 'a'.repeat(64),
+      status: 'final',
+      finalizedAt: '2026-09-21T18:00:00.000Z',
+    });
+
+    const response = await buildHandler([], new FixedClock(), {
+      documentRepository,
+    })(
+      new Request(
+        `https://portfolio.test/document-versions/${versionId}/content`,
+      ),
+      inspectorIdentity,
+    );
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'DOCUMENT_STORAGE_REFERENCE_MISSING' },
+    });
+  });
+
+  it('encodes filename* using RFC 5987 attr-char escaping', async () => {
+    const documentRepository = new InMemoryDocumentRepository();
+    const fileStorage = new MemoryFileStorage();
+    const documentId = asDocumentId(
+      'f3000000-0000-4000-8000-000000000005',
+    );
+    const versionId = asDocumentVersionId(
+      'f3000000-0000-4000-8000-000000000006',
+    );
+    const objectKey = `document-version:${versionId}`;
+
+    documentRepository.documents.set(documentId, {
+      id: documentId,
+      code: 'DOC-RFC5987-HTTP',
+      title: 'RFC 5987 filename',
+      category: 'legal',
+      status: 'active',
+      latestVersionNumber: 1,
+      revision: 2,
+    });
+    documentRepository.versions.set(versionId, {
+      id: versionId,
+      documentId,
+      versionNumber: 1,
+      fileName: "owner's(contract)*.pdf",
+      mimeType: 'application/pdf',
+      byteSize: 3,
+      sha256: 'c'.repeat(64),
+      status: 'final',
+      finalizedAt: '2026-09-21T18:00:00.000Z',
+    });
+    documentRepository.storage.set(versionId, {
+      provider: 'memory',
+      objectId: 'rfc5987-object',
+      objectKey,
+    });
+    fileStorage.objects.set(objectKey, {
+      provider: 'memory',
+      objectId: 'rfc5987-object',
+      objectKey,
+      byteSize: 3,
+      sha256: 'c'.repeat(64),
+      disposition: 'created',
+    });
+    fileStorage.contents.set(objectKey, new Uint8Array([1, 2, 3]));
+
+    const response = await buildHandler([], new FixedClock(), {
+      documentRepository,
+      fileStorage,
+    })(
+      new Request(
+        `https://portfolio.test/document-versions/${versionId}/content`,
+      ),
+      inspectorIdentity,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-disposition')).toBe(
+      'attachment; filename="owner\'s(contract)*.pdf"; ' +
+        "filename*=UTF-8''owner%27s%28contract%29%2A.pdf",
+    );
   });
 
 

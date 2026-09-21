@@ -15,14 +15,14 @@ import {
   uploadDocumentVersionCommand,
 } from '../documents/document-commands.js';
 import type { DocumentRepository } from '../documents/document-repository.js';
-import type { FileStoragePort } from '../documents/file-storage-port.js';
+import type { FileStorageWritePort } from '../documents/file-storage-port.js';
 import type { PdfPort } from '../documents/pdf-port.js';
 import type { InspectionRepository } from './inspection-repository.js';
 
 export interface GenerateInspectionFinalReportDependencies {
   readonly inspectionRepository: InspectionRepository;
   readonly documentRepository: DocumentRepository;
-  readonly fileStorage: FileStoragePort;
+  readonly fileStorage: FileStorageWritePort;
   readonly pdfPort: PdfPort;
   readonly idGenerator: IdGenerator;
   readonly clock: ClockPort;
