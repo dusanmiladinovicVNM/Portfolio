@@ -429,10 +429,13 @@ type BrowserHarnessWindow = Window & {
   __portfolioBinaryReads?: number;
   __portfolioHoldUnitCreate?: boolean;
   __portfolioHoldSpaceCreate?: boolean;
+  __portfolioHoldTenancyMutation?: boolean;
   __portfolioPendingUnitCreate?: boolean;
   __portfolioPendingSpaceCreate?: boolean;
+  __portfolioPendingTenancyMutation?: boolean;
   __portfolioReleaseUnitCreate?: () => boolean;
   __portfolioReleaseSpaceCreate?: () => boolean;
+  __portfolioReleaseTenancyMutation?: () => boolean;
 };
 
 const browserHarnessWindow = window as BrowserHarnessWindow;
@@ -442,6 +445,9 @@ let heldUnitCreate:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 let heldSpaceCreate:
+  | { readonly response: Response; readonly resolve: (response: Response) => void }
+  | null = null;
+let heldTenancyMutation:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 
@@ -467,6 +473,17 @@ function maybeHoldSpaceCreate(response: Response): Promise<Response> {
   });
 }
 
+function maybeHoldTenancyMutation(response: Response): Promise<Response> {
+  if (!browserHarnessWindow.__portfolioHoldTenancyMutation) {
+    return Promise.resolve(response);
+  }
+
+  browserHarnessWindow.__portfolioPendingTenancyMutation = true;
+  return new Promise<Response>((resolve) => {
+    heldTenancyMutation = { response, resolve };
+  });
+}
+
 browserHarnessWindow.__portfolioReleaseUnitCreate = () => {
   if (!heldUnitCreate) return false;
   const held = heldUnitCreate;
@@ -483,6 +500,16 @@ browserHarnessWindow.__portfolioReleaseSpaceCreate = () => {
   heldSpaceCreate = null;
   browserHarnessWindow.__portfolioHoldSpaceCreate = false;
   browserHarnessWindow.__portfolioPendingSpaceCreate = false;
+  held.resolve(held.response);
+  return true;
+};
+
+browserHarnessWindow.__portfolioReleaseTenancyMutation = () => {
+  if (!heldTenancyMutation) return false;
+  const held = heldTenancyMutation;
+  heldTenancyMutation = null;
+  browserHarnessWindow.__portfolioHoldTenancyMutation = false;
+  browserHarnessWindow.__portfolioPendingTenancyMutation = false;
   held.resolve(held.response);
   return true;
 };
@@ -663,7 +690,7 @@ globalThis.fetch = async (
     } else {
       throw new Error('Unexpected setup Tenancy action: ' + path);
     }
-    return json(setupTenancy);
+    return maybeHoldTenancyMutation(json(setupTenancy));
   }
 
   if (path === '/units/' + unitId + '/spaces') {
