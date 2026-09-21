@@ -465,6 +465,10 @@ export function createUnitReportingOverview(input: {
     propertyName: required(input.propertyName, 'propertyName'),
     unitCode: required(input.unitCode, 'unitCode'),
     unitNumber: required(input.unitNumber, 'unitNumber'),
+    contract: {
+      ...input.contract,
+      currentDraftAgreementCount,
+    },
     currentOperations: normalizeOperations(input.currentOperations),
     unitAttributedCostsByCurrency: costs,
   };
