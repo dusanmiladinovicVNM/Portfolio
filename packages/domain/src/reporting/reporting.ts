@@ -115,8 +115,8 @@ export interface UnitReportingOverview {
   readonly areaM2: number | null;
   readonly rooms: number | null;
   readonly occupancyStatus: ReportingOccupancyStatus;
-  readonly tenancy: ReportingTenancySummaryInput | null;
-  readonly contract: ReportingContractSummaryInput;
+  readonly tenancy: ReportingTenancySummary | null;
+  readonly contract: ReportingContractSummary;
   readonly currentOperations: ReportingCurrentOperations;
   readonly unitAttributedCostsByCurrency: readonly ReportingCostSummary[];
 }
