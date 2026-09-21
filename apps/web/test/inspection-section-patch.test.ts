@@ -123,4 +123,44 @@ describe('Inspection section patch builder', () => {
       ),
     ).toBeNull();
   });
+
+  it('treats multiselect answers as a set for no-op detection', () => {
+    const multiselectItemId = 'a1000000-0000-4000-8000-000000000006';
+    const multiselectSection: Section = {
+      ...section,
+      items: [
+        {
+          id: multiselectItemId,
+          sectionId,
+          key: 'tags',
+          type: 'multiselect',
+          label: 'Tags',
+          required: false,
+          sortOrder: 0,
+          options: [
+            { value: 'a', label: 'A' },
+            { value: 'b', label: 'B' },
+          ],
+          visibleWhen: null,
+          requiredWhen: null,
+        },
+      ],
+    };
+
+    expect(
+      buildInspectionSectionPatch(
+        multiselectSection,
+        [response(multiselectItemId, ['a', 'b'])],
+        {
+          [multiselectItemId]: {
+            value: ['b', 'a'],
+            comment: '',
+          },
+        },
+        { [multiselectItemId]: true },
+        2,
+      ),
+    ).toBeNull();
+  });
+
 });

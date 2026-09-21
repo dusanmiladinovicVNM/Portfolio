@@ -202,6 +202,20 @@ export function inspectionDraftResetKey(
   return `${bundle.inspection.id}:${sectionId}:${sectionRevision(bundle, sectionId)}`;
 }
 
+export function mergeInspectionStart(
+  current: InspectionBundleResponse,
+  targetInspectionId: string,
+  inspection: InspectionResponseDto,
+): InspectionBundleResponse {
+  if (inspection.id !== targetInspectionId) {
+    throw new Error(
+      'Inspection start response crossed its aggregate ownership boundary.',
+    );
+  }
+  if (current.inspection.id !== targetInspectionId) return current;
+  return { ...current, inspection };
+}
+
 export function mergeInspectionSectionSave(
   current: InspectionBundleResponse,
   targetInspectionId: string,
@@ -627,18 +641,15 @@ export function UnitInspections({
         { expectedVersion },
         inspectionResponseSchema,
       );
-      if (inspection.id !== targetInspectionId) {
-        throw new Error(
-          'Inspection start response crossed its aggregate ownership boundary.',
-        );
-      }
-
-      setBundle((current) => {
-        if (!current || current.inspection.id !== targetInspectionId) {
-          return current;
-        }
-        return { ...current, inspection };
-      });
+      setBundle((current) =>
+        current
+          ? mergeInspectionStart(
+              current,
+              targetInspectionId,
+              inspection,
+            )
+          : current,
+      );
       setInspections((current) =>
         current?.map((item) =>
           item.id === inspection.id ? inspection : item,
