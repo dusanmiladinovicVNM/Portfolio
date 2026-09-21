@@ -317,6 +317,7 @@ function buildHandler(
   overrides: {
     readonly portfolioRepository?: InMemoryPortfolioRepository;
     readonly unitTimelineRepository?: InMemoryUnitTimelineRepository;
+    readonly reportingRepository?: InMemoryReportingRepository;
   } = {},
 ) {
   return createPortfolioHttpHandler({
@@ -324,6 +325,8 @@ function buildHandler(
     meterRepository: new InMemoryMeterRepository(),
     unitTimelineRepository:
       overrides.unitTimelineRepository ?? new InMemoryUnitTimelineRepository(),
+    reportingRepository:
+      overrides.reportingRepository ?? new InMemoryReportingRepository(),
     assetRepository: new InMemoryAssetRepository(),
     assetInventoryRepository: new InMemoryAssetInventoryRepository(),
     assetServiceRepository: new InMemoryAssetServiceRepository(),
