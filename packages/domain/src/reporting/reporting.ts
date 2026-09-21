@@ -197,6 +197,57 @@ function normalizeCostSummary(
   return { currency, capex, opex, unclassified, total };
 }
 
+export function createReportingTermSummary(input: {
+  readonly id: TenancyTermVersionId;
+  readonly sourceType: TermSourceType;
+  readonly effectiveFrom: string;
+  readonly currency: string;
+  readonly baseRent: string;
+  readonly serviceCharge: string;
+  readonly utilitiesAdvance: string;
+  readonly parkingRent: string;
+  readonly otherRecurringCharge: string;
+  readonly recurringTotal: string;
+  readonly depositRequired: string;
+  readonly billingFrequency: BillingFrequency;
+}): ReportingTermSummary {
+  const baseRent = asMoneyAmount(input.baseRent);
+  const serviceCharge = asMoneyAmount(input.serviceCharge);
+  const utilitiesAdvance = asMoneyAmount(input.utilitiesAdvance);
+  const parkingRent = asMoneyAmount(input.parkingRent);
+  const otherRecurringCharge = asMoneyAmount(input.otherRecurringCharge);
+  const recurringTotal = asMoneyAmount(input.recurringTotal);
+  const expectedRecurring = moneyFromScaled(
+    scaledMoney(baseRent) +
+      scaledMoney(serviceCharge) +
+      scaledMoney(utilitiesAdvance) +
+      scaledMoney(parkingRent) +
+      scaledMoney(otherRecurringCharge),
+  );
+
+  if (recurringTotal !== expectedRecurring) {
+    throw new DomainError(
+      'REPORTING_INVALID_PROJECTION',
+      'Recurring total must equal all recurring charge components.',
+    );
+  }
+
+  return {
+    id: input.id,
+    sourceType: input.sourceType,
+    effectiveFrom: asDateOnly(input.effectiveFrom),
+    currency: asCurrencyCode(input.currency),
+    baseRent,
+    serviceCharge,
+    utilitiesAdvance,
+    parkingRent,
+    otherRecurringCharge,
+    recurringTotal,
+    depositRequired: asMoneyAmount(input.depositRequired),
+    billingFrequency: input.billingFrequency,
+  };
+}
+
 function normalizeOperations(
   input: ReportingCurrentOperations,
 ): ReportingCurrentOperations {
