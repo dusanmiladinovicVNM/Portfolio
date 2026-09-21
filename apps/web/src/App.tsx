@@ -87,7 +87,8 @@ function AuthenticatedShell({
   readonly sessionGateway: SessionGateway;
 }) {
   const [signOutError, setSignOutError] = useState<string | null>(null);
-  const { route, navigate } = useWorkspaceNavigation();
+  const { route, navigate, setNavigationBlocker } =
+    useWorkspaceNavigation();
   const mainRef = useRef<HTMLElement>(null);
   const focusKey =
     route.kind === 'dashboard'
@@ -173,6 +174,12 @@ function AuthenticatedShell({
                   ...(route.amendmentId
                     ? { amendmentId: route.amendmentId }
                     : {}),
+                  ...(route.inspectionId
+                    ? { inspectionId: route.inspectionId }
+                    : {}),
+                  ...(route.inspectionSectionId
+                    ? { inspectionSectionId: route.inspectionSectionId }
+                    : {}),
                 },
               )}
             >
@@ -220,6 +227,9 @@ function AuthenticatedShell({
             tenancyId={route.tenancyId}
             agreementId={route.agreementId}
             amendmentId={route.amendmentId}
+            inspectionId={route.inspectionId}
+            inspectionSectionId={route.inspectionSectionId}
+            setNavigationBlocker={setNavigationBlocker}
             unitId={route.unitId}
           />
         ) : null}

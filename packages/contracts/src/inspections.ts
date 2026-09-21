@@ -272,3 +272,39 @@ export type InspectionSignatureResponse = z.infer<
 export type InspectionFinalSnapshotResponse = z.infer<
   typeof inspectionFinalSnapshotResponseSchema
 >;
+export type SaveInspectionSectionRequest = z.infer<
+  typeof saveInspectionSectionRequestSchema
+>;
+
+
+export const inspectionListResponseSchema = z.object({
+  items: z.array(inspectionResponseSchema),
+});
+
+export const inspectionBundleResponseSchema = z.object({
+  inspection: inspectionResponseSchema,
+  schema: inspectionSchemaVersionResponseSchema,
+  sectionStates: z.array(inspectionSectionStateResponseSchema),
+  responses: z.array(inspectionItemResponseSchema),
+  findings: z.array(inspectionFindingResponseSchema),
+  evidence: z.array(inspectionEvidenceResponseSchema),
+  signatures: z.array(inspectionSignatureResponseSchema),
+  finalSnapshot: inspectionFinalSnapshotResponseSchema.nullable(),
+});
+
+export const saveInspectionSectionResponseSchema = z.object({
+  revision: z.number().int().nonnegative(),
+  contentRevision: z.number().int().nonnegative(),
+  responses: z.array(inspectionItemResponseSchema),
+  clearedItemIds: z.array(entityIdSchema),
+});
+
+export type InspectionListResponse = z.infer<
+  typeof inspectionListResponseSchema
+>;
+export type InspectionBundleResponse = z.infer<
+  typeof inspectionBundleResponseSchema
+>;
+export type SaveInspectionSectionResponse = z.infer<
+  typeof saveInspectionSectionResponseSchema
+>;

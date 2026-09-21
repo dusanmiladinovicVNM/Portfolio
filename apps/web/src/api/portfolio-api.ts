@@ -34,6 +34,18 @@ export interface PortfolioApi {
     path: string,
     options?: PortfolioApiRequestOptions,
   ): Promise<Blob>;
+  post<T>(
+    path: string,
+    body: unknown,
+    schema: ResponseSchema<T>,
+    options?: PortfolioApiRequestOptions,
+  ): Promise<T>;
+  patch<T>(
+    path: string,
+    body: unknown,
+    schema: ResponseSchema<T>,
+    options?: PortfolioApiRequestOptions,
+  ): Promise<T>;
 }
 
 export interface PortfolioApiOptions {
@@ -66,6 +78,37 @@ function requireAccessToken(options: PortfolioApiOptions): string {
     );
   }
   return accessToken;
+}
+
+async function parseDataResponse<T>(
+  response: Response,
+  schema: ResponseSchema<T>,
+): Promise<T> {
+  if (!response.ok) {
+    return throwApiResponseError(response);
+  }
+
+  const payload = await readJson(response);
+  if (typeof payload !== 'object' || payload === null || !('data' in payload)) {
+    throw new PortfolioApiError(
+      502,
+      'API_RESPONSE_INVALID',
+      'Portfolio API returned an invalid response envelope.',
+    );
+  }
+
+  const parsed = schema.safeParse(
+    (payload as { readonly data: unknown }).data,
+  );
+  if (!parsed.success) {
+    throw new PortfolioApiError(
+      502,
+      'API_RESPONSE_INVALID',
+      'Portfolio API returned data that does not match its contract.',
+    );
+  }
+
+  return parsed.data;
 }
 
 async function throwApiResponseError(response: Response): Promise<never> {
@@ -111,29 +154,7 @@ export function createPortfolioApi(options: PortfolioApiOptions): PortfolioApi {
         ...requestSignal(requestOptions),
       });
 
-      if (!response.ok) {
-        return throwApiResponseError(response);
-      }
-
-      const payload = await readJson(response);
-      if (typeof payload !== 'object' || payload === null || !('data' in payload)) {
-        throw new PortfolioApiError(
-          502,
-          'API_RESPONSE_INVALID',
-          'Portfolio API returned an invalid response envelope.',
-        );
-      }
-
-      const parsed = schema.safeParse((payload as { readonly data: unknown }).data);
-      if (!parsed.success) {
-        throw new PortfolioApiError(
-          502,
-          'API_RESPONSE_INVALID',
-          'Portfolio API returned data that does not match its contract.',
-        );
-      }
-
-      return parsed.data;
+      return parseDataResponse(response, schema);
     },
 
     async getBinary(
@@ -155,6 +176,46 @@ export function createPortfolioApi(options: PortfolioApiOptions): PortfolioApi {
       }
 
       return response.blob();
+    },
+
+    async post<T>(
+      path: string,
+      body: unknown,
+      schema: ResponseSchema<T>,
+      requestOptions?: PortfolioApiRequestOptions,
+    ): Promise<T> {
+      const accessToken = requireAccessToken(options);
+      const response = await fetchImpl(joinPath(options.baseUrl, path), {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        ...requestSignal(requestOptions),
+      });
+      return parseDataResponse(response, schema);
+    },
+
+    async patch<T>(
+      path: string,
+      body: unknown,
+      schema: ResponseSchema<T>,
+      requestOptions?: PortfolioApiRequestOptions,
+    ): Promise<T> {
+      const accessToken = requireAccessToken(options);
+      const response = await fetchImpl(joinPath(options.baseUrl, path), {
+        method: 'PATCH',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        ...requestSignal(requestOptions),
+      });
+      return parseDataResponse(response, schema);
     },
   };
 }

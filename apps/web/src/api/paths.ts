@@ -63,3 +63,23 @@ export function amendmentDocumentsPath(amendmentId: string): string {
 export function documentVersionContentPath(versionId: string): string {
   return `/document-versions/${encodeURIComponent(versionId)}/content`;
 }
+
+
+export function unitInspectionsPath(unitId: string): string {
+  return `/units/${encodeURIComponent(unitId)}/inspections`;
+}
+
+export function inspectionPath(inspectionId: string): string {
+  return `/inspections/${encodeURIComponent(inspectionId)}`;
+}
+
+export function inspectionStartPath(inspectionId: string): string {
+  return `${inspectionPath(inspectionId)}/start`;
+}
+
+export function inspectionSectionPath(
+  inspectionId: string,
+  sectionId: string,
+): string {
+  return `${inspectionPath(inspectionId)}/sections/${encodeURIComponent(sectionId)}`;
+}

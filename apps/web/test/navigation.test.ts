@@ -14,6 +14,8 @@ const unitId = '22222222-2222-4222-8222-222222222222';
 const tenancyId = '33333333-3333-4333-8333-333333333333';
 const agreementId = '44444444-4444-4444-8444-444444444444';
 const amendmentId = '55555555-5555-4555-8555-555555555555';
+const inspectionId = '66666666-6666-4666-8666-666666666666';
+const inspectionSectionId = '77777777-7777-4777-8777-777777777777';
 
 describe('workspace URL navigation', () => {
   it('preserves dashboard asOf through Property and Unit drill-down', () => {
@@ -143,6 +145,51 @@ describe('workspace URL navigation', () => {
     expect(isWorkspaceAsOf('')).toBe(false);
     expect(() => dashboardRoute('')).toThrow(
       'Workspace asOf must be a valid DateOnly value.',
+    );
+  });
+
+
+  it('deep-links one Inspection only inside the Inspections dossier tab', () => {
+    const selected = unitRoute(
+      propertyId,
+      unitId,
+      '2025-06-30',
+      'inspections',
+      { inspectionId, inspectionSectionId },
+    );
+
+    expect(workspaceRouteHref(selected)).toBe(
+      `/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionId=${inspectionSectionId}&asOf=2025-06-30`,
+    );
+
+    expect(
+      parseWorkspaceLocation(
+        `/properties/${propertyId}/units/${unitId}`,
+        `?tab=inspections&inspectionId=${inspectionId}&sectionId=${inspectionSectionId}&asOf=2025-06-30`,
+        '2026-09-21',
+      ),
+    ).toEqual({
+      kind: 'unit',
+      propertyId,
+      unitId,
+      tab: 'inspections',
+      inspectionId,
+      inspectionSectionId,
+      asOf: '2025-06-30',
+    });
+
+    expect(
+      workspaceRouteHref(
+        unitRoute(
+          propertyId,
+          unitId,
+          '2025-06-30',
+          'overview',
+          { inspectionId },
+        ),
+      ),
+    ).toBe(
+      `/properties/${propertyId}/units/${unitId}?tab=overview&asOf=2025-06-30`,
     );
   });
 

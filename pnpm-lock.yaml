@@ -199,6 +199,9 @@ importers:
       '@portfolio/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@portfolio/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@supabase/supabase-js':
         specifier: 2.116.0
         version: 2.116.0

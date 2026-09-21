@@ -11,9 +11,13 @@ import {
   unitRoute,
   type DossierTab,
 } from '../navigation/workspace-route.js';
-import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
+import type {
+  NavigateWorkspace,
+  SetNavigationBlocker,
+} from '../navigation/use-workspace-navigation.js';
 import { UnitAssets } from './UnitAssets.js';
 import { UnitDocuments } from './UnitDocuments.js';
+import { UnitInspections } from './UnitInspections.js';
 import { UnitOverview } from './UnitOverview.js';
 import { UnitTenancies } from './UnitTenancies.js';
 import { UnitContracts } from './UnitContracts.js';
@@ -28,7 +32,10 @@ interface UnitDossierProps {
   readonly tenancyId?: string | undefined;
   readonly agreementId?: string | undefined;
   readonly amendmentId?: string | undefined;
+  readonly inspectionId?: string | undefined;
+  readonly inspectionSectionId?: string | undefined;
   readonly navigate: NavigateWorkspace;
+  readonly setNavigationBlocker: SetNavigationBlocker;
 }
 
 export function UnitDossier({
@@ -40,7 +47,10 @@ export function UnitDossier({
   tenancyId,
   agreementId,
   amendmentId,
+  inspectionId,
+  inspectionSectionId,
   navigate,
+  setNavigationBlocker,
 }: UnitDossierProps) {
   const [unit, setUnit] = useState<UnitResponse | null>(null);
   const [identityError, setIdentityError] = useState<string | null>(null);
@@ -145,6 +155,19 @@ export function UnitDossier({
               Contracts
             </WorkspaceLink>
             <WorkspaceLink
+              ariaCurrent={tab === 'inspections' ? 'page' : undefined}
+              className={`dossier-tab ${tab === 'inspections' ? 'dossier-tab-active' : ''}`}
+              navigate={navigate}
+              route={unitRoute(propertyId, unitId, asOf, 'inspections', {
+                ...(inspectionId ? { inspectionId } : {}),
+                ...(inspectionSectionId
+                  ? { inspectionSectionId }
+                  : {}),
+              })}
+            >
+              Inspections
+            </WorkspaceLink>
+            <WorkspaceLink
               ariaCurrent={tab === 'timeline' ? 'page' : undefined}
               className={`dossier-tab ${tab === 'timeline' ? 'dossier-tab-active' : ''}`}
               navigate={navigate}
@@ -202,6 +225,18 @@ export function UnitDossier({
               agreementId={agreementId}
               amendmentId={amendmentId}
               navigate={navigate}
+            />
+          ) : null}
+          {tab === 'inspections' ? (
+            <UnitInspections
+              api={api}
+              asOf={asOf}
+              inspectionId={inspectionId}
+              inspectionSectionId={inspectionSectionId}
+              navigate={navigate}
+              propertyId={propertyId}
+              setNavigationBlocker={setNavigationBlocker}
+              unitId={unitId}
             />
           ) : null}
           {tab === 'timeline' ? <UnitTimeline api={api} unitId={unitId} /> : null}
