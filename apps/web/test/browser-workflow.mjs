@@ -111,6 +111,21 @@ async function currentUrl(sessionId) {
   return webdriver(`/session/${sessionId}/url`);
 }
 
+async function activeElement(sessionId) {
+  const value = await webdriver(`/session/${sessionId}/element/active`);
+  return elementId(value);
+}
+
+async function assertActiveHeading(sessionId, expectedText, label) {
+  const id = await activeElement(sessionId);
+  const [name, text] = await Promise.all([
+    webdriver(`/session/${sessionId}/element/${id}/name`),
+    webdriver(`/session/${sessionId}/element/${id}/text`),
+  ]);
+  assertEqual(name.toLowerCase(), 'h1', `${label} active element`);
+  assertEqual(text.trim(), expectedText, `${label} heading text`);
+}
+
 function assertEqual(actual, expected, label) {
   if (actual !== expected) {
     throw new Error(`${label}: expected ${expected}, got ${actual}`);
@@ -185,6 +200,12 @@ try {
     'xpath',
     "//h1[normalize-space()='Portfolio picture']",
   );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[normalize-space()='Skip to main content']",
+  );
+  await assertActiveHeading(sessionId, 'Portfolio picture', 'Dashboard focus');
   assertEqual(
     await currentUrl(sessionId),
     `${baseUrl}/dashboard?asOf=2025-06-30`,
@@ -199,6 +220,11 @@ try {
     sessionId,
     'xpath',
     "//h1[normalize-space()='Browser Test Property']",
+  );
+  await assertActiveHeading(
+    sessionId,
+    'Browser Test Property',
+    'Property route focus',
   );
   assertEqual(
     await currentUrl(sessionId),
@@ -215,6 +241,7 @@ try {
     'xpath',
     "//h1[normalize-space()='Unit 1A']",
   );
+  await assertActiveHeading(sessionId, 'Unit 1A', 'Unit route focus');
   assertEqual(
     await currentUrl(sessionId),
     `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=overview&asOf=2025-06-30`,
@@ -227,6 +254,7 @@ try {
     'xpath',
     "//h2[normalize-space()='Select the lifecycle record']",
   );
+  await assertActiveHeading(sessionId, 'Unit 1A', 'Contracts tab focus');
 
   await clickXpath(
     sessionId,

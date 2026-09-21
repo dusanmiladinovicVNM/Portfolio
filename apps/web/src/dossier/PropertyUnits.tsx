@@ -105,7 +105,7 @@ export function PropertyUnits({
           </p>
         ) : null}
         {!error && data === null ? (
-          <p className="muted">Loading Property and Units…</p>
+          <p className="muted" aria-live="polite">Loading Property and Units…</p>
         ) : null}
         {data?.units.length === 0 ? (
           <p className="muted">No Units for this Property.</p>

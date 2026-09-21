@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortfolioApi } from './api/portfolio-api.js';
 import type { AuthSession, SessionGateway } from './auth/session-gateway.js';
 import { PortfolioDashboard } from './dashboard/PortfolioDashboard.js';
@@ -67,7 +67,7 @@ function Login({ sessionGateway }: Pick<AppProps, 'sessionGateway'>) {
               value={password}
             />
           </label>
-          {error ? <p className="form-error">{error}</p> : null}
+          {error ? <p className="form-error" role="alert">{error}</p> : null}
           <button disabled={submitting} type="submit">
             {submitting ? 'Signing in…' : 'Sign in'}
           </button>
@@ -88,6 +88,13 @@ function AuthenticatedShell({
 }) {
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const { route, navigate } = useWorkspaceNavigation();
+  const mainRef = useRef<HTMLElement>(null);
+  const focusKey =
+    route.kind === 'dashboard'
+      ? 'dashboard'
+      : route.kind === 'property'
+        ? `property:${route.propertyId}`
+        : `unit:${route.propertyId}:${route.unitId}:${route.tab}`;
   const api = useMemo(
     () =>
       createPortfolioApi({
@@ -96,6 +103,17 @@ function AuthenticatedShell({
       }),
     [apiBaseUrl, session.accessToken],
   );
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const heading = mainRef.current?.querySelector('h1');
+      if (!(heading instanceof HTMLElement)) return;
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusKey]);
 
   async function signOut() {
     setSignOutError(null);
@@ -108,6 +126,9 @@ function AuthenticatedShell({
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#workspace-main">
+        Skip to main content
+      </a>
       <aside className="sidebar">
         <div>
           <p className="brand">Portfolio</p>
@@ -157,11 +178,16 @@ function AuthenticatedShell({
           <button className="button-secondary" onClick={signOut} type="button">
             Sign out
           </button>
-          {signOutError ? <p className="form-error">{signOutError}</p> : null}
+          {signOutError ? <p className="form-error" role="alert">{signOutError}</p> : null}
         </div>
       </aside>
 
-      <main className="workspace">
+      <main
+        className="workspace"
+        id="workspace-main"
+        ref={mainRef}
+        tabIndex={-1}
+      >
         {route.kind === 'dashboard' ? (
           <PortfolioDashboard api={api} asOf={route.asOf} navigate={navigate} />
         ) : null}

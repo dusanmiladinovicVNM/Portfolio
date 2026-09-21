@@ -116,7 +116,11 @@ export function UnitTenancies({
               </dl>
 
               {tenancy.parties.length > 0 ? (
-                <ul className="role-list" aria-label="Tenancy party roles">
+                <ul
+                  aria-label="Tenancy party roles"
+                  aria-live="polite"
+                  className="role-list"
+                >
                   {tenancy.parties.map((party) => (
                     <li key={party.id}>
                       <strong>

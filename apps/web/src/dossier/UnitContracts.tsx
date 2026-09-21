@@ -471,7 +471,11 @@ export function UnitContracts({
                       <div><dt>Parties</dt><dd>{agreement.parties.length}</dd></div>
                     </dl>
                     {agreement.parties.length > 0 ? (
-                      <ul className="role-list contract-party-list">
+                      <ul
+                        aria-label="Agreement party roles"
+                        aria-live="polite"
+                        className="role-list contract-party-list"
+                      >
                         {agreement.parties.map((party) => (
                           <li key={party.id}>
                             <strong>
