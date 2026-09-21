@@ -6,9 +6,13 @@ import type {
 } from '@portfolio/contracts';
 import { inspectionSectionPath } from '../src/api/paths.js';
 import {
+  canEditInspectionSection,
   inspectionDraftResetKey,
+  inspectionSectionOperationKey,
   mergeInspectionSectionSave,
   mergeInspectionStart,
+  withInspectionOperationFinished,
+  withInspectionOperationStarted,
 } from '../src/dossier/UnitInspections.js';
 
 const inspectionA = 'b1000000-0000-4000-8000-000000000001';
@@ -229,6 +233,65 @@ describe('Inspection async ownership', () => {
       merged.sectionStates.find((state) => state.sectionId === section1)
         ?.revision,
     ).toBe(2);
+  });
+
+
+  it('keeps S1 locked while S1 and S2 saves are concurrently in flight', () => {
+    const s1Key = inspectionSectionOperationKey(inspectionA, section1);
+    const s2Key = inspectionSectionOperationKey(inspectionA, section2);
+
+    let inFlight: ReadonlySet<string> = new Set();
+    inFlight = withInspectionOperationStarted(inFlight, s1Key);
+    inFlight = withInspectionOperationStarted(inFlight, s2Key);
+
+    expect(
+      canEditInspectionSection(
+        'in_progress',
+        inFlight,
+        inspectionA,
+        section1,
+      ),
+    ).toBe(false);
+    expect(
+      canEditInspectionSection(
+        'in_progress',
+        inFlight,
+        inspectionA,
+        section2,
+      ),
+    ).toBe(false);
+
+    inFlight = withInspectionOperationFinished(inFlight, s1Key);
+
+    expect(
+      canEditInspectionSection(
+        'in_progress',
+        inFlight,
+        inspectionA,
+        section1,
+      ),
+    ).toBe(true);
+    expect(
+      canEditInspectionSection(
+        'in_progress',
+        inFlight,
+        inspectionA,
+        section2,
+      ),
+    ).toBe(false);
+  });
+
+  it('finishing S1 never clears the independently pending S2 operation', () => {
+    const s1Key = inspectionSectionOperationKey(inspectionA, section1);
+    const s2Key = inspectionSectionOperationKey(inspectionA, section2);
+
+    let inFlight: ReadonlySet<string> = new Set();
+    inFlight = withInspectionOperationStarted(inFlight, s1Key);
+    inFlight = withInspectionOperationStarted(inFlight, s2Key);
+    inFlight = withInspectionOperationFinished(inFlight, s1Key);
+
+    expect(inFlight.has(s1Key)).toBe(false);
+    expect(inFlight.has(s2Key)).toBe(true);
   });
 
 });

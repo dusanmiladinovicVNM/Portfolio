@@ -202,6 +202,47 @@ export function inspectionDraftResetKey(
   return `${bundle.inspection.id}:${sectionId}:${sectionRevision(bundle, sectionId)}`;
 }
 
+export function inspectionSectionOperationKey(
+  inspectionId: string,
+  sectionId: string,
+): string {
+  return `${inspectionId}:${sectionId}`;
+}
+
+export function withInspectionOperationStarted(
+  current: ReadonlySet<string>,
+  key: string,
+): ReadonlySet<string> {
+  if (current.has(key)) return current;
+  const next = new Set(current);
+  next.add(key);
+  return next;
+}
+
+export function withInspectionOperationFinished(
+  current: ReadonlySet<string>,
+  key: string,
+): ReadonlySet<string> {
+  if (!current.has(key)) return current;
+  const next = new Set(current);
+  next.delete(key);
+  return next;
+}
+
+export function canEditInspectionSection(
+  status: InspectionResponseDto['status'],
+  inFlightSectionSaves: ReadonlySet<string>,
+  inspectionId: string,
+  sectionId: string,
+): boolean {
+  return (
+    status === 'in_progress' &&
+    !inFlightSectionSaves.has(
+      inspectionSectionOperationKey(inspectionId, sectionId),
+    )
+  );
+}
+
 export function mergeInspectionStart(
   current: InspectionBundleResponse,
   targetInspectionId: string,
@@ -438,12 +479,12 @@ export function UnitInspections({
   const [bundleError, setBundleError] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftByItem>({});
   const [touched, setTouched] = useState<TouchedByItem>({});
-  const [savingTarget, setSavingTarget] = useState<{
-    readonly inspectionId: string;
-    readonly sectionId: string;
-  } | null>(null);
-  const [startingInspectionId, setStartingInspectionId] =
-    useState<string | null>(null);
+  const [inFlightSectionSaves, setInFlightSectionSaves] =
+    useState<ReadonlySet<string>>(() => new Set());
+  const inFlightSectionSavesRef = useRef<Set<string>>(new Set());
+  const [inFlightStarts, setInFlightStarts] =
+    useState<ReadonlySet<string>>(() => new Set());
+  const inFlightStartsRef = useRef<Set<string>>(new Set());
   const [saveError, setSaveError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const activeInspectionIdRef = useRef(inspectionId);
@@ -594,17 +635,31 @@ export function UnitInspections({
         )
       : null;
 
-  const editable = bundle?.inspection.status === 'in_progress';
   const currentInspectionId = bundle?.inspection.id;
   const currentSectionId = selectedSection?.id;
+  const currentSectionOperationKey =
+    currentInspectionId !== undefined && currentSectionId !== undefined
+      ? inspectionSectionOperationKey(
+          currentInspectionId,
+          currentSectionId,
+        )
+      : null;
   const starting =
     currentInspectionId !== undefined &&
-    startingInspectionId === currentInspectionId;
+    inFlightStarts.has(currentInspectionId);
   const saving =
+    currentSectionOperationKey !== null &&
+    inFlightSectionSaves.has(currentSectionOperationKey);
+  const editable =
+    bundle !== null &&
     currentInspectionId !== undefined &&
     currentSectionId !== undefined &&
-    savingTarget?.inspectionId === currentInspectionId &&
-    savingTarget.sectionId === currentSectionId;
+    canEditInspectionSection(
+      bundle.inspection.status,
+      inFlightSectionSaves,
+      currentInspectionId,
+      currentSectionId,
+    );
   const hasUnsavedChanges = patch !== null;
 
   function isActiveInspection(targetInspectionId: string): boolean {
@@ -643,11 +698,16 @@ export function UnitInspections({
   }
 
   async function startInspection() {
-    if (!bundle || starting) return;
+    if (!bundle) return;
 
     const targetInspectionId = bundle.inspection.id;
+    if (inFlightStartsRef.current.has(targetInspectionId)) return;
+
     const expectedVersion = bundle.inspection.version;
-    setStartingInspectionId(targetInspectionId);
+    inFlightStartsRef.current.add(targetInspectionId);
+    setInFlightStarts((current) =>
+      withInspectionOperationStarted(current, targetInspectionId),
+    );
     setSaveError(null);
 
     try {
@@ -677,24 +737,30 @@ export function UnitInspections({
         cause instanceof Error ? cause.message : 'Inspection could not start.',
       );
     } finally {
-      setStartingInspectionId((current) =>
-        current === targetInspectionId ? null : current,
+      inFlightStartsRef.current.delete(targetInspectionId);
+      setInFlightStarts((current) =>
+        withInspectionOperationFinished(current, targetInspectionId),
       );
     }
   }
 
   async function saveSection(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!bundle || !selectedSection || !patch || saving) return;
+    if (!bundle || !selectedSection || !patch) return;
 
     const targetInspectionId = bundle.inspection.id;
     const targetSectionId = selectedSection.id;
-    const requestPatch = patch;
+    const targetKey = inspectionSectionOperationKey(
+      targetInspectionId,
+      targetSectionId,
+    );
+    if (inFlightSectionSavesRef.current.has(targetKey)) return;
 
-    setSavingTarget({
-      inspectionId: targetInspectionId,
-      sectionId: targetSectionId,
-    });
+    const requestPatch = patch;
+    inFlightSectionSavesRef.current.add(targetKey);
+    setInFlightSectionSaves((current) =>
+      withInspectionOperationStarted(current, targetKey),
+    );
     setSaveError(null);
     setConflict(false);
 
@@ -735,11 +801,9 @@ export function UnitInspections({
         );
       }
     } finally {
-      setSavingTarget((current) =>
-        current?.inspectionId === targetInspectionId &&
-        current.sectionId === targetSectionId
-          ? null
-          : current,
+      inFlightSectionSavesRef.current.delete(targetKey);
+      setInFlightSectionSaves((current) =>
+        withInspectionOperationFinished(current, targetKey),
       );
     }
   }
@@ -749,10 +813,16 @@ export function UnitInspections({
 
     const targetInspectionId = inspectionId;
     const targetSectionId = selectedSection.id;
-    setSavingTarget({
-      inspectionId: targetInspectionId,
-      sectionId: targetSectionId,
-    });
+    const targetKey = inspectionSectionOperationKey(
+      targetInspectionId,
+      targetSectionId,
+    );
+    if (inFlightSectionSavesRef.current.has(targetKey)) return;
+
+    inFlightSectionSavesRef.current.add(targetKey);
+    setInFlightSectionSaves((current) =>
+      withInspectionOperationStarted(current, targetKey),
+    );
     setSaveError(null);
 
     try {
@@ -768,11 +838,9 @@ export function UnitInspections({
           : 'Inspection could not be reloaded.',
       );
     } finally {
-      setSavingTarget((current) =>
-        current?.inspectionId === targetInspectionId &&
-        current.sectionId === targetSectionId
-          ? null
-          : current,
+      inFlightSectionSavesRef.current.delete(targetKey);
+      setInFlightSectionSaves((current) =>
+        withInspectionOperationFinished(current, targetKey),
       );
     }
   }
