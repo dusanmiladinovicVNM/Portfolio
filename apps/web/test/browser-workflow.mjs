@@ -118,16 +118,25 @@ async function clearXpath(sessionId, xpath) {
   });
 }
 
-async function setValueXpath(sessionId, xpath, value) {
+async function typeXpath(sessionId, xpath, value) {
   const id = await waitForElement(sessionId, 'xpath', xpath);
-  const element = { 'element-6066-11e4-a52e-4f735466cecf': id };
-  await webdriver(`/session/${sessionId}/execute/sync`, {
+  await webdriver(`/session/${sessionId}/element/${id}/clear`, {
     method: 'POST',
-    body: {
-      script:
-        "arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('change', { bubbles: true }));",
-      args: [element, value],
-    },
+    body: {},
+  });
+  await webdriver(`/session/${sessionId}/element/${id}/value`, {
+    method: 'POST',
+    body: { text: value, value: [...value] },
+  });
+}
+
+async function selectOptionXpath(sessionId, selectXpath, optionValue) {
+  const optionXpath =
+    `${selectXpath}/option[@value='${optionValue}']`;
+  const id = await waitForElement(sessionId, 'xpath', optionXpath);
+  await webdriver(`/session/${sessionId}/element/${id}/click`, {
+    method: 'POST',
+    body: {},
   });
 }
 
@@ -563,12 +572,12 @@ try {
 
   const conditionSelect =
     "//div[contains(@class,'inspection-item')][.//span[contains(normalize-space(),'Condition')]]//select";
-  await setValueXpath(sessionId, conditionSelect, 'damaged');
+  await selectOptionXpath(sessionId, conditionSelect, 'damaged');
 
   const notesInput =
     "//div[contains(@class,'inspection-item')][.//span[contains(normalize-space(),'Damage notes')]]//input[@type='text']";
   await waitForElement(sessionId, 'xpath', notesInput);
-  await setValueXpath(sessionId, notesInput, 'Window scratch');
+  await typeXpath(sessionId, notesInput, 'Window scratch');
 
   await clickAndDismissConfirm(
     sessionId,
@@ -601,7 +610,7 @@ try {
     "//a[contains(@class,'inspection-section-link')][.//small[normalize-space()='revision 1']]",
   );
 
-  await setValueXpath(sessionId, notesInput, 'conflict-edit');
+  await typeXpath(sessionId, notesInput, 'conflict-edit');
   await clickXpath(
     sessionId,
     "//button[normalize-space()='Save section']",
