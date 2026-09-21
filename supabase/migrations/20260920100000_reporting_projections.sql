@@ -209,6 +209,7 @@ with_terms as (
     order by tv.effective_from desc, tv.id
     limit 1
   ) terms on cs.tenancy_id is not null
+    and cs.contract_coverage_status = 'effective'
 ),
 maintenance_ops as (
   select
@@ -248,8 +249,10 @@ asset_ops as (
 service_plan_ops as (
   select
     u.id as unit_id,
-    count(sp.id) filter (where sp.status = 'active')::bigint
-      as active_service_plan_count
+    count(sp.id) filter (
+      where sp.status = 'active'
+        and a.status not in ('retired', 'replaced')
+    )::bigint as active_service_plan_count
   from public.units u
   left join public.assets a on a.unit_id = u.id
   left join public.asset_service_plans sp on sp.asset_id = a.id
