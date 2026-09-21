@@ -160,7 +160,10 @@ export async function createDocumentCommand(
 }
 
 export async function assertDocumentVersionStorageIntegrity(
-  deps: Pick<UploadDocumentVersionDependencies, 'documentRepository' | 'fileStorage'>,
+  deps: {
+    readonly documentRepository: DocumentRepository;
+    readonly fileStorage: Pick<FileStorageWritePort, 'stat'>;
+  },
   version: DocumentVersion,
 ): Promise<StorageObjectMetadata> {
   const reference = await deps.documentRepository.getStorageReference(version.id);
