@@ -12,8 +12,11 @@ import {
   type VerifiedIdentity,
 } from '@portfolio/application';
 import {
+  asPropertyId,
   asUnitId,
   asUserId,
+  createPortfolioDashboard,
+  createUnitReportingOverview,
   createUnitTimelineEvent,
   type DateOnly,
   type LeaseAgreement,
@@ -566,6 +569,211 @@ describe('Portfolio HTTP boundary', () => {
       inspectorIdentity,
     );
     expect(invalidRange.status).toBe(400);
+  });
+
+  it('requires explicit asOf and returns reporting projections to portfolio readers', async () => {
+    const portfolioRepository = new InMemoryPortfolioRepository();
+    const reportingRepository = new InMemoryReportingRepository();
+    const handler = buildHandler(
+      [
+        '72000000-0000-4000-8000-000000000001',
+        '72000000-0000-4000-8000-000000000002',
+      ],
+      new FixedClock(),
+      { portfolioRepository, reportingRepository },
+    );
+
+    const propertyResponse = await handler(
+      new Request('https://portfolio.test/properties', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...propertyBody,
+          code: 'PROP-REPORTING',
+          name: 'Reporting Property',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(propertyResponse.status).toBe(201);
+
+    const unitResponse = await handler(
+      new Request('https://portfolio.test/units', {
+        method: 'POST',
+        body: JSON.stringify({
+          propertyId: '72000000-0000-4000-8000-000000000001',
+          code: 'UNIT-REPORTING',
+          unitNumber: 'R-1',
+          unitType: 'apartment',
+          areaM2: 55,
+          rooms: 2,
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(unitResponse.status).toBe(201);
+
+    const propertyId = asPropertyId(
+      '72000000-0000-4000-8000-000000000001',
+    );
+    const unitId = asUnitId(
+      '72000000-0000-4000-8000-000000000002',
+    );
+
+    reportingRepository.unitOverviews.set(
+      unitId,
+      createUnitReportingOverview({
+        asOf: '2026-09-21',
+        unitId,
+        propertyId,
+        propertyCode: 'PROP-REPORTING',
+        propertyName: 'Reporting Property',
+        unitCode: 'UNIT-REPORTING',
+        unitNumber: 'R-1',
+        unitType: 'apartment',
+        floor: null,
+        areaM2: 55,
+        rooms: 2,
+        occupancyStatus: 'vacant',
+        tenancy: null,
+        contract: {
+          coverageStatus: 'missing',
+          agreementId: null,
+          agreementCode: null,
+          agreementCurrentStatus: null,
+          effectiveFrom: null,
+          effectiveTo: null,
+          signedAt: null,
+          effectiveTerms: null,
+        },
+        currentOperations: {
+          openMaintenanceIssueCount: 2,
+          urgentMaintenanceIssueCount: 1,
+          openMaintenanceWorkOrderCount: 1,
+          locatedAssetCount: 3,
+          activeAssetCount: 2,
+          inactiveAssetCount: 1,
+          activeServicePlanCount: 1,
+          openWarrantyClaimCount: 0,
+          activeMeterCount: 1,
+        },
+        unitAttributedCostsByCurrency: [
+          {
+            currency: 'CHF',
+            capex: '100.00',
+            opex: '25.50',
+            unclassified: '0.00',
+            total: '125.50',
+          },
+        ],
+      }),
+    );
+
+    reportingRepository.dashboard = createPortfolioDashboard({
+      asOf: '2026-09-21',
+      propertyCount: 1,
+      unitCount: 1,
+      occupiedUnitCount: 0,
+      plannedUnitCount: 0,
+      vacantUnitCount: 1,
+      currentOperations: {
+        openMaintenanceIssueCount: 2,
+        urgentMaintenanceIssueCount: 1,
+        openMaintenanceWorkOrderCount: 1,
+        locatedAssetCount: 3,
+        activeAssetCount: 2,
+        inactiveAssetCount: 1,
+        activeServicePlanCount: 1,
+        openWarrantyClaimCount: 0,
+        activeMeterCount: 1,
+      },
+      portfolioCostsByCurrency: [
+        {
+          currency: 'CHF',
+          capex: '100.00',
+          opex: '25.50',
+          unclassified: '0.00',
+          total: '125.50',
+        },
+      ],
+      properties: [
+        {
+          propertyId,
+          propertyCode: 'PROP-REPORTING',
+          propertyName: 'Reporting Property',
+          unitCount: 1,
+          occupiedUnitCount: 0,
+          plannedUnitCount: 0,
+          vacantUnitCount: 1,
+          currentOpenMaintenanceIssueCount: 2,
+          currentUrgentMaintenanceIssueCount: 1,
+          currentLocatedAssetCount: 3,
+          currentActiveAssetCount: 2,
+          currentActiveMeterCount: 1,
+        },
+      ],
+    });
+
+    const missingAsOf = await handler(
+      new Request(
+        'https://portfolio.test/units/72000000-0000-4000-8000-000000000002/overview',
+      ),
+      inspectorIdentity,
+    );
+    expect(missingAsOf.status).toBe(400);
+
+    const overview = await handler(
+      new Request(
+        'https://portfolio.test/units/72000000-0000-4000-8000-000000000002/overview?asOf=2026-09-21',
+      ),
+      inspectorIdentity,
+    );
+    expect(overview.status).toBe(200);
+    expect(reportingRepository.lastUnitAsOf).toBe('2026-09-21');
+    expect(await overview.json()).toMatchObject({
+      data: {
+        asOf: '2026-09-21',
+        occupancyStatus: 'vacant',
+        currentOperations: {
+          openMaintenanceIssueCount: 2,
+          urgentMaintenanceIssueCount: 1,
+        },
+        unitAttributedCostsByCurrency: [
+          {
+            currency: 'CHF',
+            total: '125.50',
+          },
+        ],
+      },
+    });
+
+    const dashboard = await handler(
+      new Request(
+        'https://portfolio.test/reporting/dashboard?asOf=2026-09-21',
+      ),
+      inspectorIdentity,
+    );
+    expect(dashboard.status).toBe(200);
+    expect(reportingRepository.lastDashboardAsOf).toBe('2026-09-21');
+    expect(await dashboard.json()).toMatchObject({
+      data: {
+        asOf: '2026-09-21',
+        propertyCount: 1,
+        unitCount: 1,
+        vacantUnitCount: 1,
+        portfolioCostsByCurrency: [
+          {
+            currency: 'CHF',
+            total: '125.50',
+          },
+        ],
+        properties: [
+          {
+            propertyCode: 'PROP-REPORTING',
+            vacantUnitCount: 1,
+          },
+        ],
+      },
+    });
   });
 
   it('runs Asset Registry create, lifecycle and replacement through HTTP', async () => {
