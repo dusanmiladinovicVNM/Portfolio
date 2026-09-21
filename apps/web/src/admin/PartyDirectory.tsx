@@ -56,7 +56,7 @@ export function PartyDirectory({ api, asOf }: PartyDirectoryProps) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!submission.tryStart()) return;
+    if (parties === null || !submission.tryStart()) return;
 
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
@@ -288,10 +288,14 @@ export function PartyDirectory({ api, asOf }: PartyDirectoryProps) {
               </span>
               <button
                 className="button-primary"
-                disabled={submitting}
+                disabled={submitting || parties === null}
                 type="submit"
               >
-                {submitting ? 'Creating…' : 'Create Party'}
+                {parties === null
+                  ? 'Loading directory…'
+                  : submitting
+                    ? 'Creating…'
+                    : 'Create Party'}
               </button>
             </div>
           </form>

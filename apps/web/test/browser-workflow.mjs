@@ -324,6 +324,11 @@ try {
 
   await clickXpath(sessionId, "//aside//a[normalize-space()='Parties']");
   await waitForElement(sessionId, 'xpath', "//h1[normalize-space()='Parties']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'party-card')][.//h3[normalize-space()='Browser Landlord Ltd']]",
+  );
   assertEqual(
     await currentUrl(sessionId),
     baseUrl + '/parties?asOf=2025-06-30',
@@ -471,6 +476,11 @@ try {
     await currentUrl(sessionId),
     setupUnitUrl,
     'Created Unit Spaces URL',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[normalize-space()='No Spaces defined for this Unit.']",
   );
 
   await typeXpath(

@@ -61,7 +61,7 @@ export function UnitSpaces({ api, unitId }: UnitSpacesProps) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!submission.tryStart()) return;
+    if (spaces === null || !submission.tryStart()) return;
 
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
@@ -163,10 +163,14 @@ export function UnitSpaces({ api, unitId }: UnitSpacesProps) {
             </span>
             <button
               className="button-primary"
-              disabled={submitting}
+              disabled={submitting || spaces === null}
               type="submit"
             >
-              {submitting ? 'Creating…' : 'Create Space'}
+              {spaces === null
+                ? 'Loading Spaces…'
+                : submitting
+                  ? 'Creating…'
+                  : 'Create Space'}
             </button>
           </div>
         </form>
