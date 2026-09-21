@@ -74,3 +74,14 @@ Tenancy and Agreement records keep Party IDs as canonical references. The web
 client resolves the small set needed by the active lifecycle surface through a
 single batch `GET /parties?id=...&id=...` read. It does not fetch one Party per
 row and it does not load the global Party register merely to resolve names.
+
+
+## Browser workflow gate
+
+CI runs a real headless-Chrome workflow against a test-only Vite harness using
+the same production React components and URL navigation code. The harness
+supplies deterministic in-memory auth/API responses only; it does not replace
+the router or dossier components. The workflow clicks Dashboard → Property →
+Unit → Contracts → Tenancy → Agreement, verifies the deep-link identity and
+business date, refreshes the browser, and requires the final dossier DOM to be
+reconstructed from the URL.

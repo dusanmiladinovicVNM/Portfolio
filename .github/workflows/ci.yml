@@ -56,5 +56,8 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
+      - name: Browser navigation workflow
+        run: pnpm --filter @portfolio/web test:browser
+
       - name: PostgreSQL integration tests
         run: pnpm test:integration
