@@ -1,3 +1,13 @@
+import type {
+  CreatePartyRequest,
+  CreatePropertyRequest,
+  CreateSpaceRequest,
+  CreateUnitRequest,
+  PartyResponse,
+  PropertyResponse,
+  SpaceResponse,
+  UnitResponse,
+} from '@portfolio/contracts';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
 import type { SessionGateway } from './auth/session-gateway.js';
@@ -35,19 +45,10 @@ const setupPartyId = 'b1000000-0000-4000-8000-000000000004';
 const setupPartyEmailId = 'b1000000-0000-4000-8000-000000000005';
 const setupPartyAddressId = 'b1000000-0000-4000-8000-000000000006';
 
-let setupProperty: typeof property | null = null;
-let setupUnit: typeof unit | null = null;
-let setupSpace: {
-  id: string;
-  unitId: string;
-  code: string;
-  name: string;
-  spaceType: string;
-  areaM2: number | null;
-  sortOrder: number;
-  active: boolean;
-} | null = null;
-let setupParty: (typeof parties)[number] | null = null;
+let setupProperty: PropertyResponse | null = null;
+let setupUnit: UnitResponse | null = null;
+let setupSpace: SpaceResponse | null = null;
+let setupParty: PartyResponse | null = null;
 
 const operations = {
   openMaintenanceIssueCount: 0,
@@ -420,7 +421,7 @@ globalThis.fetch = async (
 
   if (path === '/properties' && init?.method === 'POST') {
     requirePortfolioAuth(init);
-    const body = JSON.parse(String(init.body)) as Omit<typeof property, 'id' | 'status'>;
+    const body = JSON.parse(String(init.body)) as CreatePropertyRequest;
     setupProperty = {
       ...body,
       id: setupPropertyId,
@@ -440,16 +441,7 @@ globalThis.fetch = async (
 
   if (path === '/units' && init?.method === 'POST') {
     requirePortfolioAuth(init);
-    const body = JSON.parse(String(init.body)) as {
-      propertyId: string;
-      code: string;
-      unitNumber: string;
-      unitType: string;
-      floor?: string | null;
-      areaM2?: number | null;
-      rooms?: number | null;
-      notes?: string;
-    };
+    const body = JSON.parse(String(init.body)) as CreateUnitRequest;
     if (body.propertyId !== setupPropertyId) {
       throw new Error('Setup Unit was created for the wrong Property.');
     }
@@ -478,14 +470,7 @@ globalThis.fetch = async (
 
   if (path === '/spaces' && init?.method === 'POST') {
     requirePortfolioAuth(init);
-    const body = JSON.parse(String(init.body)) as {
-      unitId: string;
-      code: string;
-      name: string;
-      spaceType: string;
-      areaM2?: number | null;
-      sortOrder?: number;
-    };
+    const body = JSON.parse(String(init.body)) as CreateSpaceRequest;
     if (body.unitId !== setupUnitId) {
       throw new Error('Setup Space was created for the wrong Unit.');
     }
@@ -504,31 +489,7 @@ globalThis.fetch = async (
 
   if (path === '/parties' && init?.method === 'POST') {
     requirePortfolioAuth(init);
-    const body = JSON.parse(String(init.body)) as {
-      code: string;
-      partyType: 'person' | 'company';
-      displayName?: string;
-      legalName?: string;
-      firstName?: string;
-      middleName?: string | null;
-      lastName?: string;
-      contactPoints?: Array<{
-        contactType: string;
-        value: string;
-        label?: string | null;
-        isPrimary?: boolean;
-      }>;
-      addresses?: Array<{
-        addressType: string;
-        line1: string;
-        line2?: string | null;
-        postalCode: string;
-        city: string;
-        region?: string | null;
-        countryCode: string;
-        isPrimary?: boolean;
-      }>;
-    };
+    const body = JSON.parse(String(init.body)) as CreatePartyRequest;
     if (body.partyType !== 'company' || !body.legalName) {
       throw new Error('Browser setup expects a Company Party.');
     }
