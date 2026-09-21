@@ -68,14 +68,13 @@ function answerEqual(
   return left === right;
 }
 
-function normalizedAnswer(
-  item: SchemaItem,
+export function normalizedInspectionAnswer(
+  _item: SchemaItem,
   value: InspectionAnswerValue | undefined,
 ): InspectionAnswerValue | undefined {
   if (value === undefined) return undefined;
   if (Array.isArray(value)) return value.length === 0 ? undefined : value;
   if (typeof value === 'string') {
-    if (item.type === 'text' || item.type === 'textarea') return value;
     return value.trim() === '' ? undefined : value;
   }
   return value;
@@ -124,7 +123,7 @@ function valuesByFieldKey(
   }
 
   for (const item of section.items) {
-    const value = normalizedAnswer(item, draft[item.id]?.value);
+    const value = normalizedInspectionAnswer(item, draft[item.id]?.value);
     if (value === undefined) {
       values.delete(item.key.toLowerCase());
     } else {
@@ -135,7 +134,7 @@ function valuesByFieldKey(
   return values;
 }
 
-function buildPatch(
+export function buildInspectionSectionPatch(
   section: SchemaSection,
   responses: readonly InspectionItemResponse[],
   draft: DraftByItem,
@@ -151,7 +150,7 @@ function buildPatch(
 
     const before = canonical.get(item.id);
     const entry = draft[item.id] ?? { value: undefined, comment: '' };
-    const nextValue = normalizedAnswer(item, entry.value);
+    const nextValue = normalizedInspectionAnswer(item, entry.value);
     const nextComment = entry.comment.trim() || null;
 
     if (nextValue === undefined) {
@@ -325,7 +324,7 @@ function Field({
       <label className="inspection-comment">
         Comment
         <textarea
-          disabled={disabled || normalizedAnswer(item, entry.value) === undefined}
+          disabled={disabled || normalizedInspectionAnswer(item, entry.value) === undefined}
           onChange={(event) =>
             onChange({ ...entry, comment: event.currentTarget.value })
           }
@@ -480,7 +479,7 @@ export function UnitInspections({
 
   const patch =
     bundle && selectedSection
-      ? buildPatch(
+      ? buildInspectionSectionPatch(
           selectedSection,
           bundle.responses,
           draft,
@@ -525,6 +524,11 @@ export function UnitInspections({
       );
       setBundle((current) =>
         current ? { ...current, inspection } : current,
+      );
+      setInspections((current) =>
+        current?.map((item) =>
+          item.id === inspection.id ? inspection : item,
+        ) ?? current,
       );
     } catch (cause) {
       setSaveError(
