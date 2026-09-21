@@ -18,6 +18,7 @@ import {
   asLeaseAgreementId,
   asLeaseAmendmentId,
   asPropertyId,
+  asTenancyId,
   asUnitId,
   asUserId,
   createPortfolioDashboard,
