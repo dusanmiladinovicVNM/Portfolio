@@ -341,8 +341,8 @@ export function createUnitReportingOverview(input: {
   readonly areaM2: number | null;
   readonly rooms: number | null;
   readonly occupancyStatus: ReportingOccupancyStatus;
-  readonly tenancy: ReportingTenancySummary | null;
-  readonly contract: ReportingContractSummary;
+  readonly tenancy: ReportingTenancySummaryInput | null;
+  readonly contract: ReportingContractSummaryInput;
   readonly currentOperations: ReportingCurrentOperations;
   readonly unitAttributedCostsByCurrency: readonly Parameters<
     typeof normalizeCostSummary
@@ -388,15 +388,15 @@ export function createUnitReportingOverview(input: {
         };
 
   const effectiveTerms =
-    contract.effectiveTerms === null
+    input.contract.effectiveTerms === null
       ? null
-      : createReportingTermSummary(contract.effectiveTerms);
+      : createReportingTermSummary(input.contract.effectiveTerms);
 
   let agreementCurrentStatus: LeaseAgreementStatus | null = null;
-  if (contract.agreementCurrentStatus !== null) {
+  if (input.contract.agreementCurrentStatus !== null) {
     if (
       !LEASE_AGREEMENT_STATUSES.includes(
-        contract.agreementCurrentStatus as LeaseAgreementStatus,
+        input.contract.agreementCurrentStatus as LeaseAgreementStatus,
       )
     ) {
       throw new DomainError(
@@ -405,33 +405,33 @@ export function createUnitReportingOverview(input: {
       );
     }
     agreementCurrentStatus =
-      contract.agreementCurrentStatus as LeaseAgreementStatus;
+      input.contract.agreementCurrentStatus as LeaseAgreementStatus;
   }
 
   const contract: ReportingContractSummary = {
-    coverageStatus: contract.coverageStatus,
+    coverageStatus: input.contract.coverageStatus,
     currentDraftAgreementCount: nonNegativeInteger(
       input.contract.currentDraftAgreementCount,
       'contract.currentDraftAgreementCount',
     ),
-    agreementId: contract.agreementId,
+    agreementId: input.contract.agreementId,
     agreementCode:
-      contract.agreementCode === null
+      input.contract.agreementCode === null
         ? null
-        : required(contract.agreementCode, 'contract.agreementCode'),
+        : required(input.contract.agreementCode, 'contract.agreementCode'),
     agreementCurrentStatus,
     effectiveFrom:
-      contract.effectiveFrom === null
+      input.contract.effectiveFrom === null
         ? null
-        : asDateOnly(contract.effectiveFrom),
+        : asDateOnly(input.contract.effectiveFrom),
     effectiveTo:
-      contract.effectiveTo === null
+      input.contract.effectiveTo === null
         ? null
-        : asDateOnly(contract.effectiveTo),
+        : asDateOnly(input.contract.effectiveTo),
     signedAt:
-      contract.signedAt === null
+      input.contract.signedAt === null
         ? null
-        : asDateOnly(contract.signedAt),
+        : asDateOnly(input.contract.signedAt),
     effectiveTerms,
   };
 
