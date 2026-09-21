@@ -2,10 +2,12 @@ import type {
   CreatePartyRequest,
   CreatePropertyRequest,
   CreateSpaceRequest,
+  CreateTenancyRequest,
   CreateUnitRequest,
   PartyResponse,
   PropertyResponse,
   SpaceResponse,
+  TenancyResponse,
   UnitResponse,
 } from '@portfolio/contracts';
 import { createRoot } from 'react-dom/client';
@@ -44,11 +46,14 @@ const setupSpaceId = 'b1000000-0000-4000-8000-000000000003';
 const setupPartyId = 'b1000000-0000-4000-8000-000000000004';
 const setupPartyEmailId = 'b1000000-0000-4000-8000-000000000005';
 const setupPartyAddressId = 'b1000000-0000-4000-8000-000000000006';
+const setupTenancyId = 'b1000000-0000-4000-8000-000000000007';
+const setupTenancyPartyId = 'b1000000-0000-4000-8000-000000000008';
 
 let setupProperty: PropertyResponse | null = null;
 let setupUnit: UnitResponse | null = null;
 let setupSpace: SpaceResponse | null = null;
 let setupParty: PartyResponse | null = null;
+let setupTenancy: TenancyResponse | null = null;
 
 const operations = {
   openMaintenanceIssueCount: 0,
@@ -388,6 +393,21 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
+function tenancyVersionConflict(): Response {
+  return new Response(
+    JSON.stringify({
+      error: {
+        code: 'TENANCY_VERSION_CONFLICT',
+        message: 'Tenancy version conflict.',
+      },
+    }),
+    {
+      status: 409,
+      headers: { 'content-type': 'application/json' },
+    },
+  );
+}
+
 function apiPath(input: RequestInfo | URL): URL {
   const raw =
     input instanceof Request
@@ -521,6 +541,129 @@ globalThis.fetch = async (
 
   if (setupUnit && path === '/units/' + setupUnitId + '/spaces') {
     return json({ items: setupSpace ? [setupSpace] : [] });
+  }
+
+  if (setupUnit && path === '/units/' + setupUnitId + '/tenancies') {
+    if (init?.method === 'POST') {
+      requirePortfolioAuth(init);
+      const body = JSON.parse(String(init.body)) as CreateTenancyRequest;
+      setupTenancy = {
+        id: setupTenancyId,
+        code: body.code,
+        unitId: setupUnitId,
+        status: 'draft',
+        plannedStart: null,
+        plannedEnd: null,
+        actualStart: null,
+        actualEnd: null,
+        noticeGivenAt: null,
+        terminationEffectiveAt: null,
+        version: 1,
+        parties: [],
+      };
+      return json(setupTenancy, 201);
+    }
+    return json({ items: setupTenancy ? [setupTenancy] : [] });
+  }
+
+  if (
+    setupTenancy &&
+    path === '/tenancies/' + setupTenancyId + '/parties' &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      partyId: string;
+      role: 'tenant' | 'co_tenant' | 'guarantor' | 'authorized_occupant';
+      isPrimary?: boolean;
+    };
+    if (body.expectedVersion !== setupTenancy.version) {
+      return tenancyVersionConflict();
+    }
+    setupTenancy = {
+      ...setupTenancy,
+      version: setupTenancy.version + 1,
+      parties: [
+        ...setupTenancy.parties,
+        {
+          id: setupTenancyPartyId,
+          tenancyId: setupTenancyId,
+          partyId: body.partyId,
+          role: body.role,
+          isPrimary: body.isPrimary ?? false,
+        },
+      ],
+    };
+    return json(setupTenancy);
+  }
+
+  if (
+    setupTenancy &&
+    path.startsWith('/tenancies/' + setupTenancyId + '/') &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      plannedStart?: string;
+      plannedEnd?: string | null;
+      actualStart?: string;
+      noticeGivenAt?: string;
+      terminationEffectiveAt?: string;
+      actualEnd?: string;
+    };
+    if (body.expectedVersion !== setupTenancy.version) {
+      return tenancyVersionConflict();
+    }
+
+    const nextVersion = setupTenancy.version + 1;
+    if (path.endsWith('/plan')) {
+      setupTenancy = {
+        ...setupTenancy,
+        status: 'planned',
+        plannedStart: body.plannedStart ?? null,
+        plannedEnd: body.plannedEnd ?? null,
+        version: nextVersion,
+      };
+    } else if (path.endsWith('/activate')) {
+      setupTenancy = {
+        ...setupTenancy,
+        status: 'active',
+        actualStart: body.actualStart ?? null,
+        version: nextVersion,
+      };
+    } else if (path.endsWith('/give-notice')) {
+      setupTenancy = {
+        ...setupTenancy,
+        status: 'notice_given',
+        noticeGivenAt: body.noticeGivenAt ?? null,
+        terminationEffectiveAt: body.terminationEffectiveAt ?? null,
+        version: nextVersion,
+      };
+    } else if (path.endsWith('/move-out-pending')) {
+      setupTenancy = {
+        ...setupTenancy,
+        status: 'move_out_pending',
+        version: nextVersion,
+      };
+    } else if (path.endsWith('/end')) {
+      setupTenancy = {
+        ...setupTenancy,
+        status: 'ended',
+        actualEnd: body.actualEnd ?? null,
+        version: nextVersion,
+      };
+    } else if (path.endsWith('/cancel')) {
+      setupTenancy = {
+        ...setupTenancy,
+        status: 'cancelled',
+        version: nextVersion,
+      };
+    } else {
+      throw new Error('Unexpected setup Tenancy action: ' + path);
+    }
+    return json(setupTenancy);
   }
 
   if (path === '/units/' + unitId + '/spaces') {
