@@ -13,12 +13,18 @@ import {
   type CurrencyCode,
   type MoneyAmount,
 } from '../shared/money.js';
-import type { LeaseAgreementStatus } from '../contracts/lease-agreement.js';
+import {
+  LEASE_AGREEMENT_STATUSES,
+  type LeaseAgreementStatus,
+} from '../contracts/lease-agreement.js';
 import type {
   BillingFrequency,
   TermSourceType,
 } from '../contracts/tenancy-term-version.js';
-import type { TenancyStatus } from '../tenancy/tenancy.js';
+import {
+  TENANCY_STATUSES,
+  type TenancyStatus,
+} from '../tenancy/tenancy.js';
 import type { UnitType } from '../portfolio/unit.js';
 
 export const REPORTING_OCCUPANCY_STATUSES = [
@@ -109,8 +115,8 @@ export interface UnitReportingOverview {
   readonly areaM2: number | null;
   readonly rooms: number | null;
   readonly occupancyStatus: ReportingOccupancyStatus;
-  readonly tenancy: ReportingTenancySummary | null;
-  readonly contract: ReportingContractSummary;
+  readonly tenancy: ReportingTenancySummaryInput | null;
+  readonly contract: ReportingContractSummaryInput;
   readonly currentOperations: ReportingCurrentOperations;
   readonly unitAttributedCostsByCurrency: readonly ReportingCostSummary[];
 }
@@ -141,6 +147,31 @@ export interface PortfolioDashboard {
   readonly portfolioCostsByCurrency: readonly ReportingCostSummary[];
   readonly properties: readonly PropertyReportingSummary[];
 }
+
+export interface ReportingTenancySummaryInput {
+  readonly id: TenancyId;
+  readonly code: string;
+  readonly currentStatus: string;
+  readonly plannedStart: string | null;
+  readonly plannedEnd: string | null;
+  readonly actualStart: string | null;
+  readonly actualEnd: string | null;
+}
+
+export interface ReportingContractSummaryInput {
+  readonly coverageStatus: ReportingContractCoverageStatus;
+  readonly currentDraftAgreementCount: number;
+  readonly agreementId: LeaseAgreementId | null;
+  readonly agreementCode: string | null;
+  readonly agreementCurrentStatus: string | null;
+  readonly effectiveFrom: string | null;
+  readonly effectiveTo: string | null;
+  readonly signedAt: string | null;
+  readonly effectiveTerms:
+    | Parameters<typeof createReportingTermSummary>[0]
+    | null;
+}
+
 
 function required(value: string, field: string): string {
   const normalized = value.trim();
@@ -319,28 +350,111 @@ export function createUnitReportingOverview(input: {
 }): UnitReportingOverview {
   const asOf = asDateOnly(input.asOf);
 
-  if (input.occupancyStatus === 'vacant' && input.tenancy !== null) {
+  const tenancy: ReportingTenancySummary | null =
+    input.tenancy === null
+      ? null
+      : {
+          id: input.tenancy.id,
+          code: required(input.tenancy.code, 'tenancy.code'),
+          currentStatus: (() => {
+            if (
+              !TENANCY_STATUSES.includes(
+                input.tenancy!.currentStatus as TenancyStatus,
+              )
+            ) {
+              throw new DomainError(
+                'REPORTING_INVALID_PROJECTION',
+                'Reporting Tenancy contains an unsupported current status.',
+              );
+            }
+            return input.tenancy!.currentStatus as TenancyStatus;
+          })(),
+          plannedStart:
+            input.tenancy.plannedStart === null
+              ? null
+              : asDateOnly(input.tenancy.plannedStart),
+          plannedEnd:
+            input.tenancy.plannedEnd === null
+              ? null
+              : asDateOnly(input.tenancy.plannedEnd),
+          actualStart:
+            input.tenancy.actualStart === null
+              ? null
+              : asDateOnly(input.tenancy.actualStart),
+          actualEnd:
+            input.tenancy.actualEnd === null
+              ? null
+              : asDateOnly(input.tenancy.actualEnd),
+        };
+
+  const effectiveTerms =
+    contract.effectiveTerms === null
+      ? null
+      : createReportingTermSummary(contract.effectiveTerms);
+
+  let agreementCurrentStatus: LeaseAgreementStatus | null = null;
+  if (contract.agreementCurrentStatus !== null) {
+    if (
+      !LEASE_AGREEMENT_STATUSES.includes(
+        contract.agreementCurrentStatus as LeaseAgreementStatus,
+      )
+    ) {
+      throw new DomainError(
+        'REPORTING_INVALID_PROJECTION',
+        'Reporting contract contains an unsupported current Agreement status.',
+      );
+    }
+    agreementCurrentStatus =
+      contract.agreementCurrentStatus as LeaseAgreementStatus;
+  }
+
+  const contract: ReportingContractSummary = {
+    coverageStatus: contract.coverageStatus,
+    currentDraftAgreementCount: nonNegativeInteger(
+      input.contract.currentDraftAgreementCount,
+      'contract.currentDraftAgreementCount',
+    ),
+    agreementId: contract.agreementId,
+    agreementCode:
+      contract.agreementCode === null
+        ? null
+        : required(contract.agreementCode, 'contract.agreementCode'),
+    agreementCurrentStatus,
+    effectiveFrom:
+      contract.effectiveFrom === null
+        ? null
+        : asDateOnly(contract.effectiveFrom),
+    effectiveTo:
+      contract.effectiveTo === null
+        ? null
+        : asDateOnly(contract.effectiveTo),
+    signedAt:
+      contract.signedAt === null
+        ? null
+        : asDateOnly(contract.signedAt),
+    effectiveTerms,
+  };
+
+  if (input.occupancyStatus === 'vacant' && tenancy !== null) {
     throw new DomainError(
       'REPORTING_INVALID_PROJECTION',
       'Vacant Unit cannot carry a reporting Tenancy.',
     );
   }
 
-  if (input.occupancyStatus !== 'vacant' && input.tenancy === null) {
+  if (input.occupancyStatus !== 'vacant' && tenancy === null) {
     throw new DomainError(
       'REPORTING_INVALID_PROJECTION',
       'Occupied/planned Unit requires a reporting Tenancy.',
     );
   }
 
-  if (input.tenancy !== null) {
-    required(input.tenancy.code, 'tenancy.code');
-
+  if (tenancy !== null) {
     if (input.occupancyStatus === 'occupied') {
       if (
-        input.tenancy.actualStart === null ||
-        input.tenancy.actualStart > asOf ||
-        (input.tenancy.actualEnd !== null && input.tenancy.actualEnd < asOf)
+        tenancy.actualStart === null ||
+        tenancy.actualStart > asOf ||
+        (tenancy.actualEnd !== null && tenancy.actualEnd < asOf)
       ) {
         throw new DomainError(
           'REPORTING_INVALID_PROJECTION',
@@ -351,9 +465,9 @@ export function createUnitReportingOverview(input: {
 
     if (input.occupancyStatus === 'planned') {
       if (
-        input.tenancy.plannedStart === null ||
-        input.tenancy.plannedStart > asOf ||
-        (input.tenancy.plannedEnd !== null && input.tenancy.plannedEnd < asOf)
+        tenancy.plannedStart === null ||
+        tenancy.plannedStart > asOf ||
+        (tenancy.plannedEnd !== null && tenancy.plannedEnd < asOf)
       ) {
         throw new DomainError(
           'REPORTING_INVALID_PROJECTION',
@@ -363,17 +477,14 @@ export function createUnitReportingOverview(input: {
     }
   }
 
-  const currentDraftAgreementCount = nonNegativeInteger(
-    input.contract.currentDraftAgreementCount,
-    'contract.currentDraftAgreementCount',
-  );
+  const currentDraftAgreementCount = contract.currentDraftAgreementCount;
 
   if (
-    input.contract.coverageStatus !== 'missing' &&
-    (input.contract.agreementId === null ||
-      input.contract.agreementCode === null ||
-      input.contract.agreementCurrentStatus === null ||
-      input.contract.effectiveFrom === null)
+    contract.coverageStatus !== 'missing' &&
+    (contract.agreementId === null ||
+      contract.agreementCode === null ||
+      contract.agreementCurrentStatus === null ||
+      contract.effectiveFrom === null)
   ) {
     throw new DomainError(
       'REPORTING_INVALID_PROJECTION',
@@ -381,15 +492,15 @@ export function createUnitReportingOverview(input: {
     );
   }
 
-  if (input.contract.coverageStatus === 'missing') {
+  if (contract.coverageStatus === 'missing') {
     if (
-      input.contract.agreementId !== null ||
-      input.contract.agreementCode !== null ||
-      input.contract.agreementCurrentStatus !== null ||
-      input.contract.effectiveFrom !== null ||
-      input.contract.effectiveTo !== null ||
-      input.contract.signedAt !== null ||
-      input.contract.effectiveTerms !== null
+      contract.agreementId !== null ||
+      contract.agreementCode !== null ||
+      contract.agreementCurrentStatus !== null ||
+      contract.effectiveFrom !== null ||
+      contract.effectiveTo !== null ||
+      contract.signedAt !== null ||
+      contract.effectiveTerms !== null
     ) {
       throw new DomainError(
         'REPORTING_INVALID_PROJECTION',
@@ -397,7 +508,7 @@ export function createUnitReportingOverview(input: {
       );
     }
   } else {
-    if (input.contract.signedAt === null) {
+    if (contract.signedAt === null) {
       throw new DomainError(
         'REPORTING_INVALID_PROJECTION',
         'Signed contract coverage requires signedAt.',
@@ -405,8 +516,8 @@ export function createUnitReportingOverview(input: {
     }
 
     if (
-      input.contract.agreementCurrentStatus === 'draft' ||
-      input.contract.agreementCurrentStatus === 'cancelled'
+      contract.agreementCurrentStatus === 'draft' ||
+      contract.agreementCurrentStatus === 'cancelled'
     ) {
       throw new DomainError(
         'REPORTING_INVALID_PROJECTION',
@@ -416,8 +527,8 @@ export function createUnitReportingOverview(input: {
   }
 
   if (
-    input.contract.coverageStatus === 'effective' &&
-    input.contract.effectiveTerms === null
+    contract.coverageStatus === 'effective' &&
+    contract.effectiveTerms === null
   ) {
     throw new DomainError(
       'REPORTING_INVALID_PROJECTION',
@@ -426,8 +537,8 @@ export function createUnitReportingOverview(input: {
   }
 
   if (
-    input.contract.coverageStatus !== 'effective' &&
-    input.contract.effectiveTerms !== null
+    contract.coverageStatus !== 'effective' &&
+    contract.effectiveTerms !== null
   ) {
     throw new DomainError(
       'REPORTING_INVALID_PROJECTION',
@@ -436,12 +547,12 @@ export function createUnitReportingOverview(input: {
   }
 
   if (
-    input.contract.coverageStatus === 'effective' &&
+    contract.coverageStatus === 'effective' &&
     (
-      input.contract.effectiveFrom === null ||
-      input.contract.effectiveFrom > asOf ||
-      (input.contract.effectiveTo !== null &&
-        input.contract.effectiveTo < asOf)
+      contract.effectiveFrom === null ||
+      contract.effectiveFrom > asOf ||
+      (contract.effectiveTo !== null &&
+        contract.effectiveTo < asOf)
     )
   ) {
     throw new DomainError(
@@ -451,10 +562,10 @@ export function createUnitReportingOverview(input: {
   }
 
   if (
-    input.contract.coverageStatus === 'future_signed' &&
+    contract.coverageStatus === 'future_signed' &&
     (
-      input.contract.effectiveFrom === null ||
-      input.contract.effectiveFrom <= asOf
+      contract.effectiveFrom === null ||
+      contract.effectiveFrom <= asOf
     )
   ) {
     throw new DomainError(
@@ -464,8 +575,8 @@ export function createUnitReportingOverview(input: {
   }
 
   if (
-    input.contract.effectiveTerms !== null &&
-    input.contract.effectiveTerms.effectiveFrom > asOf
+    contract.effectiveTerms !== null &&
+    contract.effectiveTerms.effectiveFrom > asOf
   ) {
     throw new DomainError(
       'REPORTING_INVALID_PROJECTION',
@@ -495,8 +606,9 @@ export function createUnitReportingOverview(input: {
     propertyName: required(input.propertyName, 'propertyName'),
     unitCode: required(input.unitCode, 'unitCode'),
     unitNumber: required(input.unitNumber, 'unitNumber'),
+    tenancy,
     contract: {
-      ...input.contract,
+      ...contract,
       currentDraftAgreementCount,
     },
     currentOperations: normalizeOperations(input.currentOperations),
