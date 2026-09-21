@@ -198,8 +198,22 @@ with_terms as (
   left join lateral (
     select tv.*
     from public.tenancy_term_versions tv
+    left join public.lease_amendments source_amendment
+      on tv.source_type = 'amendment'
+     and source_amendment.id = tv.source_amendment_id
     where tv.tenancy_id = cs.tenancy_id
       and tv.effective_from <= p_as_of
+      and (
+        (
+          tv.source_type = 'agreement'
+          and tv.source_agreement_id = cs.agreement_id
+        )
+        or
+        (
+          tv.source_type = 'amendment'
+          and source_amendment.agreement_id = cs.agreement_id
+        )
+      )
     order by tv.effective_from desc, tv.id
     limit 1
   ) terms on cs.tenancy_id is not null
