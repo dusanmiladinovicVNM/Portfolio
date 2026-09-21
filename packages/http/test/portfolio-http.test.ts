@@ -637,6 +637,7 @@ describe('Portfolio HTTP boundary', () => {
         tenancy: null,
         contract: {
           coverageStatus: 'missing',
+          currentDraftAgreementCount: 0,
           agreementId: null,
           agreementCode: null,
           agreementCurrentStatus: null,
