@@ -20,8 +20,16 @@ export class PortfolioApiError extends Error {
   }
 }
 
+export interface PortfolioApiRequestOptions {
+  readonly signal?: AbortSignal;
+}
+
 export interface PortfolioApi {
-  get<T>(path: string, schema: ResponseSchema<T>): Promise<T>;
+  get<T>(
+    path: string,
+    schema: ResponseSchema<T>,
+    options?: PortfolioApiRequestOptions,
+  ): Promise<T>;
 }
 
 export interface PortfolioApiOptions {
@@ -48,7 +56,11 @@ export function createPortfolioApi(options: PortfolioApiOptions): PortfolioApi {
   const fetchImpl = options.fetchImpl ?? fetch;
 
   return {
-    async get<T>(path: string, schema: ResponseSchema<T>): Promise<T> {
+    async get<T>(
+      path: string,
+      schema: ResponseSchema<T>,
+      requestOptions?: PortfolioApiRequestOptions,
+    ): Promise<T> {
       const accessToken = options.getAccessToken();
       if (!accessToken) {
         throw new PortfolioApiError(
@@ -58,13 +70,18 @@ export function createPortfolioApi(options: PortfolioApiOptions): PortfolioApi {
         );
       }
 
-      const response = await fetchImpl(joinPath(options.baseUrl, path), {
+      const request: RequestInit = {
         method: 'GET',
         headers: {
           Accept: 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
-      });
+      };
+      if (requestOptions?.signal) {
+        request.signal = requestOptions.signal;
+      }
+
+      const response = await fetchImpl(joinPath(options.baseUrl, path), request);
       const payload = await readJson(response);
 
       if (!response.ok) {
@@ -76,6 +93,7 @@ export function createPortfolioApi(options: PortfolioApiOptions): PortfolioApi {
             parsedError.data.error.message,
           );
         }
+
         throw new PortfolioApiError(
           response.status,
           'API_ERROR',

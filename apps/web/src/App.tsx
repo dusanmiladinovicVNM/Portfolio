@@ -1,11 +1,14 @@
-import { type FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { createPortfolioApi } from './api/portfolio-api.js';
 import type { AuthSession, SessionGateway } from './auth/session-gateway.js';
+import { PortfolioDashboard } from './dashboard/PortfolioDashboard.js';
 
 interface AppProps {
+  readonly apiBaseUrl: string;
   readonly sessionGateway: SessionGateway;
 }
 
-function Login({ sessionGateway }: AppProps) {
+function Login({ sessionGateway }: Pick<AppProps, 'sessionGateway'>) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -66,13 +69,23 @@ function Login({ sessionGateway }: AppProps) {
 }
 
 function AuthenticatedShell({
+  apiBaseUrl,
   session,
   sessionGateway,
 }: {
+  readonly apiBaseUrl: string;
   readonly session: AuthSession;
   readonly sessionGateway: SessionGateway;
 }) {
   const [signOutError, setSignOutError] = useState<string | null>(null);
+  const api = useMemo(
+    () =>
+      createPortfolioApi({
+        baseUrl: apiBaseUrl,
+        getAccessToken: () => session.accessToken,
+      }),
+    [apiBaseUrl, session.accessToken],
+  );
 
   async function signOut() {
     setSignOutError(null);
@@ -104,26 +117,13 @@ function AuthenticatedShell({
         </div>
       </aside>
       <main className="workspace">
-        <header className="workspace-header">
-          <div>
-            <p className="eyebrow">Foundation</p>
-            <h1>Authenticated workspace</h1>
-          </div>
-        </header>
-        <section className="empty-state">
-          <p className="eyebrow">Next slice</p>
-          <h2>Portfolio dashboard → Unit dossier</h2>
-          <p>
-            The shell is authenticated. Business data will enter only through
-            the typed Portfolio HTTP client and existing API contracts.
-          </p>
-        </section>
+        <PortfolioDashboard api={api} />
       </main>
     </div>
   );
 }
 
-export function App({ sessionGateway }: AppProps) {
+export function App({ apiBaseUrl, sessionGateway }: AppProps) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
@@ -173,7 +173,11 @@ export function App({ sessionGateway }: AppProps) {
   }
 
   return session ? (
-    <AuthenticatedShell session={session} sessionGateway={sessionGateway} />
+    <AuthenticatedShell
+      apiBaseUrl={apiBaseUrl}
+      session={session}
+      sessionGateway={sessionGateway}
+    />
   ) : (
     <Login sessionGateway={sessionGateway} />
   );

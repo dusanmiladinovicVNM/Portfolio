@@ -18,7 +18,7 @@ try {
   );
   root.render(
     <StrictMode>
-      <App sessionGateway={sessionGateway} />
+      <App apiBaseUrl={config.apiBaseUrl} sessionGateway={sessionGateway} />
     </StrictMode>,
   );
 } catch (cause) {
