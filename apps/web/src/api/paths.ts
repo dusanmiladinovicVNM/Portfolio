@@ -38,28 +38,57 @@ export function unitOverviewPath(unitId: string, asOf: string): string {
   return `${unitPath(unitId)}/overview?asOf=${encodeURIComponent(asOf)}`;
 }
 
-
 export function unitDocumentsPath(unitId: string): string {
   return `${unitPath(unitId)}/documents`;
 }
-
 
 export function unitTenanciesPath(unitId: string): string {
   return `${unitPath(unitId)}/tenancies`;
 }
 
+export function tenancyPath(tenancyId: string): string {
+  return `/tenancies/${encodeURIComponent(tenancyId)}`;
+}
+
+export function tenancyPartiesPath(tenancyId: string): string {
+  return `${tenancyPath(tenancyId)}/parties`;
+}
+
+export function tenancyPlanPath(tenancyId: string): string {
+  return `${tenancyPath(tenancyId)}/plan`;
+}
+
+export function tenancyActivatePath(tenancyId: string): string {
+  return `${tenancyPath(tenancyId)}/activate`;
+}
+
+export function tenancyGiveNoticePath(tenancyId: string): string {
+  return `${tenancyPath(tenancyId)}/give-notice`;
+}
+
+export function tenancyMoveOutPendingPath(tenancyId: string): string {
+  return `${tenancyPath(tenancyId)}/move-out-pending`;
+}
+
+export function tenancyEndPath(tenancyId: string): string {
+  return `${tenancyPath(tenancyId)}/end`;
+}
+
+export function tenancyCancelPath(tenancyId: string): string {
+  return `${tenancyPath(tenancyId)}/cancel`;
+}
+
 export function tenancyAgreementsPath(tenancyId: string): string {
-  return `/tenancies/${encodeURIComponent(tenancyId)}/agreements`;
+  return `${tenancyPath(tenancyId)}/agreements`;
 }
 
 export function tenancyTermsPath(tenancyId: string, at: string): string {
-  return `/tenancies/${encodeURIComponent(tenancyId)}/terms?at=${encodeURIComponent(at)}`;
+  return `${tenancyPath(tenancyId)}/terms?at=${encodeURIComponent(at)}`;
 }
 
 export function agreementAmendmentsPath(agreementId: string): string {
   return `/agreements/${encodeURIComponent(agreementId)}/amendments`;
 }
-
 
 export function partiesByIdsPath(ids: readonly string[]): string {
   const uniqueIds = [...new Set(ids)].sort();
@@ -70,7 +99,6 @@ export function partiesByIdsPath(ids: readonly string[]): string {
   return `/parties?${search.toString()}`;
 }
 
-
 export function agreementDocumentsPath(agreementId: string): string {
   return `/agreements/${encodeURIComponent(agreementId)}/documents`;
 }
@@ -79,11 +107,9 @@ export function amendmentDocumentsPath(amendmentId: string): string {
   return `/amendments/${encodeURIComponent(amendmentId)}/documents`;
 }
 
-
 export function documentVersionContentPath(versionId: string): string {
   return `/document-versions/${encodeURIComponent(versionId)}/content`;
 }
-
 
 export function unitInspectionsPath(unitId: string): string {
   return `/units/${encodeURIComponent(unitId)}/inspections`;
