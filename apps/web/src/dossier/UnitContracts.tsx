@@ -232,6 +232,7 @@ function LegalDocuments({
                     <DocumentBinaryActions
                       api={api}
                       fileName={reference.linkedVersion.fileName}
+                      mimeType={reference.linkedVersion.mimeType}
                       versionId={reference.linkedVersion.id}
                     />
                   </>

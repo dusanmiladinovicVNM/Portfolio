@@ -6,6 +6,19 @@ interface DocumentBinaryActionsProps {
   readonly api: PortfolioApi;
   readonly versionId: string;
   readonly fileName: string;
+  readonly mimeType: string;
+}
+
+const INLINE_SAFE_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/gif',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
+
+export function canOpenDocumentMimeType(mimeType: string): boolean {
+  return INLINE_SAFE_MIME_TYPES.has(mimeType.trim().toLowerCase());
 }
 
 type BinaryAction = 'open' | 'download' | null;
@@ -18,6 +31,7 @@ export function DocumentBinaryActions({
   api,
   versionId,
   fileName,
+  mimeType,
 }: DocumentBinaryActionsProps) {
   const [active, setActive] = useState<BinaryAction>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,17 +91,21 @@ export function DocumentBinaryActions({
     }
   }
 
+  const canOpen = canOpenDocumentMimeType(mimeType);
+
   return (
     <div className="document-binary-actions">
       <div className="document-action-buttons">
-        <button
-          className="button-secondary document-action-button"
-          disabled={active !== null}
-          onClick={openDocument}
-          type="button"
-        >
-          {active === 'open' ? 'Opening…' : 'Open'}
-        </button>
+        {canOpen ? (
+          <button
+            className="button-secondary document-action-button"
+            disabled={active !== null}
+            onClick={openDocument}
+            type="button"
+          >
+            {active === 'open' ? 'Opening…' : 'Open'}
+          </button>
+        ) : null}
         <button
           className="button-secondary document-action-button"
           disabled={active !== null}
