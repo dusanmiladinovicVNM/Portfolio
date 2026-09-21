@@ -42,21 +42,24 @@ export function DocumentBinaryActions({
 
   async function openDocument() {
     if (active !== null) return;
+
+    const target = window.open('about:blank', '_blank');
+    if (!target) {
+      setError('The browser blocked the document window.');
+      return;
+    }
+    target.opener = null;
+
     setActive('open');
     setError(null);
 
     try {
       const blob = await getBlob();
       const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.target = '_blank';
-      anchor.rel = 'noopener noreferrer';
-      document.body.append(anchor);
-      anchor.click();
-      anchor.remove();
+      target.location.replace(url);
       revokeLater(url);
     } catch (cause) {
+      target.close();
       setError(
         cause instanceof Error ? cause.message : 'Document could not be opened.',
       );
