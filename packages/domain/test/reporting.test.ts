@@ -266,6 +266,119 @@ describe('Reporting projections', () => {
     );
   });
 
+  it('rejects current-operation subcounts that contradict their parent totals', () => {
+    expect(() =>
+      createUnitReportingOverview({
+        asOf: '2026-09-21',
+        unitId,
+        propertyId,
+        propertyCode: 'PROP-1',
+        propertyName: 'Main Property',
+        unitCode: 'UNIT-1',
+        unitNumber: '1A',
+        unitType: 'apartment',
+        floor: null,
+        areaM2: null,
+        rooms: null,
+        occupancyStatus: 'vacant',
+        tenancy: null,
+        contract: {
+          coverageStatus: 'missing',
+          currentDraftAgreementCount: 0,
+          agreementId: null,
+          agreementCode: null,
+          agreementCurrentStatus: null,
+          effectiveFrom: null,
+          effectiveTo: null,
+          signedAt: null,
+          effectiveTerms: null,
+        },
+        currentOperations: {
+          ...emptyOps,
+          openMaintenanceIssueCount: 1,
+          urgentMaintenanceIssueCount: 2,
+        },
+        unitAttributedCostsByCurrency: [],
+      }),
+    ).toThrowError(
+      expect.objectContaining({ code: 'REPORTING_INVALID_PROJECTION' }),
+    );
+
+    expect(() =>
+      createUnitReportingOverview({
+        asOf: '2026-09-21',
+        unitId,
+        propertyId,
+        propertyCode: 'PROP-1',
+        propertyName: 'Main Property',
+        unitCode: 'UNIT-1',
+        unitNumber: '1A',
+        unitType: 'apartment',
+        floor: null,
+        areaM2: null,
+        rooms: null,
+        occupancyStatus: 'vacant',
+        tenancy: null,
+        contract: {
+          coverageStatus: 'missing',
+          currentDraftAgreementCount: 0,
+          agreementId: null,
+          agreementCode: null,
+          agreementCurrentStatus: null,
+          effectiveFrom: null,
+          effectiveTo: null,
+          signedAt: null,
+          effectiveTerms: null,
+        },
+        currentOperations: {
+          ...emptyOps,
+          locatedAssetCount: 1,
+          activeAssetCount: 1,
+          inactiveAssetCount: 1,
+        },
+        unitAttributedCostsByCurrency: [],
+      }),
+    ).toThrowError(
+      expect.objectContaining({ code: 'REPORTING_INVALID_PROJECTION' }),
+    );
+  });
+
+  it('requires Property rows to roll up exactly to Portfolio totals', () => {
+    expect(() =>
+      createPortfolioDashboard({
+        asOf: '2026-09-21',
+        propertyCount: 1,
+        unitCount: 2,
+        occupiedUnitCount: 1,
+        plannedUnitCount: 0,
+        vacantUnitCount: 1,
+        currentOperations: {
+          ...emptyOps,
+          openMaintenanceIssueCount: 1,
+        },
+        portfolioCostsByCurrency: [],
+        properties: [
+          {
+            propertyId,
+            propertyCode: 'PROP-1',
+            propertyName: 'Main Property',
+            unitCount: 1,
+            occupiedUnitCount: 1,
+            plannedUnitCount: 0,
+            vacantUnitCount: 0,
+            currentOpenMaintenanceIssueCount: 0,
+            currentUrgentMaintenanceIssueCount: 0,
+            currentLocatedAssetCount: 0,
+            currentActiveAssetCount: 0,
+            currentActiveMeterCount: 0,
+          },
+        ],
+      }),
+    ).toThrowError(
+      expect.objectContaining({ code: 'REPORTING_INVALID_PROJECTION' }),
+    );
+  });
+
   it('requires portfolio occupancy buckets to partition Unit count', () => {
     expect(() =>
       createPortfolioDashboard({
