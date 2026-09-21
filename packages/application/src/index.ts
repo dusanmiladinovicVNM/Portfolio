@@ -63,3 +63,6 @@ export * from './meters/meter-queries.js';
 
 export * from './timeline/unit-timeline-repository.js';
 export * from './timeline/unit-timeline-queries.js';
+
+export * from './reporting/reporting-repository.js';
+export * from './reporting/reporting-queries.js';

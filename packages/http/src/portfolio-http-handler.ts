@@ -18,6 +18,7 @@ import {
   type OwnershipRepository,
   type PartyRepository,
   type PortfolioRepository,
+  type ReportingRepository,
   type StaffDirectoryRepository,
   type TenancyRepository,
   type UnitTimelineRepository,
@@ -39,11 +40,13 @@ import { handleMeterHttp } from './meter-http-routes.js';
 import { handleOwnershipHttp } from './ownership-http-routes.js';
 import { handlePartyHttp } from './party-http-routes.js';
 import { handlePortfolioHttp } from './portfolio-http-routes.js';
+import { handleReportingHttp } from './reporting-http-routes.js';
 import { handleTenancyHttp } from './tenancy-http-routes.js';
 import { handleUnitTimelineHttp } from './unit-timeline-http-routes.js';
 
 export interface PortfolioHttpDependencies {
   readonly portfolioRepository: PortfolioRepository;
+  readonly reportingRepository: ReportingRepository;
   readonly accessItemRepository: AccessItemRepository;
   readonly assetRepository: AssetRepository;
   readonly assetInventoryRepository: AssetInventoryRepository;
@@ -159,6 +162,16 @@ export function createPortfolioHttpHandler(
       const actor = await resolveActor(deps.userAccessRepository, identity);
 
       const handlers = [
+        () =>
+          handleReportingHttp(
+            {
+              reportingRepository: deps.reportingRepository,
+              portfolioRepository: deps.portfolioRepository,
+            },
+            actor,
+            request,
+            path,
+          ),
         () =>
           handleUnitTimelineHttp(
             {

@@ -19,3 +19,5 @@ export * from './access-items.js';
 export * from './meters.js';
 
 export * from './timeline.js';
+
+export * from './reporting.js';

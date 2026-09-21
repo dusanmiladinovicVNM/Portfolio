@@ -95,11 +95,13 @@ import {
 } from '@portfolio/application';
 import {
   addStoredDocumentVersion,
+  asDateOnly,
   asCostId,
   asCostReversalId,
   asDocumentVersionId,
   asInspectionResponseId,
   asOwnershipPeriodId,
+  asPropertyId,
   asPartyAddressId,
   asPartyId,
   asTenancyId,
@@ -126,6 +128,7 @@ import {
   PostgresOwnershipRepository,
   PostgresPartyRepository,
   PostgresPortfolioRepository,
+  PostgresReportingRepository,
   PostgresTenancyRepository,
   PostgresUnitTimelineRepository,
   PostgresUserAccessRepository,
@@ -154,6 +157,7 @@ const improvementRepository = new PostgresImprovementRepository(sql);
 const maintenanceRepository = new PostgresMaintenanceRepository(sql);
 const meterRepository = new PostgresMeterRepository(sql);
 const unitTimelineRepository = new PostgresUnitTimelineRepository(sql);
+const reportingRepository = new PostgresReportingRepository(sql);
 
 class SequenceIds implements IdGenerator {
   private index = 0;
@@ -10439,6 +10443,979 @@ describe('PostgreSQL infrastructure', () => {
     expect(
       await costRepository.getCostById(rogueReplacement.id),
     ).toBeNull();
+  });
+
+  it('projects reporting from canonical temporal, legal, operational and financial truth', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+
+    const dashboardBaseline = await reportingRepository.getPortfolioDashboard(
+      asDateOnly('2026-07-01'),
+    );
+
+    const ids = new SequenceIds(
+      Array.from(
+        { length: 220 },
+        (_, index) =>
+          `e9000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      ),
+    );
+
+    const propertyA = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-REPORT-A',
+        name: 'Reporting Property A',
+        propertyType: 'apartment_building',
+        street: 'Reporting Street',
+        houseNumber: '1',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+
+    const unitA = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: propertyA.id,
+        code: 'UNIT-REPORT-A',
+        unitNumber: 'A-1',
+        unitType: 'apartment',
+        areaM2: 80,
+        rooms: 3,
+      },
+    );
+
+    const spaceA = await createSpaceCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        unitId: unitA.id,
+        code: 'SPACE-REPORT-A',
+        name: 'Reporting room',
+        spaceType: 'other',
+      },
+    );
+
+    const propertyB = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-REPORT-B',
+        name: 'Reporting Property B',
+        propertyType: 'apartment_building',
+        street: 'Reporting Street',
+        houseNumber: '2',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+
+    const unitB = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: propertyB.id,
+        code: 'UNIT-REPORT-B',
+        unitNumber: 'B-1',
+        unitType: 'apartment',
+      },
+    );
+
+    const tenant = await createPartyCommand(
+      { partyRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PTY-REPORT-TENANT',
+        partyType: 'person',
+        firstName: 'Reporting',
+        lastName: 'Tenant',
+      },
+    );
+
+    const landlord = await createPartyCommand(
+      { partyRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PTY-REPORT-LANDLORD',
+        partyType: 'company',
+        legalName: 'Reporting Landlord d.o.o.',
+      },
+    );
+
+    const tenancyDraft = await createTenancyCommand(
+      {
+        tenancyRepository,
+        portfolioRepository,
+        partyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        unitId: unitA.id,
+        code: 'TEN-REPORT-A',
+        parties: [
+          {
+            partyId: tenant.id,
+            role: 'tenant',
+            isPrimary: true,
+          },
+        ],
+      },
+    );
+
+    const tenancyPlanned = await planTenancyCommand(
+      { tenancyRepository },
+      actor,
+      tenancyDraft.id,
+      tenancyDraft.version,
+      '2026-01-01',
+    );
+
+    const tenancy = await activateTenancyCommand(
+      { tenancyRepository },
+      actor,
+      tenancyPlanned.id,
+      tenancyPlanned.version,
+      '2026-01-01',
+    );
+
+    const leaseDeps = {
+      leaseRepository,
+      tenancyRepository,
+      partyRepository,
+      idGenerator: ids,
+    };
+
+    const initialDraft = await createLeaseAgreementCommand(
+      leaseDeps,
+      actor,
+      {
+        tenancyId: tenancy.id,
+        code: 'AGR-REPORT-1',
+        agreementType: 'initial',
+        effectiveFrom: '2026-01-01',
+        parties: [
+          { partyId: landlord.id, role: 'landlord' },
+          { partyId: tenant.id, role: 'tenant' },
+        ],
+      },
+    );
+
+    const initial = await signLeaseAgreementCommand(
+      leaseDeps,
+      actor,
+      initialDraft.id,
+      initialDraft.version,
+      '2025-12-20',
+      {
+        currency: 'CHF',
+        baseRent: '1000',
+        serviceCharge: '100',
+      },
+    );
+
+    const supersededFutureAmendmentDraft =
+      await createLeaseAmendmentCommand(
+        { leaseRepository, idGenerator: ids },
+        actor,
+        {
+          agreementId: initial.id,
+          code: 'AMD-REPORT-OLD-FUTURE',
+          title: 'Future adjustment on predecessor',
+          effectiveFrom: '2026-08-01',
+        },
+      );
+
+    await signLeaseAmendmentCommand(
+      { leaseRepository, tenancyRepository, idGenerator: ids },
+      actor,
+      supersededFutureAmendmentDraft.id,
+      supersededFutureAmendmentDraft.version,
+      '2026-05-15',
+      {
+        currency: 'CHF',
+        baseRent: '9000',
+        serviceCharge: '100',
+      },
+    );
+
+    const successorDraft = await createLeaseAgreementCommand(
+      leaseDeps,
+      actor,
+      {
+        tenancyId: tenancy.id,
+        code: 'AGR-REPORT-2',
+        agreementType: 'renewal',
+        predecessorAgreementId: initial.id,
+        effectiveFrom: '2026-07-01',
+        parties: [
+          { partyId: landlord.id, role: 'landlord' },
+          { partyId: tenant.id, role: 'tenant' },
+        ],
+      },
+    );
+
+    const successor = await signLeaseAgreementCommand(
+      leaseDeps,
+      actor,
+      successorDraft.id,
+      successorDraft.version,
+      '2026-06-01',
+      {
+        currency: 'CHF',
+        baseRent: '1100',
+        serviceCharge: '100',
+      },
+    );
+
+    const thirdDraft = await createLeaseAgreementCommand(
+      leaseDeps,
+      actor,
+      {
+        tenancyId: tenancy.id,
+        code: 'AGR-REPORT-3',
+        agreementType: 'renewal',
+        predecessorAgreementId: successor.id,
+        effectiveFrom: '2027-01-01',
+        parties: [
+          { partyId: landlord.id, role: 'landlord' },
+          { partyId: tenant.id, role: 'tenant' },
+        ],
+      },
+    );
+
+    const third = await signLeaseAgreementCommand(
+      leaseDeps,
+      actor,
+      thirdDraft.id,
+      thirdDraft.version,
+      '2026-11-01',
+      {
+        currency: 'CHF',
+        baseRent: '1200',
+        serviceCharge: '100',
+      },
+    );
+
+    await createLeaseAgreementCommand(
+      leaseDeps,
+      actor,
+      {
+        tenancyId: tenancy.id,
+        code: 'AGR-REPORT-4-DRAFT',
+        agreementType: 'renewal',
+        predecessorAgreementId: third.id,
+        effectiveFrom: '2027-07-01',
+        parties: [
+          { partyId: landlord.id, role: 'landlord' },
+          { partyId: tenant.id, role: 'tenant' },
+        ],
+      },
+    );
+
+    const currentClock = { now: () => '2026-09-21T08:00:00.000Z' };
+
+    const assetA = await createAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: currentClock,
+      },
+      actor,
+      {
+        code: 'ASSET-REPORT-A',
+        name: 'Reporting Asset A',
+        propertyId: propertyA.id,
+        unitId: unitA.id,
+      },
+    );
+
+    const assetB = await createAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: currentClock,
+      },
+      actor,
+      {
+        code: 'ASSET-REPORT-B',
+        name: 'Reporting Asset B',
+        propertyId: propertyB.id,
+        unitId: unitB.id,
+      },
+    );
+
+    const assetServiceDeps = {
+      assetRepository,
+      assetServiceRepository,
+      partyRepository,
+      idGenerator: ids,
+      clock: currentClock,
+    };
+
+    await createServicePlanCommand(
+      assetServiceDeps,
+      actor,
+      assetA.id,
+      {
+        name: 'Reporting annual service',
+        scheduleKind: 'recurring',
+        firstDueOn: '2026-10-01',
+        intervalMonths: 12,
+      },
+    );
+
+    const warranty = await createWarrantyCommand(
+      assetServiceDeps,
+      actor,
+      assetA.id,
+      {
+        warrantyType: 'manufacturer',
+        validFrom: '2026-01-01',
+        validTo: '2027-12-31',
+      },
+    );
+
+    await createWarrantyClaimCommand(
+      {
+        assetServiceRepository,
+        idGenerator: ids,
+        clock: currentClock,
+      },
+      actor,
+      warranty.id,
+      {
+        incidentOn: '2026-09-10',
+        description: 'Reporting open warranty claim',
+      },
+    );
+
+    const maintenanceDeps = {
+      maintenanceRepository,
+      portfolioRepository,
+      assetRepository,
+      assetServiceRepository,
+      inspectionRepository,
+      partyRepository,
+      staffDirectoryRepository: accessRepository,
+      idGenerator: ids,
+      clock: currentClock,
+    };
+
+    const issue = await createMaintenanceIssueCommand(
+      maintenanceDeps,
+      actor,
+      {
+        code: 'MI-REPORT-A',
+        propertyId: propertyA.id,
+        unitId: unitA.id,
+        assetId: assetA.id,
+        title: 'Reporting urgent issue',
+        priority: 'urgent',
+        reportedAt: '2026-09-21T08:00:00.000Z',
+      },
+    );
+
+    await createMaintenanceWorkOrderCommand(
+      {
+        maintenanceRepository,
+        idGenerator: ids,
+        clock: currentClock,
+      },
+      actor,
+      issue.id,
+      {
+        code: 'WO-REPORT-A',
+        title: 'Reporting work order',
+      },
+    );
+
+    await createMeterCommand(
+      {
+        meterRepository,
+        portfolioRepository,
+        tenancyRepository,
+        idGenerator: ids,
+        clock: currentClock,
+      },
+      actor,
+      {
+        code: 'MTR-REPORT-A',
+        serialNumber: 'SER-REPORT-A',
+        utilityType: 'electricity',
+        measurementUnit: 'kwh',
+        unitId: unitA.id,
+        label: 'Reporting Meter A',
+        installedAt: '2026-09-01T00:00:00.000Z',
+      },
+    );
+
+    const costDeps = {
+      costRepository,
+      portfolioRepository,
+      partyRepository,
+      assetRepository,
+      assetServiceRepository,
+      improvementRepository,
+      maintenanceRepository,
+      idGenerator: ids,
+      clock: currentClock,
+    };
+
+    await createCostCommand(
+      costDeps,
+      actor,
+      {
+        source: { kind: 'unit', unitId: unitA.id },
+        description: 'Unit CAPEX',
+        amount: '100',
+        currency: 'CHF',
+        incurredOn: '2026-06-15',
+        reportingClass: 'capex',
+      },
+    );
+
+    await createCostCommand(
+      costDeps,
+      actor,
+      {
+        source: { kind: 'space', spaceId: spaceA.id },
+        description: 'Space OPEX',
+        amount: '25.50',
+        currency: 'CHF',
+        incurredOn: '2026-06-16',
+        reportingClass: 'opex',
+      },
+    );
+
+    await createCostCommand(
+      costDeps,
+      actor,
+      {
+        source: { kind: 'unit', unitId: unitA.id },
+        description: 'Unit EUR unclassified',
+        amount: '10',
+        currency: 'EUR',
+        incurredOn: '2026-06-17',
+        reportingClass: 'unclassified',
+      },
+    );
+
+    await createCostCommand(
+      costDeps,
+      actor,
+      {
+        source: { kind: 'property', propertyId: propertyA.id },
+        description: 'Property EUR OPEX',
+        amount: '40',
+        currency: 'EUR',
+        incurredOn: '2026-06-18',
+        reportingClass: 'opex',
+      },
+    );
+
+    const correctedOriginal = await createCostCommand(
+      costDeps,
+      actor,
+      {
+        source: { kind: 'unit', unitId: unitA.id },
+        description: 'Original incorrect Unit OPEX',
+        amount: '5',
+        currency: 'CHF',
+        incurredOn: '2026-06-19',
+        reportingClass: 'opex',
+      },
+    );
+
+    await correctCostCommand(
+      costDeps,
+      actor,
+      correctedOriginal.id,
+      'Correct reporting amount',
+      {
+        source: { kind: 'unit', unitId: unitA.id },
+        description: 'Corrected Unit OPEX',
+        amount: '7',
+        currency: 'CHF',
+        incurredOn: '2026-06-19',
+        reportingClass: 'opex',
+      },
+    );
+
+    await createCostCommand(
+      costDeps,
+      actor,
+      {
+        source: { kind: 'unit', unitId: unitA.id },
+        description: 'Post-asOf Unit cost',
+        amount: '999',
+        currency: 'CHF',
+        incurredOn: '2026-09-01',
+        reportingClass: 'opex',
+      },
+    );
+
+    await createCostCommand(
+      costDeps,
+      actor,
+      {
+        source: { kind: 'unit', unitId: unitB.id },
+        description: 'Property B Unit cost',
+        amount: '33',
+        currency: 'CHF',
+        incurredOn: '2026-06-20',
+        reportingClass: 'opex',
+      },
+    );
+
+    const beforeSuccessor = await reportingRepository.getUnitOverview(
+      unitA.id,
+      asDateOnly('2026-06-30'),
+    );
+    expect(beforeSuccessor).toMatchObject({
+      occupancyStatus: 'occupied',
+      tenancy: {
+        id: tenancy.id,
+      },
+      contract: {
+        coverageStatus: 'effective',
+        currentDraftAgreementCount: 1,
+        agreementId: initial.id,
+        agreementCurrentStatus: 'superseded',
+        effectiveTerms: {
+          baseRent: '1000.00',
+          recurringTotal: '1100.00',
+        },
+      },
+      currentOperations: {
+        openMaintenanceIssueCount: 1,
+        urgentMaintenanceIssueCount: 1,
+        openMaintenanceWorkOrderCount: 1,
+        locatedAssetCount: 1,
+        activeAssetCount: 1,
+        activeServicePlanCount: 1,
+        openWarrantyClaimCount: 1,
+        activeMeterCount: 1,
+      },
+    });
+
+    const onSuccessorBoundary = await reportingRepository.getUnitOverview(
+      unitA.id,
+      asDateOnly('2026-07-01'),
+    );
+    expect(onSuccessorBoundary).toMatchObject({
+      contract: {
+        coverageStatus: 'effective',
+        currentDraftAgreementCount: 1,
+        agreementId: successor.id,
+        agreementCurrentStatus: 'superseded',
+        effectiveTerms: {
+          baseRent: '1100.00',
+          recurringTotal: '1200.00',
+        },
+      },
+      unitAttributedCostsByCurrency: [
+        {
+          currency: 'CHF',
+          capex: '100.00',
+          opex: '32.50',
+          unclassified: '0.00',
+          total: '132.50',
+        },
+        {
+          currency: 'EUR',
+          capex: '0.00',
+          opex: '0.00',
+          unclassified: '10.00',
+          total: '10.00',
+        },
+      ],
+    });
+
+    const afterSupersededFutureAmendment =
+      await reportingRepository.getUnitOverview(
+        unitA.id,
+        asDateOnly('2026-08-01'),
+      );
+    expect(afterSupersededFutureAmendment).toMatchObject({
+      contract: {
+        coverageStatus: 'effective',
+        agreementId: successor.id,
+        effectiveTerms: {
+          baseRent: '1100.00',
+          recurringTotal: '1200.00',
+        },
+      },
+    });
+
+    const futureInitial = await reportingRepository.getUnitOverview(
+      unitA.id,
+      asDateOnly('2025-12-31'),
+    );
+    expect(futureInitial).toMatchObject({
+      occupancyStatus: 'vacant',
+      tenancy: null,
+      contract: {
+        coverageStatus: 'missing',
+        currentDraftAgreementCount: 0,
+      },
+    });
+
+    const thirdBoundary = await reportingRepository.getUnitOverview(
+      unitA.id,
+      asDateOnly('2027-01-01'),
+    );
+    expect(thirdBoundary).toMatchObject({
+      contract: {
+        coverageStatus: 'effective',
+        currentDraftAgreementCount: 1,
+        agreementId: third.id,
+        agreementCurrentStatus: 'signed',
+        effectiveTerms: {
+          baseRent: '1200.00',
+          recurringTotal: '1300.00',
+        },
+      },
+    });
+
+    const dashboard = await reportingRepository.getPortfolioDashboard(
+      asDateOnly('2026-07-01'),
+    );
+
+    expect(dashboard).toMatchObject({
+      propertyCount: dashboardBaseline.propertyCount + 2,
+      unitCount: dashboardBaseline.unitCount + 2,
+      occupiedUnitCount: dashboardBaseline.occupiedUnitCount + 1,
+      plannedUnitCount: dashboardBaseline.plannedUnitCount,
+      vacantUnitCount: dashboardBaseline.vacantUnitCount + 1,
+      currentOperations: {
+        openMaintenanceIssueCount:
+          dashboardBaseline.currentOperations.openMaintenanceIssueCount + 1,
+        urgentMaintenanceIssueCount:
+          dashboardBaseline.currentOperations.urgentMaintenanceIssueCount + 1,
+        openMaintenanceWorkOrderCount:
+          dashboardBaseline.currentOperations.openMaintenanceWorkOrderCount + 1,
+        locatedAssetCount:
+          dashboardBaseline.currentOperations.locatedAssetCount + 2,
+        activeAssetCount:
+          dashboardBaseline.currentOperations.activeAssetCount + 2,
+        inactiveAssetCount:
+          dashboardBaseline.currentOperations.inactiveAssetCount,
+        activeServicePlanCount:
+          dashboardBaseline.currentOperations.activeServicePlanCount + 1,
+        openWarrantyClaimCount:
+          dashboardBaseline.currentOperations.openWarrantyClaimCount + 1,
+        activeMeterCount:
+          dashboardBaseline.currentOperations.activeMeterCount + 1,
+      },
+    });
+
+    function cents(value: string): bigint {
+      return BigInt(value.replace('.', ''));
+    }
+
+    function costByCurrency(
+      rows: readonly { currency: string; capex: string; opex: string; unclassified: string; total: string }[],
+      currency: string,
+    ) {
+      return (
+        rows.find((row) => row.currency === currency) ?? {
+          currency,
+          capex: '0.00',
+          opex: '0.00',
+          unclassified: '0.00',
+          total: '0.00',
+        }
+      );
+    }
+
+    const baselineChf = costByCurrency(
+      dashboardBaseline.portfolioCostsByCurrency,
+      'CHF',
+    );
+    const dashboardChf = costByCurrency(
+      dashboard.portfolioCostsByCurrency,
+      'CHF',
+    );
+    expect(cents(dashboardChf.capex) - cents(baselineChf.capex)).toBe(10000n);
+    expect(cents(dashboardChf.opex) - cents(baselineChf.opex)).toBe(6550n);
+    expect(
+      cents(dashboardChf.unclassified) - cents(baselineChf.unclassified),
+    ).toBe(0n);
+    expect(cents(dashboardChf.total) - cents(baselineChf.total)).toBe(16550n);
+
+    const baselineEur = costByCurrency(
+      dashboardBaseline.portfolioCostsByCurrency,
+      'EUR',
+    );
+    const dashboardEur = costByCurrency(
+      dashboard.portfolioCostsByCurrency,
+      'EUR',
+    );
+    expect(cents(dashboardEur.capex) - cents(baselineEur.capex)).toBe(0n);
+    expect(cents(dashboardEur.opex) - cents(baselineEur.opex)).toBe(4000n);
+    expect(
+      cents(dashboardEur.unclassified) - cents(baselineEur.unclassified),
+    ).toBe(1000n);
+    expect(cents(dashboardEur.total) - cents(baselineEur.total)).toBe(5000n);
+
+    const reportingPropertyA = dashboard.properties.find(
+      (property) => property.propertyId === propertyA.id,
+    );
+    const reportingPropertyB = dashboard.properties.find(
+      (property) => property.propertyId === propertyB.id,
+    );
+
+    expect(reportingPropertyA).toMatchObject({
+      propertyId: propertyA.id,
+      unitCount: 1,
+      occupiedUnitCount: 1,
+      plannedUnitCount: 0,
+      vacantUnitCount: 0,
+      currentOpenMaintenanceIssueCount: 1,
+      currentUrgentMaintenanceIssueCount: 1,
+      currentLocatedAssetCount: 1,
+      currentActiveAssetCount: 1,
+      currentActiveMeterCount: 1,
+    });
+    expect(reportingPropertyB).toMatchObject({
+      propertyId: propertyB.id,
+      unitCount: 1,
+      occupiedUnitCount: 0,
+      plannedUnitCount: 0,
+      vacantUnitCount: 1,
+      currentOpenMaintenanceIssueCount: 0,
+      currentUrgentMaintenanceIssueCount: 0,
+      currentLocatedAssetCount: 1,
+      currentActiveAssetCount: 1,
+      currentActiveMeterCount: 0,
+    });
+
+    const relationCheck = await sql<{
+      reporting_table_count: number;
+    }[]>`
+      select count(*)::int as reporting_table_count
+      from information_schema.tables
+      where table_schema = 'public'
+        and table_name like 'reporting_%'
+    `;
+    expect(relationCheck[0]?.reporting_table_count).toBe(0);
+
+    // Reporting is a read model; nothing in this query path mutates source rows.
+    expect(assetB.unitId).toBe(unitB.id);
+  });
+
+
+  it('accepts exact Portfolio money aggregates beyond the scalar MoneyAmount range', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+    const [propertyRow] = await sql<{ id: string }[]>`
+      select id
+      from public.properties
+      order by id
+      limit 1
+    `;
+    if (!propertyRow) throw new Error('Expected a Property for reporting aggregate test.');
+
+    const asOf = asDateOnly('2026-09-21');
+    const before = await reportingRepository.getPortfolioDashboard(asOf);
+    const ids = new SequenceIds([
+      'f2400000-0000-4000-8000-000000000001',
+      'f2400000-0000-4000-8000-000000000002',
+    ]);
+    const deps = {
+      costRepository,
+      portfolioRepository,
+      partyRepository,
+      assetRepository,
+      assetServiceRepository,
+      improvementRepository,
+      maintenanceRepository,
+      idGenerator: ids,
+      clock: { now: () => '2026-09-21T12:00:00.000Z' },
+    };
+    const propertyId = asPropertyId(propertyRow.id);
+
+    for (const description of ['Wide aggregate A', 'Wide aggregate B']) {
+      await createCostCommand(
+        deps,
+        actor,
+        {
+          source: { kind: 'property', propertyId },
+          description,
+          amount: '9999999999999999.99',
+          currency: 'CHF',
+          incurredOn: '2026-09-21',
+          reportingClass: 'capex',
+        },
+      );
+    }
+
+    const after = await reportingRepository.getPortfolioDashboard(asOf);
+    const beforeChf = before.portfolioCostsByCurrency.find(
+      (item) => item.currency === 'CHF',
+    );
+    const afterChf = after.portfolioCostsByCurrency.find(
+      (item) => item.currency === 'CHF',
+    );
+    if (!afterChf) throw new Error('Expected CHF Portfolio aggregate.');
+
+    const cents = (value: string): bigint => BigInt(value.replace('.', ''));
+    expect(
+      cents(afterChf.total) - cents(beforeChf?.total ?? '0.00'),
+    ).toBe(1999999999999999998n);
+    expect(
+      cents(afterChf.capex) - cents(beforeChf?.capex ?? '0.00'),
+    ).toBe(1999999999999999998n);
+  });
+
+  it('keeps one reporting response on one repeatable-read database snapshot', async () => {
+    const reportingSql = postgres(connectionString, { max: 1 });
+    const writerSql = postgres(connectionString, { max: 1 });
+    let releaseSnapshot!: () => void;
+    const snapshotEstablished = new Promise<void>((resolve) => {
+      releaseSnapshot = resolve;
+    });
+    let releaseReporting!: () => void;
+    const writerCommitted = new Promise<void>((resolve) => {
+      releaseReporting = resolve;
+    });
+
+    try {
+      const [propertyRow] = await writerSql<{ id: string }[]>`
+        select id
+        from public.properties
+        order by id
+        limit 1
+      `;
+      if (!propertyRow) throw new Error('Expected a Property for reporting snapshot test.');
+
+      const writerAccessRepository = new PostgresUserAccessRepository(writerSql);
+      const writerActor = await resolveActor(writerAccessRepository, {
+        provider: 'supabase',
+        subject: 'external-admin-subject',
+      });
+      const writerPortfolioRepository = new PostgresPortfolioRepository(writerSql);
+      const writerMaintenanceRepository = new PostgresMaintenanceRepository(writerSql);
+      const writerAssetRepository = new PostgresAssetRepository(writerSql);
+      const writerAssetServiceRepository = new PostgresAssetServiceRepository(writerSql);
+      const writerInspectionRepository = new PostgresInspectionRepository(writerSql);
+      const writerPartyRepository = new PostgresPartyRepository(writerSql);
+      const asOf = asDateOnly('2026-09-21');
+
+      const reportingRead = reportingSql.begin(
+        'isolation level repeatable read read only',
+        async (tx) => {
+          const [mode] = await tx<{
+            isolation_level: string;
+            read_only: string;
+          }[]>`
+            select
+              current_setting('transaction_isolation') as isolation_level,
+              current_setting('transaction_read_only') as read_only
+          `;
+          expect(mode).toEqual({
+            isolation_level: 'repeatable read',
+            read_only: 'on',
+          });
+
+          const propertyRows = await tx<{
+            current_open_maintenance_issue_count: string | number | bigint;
+          }[]>`
+            select current_open_maintenance_issue_count
+            from public.reporting_property_summaries(${asOf}::date)
+          `;
+          const propertyOpenIssues = propertyRows.reduce(
+            (sum, row) =>
+              sum + Number(row.current_open_maintenance_issue_count),
+            0,
+          );
+
+          releaseSnapshot();
+          await writerCommitted;
+
+          const [operations] = await tx<{
+            open_maintenance_issue_count: string | number | bigint;
+          }[]>`
+            select count(*)::bigint as open_maintenance_issue_count
+            from public.maintenance_issues
+            where status = 'open'
+          `;
+          if (!operations) {
+            throw new Error('Expected Portfolio operations row.');
+          }
+
+          expect(Number(operations.open_maintenance_issue_count)).toBe(
+            propertyOpenIssues,
+          );
+          return propertyOpenIssues;
+        },
+      );
+
+      await snapshotEstablished;
+
+      let writerFailure: unknown;
+      try {
+        await createMaintenanceIssueCommand(
+          {
+            maintenanceRepository: writerMaintenanceRepository,
+            portfolioRepository: writerPortfolioRepository,
+            assetRepository: writerAssetRepository,
+            assetServiceRepository: writerAssetServiceRepository,
+            inspectionRepository: writerInspectionRepository,
+            partyRepository: writerPartyRepository,
+            staffDirectoryRepository: writerAccessRepository,
+            idGenerator: new SequenceIds([
+              'f2400000-0000-4000-8000-000000000010',
+            ]),
+            clock: { now: () => '2026-09-21T12:30:00.000Z' },
+          },
+          writerActor,
+          {
+            code: 'MI-REPORT-SNAPSHOT-RACE',
+            propertyId: asPropertyId(propertyRow.id),
+            title: 'Concurrent reporting snapshot proof',
+            priority: 'normal',
+            reportedAt: '2026-09-21T12:30:00.000Z',
+          },
+        );
+      } catch (error) {
+        writerFailure = error;
+      } finally {
+        releaseReporting();
+      }
+
+      const preWriteOpenIssues = await reportingRead;
+      if (writerFailure !== undefined) throw writerFailure;
+
+      const fresh = await new PostgresReportingRepository(
+        reportingSql,
+      ).getPortfolioDashboard(asOf);
+      expect(fresh.currentOperations.openMaintenanceIssueCount).toBe(
+        preWriteOpenIssues + 1,
+      );
+      expect(
+        fresh.properties.reduce(
+          (sum, property) =>
+            sum + property.currentOpenMaintenanceIssueCount,
+          0,
+        ),
+      ).toBe(preWriteOpenIssues + 1);
+    } finally {
+      await reportingSql.end();
+      await writerSql.end();
+    }
   });
 
 });

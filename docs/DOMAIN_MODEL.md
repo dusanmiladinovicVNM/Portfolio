@@ -375,6 +375,95 @@ convenience and cannot be written back to domain state.
 Technical request/security/audit logging remains a separate concern from this
 business chronology.
 
+
+## Reporting + Portfolio projections
+
+Canonical #23 is a read-only cross-context projection layer. It does not add
+business write state:
+
+```text
+canonical domain tables
+       ↓
+parameterized SQL projections
+       ↓
+ReportingRepository
+       ↓
+Unit overview / Portfolio dashboard
+```
+
+Every reporting request carries an explicit business `asOf` date. No
+projection uses session/current date to decide occupancy, contract coverage or
+Cost inclusion.
+
+The projection intentionally separates two temporal classes:
+
+```text
+asOf business facts
+  - Tenancy occupancy interval
+  - canonical signed lease coverage
+  - effective commercial terms
+  - Cost incurredOn cutoff
+
+current state
+  - Maintenance workload
+  - Asset inventory/status
+  - active ServicePlans
+  - open WarrantyClaims
+  - active Meters
+  - draft LeaseAgreement workflow count
+```
+
+Current values are named as current metadata and are not represented as
+historical facts at `asOf`.
+
+Occupancy is derived from Tenancy truth only:
+
+```text
+actual occupancy covering asOf -> occupied
+else retained planned interval covering asOf -> planned
+else -> vacant
+```
+
+The domain reporting boundary independently validates that an
+`occupied|planned` label has the matching interval covering `asOf`.
+`Unit.status` never determines occupancy.
+
+Legal contract coverage is:
+
+```text
+effective | future_signed | missing
+```
+
+It evaluates the **current canonical signed agreement chain** at `asOf`.
+Because predecessor `effectiveTo` is deliberately not rewritten when a
+successor is signed, Reporting explicitly treats a signed successor's
+`effectiveFrom` as the predecessor's governing upper boundary. Thus a
+currently `superseded` agreement can still correctly govern an earlier
+business date.
+
+Draft agreements are current workflow facts only and are exposed separately as
+`currentDraftAgreementCount`; they never masquerade as historical legal
+coverage.
+
+Effective Tenancy terms follow the same legal-chain boundary and preserve exact
+money plus the original billing frequency. Reporting does not invent monthly
+normalization.
+
+Cost summaries use the **currently corrected Cost ledger filtered by
+`incurredOn <= asOf`**. Reversed originals are excluded and non-reversed
+replacement Costs participate. This is not a historical "what the database knew
+then" ledger.
+
+Currencies are independent reporting grains. CAPEX/OPEX/unclassified/total are
+calculated per currency only; no CHF/EUR/RSD cross-currency total exists.
+
+Unit Cost attribution is conservative and uses only durable deterministic
+parents: Unit, immutable Space Unit, Unit-scoped Improvement/Work and immutable
+Maintenance scope. Property Costs and direct Asset/Warranty/Service Costs are
+not copied/guessed into a Unit summary. Portfolio-wide totals may include every
+effective Cost because no Unit allocation is required.
+
+
 ### Cost
 
 Canonical #18 defines Cost as one append-only positive monetary allocation to exactly one typed business source. Cost is a financial fact/projection and never substitutes for the source entity's own state or lifecycle.
