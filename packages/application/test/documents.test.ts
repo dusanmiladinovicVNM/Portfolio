@@ -297,6 +297,7 @@ describe('Document application workflow', () => {
         {
           documentRepository: new ReadRepository(),
           fileStorage: storage,
+          binaryPolicy: DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
         },
         actor,
         versionId,
@@ -347,6 +348,7 @@ describe('Document application workflow', () => {
         {
           documentRepository: new ReadRepository(),
           fileStorage: storage,
+          binaryPolicy: DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
         },
         actor,
         versionId,
