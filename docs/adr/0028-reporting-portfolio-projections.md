@@ -165,6 +165,13 @@ Each summary keeps:
 
 All values are exact two-decimal strings.
 
+`MoneyAmount` remains the bounded scalar type for one canonical monetary
+fact. Reporting totals use a separate `ReportingMoneyAmount` aggregate type:
+the scale remains exact at two decimals, but the whole-part range is not capped
+to the scalar 16-digit limit. A set of individually valid Costs or recurring
+term components therefore cannot make a read projection invalid merely because
+their exact sum is wider than one fact.
+
 ### Unit cost attribution
 
 Unit reporting only includes Costs whose Unit attribution is deterministic from
@@ -196,6 +203,17 @@ occupancy source of truth.
 
 Canonical #23 therefore avoids propagating any legacy occupancy flag into the
 new projection.
+
+### Consistent response snapshot
+
+One Reporting DTO is one database observation. If a response needs multiple SQL
+statements, they run inside one PostgreSQL `REPEATABLE READ READ ONLY`
+transaction. A plain `READ COMMITTED` transaction is insufficient because its
+statements may observe different committed snapshots.
+
+This applies to both Unit overview composition and Portfolio dashboard
+composition. A concurrent write becomes visible on the next Reporting request,
+not halfway through the current response.
 
 ### Portfolio dashboard
 
@@ -242,8 +260,14 @@ Canonical #23 must prove at minimum:
     current-operation totals; obvious subcounts such as urgent<=open and
     active/inactive Asset counts<=located Assets are validated at the domain
     projection boundary;
-20. Reporting reads require `portfolio:read`;
-21. reporting projections are not accepted as write commands.
+20. Reporting monetary aggregates are exact two-decimal strings with a wider
+    range than scalar `MoneyAmount`; summing individually valid monetary facts
+    cannot fail only because the aggregate crosses the scalar whole-part limit;
+21. every multi-statement Reporting response is assembled inside one PostgreSQL
+    `REPEATABLE READ READ ONLY` transaction; a concurrent commit cannot produce
+    a torn DTO, and the next request observes the new committed state;
+22. Reporting reads require `portfolio:read`;
+23. reporting projections are not accepted as write commands.
 
 ## Deferred
 
