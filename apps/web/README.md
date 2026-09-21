@@ -41,3 +41,28 @@ The first commit establishes the React/Vite package, production build gate,
 Supabase session gateway, authenticated shell and typed bearer-token Portfolio
 HTTP transport. Portfolio dashboard and Unit dossier data are the next vertical
 slice.
+
+
+## Navigation state
+
+Workspace identity and reporting context live in the browser URL, not in
+transient React DTO state:
+
+```text
+/dashboard?asOf=2025-06-30
+/properties/<propertyId>?asOf=2025-06-30
+/properties/<propertyId>/units/<unitId>?tab=overview&asOf=2025-06-30
+```
+
+Rules:
+
+- `propertyId`, `unitId`, dossier `tab` and reporting `asOf` are URL-owned
+  navigation state.
+- Dashboard → Property → Unit drill-down preserves the same `asOf`.
+- Changing `asOf` in Unit Overview updates the same route-level context.
+- Property and Unit DTOs are fetched from canonical HTTP reads after navigation;
+  they are not carried as route identity.
+- `popstate` restores Back/Forward navigation and a refresh can reconstruct the
+  workspace from the URL.
+- Production hosting must rewrite these application routes to `index.html` so
+  direct deep links load the Vite shell before client-side route restoration.

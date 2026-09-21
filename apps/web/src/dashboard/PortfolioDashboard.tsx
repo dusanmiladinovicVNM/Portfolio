@@ -3,14 +3,17 @@ import {
   type PortfolioDashboardResponse,
 } from '@portfolio/contracts';
 import { useEffect, useState } from 'react';
+import { reportingDashboardPath } from '../api/paths.js';
 import type { PortfolioApi } from '../api/portfolio-api.js';
-import { formatExactMoney, localDateOnly } from '../presentation/format.js';
-
-type PropertySummary = PortfolioDashboardResponse['properties'][number];
+import { WorkspaceLink } from '../navigation/WorkspaceLink.js';
+import { propertyRoute } from '../navigation/workspace-route.js';
+import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
+import { formatExactMoney } from '../presentation/format.js';
 
 interface PortfolioDashboardProps {
   readonly api: PortfolioApi;
-  readonly onSelectProperty: (property: PropertySummary) => void;
+  readonly asOf: string;
+  readonly navigate: NavigateWorkspace;
 }
 
 function occupancyRate(data: PortfolioDashboardResponse): string {
@@ -29,9 +32,9 @@ function LoadingState() {
 
 export function PortfolioDashboard({
   api,
-  onSelectProperty,
+  asOf,
+  navigate,
 }: PortfolioDashboardProps) {
-  const [asOf, setAsOf] = useState(localDateOnly);
   const [data, setData] = useState<PortfolioDashboardResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [requestVersion, setRequestVersion] = useState(0);
@@ -42,12 +45,15 @@ export function PortfolioDashboard({
     setError(null);
 
     void api
-      .get(
-        `/reporting/dashboard?asOf=${encodeURIComponent(asOf)}`,
-        portfolioDashboardResponseSchema,
-        { signal: controller.signal },
-      )
-      .then(setData)
+      .get(reportingDashboardPath(asOf), portfolioDashboardResponseSchema, {
+        signal: controller.signal,
+      })
+      .then((result) => {
+        if (result.asOf !== asOf) {
+          throw new Error('Portfolio dashboard returned a different as-of date.');
+        }
+        setData(result);
+      })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
         setError(
@@ -65,7 +71,7 @@ export function PortfolioDashboard({
       <header className="workspace-header">
         <div>
           <p className="eyebrow">Portfolio dashboard</p>
-          <h1>Current portfolio picture</h1>
+          <h1>Portfolio picture</h1>
           <p className="header-note">
             Occupancy and costs are historical as of the selected business date.
             Operational counters represent current operations.
@@ -75,7 +81,12 @@ export function PortfolioDashboard({
           As of
           <input
             aria-label="Reporting business date"
-            onChange={(event) => setAsOf(event.currentTarget.value)}
+            onChange={(event) =>
+              navigate(
+                { kind: 'dashboard', asOf: event.currentTarget.value },
+                { replace: true },
+              )
+            }
             type="date"
             value={asOf}
           />
@@ -130,7 +141,9 @@ export function PortfolioDashboard({
                 <p className="eyebrow">Current operations</p>
                 <h2>Operational attention</h2>
               </div>
-              <span className="section-note">Current state · not rewound by as-of date</span>
+              <span className="section-note">
+                Current state · not rewound by as-of date
+              </span>
             </div>
             <div className="operations-grid">
               <div><span>Open maintenance</span><strong>{data.currentOperations.openMaintenanceIssueCount}</strong></div>
@@ -148,7 +161,9 @@ export function PortfolioDashboard({
                 <p className="eyebrow">Cost ledger</p>
                 <h2>Portfolio costs by currency</h2>
               </div>
-              <span className="section-note">No cross-currency total or FX conversion</span>
+              <span className="section-note">
+                No cross-currency total or FX conversion
+              </span>
             </div>
             {data.portfolioCostsByCurrency.length === 0 ? (
               <p className="muted">No attributed costs through {data.asOf}.</p>
@@ -184,22 +199,27 @@ export function PortfolioDashboard({
                 <table>
                   <thead>
                     <tr>
-                      <th>Property</th><th>Units</th><th>Occupied</th><th>Planned</th>
-                      <th>Vacant</th><th>Open issues</th><th>Urgent</th>
+                      <th>Property</th>
+                      <th>Units</th>
+                      <th>Occupied</th>
+                      <th>Planned</th>
+                      <th>Vacant</th>
+                      <th>Open issues</th>
+                      <th>Urgent</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.properties.map((property) => (
                       <tr key={property.propertyId}>
                         <td>
-                          <button
+                          <WorkspaceLink
                             className="table-link"
-                            onClick={() => onSelectProperty(property)}
-                            type="button"
+                            navigate={navigate}
+                            route={propertyRoute(property.propertyId, asOf)}
                           >
                             <strong>{property.propertyCode}</strong>
                             <span>{property.propertyName}</span>
-                          </button>
+                          </WorkspaceLink>
                         </td>
                         <td>{property.unitCount}</td>
                         <td>{property.occupiedUnitCount}</td>

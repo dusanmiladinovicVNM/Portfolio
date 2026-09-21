@@ -1,15 +1,17 @@
 import {
   unitReportingOverviewResponseSchema,
   type UnitReportingOverviewResponse,
-  type UnitResponse,
 } from '@portfolio/contracts';
 import { useEffect, useState } from 'react';
+import { unitOverviewPath } from '../api/paths.js';
 import type { PortfolioApi } from '../api/portfolio-api.js';
-import { formatExactMoney, localDateOnly } from '../presentation/format.js';
+import { formatExactMoney } from '../presentation/format.js';
 
 interface UnitOverviewProps {
   readonly api: PortfolioApi;
-  readonly unit: UnitResponse;
+  readonly unitId: string;
+  readonly asOf: string;
+  readonly onAsOfChange: (asOf: string) => void;
 }
 
 function coverageLabel(
@@ -20,8 +22,12 @@ function coverageLabel(
   return 'Missing';
 }
 
-export function UnitOverview({ api, unit }: UnitOverviewProps) {
-  const [asOf, setAsOf] = useState(localDateOnly);
+export function UnitOverview({
+  api,
+  unitId,
+  asOf,
+  onAsOfChange,
+}: UnitOverviewProps) {
   const [overview, setOverview] =
     useState<UnitReportingOverviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -33,11 +39,16 @@ export function UnitOverview({ api, unit }: UnitOverviewProps) {
 
     void api
       .get(
-        `/units/${encodeURIComponent(unit.id)}/overview?asOf=${encodeURIComponent(asOf)}`,
+        unitOverviewPath(unitId, asOf),
         unitReportingOverviewResponseSchema,
         { signal: controller.signal },
       )
-      .then(setOverview)
+      .then((result) => {
+        if (result.asOf !== asOf) {
+          throw new Error('Unit overview returned a different as-of date.');
+        }
+        setOverview(result);
+      })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
         setError(
@@ -48,7 +59,7 @@ export function UnitOverview({ api, unit }: UnitOverviewProps) {
       });
 
     return () => controller.abort();
-  }, [api, asOf, unit.id]);
+  }, [api, asOf, unitId]);
 
   return (
     <>
@@ -64,7 +75,7 @@ export function UnitOverview({ api, unit }: UnitOverviewProps) {
           Overview as of
           <input
             aria-label="Unit overview business date"
-            onChange={(event) => setAsOf(event.currentTarget.value)}
+            onChange={(event) => onAsOfChange(event.currentTarget.value)}
             type="date"
             value={asOf}
           />
@@ -99,9 +110,7 @@ export function UnitOverview({ api, unit }: UnitOverviewProps) {
               <strong className="text-metric">
                 {coverageLabel(overview.contract.coverageStatus)}
               </strong>
-              <small>
-                {overview.contract.agreementCode ?? 'No selected agreement'}
-              </small>
+              <small>{overview.contract.agreementCode ?? 'No selected agreement'}</small>
             </article>
             <article className="metric-card">
               <span>Area</span>
@@ -121,26 +130,11 @@ export function UnitOverview({ api, unit }: UnitOverviewProps) {
               <h2>{overview.tenancy?.code ?? 'No tenancy at this date'}</h2>
               {overview.tenancy ? (
                 <dl className="detail-list">
-                  <div>
-                    <dt>Status</dt>
-                    <dd>{overview.tenancy.currentStatus}</dd>
-                  </div>
-                  <div>
-                    <dt>Actual start</dt>
-                    <dd>{overview.tenancy.actualStart ?? '—'}</dd>
-                  </div>
-                  <div>
-                    <dt>Actual end</dt>
-                    <dd>{overview.tenancy.actualEnd ?? '—'}</dd>
-                  </div>
-                  <div>
-                    <dt>Planned start</dt>
-                    <dd>{overview.tenancy.plannedStart ?? '—'}</dd>
-                  </div>
-                  <div>
-                    <dt>Planned end</dt>
-                    <dd>{overview.tenancy.plannedEnd ?? '—'}</dd>
-                  </div>
+                  <div><dt>Status</dt><dd>{overview.tenancy.currentStatus}</dd></div>
+                  <div><dt>Actual start</dt><dd>{overview.tenancy.actualStart ?? '—'}</dd></div>
+                  <div><dt>Actual end</dt><dd>{overview.tenancy.actualEnd ?? '—'}</dd></div>
+                  <div><dt>Planned start</dt><dd>{overview.tenancy.plannedStart ?? '—'}</dd></div>
+                  <div><dt>Planned end</dt><dd>{overview.tenancy.plannedEnd ?? '—'}</dd></div>
                 </dl>
               ) : (
                 <p className="muted">
@@ -153,29 +147,14 @@ export function UnitOverview({ api, unit }: UnitOverviewProps) {
               <p className="eyebrow">Contract</p>
               <h2>{coverageLabel(overview.contract.coverageStatus)}</h2>
               <dl className="detail-list">
-                <div>
-                  <dt>Agreement</dt>
-                  <dd>{overview.contract.agreementCode ?? '—'}</dd>
-                </div>
-                <div>
-                  <dt>Status</dt>
-                  <dd>{overview.contract.agreementCurrentStatus ?? '—'}</dd>
-                </div>
+                <div><dt>Agreement</dt><dd>{overview.contract.agreementCode ?? '—'}</dd></div>
+                <div><dt>Status</dt><dd>{overview.contract.agreementCurrentStatus ?? '—'}</dd></div>
                 <div>
                   <dt>Effective</dt>
-                  <dd>
-                    {overview.contract.effectiveFrom ?? '—'} →{' '}
-                    {overview.contract.effectiveTo ?? 'open'}
-                  </dd>
+                  <dd>{overview.contract.effectiveFrom ?? '—'} → {overview.contract.effectiveTo ?? 'open'}</dd>
                 </div>
-                <div>
-                  <dt>Signed</dt>
-                  <dd>{overview.contract.signedAt ?? '—'}</dd>
-                </div>
-                <div>
-                  <dt>Other drafts</dt>
-                  <dd>{overview.contract.currentDraftAgreementCount}</dd>
-                </div>
+                <div><dt>Signed</dt><dd>{overview.contract.signedAt ?? '—'}</dd></div>
+                <div><dt>Other drafts</dt><dd>{overview.contract.currentDraftAgreementCount}</dd></div>
               </dl>
               {overview.contract.effectiveTerms ? (
                 <div className="term-total">
@@ -186,9 +165,7 @@ export function UnitOverview({ api, unit }: UnitOverviewProps) {
                       overview.contract.effectiveTerms.recurringTotal,
                     )}
                   </strong>
-                  <small>
-                    {overview.contract.effectiveTerms.billingFrequency}
-                  </small>
+                  <small>{overview.contract.effectiveTerms.billingFrequency}</small>
                 </div>
               ) : null}
             </article>
@@ -196,56 +173,24 @@ export function UnitOverview({ api, unit }: UnitOverviewProps) {
 
           <section className="panel">
             <div className="section-heading">
-              <div>
-                <p className="eyebrow">Current operations</p>
-                <h2>Unit attention</h2>
-              </div>
+              <div><p className="eyebrow">Current operations</p><h2>Unit attention</h2></div>
               <span className="section-note">
                 Current state · independent of overview as-of
               </span>
             </div>
             <div className="operations-grid">
-              <div>
-                <span>Open issues</span>
-                <strong>
-                  {overview.currentOperations.openMaintenanceIssueCount}
-                </strong>
-              </div>
-              <div>
-                <span>Urgent issues</span>
-                <strong>
-                  {overview.currentOperations.urgentMaintenanceIssueCount}
-                </strong>
-              </div>
-              <div>
-                <span>Work orders</span>
-                <strong>
-                  {overview.currentOperations.openMaintenanceWorkOrderCount}
-                </strong>
-              </div>
-              <div>
-                <span>Located assets</span>
-                <strong>{overview.currentOperations.locatedAssetCount}</strong>
-              </div>
-              <div>
-                <span>Service plans</span>
-                <strong>
-                  {overview.currentOperations.activeServicePlanCount}
-                </strong>
-              </div>
-              <div>
-                <span>Active meters</span>
-                <strong>{overview.currentOperations.activeMeterCount}</strong>
-              </div>
+              <div><span>Open issues</span><strong>{overview.currentOperations.openMaintenanceIssueCount}</strong></div>
+              <div><span>Urgent issues</span><strong>{overview.currentOperations.urgentMaintenanceIssueCount}</strong></div>
+              <div><span>Work orders</span><strong>{overview.currentOperations.openMaintenanceWorkOrderCount}</strong></div>
+              <div><span>Located assets</span><strong>{overview.currentOperations.locatedAssetCount}</strong></div>
+              <div><span>Service plans</span><strong>{overview.currentOperations.activeServicePlanCount}</strong></div>
+              <div><span>Active meters</span><strong>{overview.currentOperations.activeMeterCount}</strong></div>
             </div>
           </section>
 
           <section className="panel">
             <div className="section-heading">
-              <div>
-                <p className="eyebrow">Attributed cost ledger</p>
-                <h2>Costs through {overview.asOf}</h2>
-              </div>
+              <div><p className="eyebrow">Attributed cost ledger</p><h2>Costs through {overview.asOf}</h2></div>
               <span className="section-note">Currencies stay separate</span>
             </div>
             {overview.unitAttributedCostsByCurrency.length === 0 ? (
@@ -257,24 +202,11 @@ export function UnitOverview({ api, unit }: UnitOverviewProps) {
                 {overview.unitAttributedCostsByCurrency.map((cost) => (
                   <article className="cost-card" key={cost.currency}>
                     <span>{cost.currency}</span>
-                    <strong>
-                      {formatExactMoney(cost.currency, cost.total)}
-                    </strong>
+                    <strong>{formatExactMoney(cost.currency, cost.total)}</strong>
                     <dl>
-                      <div>
-                        <dt>CAPEX</dt>
-                        <dd>{formatExactMoney(cost.currency, cost.capex)}</dd>
-                      </div>
-                      <div>
-                        <dt>OPEX</dt>
-                        <dd>{formatExactMoney(cost.currency, cost.opex)}</dd>
-                      </div>
-                      <div>
-                        <dt>Unclassified</dt>
-                        <dd>
-                          {formatExactMoney(cost.currency, cost.unclassified)}
-                        </dd>
-                      </div>
+                      <div><dt>CAPEX</dt><dd>{formatExactMoney(cost.currency, cost.capex)}</dd></div>
+                      <div><dt>OPEX</dt><dd>{formatExactMoney(cost.currency, cost.opex)}</dd></div>
+                      <div><dt>Unclassified</dt><dd>{formatExactMoney(cost.currency, cost.unclassified)}</dd></div>
                     </dl>
                   </article>
                 ))}

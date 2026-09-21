@@ -1,24 +1,16 @@
-import {
-  type PortfolioDashboardResponse,
-  type UnitResponse,
-} from '@portfolio/contracts';
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { createPortfolioApi } from './api/portfolio-api.js';
 import type { AuthSession, SessionGateway } from './auth/session-gateway.js';
 import { PortfolioDashboard } from './dashboard/PortfolioDashboard.js';
 import { PropertyUnits } from './dossier/PropertyUnits.js';
 import { UnitDossier } from './dossier/UnitDossier.js';
-
-type PropertySummary = PortfolioDashboardResponse['properties'][number];
-
-type WorkspaceView =
-  | { readonly kind: 'dashboard' }
-  | { readonly kind: 'property'; readonly property: PropertySummary }
-  | {
-      readonly kind: 'unit';
-      readonly property: PropertySummary;
-      readonly unit: UnitResponse;
-    };
+import { WorkspaceLink } from './navigation/WorkspaceLink.js';
+import {
+  dashboardRoute,
+  propertyRoute,
+  unitRoute,
+} from './navigation/workspace-route.js';
+import { useWorkspaceNavigation } from './navigation/use-workspace-navigation.js';
 
 interface AppProps {
   readonly apiBaseUrl: string;
@@ -54,10 +46,31 @@ function Login({ sessionGateway }: Pick<AppProps, 'sessionGateway'>) {
           by Portfolio on the server, independently of the external auth role.
         </p>
         <form className="login-form" onSubmit={submit}>
-          <label>Email<input autoComplete="email" inputMode="email" onChange={(event) => setEmail(event.currentTarget.value)} required type="email" value={email} /></label>
-          <label>Password<input autoComplete="current-password" onChange={(event) => setPassword(event.currentTarget.value)} required type="password" value={password} /></label>
+          <label>
+            Email
+            <input
+              autoComplete="email"
+              inputMode="email"
+              onChange={(event) => setEmail(event.currentTarget.value)}
+              required
+              type="email"
+              value={email}
+            />
+          </label>
+          <label>
+            Password
+            <input
+              autoComplete="current-password"
+              onChange={(event) => setPassword(event.currentTarget.value)}
+              required
+              type="password"
+              value={password}
+            />
+          </label>
           {error ? <p className="form-error">{error}</p> : null}
-          <button disabled={submitting} type="submit">{submitting ? 'Signing in…' : 'Sign in'}</button>
+          <button disabled={submitting} type="submit">
+            {submitting ? 'Signing in…' : 'Sign in'}
+          </button>
         </form>
       </section>
     </main>
@@ -74,12 +87,13 @@ function AuthenticatedShell({
   readonly sessionGateway: SessionGateway;
 }) {
   const [signOutError, setSignOutError] = useState<string | null>(null);
-  const [view, setView] = useState<WorkspaceView>({ kind: 'dashboard' });
+  const { route, navigate } = useWorkspaceNavigation();
   const api = useMemo(
-    () => createPortfolioApi({
-      baseUrl: apiBaseUrl,
-      getAccessToken: () => session.accessToken,
-    }),
+    () =>
+      createPortfolioApi({
+        baseUrl: apiBaseUrl,
+        getAccessToken: () => session.accessToken,
+      }),
     [apiBaseUrl, session.accessToken],
   );
 
@@ -95,50 +109,80 @@ function AuthenticatedShell({
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div><p className="brand">Portfolio</p><p className="eyebrow">Property lifecycle</p></div>
+        <div>
+          <p className="brand">Portfolio</p>
+          <p className="eyebrow">Property lifecycle</p>
+        </div>
         <nav aria-label="Primary">
-          <button
-            className={`nav-item ${view.kind === 'dashboard' ? 'nav-item-active' : ''}`}
-            onClick={() => setView({ kind: 'dashboard' })}
-            type="button"
+          <WorkspaceLink
+            ariaCurrent={route.kind === 'dashboard' ? 'page' : undefined}
+            className={`nav-item ${route.kind === 'dashboard' ? 'nav-item-active' : ''}`}
+            navigate={navigate}
+            route={dashboardRoute(route.asOf)}
           >
             Overview
-          </button>
-          <span className={`nav-item ${view.kind === 'property' ? 'nav-item-active' : ''}`}>
-            Property
-          </span>
-          <span className={`nav-item ${view.kind === 'unit' ? 'nav-item-active' : ''}`}>
-            Unit dossier
-          </span>
+          </WorkspaceLink>
+          {route.kind === 'property' || route.kind === 'unit' ? (
+            <WorkspaceLink
+              ariaCurrent={route.kind === 'property' ? 'page' : undefined}
+              className={`nav-item ${route.kind === 'property' ? 'nav-item-active' : ''}`}
+              navigate={navigate}
+              route={propertyRoute(route.propertyId, route.asOf)}
+            >
+              Property
+            </WorkspaceLink>
+          ) : (
+            <span className="nav-item nav-item-disabled">Property</span>
+          )}
+          {route.kind === 'unit' ? (
+            <WorkspaceLink
+              ariaCurrent="page"
+              className="nav-item nav-item-active"
+              navigate={navigate}
+              route={unitRoute(
+                route.propertyId,
+                route.unitId,
+                route.asOf,
+                route.tab,
+              )}
+            >
+              Unit dossier
+            </WorkspaceLink>
+          ) : (
+            <span className="nav-item nav-item-disabled">Unit dossier</span>
+          )}
         </nav>
         <div className="session-card">
           <span>{session.email ?? 'Authenticated user'}</span>
-          <button className="button-secondary" onClick={signOut} type="button">Sign out</button>
+          <button className="button-secondary" onClick={signOut} type="button">
+            Sign out
+          </button>
           {signOutError ? <p className="form-error">{signOutError}</p> : null}
         </div>
       </aside>
+
       <main className="workspace">
-        {view.kind === 'dashboard' ? (
-          <PortfolioDashboard
-            api={api}
-            onSelectProperty={(property) => setView({ kind: 'property', property })}
-          />
+        {route.kind === 'dashboard' ? (
+          <PortfolioDashboard api={api} asOf={route.asOf} navigate={navigate} />
         ) : null}
-        {view.kind === 'property' ? (
+
+        {route.kind === 'property' ? (
           <PropertyUnits
             api={api}
-            property={view.property}
-            onBack={() => setView({ kind: 'dashboard' })}
-            onSelectUnit={(unit) =>
-              setView({ kind: 'unit', property: view.property, unit })
-            }
+            asOf={route.asOf}
+            navigate={navigate}
+            propertyId={route.propertyId}
           />
         ) : null}
-        {view.kind === 'unit' ? (
+
+        {route.kind === 'unit' ? (
           <UnitDossier
             api={api}
-            unit={view.unit}
-            onBack={() => setView({ kind: 'property', property: view.property })}
+            asOf={route.asOf}
+            navigate={navigate}
+            propertyId={route.propertyId}
+            tab={route.tab}
+            unitId={route.unitId}
           />
         ) : null}
       </main>
@@ -153,14 +197,24 @@ export function App({ apiBaseUrl, sessionGateway }: AppProps) {
 
   useEffect(() => {
     let active = true;
-    void sessionGateway.getSession()
-      .then((current) => { if (active) setSession(current); })
+
+    void sessionGateway
+      .getSession()
+      .then((current) => {
+        if (active) setSession(current);
+      })
       .catch((cause: unknown) => {
         if (active) {
-          setBootstrapError(cause instanceof Error ? cause.message : 'Authentication bootstrap failed.');
+          setBootstrapError(
+            cause instanceof Error
+              ? cause.message
+              : 'Authentication bootstrap failed.',
+          );
         }
       })
-      .finally(() => { if (active) setLoading(false); });
+      .finally(() => {
+        if (active) setLoading(false);
+      });
 
     const unsubscribe = sessionGateway.subscribe((current) => {
       if (active) {
@@ -170,16 +224,29 @@ export function App({ apiBaseUrl, sessionGateway }: AppProps) {
       }
     });
 
-    return () => { active = false; unsubscribe(); };
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, [sessionGateway]);
 
   if (loading) return <main className="status-page">Opening Portfolio…</main>;
+
   if (bootstrapError) {
-    return <main className="status-page" role="alert"><strong>Portfolio could not start.</strong><span>{bootstrapError}</span></main>;
+    return (
+      <main className="status-page" role="alert">
+        <strong>Portfolio could not start.</strong>
+        <span>{bootstrapError}</span>
+      </main>
+    );
   }
 
   return session ? (
-    <AuthenticatedShell apiBaseUrl={apiBaseUrl} session={session} sessionGateway={sessionGateway} />
+    <AuthenticatedShell
+      apiBaseUrl={apiBaseUrl}
+      session={session}
+      sessionGateway={sessionGateway}
+    />
   ) : (
     <Login sessionGateway={sessionGateway} />
   );
