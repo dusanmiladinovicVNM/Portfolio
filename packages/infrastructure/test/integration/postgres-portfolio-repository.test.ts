@@ -11220,12 +11220,12 @@ describe('PostgreSQL infrastructure', () => {
       provider: 'supabase',
       subject: 'external-admin-subject',
     });
-    const [propertyRow] = await sql<{ id: string }[]>\`
+    const [propertyRow] = await sql<{ id: string }[]>`
       select id
       from public.properties
       order by id
       limit 1
-    \`;
+    `;
     if (!propertyRow) throw new Error('Expected a Property for reporting aggregate test.');
 
     const asOf = asDateOnly('2026-09-21');
@@ -11293,12 +11293,12 @@ describe('PostgreSQL infrastructure', () => {
     });
 
     try {
-      const [propertyRow] = await writerSql<{ id: string }[]>\`
+      const [propertyRow] = await writerSql<{ id: string }[]>`
         select id
         from public.properties
         order by id
         limit 1
-      \`;
+      `;
       if (!propertyRow) throw new Error('Expected a Property for reporting snapshot test.');
 
       const writerAccessRepository = new PostgresUserAccessRepository(writerSql);
@@ -11320,11 +11320,11 @@ describe('PostgreSQL infrastructure', () => {
           const [mode] = await tx<{
             isolation_level: string;
             read_only: string;
-          }[]>\`
+          }[]>`
             select
               current_setting('transaction_isolation') as isolation_level,
               current_setting('transaction_read_only') as read_only
-          \`;
+          `;
           expect(mode).toEqual({
             isolation_level: 'repeatable read',
             read_only: 'on',
@@ -11332,10 +11332,10 @@ describe('PostgreSQL infrastructure', () => {
 
           const propertyRows = await tx<{
             current_open_maintenance_issue_count: string | number | bigint;
-          }[]>\`
+          }[]>`
             select current_open_maintenance_issue_count
             from public.reporting_property_summaries(${asOf}::date)
-          \`;
+          `;
           const propertyOpenIssues = propertyRows.reduce(
             (sum, row) =>
               sum + Number(row.current_open_maintenance_issue_count),
@@ -11347,11 +11347,11 @@ describe('PostgreSQL infrastructure', () => {
 
           const [operations] = await tx<{
             open_maintenance_issue_count: string | number | bigint;
-          }[]>\`
+          }[]>`
             select count(*)::bigint as open_maintenance_issue_count
             from public.maintenance_issues
             where status = 'open'
-          \`;
+          `;
           if (!operations) {
             throw new Error('Expected Portfolio operations row.');
           }
