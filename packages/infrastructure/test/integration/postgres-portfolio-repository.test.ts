@@ -10791,7 +10791,7 @@ describe('PostgreSQL infrastructure', () => {
         assetId: assetA.id,
         title: 'Reporting urgent issue',
         priority: 'urgent',
-        reportedAt: '2026-09-21T07:30:00.000Z',
+        reportedAt: '2026-09-21T08:00:00.000Z',
       },
     );
 
