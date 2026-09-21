@@ -59,7 +59,7 @@ import type { IdGenerator } from '../shared/id-generator.js';
 import type { PortfolioRepository } from '../portfolio/portfolio-repository.js';
 import { assertDocumentVersionStorageIntegrity } from '../documents/document-commands.js';
 import type { DocumentRepository } from '../documents/document-repository.js';
-import type { FileStoragePort } from '../documents/file-storage-port.js';
+import type { FileStorageWritePort } from '../documents/file-storage-port.js';
 import type { PartyRepository } from '../parties/party-repository.js';
 import type { OwnershipRepository } from '../ownership/ownership-repository.js';
 import type { TenancyRepository } from '../tenancy/tenancy-repository.js';
@@ -525,7 +525,7 @@ export async function attachInspectionEvidenceCommand(
     'inspectionRepository' | 'idGenerator' | 'clock'
   > & {
     readonly documentRepository: DocumentRepository;
-    readonly fileStorage: FileStoragePort;
+    readonly fileStorage: Pick<FileStorageWritePort, 'stat'>;
   },
   actor: Actor,
   inspectionId: InspectionId,
@@ -595,7 +595,7 @@ export async function addInspectionSignatureCommand(
     'inspectionRepository' | 'idGenerator' | 'clock'
   > & {
     readonly documentRepository: DocumentRepository;
-    readonly fileStorage: FileStoragePort;
+    readonly fileStorage: Pick<FileStorageWritePort, 'stat'>;
     readonly partyRepository: PartyRepository;
     readonly ownershipRepository: OwnershipRepository;
     readonly tenancyRepository: TenancyRepository;
@@ -766,7 +766,7 @@ export async function finalizeInspectionCommand(
     'inspectionRepository' | 'idGenerator' | 'clock'
   > & {
     readonly documentRepository: DocumentRepository;
-    readonly fileStorage: FileStoragePort;
+    readonly fileStorage: Pick<FileStorageWritePort, 'stat'>;
   },
   actor: Actor,
   id: InspectionId,
