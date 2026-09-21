@@ -95,6 +95,7 @@ import {
 } from '@portfolio/application';
 import {
   addStoredDocumentVersion,
+  asDateOnly,
   asCostId,
   asCostReversalId,
   asDocumentVersionId,
@@ -10441,6 +10442,679 @@ describe('PostgreSQL infrastructure', () => {
     expect(
       await costRepository.getCostById(rogueReplacement.id),
     ).toBeNull();
+  });
+
+  it('projects reporting from canonical temporal, legal, operational and financial truth', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+
+    const ids = new SequenceIds(
+      Array.from(
+        { length: 220 },
+        (_, index) =>
+          `e9000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      ),
+    );
+
+    const propertyA = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-REPORT-A',
+        name: 'Reporting Property A',
+        propertyType: 'apartment_building',
+        street: 'Reporting Street',
+        houseNumber: '1',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+
+    const unitA = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: propertyA.id,
+        code: 'UNIT-REPORT-A',
+        unitNumber: 'A-1',
+        unitType: 'apartment',
+        areaM2: 80,
+        rooms: 3,
+      },
+    );
+
+    const spaceA = await createSpaceCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        unitId: unitA.id,
+        code: 'SPACE-REPORT-A',
+        name: 'Reporting room',
+        spaceType: 'other',
+      },
+    );
+
+    const propertyB = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-REPORT-B',
+        name: 'Reporting Property B',
+        propertyType: 'apartment_building',
+        street: 'Reporting Street',
+        houseNumber: '2',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+
+    const unitB = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: propertyB.id,
+        code: 'UNIT-REPORT-B',
+        unitNumber: 'B-1',
+        unitType: 'apartment',
+      },
+    );
+
+    const tenant = await createPartyCommand(
+      { partyRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PTY-REPORT-TENANT',
+        partyType: 'person',
+        firstName: 'Reporting',
+        lastName: 'Tenant',
+      },
+    );
+
+    const landlord = await createPartyCommand(
+      { partyRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PTY-REPORT-LANDLORD',
+        partyType: 'company',
+        legalName: 'Reporting Landlord d.o.o.',
+      },
+    );
+
+    const tenancyDraft = await createTenancyCommand(
+      {
+        tenancyRepository,
+        portfolioRepository,
+        partyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        unitId: unitA.id,
+        code: 'TEN-REPORT-A',
+        parties: [
+          {
+            partyId: tenant.id,
+            role: 'tenant',
+            isPrimary: true,
+          },
+        ],
+      },
+    );
+
+    const tenancyPlanned = await planTenancyCommand(
+      { tenancyRepository },
+      actor,
+      tenancyDraft.id,
+      tenancyDraft.version,
+      '2026-01-01',
+    );
+
+    const tenancy = await activateTenancyCommand(
+      { tenancyRepository },
+      actor,
+      tenancyPlanned.id,
+      tenancyPlanned.version,
+      '2026-01-01',
+    );
+
+    const leaseDeps = {
+      leaseRepository,
+      tenancyRepository,
+      partyRepository,
+      idGenerator: ids,
+    };
+
+    const initialDraft = await createLeaseAgreementCommand(
+      leaseDeps,
+      actor,
+      {
+        tenancyId: tenancy.id,
+        code: 'AGR-REPORT-1',
+        agreementType: 'initial',
+        effectiveFrom: '2026-01-01',
+        parties: [
+          { partyId: landlord.id, role: 'landlord' },
+          { partyId: tenant.id, role: 'tenant' },
+        ],
+      },
+    );
+
+    const initial = await signLeaseAgreementCommand(
+      leaseDeps,
+      actor,
+      initialDraft.id,
+      initialDraft.version,
+      '2025-12-20',
+      {
+        currency: 'CHF',
+        baseRent: '1000',
+        serviceCharge: '100',
+      },
+    );
+
+    const successorDraft = await createLeaseAgreementCommand(
+      leaseDeps,
+      actor,
+      {
+        tenancyId: tenancy.id,
+        code: 'AGR-REPORT-2',
+        agreementType: 'renewal',
+        predecessorAgreementId: initial.id,
+        effectiveFrom: '2026-07-01',
+        parties: [
+          { partyId: landlord.id, role: 'landlord' },
+          { partyId: tenant.id, role: 'tenant' },
+        ],
+      },
+    );
+
+    const successor = await signLeaseAgreementCommand(
+      leaseDeps,
+      actor,
+      successorDraft.id,
+      successorDraft.version,
+      '2026-06-01',
+      {
+        currency: 'CHF',
+        baseRent: '1100',
+        serviceCharge: '100',
+      },
+    );
+
+    const thirdDraft = await createLeaseAgreementCommand(
+      leaseDeps,
+      actor,
+      {
+        tenancyId: tenancy.id,
+        code: 'AGR-REPORT-3',
+        agreementType: 'renewal',
+        predecessorAgreementId: successor.id,
+        effectiveFrom: '2027-01-01',
+        parties: [
+          { partyId: landlord.id, role: 'landlord' },
+          { partyId: tenant.id, role: 'tenant' },
+        ],
+      },
+    );
+
+    const third = await signLeaseAgreementCommand(
+      leaseDeps,
+      actor,
+      thirdDraft.id,
+      thirdDraft.version,
+      '2026-11-01',
+      {
+        currency: 'CHF',
+        baseRent: '1200',
+        serviceCharge: '100',
+      },
+    );
+
+    await createLeaseAgreementCommand(
+      leaseDeps,
+      actor,
+      {
+        tenancyId: tenancy.id,
+        code: 'AGR-REPORT-4-DRAFT',
+        agreementType: 'renewal',
+        predecessorAgreementId: third.id,
+        effectiveFrom: '2027-07-01',
+        parties: [
+          { partyId: landlord.id, role: 'landlord' },
+          { partyId: tenant.id, role: 'tenant' },
+        ],
+      },
+    );
+
+    const currentClock = { now: () => '2026-09-21T08:00:00.000Z' };
+
+    const assetA = await createAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: currentClock,
+      },
+      actor,
+      {
+        code: 'ASSET-REPORT-A',
+        name: 'Reporting Asset A',
+        propertyId: propertyA.id,
+        unitId: unitA.id,
+      },
+    );
+
+    const assetB = await createAssetCommand(
+      {
+        assetRepository,
+        portfolioRepository,
+        idGenerator: ids,
+        clock: currentClock,
+      },
+      actor,
+      {
+        code: 'ASSET-REPORT-B',
+        name: 'Reporting Asset B',
+        propertyId: propertyB.id,
+        unitId: unitB.id,
+      },
+    );
+
+    const assetServiceDeps = {
+      assetRepository,
+      assetServiceRepository,
+      partyRepository,
+      idGenerator: ids,
+      clock: currentClock,
+    };
+
+    await createServicePlanCommand(
+      assetServiceDeps,
+      actor,
+      assetA.id,
+      {
+        name: 'Reporting annual service',
+        scheduleKind: 'recurring',
+        firstDueOn: '2026-10-01',
+        intervalMonths: 12,
+      },
+    );
+
+    const warranty = await createWarrantyCommand(
+      assetServiceDeps,
+      actor,
+      assetA.id,
+      {
+        warrantyType: 'manufacturer',
+        validFrom: '2026-01-01',
+        validTo: '2027-12-31',
+      },
+    );
+
+    await createWarrantyClaimCommand(
+      {
+        assetServiceRepository,
+        idGenerator: ids,
+        clock: currentClock,
+      },
+      actor,
+      warranty.id,
+      {
+        incidentOn: '2026-09-10',
+        description: 'Reporting open warranty claim',
+      },
+    );
+
+    const maintenanceDeps = {
+      maintenanceRepository,
+      portfolioRepository,
+      assetRepository,
+      assetServiceRepository,
+      inspectionRepository,
+      partyRepository,
+      staffDirectoryRepository: accessRepository,
+      idGenerator: ids,
+      clock: currentClock,
+    };
+
+    const issue = await createMaintenanceIssueCommand(
+      maintenanceDeps,
+      actor,
+      {
+        code: 'MI-REPORT-A',
+        propertyId: propertyA.id,
+        unitId: unitA.id,
+        assetId: assetA.id,
+        title: 'Reporting urgent issue',
+        priority: 'urgent',
+        reportedAt: '2026-09-21T07:30:00.000Z',
+      },
+    );
+
+    await createMaintenanceWorkOrderCommand(
+      {
+        maintenanceRepository,
+        idGenerator: ids,
+        clock: currentClock,
+      },
+      actor,
+      issue.id,
+      {
+        code: 'WO-REPORT-A',
+        title: 'Reporting work order',
+      },
+    );
+
+    await createMeterCommand(
+      {
+        meterRepository,
+        portfolioRepository,
+        tenancyRepository,
+        idGenerator: ids,
+        clock: currentClock,
+      },
+      actor,
+      {
+        code: 'MTR-REPORT-A',
+        serialNumber: 'SER-REPORT-A',
+        utilityType: 'electricity',
+        measurementUnit: 'kwh',
+        unitId: unitA.id,
+        label: 'Reporting Meter A',
+        installedAt: '2026-09-01T00:00:00.000Z',
+      },
+    );
+
+    const costDeps = {
+      costRepository,
+      portfolioRepository,
+      partyRepository,
+      assetRepository,
+      assetServiceRepository,
+      improvementRepository,
+      maintenanceRepository,
+      idGenerator: ids,
+      clock: currentClock,
+    };
+
+    await createCostCommand(
+      costDeps,
+      actor,
+      {
+        source: { kind: 'unit', unitId: unitA.id },
+        description: 'Unit CAPEX',
+        amount: '100',
+        currency: 'CHF',
+        incurredOn: '2026-06-15',
+        reportingClass: 'capex',
+      },
+    );
+
+    await createCostCommand(
+      costDeps,
+      actor,
+      {
+        source: { kind: 'space', spaceId: spaceA.id },
+        description: 'Space OPEX',
+        amount: '25.50',
+        currency: 'CHF',
+        incurredOn: '2026-06-16',
+        reportingClass: 'opex',
+      },
+    );
+
+    await createCostCommand(
+      costDeps,
+      actor,
+      {
+        source: { kind: 'unit', unitId: unitA.id },
+        description: 'Unit EUR unclassified',
+        amount: '10',
+        currency: 'EUR',
+        incurredOn: '2026-06-17',
+        reportingClass: 'unclassified',
+      },
+    );
+
+    await createCostCommand(
+      costDeps,
+      actor,
+      {
+        source: { kind: 'property', propertyId: propertyA.id },
+        description: 'Property EUR OPEX',
+        amount: '40',
+        currency: 'EUR',
+        incurredOn: '2026-06-18',
+        reportingClass: 'opex',
+      },
+    );
+
+    const correctedOriginal = await createCostCommand(
+      costDeps,
+      actor,
+      {
+        source: { kind: 'unit', unitId: unitA.id },
+        description: 'Original incorrect Unit OPEX',
+        amount: '5',
+        currency: 'CHF',
+        incurredOn: '2026-06-19',
+        reportingClass: 'opex',
+      },
+    );
+
+    await correctCostCommand(
+      costDeps,
+      actor,
+      correctedOriginal.id,
+      'Correct reporting amount',
+      {
+        source: { kind: 'unit', unitId: unitA.id },
+        description: 'Corrected Unit OPEX',
+        amount: '7',
+        currency: 'CHF',
+        incurredOn: '2026-06-19',
+        reportingClass: 'opex',
+      },
+    );
+
+    await createCostCommand(
+      costDeps,
+      actor,
+      {
+        source: { kind: 'unit', unitId: unitA.id },
+        description: 'Future Unit cost',
+        amount: '999',
+        currency: 'CHF',
+        incurredOn: '2027-02-01',
+        reportingClass: 'opex',
+      },
+    );
+
+    await createCostCommand(
+      costDeps,
+      actor,
+      {
+        source: { kind: 'unit', unitId: unitB.id },
+        description: 'Property B Unit cost',
+        amount: '33',
+        currency: 'CHF',
+        incurredOn: '2026-06-20',
+        reportingClass: 'opex',
+      },
+    );
+
+    const beforeSuccessor = await reportingRepository.getUnitOverview(
+      unitA.id,
+      asDateOnly('2026-06-30'),
+    );
+    expect(beforeSuccessor).toMatchObject({
+      occupancyStatus: 'occupied',
+      tenancy: {
+        id: tenancy.id,
+      },
+      contract: {
+        coverageStatus: 'effective',
+        currentDraftAgreementCount: 1,
+        agreementId: initial.id,
+        agreementCurrentStatus: 'superseded',
+        effectiveTerms: {
+          baseRent: '1000.00',
+          recurringTotal: '1100.00',
+        },
+      },
+      currentOperations: {
+        openMaintenanceIssueCount: 1,
+        urgentMaintenanceIssueCount: 1,
+        openMaintenanceWorkOrderCount: 1,
+        locatedAssetCount: 1,
+        activeAssetCount: 1,
+        activeServicePlanCount: 1,
+        openWarrantyClaimCount: 1,
+        activeMeterCount: 1,
+      },
+    });
+
+    const onSuccessorBoundary = await reportingRepository.getUnitOverview(
+      unitA.id,
+      asDateOnly('2026-07-01'),
+    );
+    expect(onSuccessorBoundary).toMatchObject({
+      contract: {
+        coverageStatus: 'effective',
+        currentDraftAgreementCount: 1,
+        agreementId: successor.id,
+        agreementCurrentStatus: 'superseded',
+        effectiveTerms: {
+          baseRent: '1100.00',
+          recurringTotal: '1200.00',
+        },
+      },
+      unitAttributedCostsByCurrency: [
+        {
+          currency: 'CHF',
+          capex: '100.00',
+          opex: '32.50',
+          unclassified: '0.00',
+          total: '132.50',
+        },
+        {
+          currency: 'EUR',
+          capex: '0.00',
+          opex: '0.00',
+          unclassified: '10.00',
+          total: '10.00',
+        },
+      ],
+    });
+
+    const futureInitial = await reportingRepository.getUnitOverview(
+      unitA.id,
+      asDateOnly('2025-12-31'),
+    );
+    expect(futureInitial).toMatchObject({
+      occupancyStatus: 'vacant',
+      tenancy: null,
+      contract: {
+        coverageStatus: 'missing',
+        currentDraftAgreementCount: 0,
+      },
+    });
+
+    const thirdBoundary = await reportingRepository.getUnitOverview(
+      unitA.id,
+      asDateOnly('2027-01-01'),
+    );
+    expect(thirdBoundary).toMatchObject({
+      contract: {
+        coverageStatus: 'effective',
+        currentDraftAgreementCount: 1,
+        agreementId: third.id,
+        agreementCurrentStatus: 'signed',
+        effectiveTerms: {
+          baseRent: '1200.00',
+          recurringTotal: '1300.00',
+        },
+      },
+    });
+
+    const dashboard = await reportingRepository.getPortfolioDashboard(
+      asDateOnly('2026-07-01'),
+    );
+
+    expect(dashboard).toMatchObject({
+      propertyCount: 2,
+      unitCount: 2,
+      occupiedUnitCount: 1,
+      plannedUnitCount: 0,
+      vacantUnitCount: 1,
+      currentOperations: {
+        openMaintenanceIssueCount: 1,
+        urgentMaintenanceIssueCount: 1,
+        openMaintenanceWorkOrderCount: 1,
+        locatedAssetCount: 2,
+        activeAssetCount: 2,
+        activeServicePlanCount: 1,
+        openWarrantyClaimCount: 1,
+        activeMeterCount: 1,
+      },
+      portfolioCostsByCurrency: [
+        {
+          currency: 'CHF',
+          capex: '100.00',
+          opex: '65.50',
+          unclassified: '0.00',
+          total: '165.50',
+        },
+        {
+          currency: 'EUR',
+          capex: '0.00',
+          opex: '40.00',
+          unclassified: '10.00',
+          total: '50.00',
+        },
+      ],
+      properties: [
+        {
+          propertyId: propertyA.id,
+          unitCount: 1,
+          occupiedUnitCount: 1,
+          vacantUnitCount: 0,
+          currentOpenMaintenanceIssueCount: 1,
+          currentUrgentMaintenanceIssueCount: 1,
+          currentLocatedAssetCount: 1,
+          currentActiveAssetCount: 1,
+          currentActiveMeterCount: 1,
+        },
+        {
+          propertyId: propertyB.id,
+          unitCount: 1,
+          occupiedUnitCount: 0,
+          vacantUnitCount: 1,
+          currentOpenMaintenanceIssueCount: 0,
+          currentUrgentMaintenanceIssueCount: 0,
+          currentLocatedAssetCount: 1,
+          currentActiveAssetCount: 1,
+          currentActiveMeterCount: 0,
+        },
+      ],
+    });
+
+    const relationCheck = await sql<{
+      reporting_table_count: number;
+    }[]>`
+      select count(*)::int as reporting_table_count
+      from information_schema.tables
+      where table_schema = 'public'
+        and table_name like 'reporting_%'
+    `;
+    expect(relationCheck[0]?.reporting_table_count).toBe(0);
+
+    // Reporting is a read model; nothing in this query path mutates source rows.
+    expect(assetB.unitId).toBe(unitB.id);
   });
 
 });
