@@ -761,6 +761,30 @@ try {
     'Tenancy lifecycle stays on setup Unit owner',
   );
 
+  await typeXpath(
+    sessionId,
+    "//form[@data-tenancy-form='create']//input[@name='code']",
+    'TEN-CANCEL-BRW',
+  );
+  await clickXpath(
+    sessionId,
+    "//form[@data-tenancy-form='create']//button[normalize-space()='Create Tenancy']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'tenancy-card')][.//span[normalize-space()='TEN-CANCEL-BRW']][.//span[contains(@class,'status-chip') and normalize-space()='draft']]",
+  );
+  await clickXpath(
+    sessionId,
+    "//article[.//span[normalize-space()='TEN-CANCEL-BRW']]//button[normalize-space()='Cancel Tenancy']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[.//span[normalize-space()='TEN-CANCEL-BRW']]//span[contains(@class,'status-chip') and normalize-space()='cancelled']",
+  );
+
   await clickXpath(sessionId, "//a[normalize-space()='Spaces']");
   await waitForElement(
     sessionId,
