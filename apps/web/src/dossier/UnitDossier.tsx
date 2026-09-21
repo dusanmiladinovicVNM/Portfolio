@@ -19,6 +19,7 @@ import { UnitAssets } from './UnitAssets.js';
 import { UnitDocuments } from './UnitDocuments.js';
 import { UnitInspections } from './UnitInspections.js';
 import { UnitOverview } from './UnitOverview.js';
+import { UnitSpaces } from './UnitSpaces.js';
 import { UnitTenancies } from './UnitTenancies.js';
 import { UnitContracts } from './UnitContracts.js';
 import { UnitTimeline } from './UnitTimeline.js';
@@ -135,6 +136,14 @@ export function UnitDossier({
               Overview
             </WorkspaceLink>
             <WorkspaceLink
+              ariaCurrent={tab === 'spaces' ? 'page' : undefined}
+              className={'dossier-tab ' + (tab === 'spaces' ? 'dossier-tab-active' : '')}
+              navigate={navigate}
+              route={unitRoute(propertyId, unitId, asOf, 'spaces')}
+            >
+              Spaces
+            </WorkspaceLink>
+            <WorkspaceLink
               ariaCurrent={tab === 'tenancies' ? 'page' : undefined}
               className={`dossier-tab ${tab === 'tenancies' ? 'dossier-tab-active' : ''}`}
               navigate={navigate}
@@ -205,6 +214,9 @@ export function UnitDossier({
               }
               unitId={unitId}
             />
+          ) : null}
+          {tab === 'spaces' ? (
+            <UnitSpaces api={api} unitId={unitId} />
           ) : null}
           {tab === 'tenancies' ? (
             <UnitTenancies

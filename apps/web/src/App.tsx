@@ -1,12 +1,14 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortfolioApi } from './api/portfolio-api.js';
 import type { AuthSession, SessionGateway } from './auth/session-gateway.js';
+import { PartyDirectory } from './admin/PartyDirectory.js';
 import { PortfolioDashboard } from './dashboard/PortfolioDashboard.js';
 import { PropertyUnits } from './dossier/PropertyUnits.js';
 import { UnitDossier } from './dossier/UnitDossier.js';
 import { WorkspaceLink } from './navigation/WorkspaceLink.js';
 import {
   dashboardRoute,
+  partiesRoute,
   propertyRoute,
   unitRoute,
 } from './navigation/workspace-route.js';
@@ -93,9 +95,11 @@ function AuthenticatedShell({
   const focusKey =
     route.kind === 'dashboard'
       ? 'dashboard'
-      : route.kind === 'property'
-        ? `property:${route.propertyId}`
-        : `unit:${route.propertyId}:${route.unitId}:${route.tab}`;
+      : route.kind === 'parties'
+        ? 'parties'
+        : route.kind === 'property'
+          ? 'property:' + route.propertyId
+          : 'unit:' + route.propertyId + ':' + route.unitId + ':' + route.tab;
   const api = useMemo(
     () =>
       createPortfolioApi({
@@ -143,6 +147,14 @@ function AuthenticatedShell({
             route={dashboardRoute(route.asOf)}
           >
             Overview
+          </WorkspaceLink>
+          <WorkspaceLink
+            ariaCurrent={route.kind === 'parties' ? 'page' : undefined}
+            className={'nav-item ' + (route.kind === 'parties' ? 'nav-item-active' : '')}
+            navigate={navigate}
+            route={partiesRoute(route.asOf)}
+          >
+            Parties
           </WorkspaceLink>
           {route.kind === 'property' || route.kind === 'unit' ? (
             <WorkspaceLink
@@ -206,6 +218,10 @@ function AuthenticatedShell({
       >
         {route.kind === 'dashboard' ? (
           <PortfolioDashboard api={api} asOf={route.asOf} navigate={navigate} />
+        ) : null}
+
+        {route.kind === 'parties' ? (
+          <PartyDirectory api={api} asOf={route.asOf} />
         ) : null}
 
         {route.kind === 'property' ? (

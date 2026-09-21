@@ -6,6 +6,7 @@ import { localDateOnly } from '../presentation/format.js';
 
 export const DOSSIER_TABS = [
   'overview',
+  'spaces',
   'tenancies',
   'contracts',
   'inspections',
@@ -18,6 +19,10 @@ export type DossierTab = (typeof DOSSIER_TABS)[number];
 export type WorkspaceRoute =
   | {
       readonly kind: 'dashboard';
+      readonly asOf: string;
+    }
+  | {
+      readonly kind: 'parties';
       readonly asOf: string;
     }
   | {
@@ -80,6 +85,10 @@ function readEntityId(value: string | undefined): string | null {
 
 export function dashboardRoute(asOf: string): WorkspaceRoute {
   return { kind: 'dashboard', asOf: requireWorkspaceAsOf(asOf) };
+}
+
+export function partiesRoute(asOf: string): WorkspaceRoute {
+  return { kind: 'parties', asOf: requireWorkspaceAsOf(asOf) };
 }
 
 export function propertyRoute(
@@ -188,6 +197,10 @@ export function parseWorkspaceLocation(
     }
   }
 
+  if (segments.length === 1 && segments[0] === 'parties') {
+    return partiesRoute(asOf);
+  }
+
   if (segments.length === 2 && segments[0] === 'properties') {
     const propertyId = readEntityId(segments[1]);
     if (propertyId) return propertyRoute(propertyId, asOf);
@@ -220,7 +233,10 @@ export function workspaceRouteHref(route: WorkspaceRoute): string {
   search.set('asOf', route.asOf);
 
   if (route.kind === 'dashboard') {
-    return `/dashboard?${search.toString()}`;
+    return '/dashboard?' + search.toString();
+  }
+  if (route.kind === 'parties') {
+    return '/parties?' + search.toString();
   }
   if (route.kind === 'property') {
     return `/properties/${encodeURIComponent(route.propertyId)}?${search.toString()}`;
