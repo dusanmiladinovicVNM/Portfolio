@@ -7,6 +7,7 @@ import {
   asUnitId,
   createPortfolioDashboard,
   createReportingCostSummary,
+  createReportingTermSummary,
   createUnitReportingOverview,
 } from '../src/index.js';
 
@@ -58,6 +59,54 @@ describe('Reporting projections', () => {
         opex: '20.20',
         unclassified: '0.70',
         total: '120.99',
+      }),
+    ).toThrowError(
+      expect.objectContaining({ code: 'REPORTING_INVALID_PROJECTION' }),
+    );
+  });
+
+  it('keeps aggregate money exact beyond the scalar MoneyAmount range', () => {
+    expect(
+      createReportingCostSummary({
+        currency: 'CHF',
+        capex: '9999999999999999.99',
+        opex: '9999999999999999.99',
+        unclassified: '0',
+        total: '19999999999999999.98',
+      }),
+    ).toMatchObject({
+      capex: '9999999999999999.99',
+      opex: '9999999999999999.99',
+      unclassified: '0.00',
+      total: '19999999999999999.98',
+    });
+
+    expect(
+      createReportingTermSummary({
+        id: termId,
+        sourceType: 'agreement',
+        effectiveFrom: '2026-09-21',
+        currency: 'CHF',
+        baseRent: '9999999999999999.99',
+        serviceCharge: '9999999999999999.99',
+        utilitiesAdvance: '9999999999999999.99',
+        parkingRent: '9999999999999999.99',
+        otherRecurringCharge: '9999999999999999.99',
+        recurringTotal: '49999999999999999.95',
+        depositRequired: '9999999999999999.99',
+        billingFrequency: 'monthly',
+      }),
+    ).toMatchObject({
+      recurringTotal: '49999999999999999.95',
+    });
+
+    expect(() =>
+      createReportingCostSummary({
+        currency: 'CHF',
+        capex: '1.001',
+        opex: '0',
+        unclassified: '0',
+        total: '1.001',
       }),
     ).toThrowError(
       expect.objectContaining({ code: 'REPORTING_INVALID_PROJECTION' }),
