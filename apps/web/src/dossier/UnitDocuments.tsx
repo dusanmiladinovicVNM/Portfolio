@@ -5,6 +5,7 @@ import {
 import { useEffect, useState } from 'react';
 import { unitDocumentsPath } from '../api/paths.js';
 import type { PortfolioApi } from '../api/portfolio-api.js';
+import { DocumentBinaryActions } from '../documents/DocumentBinaryActions.js';
 import { formatDetailKey } from '../presentation/format.js';
 
 interface UnitDocumentsProps {
@@ -19,8 +20,10 @@ function formatBytes(value: number): string {
 }
 
 function LinkScope({
+  api,
   reference,
 }: {
+  readonly api: PortfolioApi;
   readonly reference: UnitDocumentReferenceResponse;
 }) {
   if (reference.linkedVersion === null) {
@@ -47,6 +50,11 @@ function LinkScope({
         {formatBytes(reference.linkedVersion.byteSize)} ·{' '}
         {reference.linkedVersion.status}
       </small>
+      <DocumentBinaryActions
+        api={api}
+        fileName={reference.linkedVersion.fileName}
+        versionId={reference.linkedVersion.id}
+      />
     </div>
   );
 }
@@ -133,7 +141,7 @@ export function UnitDocuments({ api, unitId }: UnitDocumentsProps) {
                 </div>
               </dl>
 
-              <LinkScope reference={reference} />
+              <LinkScope api={api} reference={reference} />
             </article>
           ))}
         </div>

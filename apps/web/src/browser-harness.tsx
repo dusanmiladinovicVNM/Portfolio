@@ -252,7 +252,17 @@ function apiPath(input: RequestInfo | URL): URL {
   );
 }
 
-globalThis.fetch = async (input: RequestInfo | URL): Promise<Response> => {
+type BrowserHarnessWindow = Window & {
+  __portfolioBinaryReads?: number;
+};
+
+const browserHarnessWindow = window as BrowserHarnessWindow;
+browserHarnessWindow.__portfolioBinaryReads = 0;
+
+globalThis.fetch = async (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> => {
   const url = apiPath(input);
   const path = url.pathname;
 
@@ -365,6 +375,32 @@ globalThis.fetch = async (input: RequestInfo | URL): Promise<Response> => {
 
   if (path === `/agreements/${agreementId}/amendments`) {
     return json({ items: [amendment] });
+  }
+
+  if (path === `/document-versions/${agreementVersionId}/content`) {
+    const authorization = new Headers(init?.headers).get('authorization');
+    if (authorization !== 'Bearer browser-workflow-token') {
+      throw new Error('Agreement binary request is missing Portfolio auth.');
+    }
+    browserHarnessWindow.__portfolioBinaryReads =
+      (browserHarnessWindow.__portfolioBinaryReads ?? 0) + 1;
+    return new Response(new Uint8Array([1, 2, 3]), {
+      status: 200,
+      headers: { 'content-type': 'application/pdf' },
+    });
+  }
+
+  if (path === `/document-versions/${amendmentVersionId}/content`) {
+    const authorization = new Headers(init?.headers).get('authorization');
+    if (authorization !== 'Bearer browser-workflow-token') {
+      throw new Error('Amendment binary request is missing Portfolio auth.');
+    }
+    browserHarnessWindow.__portfolioBinaryReads =
+      (browserHarnessWindow.__portfolioBinaryReads ?? 0) + 1;
+    return new Response(new Uint8Array([4, 5, 6]), {
+      status: 200,
+      headers: { 'content-type': 'application/pdf' },
+    });
   }
 
   if (path === `/agreements/${agreementId}/documents`) {

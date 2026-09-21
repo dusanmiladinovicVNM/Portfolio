@@ -30,6 +30,10 @@ export interface PortfolioApi {
     schema: ResponseSchema<T>,
     options?: PortfolioApiRequestOptions,
   ): Promise<T>;
+  getBinary(
+    path: string,
+    options?: PortfolioApiRequestOptions,
+  ): Promise<Blob>;
 }
 
 export interface PortfolioApiOptions {
@@ -52,6 +56,42 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
+function requireAccessToken(options: PortfolioApiOptions): string {
+  const accessToken = options.getAccessToken();
+  if (!accessToken) {
+    throw new PortfolioApiError(
+      401,
+      'AUTH_SESSION_REQUIRED',
+      'An authenticated session is required.',
+    );
+  }
+  return accessToken;
+}
+
+async function throwApiResponseError(response: Response): Promise<never> {
+  const payload = await readJson(response);
+  const parsedError = apiErrorResponseSchema.safeParse(payload);
+  if (parsedError.success) {
+    throw new PortfolioApiError(
+      response.status,
+      parsedError.data.error.code,
+      parsedError.data.error.message,
+    );
+  }
+
+  throw new PortfolioApiError(
+    response.status,
+    'API_ERROR',
+    `Portfolio API request failed with status ${response.status}.`,
+  );
+}
+
+function requestSignal(
+  options: PortfolioApiRequestOptions | undefined,
+): Pick<RequestInit, 'signal'> {
+  return options?.signal ? { signal: options.signal } : {};
+}
+
 export function createPortfolioApi(options: PortfolioApiOptions): PortfolioApi {
   const fetchImpl = options.fetchImpl ?? fetch;
 
@@ -61,46 +101,21 @@ export function createPortfolioApi(options: PortfolioApiOptions): PortfolioApi {
       schema: ResponseSchema<T>,
       requestOptions?: PortfolioApiRequestOptions,
     ): Promise<T> {
-      const accessToken = options.getAccessToken();
-      if (!accessToken) {
-        throw new PortfolioApiError(
-          401,
-          'AUTH_SESSION_REQUIRED',
-          'An authenticated session is required.',
-        );
-      }
-
-      const request: RequestInit = {
+      const accessToken = requireAccessToken(options);
+      const response = await fetchImpl(joinPath(options.baseUrl, path), {
         method: 'GET',
         headers: {
           Accept: 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
-      };
-      if (requestOptions?.signal) {
-        request.signal = requestOptions.signal;
-      }
-
-      const response = await fetchImpl(joinPath(options.baseUrl, path), request);
-      const payload = await readJson(response);
+        ...requestSignal(requestOptions),
+      });
 
       if (!response.ok) {
-        const parsedError = apiErrorResponseSchema.safeParse(payload);
-        if (parsedError.success) {
-          throw new PortfolioApiError(
-            response.status,
-            parsedError.data.error.code,
-            parsedError.data.error.message,
-          );
-        }
-
-        throw new PortfolioApiError(
-          response.status,
-          'API_ERROR',
-          `Portfolio API request failed with status ${response.status}.`,
-        );
+        return throwApiResponseError(response);
       }
 
+      const payload = await readJson(response);
       if (typeof payload !== 'object' || payload === null || !('data' in payload)) {
         throw new PortfolioApiError(
           502,
@@ -119,6 +134,27 @@ export function createPortfolioApi(options: PortfolioApiOptions): PortfolioApi {
       }
 
       return parsed.data;
+    },
+
+    async getBinary(
+      path: string,
+      requestOptions?: PortfolioApiRequestOptions,
+    ): Promise<Blob> {
+      const accessToken = requireAccessToken(options);
+      const response = await fetchImpl(joinPath(options.baseUrl, path), {
+        method: 'GET',
+        headers: {
+          Accept: 'application/octet-stream',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        ...requestSignal(requestOptions),
+      });
+
+      if (!response.ok) {
+        return throwApiResponseError(response);
+      }
+
+      return response.blob();
     },
   };
 }
