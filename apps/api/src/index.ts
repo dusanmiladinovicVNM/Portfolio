@@ -17,6 +17,7 @@ import {
   PostgresOwnershipRepository,
   PostgresPartyRepository,
   PostgresPortfolioRepository,
+  PostgresReportingRepository,
   PostgresTenancyRepository,
   PostgresUnitTimelineRepository,
   PostgresUserAccessRepository,
@@ -43,6 +44,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
   });
 
   const portfolioRepository = new PostgresPortfolioRepository(sql);
+  const reportingRepository = new PostgresReportingRepository(sql);
   const accessItemRepository = new PostgresAccessItemRepository(sql);
   const assetRepository = new PostgresAssetRepository(sql);
   const assetInventoryRepository = new PostgresAssetInventoryRepository(sql);
@@ -67,6 +69,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
       assetInventoryRepository,
       assetServiceRepository,
       portfolioRepository,
+      reportingRepository,
       partyRepository,
       ownershipRepository,
       tenancyRepository,
