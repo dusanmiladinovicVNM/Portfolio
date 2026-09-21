@@ -751,10 +751,13 @@ export function UnitTenancies({
             </span>
             <button
               className="button-secondary"
+              disabled={submittingCreate || pendingTenancies.size > 0}
               onClick={() => setReloadToken((value) => value + 1)}
               type="button"
             >
-              Reload Tenancies
+              {submittingCreate || pendingTenancies.size > 0
+                ? 'Write in progress…'
+                : 'Reload Tenancies'}
             </button>
           </div>
         </div>
