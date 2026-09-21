@@ -53,8 +53,61 @@ export const documentLinkResponseSchema = z.object({
   targetId: entityIdSchema,
 });
 
+export const unitDocumentLinkResponseSchema =
+  documentLinkResponseSchema.extend({
+    targetType: z.literal('unit'),
+  });
+
+export const unitDocumentReferenceResponseSchema = z
+  .object({
+    document: documentResponseSchema,
+    link: unitDocumentLinkResponseSchema,
+    linkedVersion: documentVersionResponseSchema.nullable(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.link.documentId !== value.document.id) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Document link must reference the returned Document.',
+      });
+    }
+
+    if (value.link.documentVersionId === null && value.linkedVersion !== null) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Document-level links must not return a linked version.',
+      });
+    }
+
+    if (value.link.documentVersionId !== null) {
+      if (
+        value.linkedVersion === null ||
+        value.linkedVersion.id !== value.link.documentVersionId ||
+        value.linkedVersion.documentId !== value.document.id
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Version-specific links must return that exact Document version.',
+        });
+      }
+    }
+  });
+
+export const unitDocumentListResponseSchema = z.object({
+  items: z.array(unitDocumentReferenceResponseSchema),
+});
+
 export type CreateDocumentRequest = z.infer<typeof createDocumentRequestSchema>;
 export type DocumentLinkRequest = z.infer<typeof documentLinkRequestSchema>;
 export type DocumentResponse = z.infer<typeof documentResponseSchema>;
 export type DocumentVersionResponse = z.infer<typeof documentVersionResponseSchema>;
 export type DocumentLinkResponse = z.infer<typeof documentLinkResponseSchema>;
+export type UnitDocumentLinkResponse = z.infer<
+  typeof unitDocumentLinkResponseSchema
+>;
+export type UnitDocumentReferenceResponse = z.infer<
+  typeof unitDocumentReferenceResponseSchema
+>;
+export type UnitDocumentListResponse = z.infer<
+  typeof unitDocumentListResponseSchema
+>;

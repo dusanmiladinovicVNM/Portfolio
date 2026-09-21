@@ -17,3 +17,8 @@ export function unitPath(unitId: string): string {
 export function unitOverviewPath(unitId: string, asOf: string): string {
   return `${unitPath(unitId)}/overview?asOf=${encodeURIComponent(asOf)}`;
 }
+
+
+export function unitDocumentsPath(unitId: string): string {
+  return `${unitPath(unitId)}/documents`;
+}

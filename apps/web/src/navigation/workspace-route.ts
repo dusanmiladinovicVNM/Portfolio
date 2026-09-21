@@ -4,7 +4,7 @@ import {
 } from '@portfolio/contracts';
 import { localDateOnly } from '../presentation/format.js';
 
-export const DOSSIER_TABS = ['overview', 'timeline', 'assets'] as const;
+export const DOSSIER_TABS = ['overview', 'timeline', 'documents', 'assets'] as const;
 export type DossierTab = (typeof DOSSIER_TABS)[number];
 
 export type WorkspaceRoute =

@@ -73,6 +73,7 @@ import {
   listPropertiesQuery,
   listSpacesByUnitQuery,
   listTenanciesByUnitQuery,
+  listUnitDocumentsQuery,
   listUnitsByPropertyQuery,
   listAssetsByPropertyQuery,
   listAssetsByUnitQuery,
@@ -11417,5 +11418,180 @@ describe('PostgreSQL infrastructure', () => {
       await writerSql.end();
     }
   });
+
+  it('reads Unit document links at link grain with exact optional versions', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+    const ids = new SequenceIds([
+      'a2000000-0000-4000-8000-000000000001',
+      'a2000000-0000-4000-8000-000000000002',
+      'a2000000-0000-4000-8000-000000000003',
+      'a2000000-0000-4000-8000-000000000004',
+      'a2000000-0000-4000-8000-000000000005',
+      'a2000000-0000-4000-8000-000000000006',
+      'a2000000-0000-4000-8000-000000000007',
+    ]);
+
+    const property = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-UNIT-DOC-INT',
+        name: 'Unit document integration',
+        propertyType: 'apartment_building',
+        street: 'Document Street',
+        houseNumber: '1',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+    );
+
+    const unit = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-DOC-INT',
+        unitNumber: 'D-1',
+        unitType: 'apartment',
+      },
+    );
+
+    const document = await createDocumentCommand(
+      { documentRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'DOC-UNIT-INT',
+        title: 'Unit technical evidence',
+        category: 'technical',
+      },
+    );
+
+    const fileStorage = {
+      async put(input: { objectKey: string; content: Uint8Array }) {
+        return {
+          provider: 'integration-test',
+          objectId: 'unit-document-object',
+          objectKey: input.objectKey,
+          byteSize: input.content.byteLength,
+          sha256: 'f'.repeat(64),
+          disposition: 'created' as const,
+        };
+      },
+      async stat(
+        reference: import('@portfolio/application').StorageObjectReference,
+      ) {
+        return {
+          ...reference,
+          byteSize: 4,
+          sha256: 'f'.repeat(64),
+        };
+      },
+      async remove() {},
+    };
+
+    const version = await uploadDocumentVersionCommand(
+      { documentRepository, fileStorage, idGenerator: ids },
+      actor,
+      {
+        documentId: document.id,
+        fileName: 'unit-evidence.pdf',
+        mimeType: 'application/pdf',
+        content: new Uint8Array([1, 2, 3, 4]),
+      },
+    );
+
+    await linkDocumentCommand(
+      {
+        documentRepository,
+        portfolioRepository,
+        partyRepository,
+        tenancyRepository,
+        leaseRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        documentId: document.id,
+        documentVersionId: version.id,
+        relation: 'supporting',
+        targetType: 'unit',
+        targetId: unit.id,
+      },
+    );
+
+    await linkDocumentCommand(
+      {
+        documentRepository,
+        portfolioRepository,
+        partyRepository,
+        tenancyRepository,
+        leaseRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        documentId: document.id,
+        relation: 'other',
+        targetType: 'unit',
+        targetId: unit.id,
+      },
+    );
+
+    await linkDocumentCommand(
+      {
+        documentRepository,
+        portfolioRepository,
+        partyRepository,
+        tenancyRepository,
+        leaseRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        documentId: document.id,
+        relation: 'attachment',
+        targetType: 'property',
+        targetId: property.id,
+      },
+    );
+
+    const references = await listUnitDocumentsQuery(
+      documentRepository,
+      portfolioRepository,
+      actor,
+      unit.id,
+    );
+
+    expect(references).toHaveLength(2);
+    expect(
+      references.every(
+        (reference) =>
+          reference.link.targetType === 'unit' &&
+          reference.link.targetId === unit.id &&
+          reference.document.id === document.id,
+      ),
+    ).toBe(true);
+
+    const supporting = references.find(
+      (reference) => reference.link.relation === 'supporting',
+    );
+    const documentLevel = references.find(
+      (reference) => reference.link.relation === 'other',
+    );
+
+    expect(supporting?.linkedVersion).toMatchObject({
+      id: version.id,
+      documentId: document.id,
+      versionNumber: 1,
+      fileName: 'unit-evidence.pdf',
+    });
+    expect(documentLevel?.link.documentVersionId).toBeNull();
+    expect(documentLevel?.linkedVersion).toBeNull();
+  });
+
 
 });

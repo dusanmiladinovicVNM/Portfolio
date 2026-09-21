@@ -6,6 +6,7 @@ import {
   listDocumentLinksQuery,
   listDocumentsQuery,
   listDocumentVersionsQuery,
+  listUnitDocumentsQuery,
   uploadDocumentVersionCommand,
   type Actor,
   type ClockPort,
@@ -90,6 +91,32 @@ export async function handleDocumentHttp(
     }
 
     return null;
+  }
+
+  const unitDocumentsMatch = /^\/units\/([^/]+)\/documents$/.exec(path);
+  if (method === 'GET' && unitDocumentsMatch) {
+    const parsedId = entityIdSchema.safeParse(unitDocumentsMatch[1]);
+    if (!parsedId.success) return validationFailure();
+
+    const references = await listUnitDocumentsQuery(
+      deps.documentRepository,
+      deps.portfolioRepository,
+      actor,
+      asUnitId(parsedId.data),
+    );
+
+    return json({
+      data: {
+        items: references.map((reference) => ({
+          document: toDocumentResponse(reference.document),
+          link: toDocumentLinkResponse(reference.link),
+          linkedVersion:
+            reference.linkedVersion === null
+              ? null
+              : toDocumentVersionResponse(reference.linkedVersion),
+        })),
+      },
+    });
   }
 
   const documentMatch = /^\/documents\/([^/]+)$/.exec(path);

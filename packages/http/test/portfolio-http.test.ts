@@ -2856,4 +2856,156 @@ describe('Portfolio HTTP boundary', () => {
     expect(inspectorWrite.status).toBe(403);
   });
 
+  it('returns Unit-scoped document links without leaking unrelated targets', async () => {
+    const ids = [
+      'a1000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000002',
+      'a1000000-0000-4000-8000-000000000003',
+      'a1000000-0000-4000-8000-000000000004',
+      'a1000000-0000-4000-8000-000000000005',
+      'a1000000-0000-4000-8000-000000000006',
+      'a1000000-0000-4000-8000-000000000007',
+    ];
+    const handler = buildHandler(ids);
+
+    const propertyResponse = await handler(
+      new Request('https://portfolio.test/properties', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...propertyBody,
+          code: 'PROP-UNIT-DOCS',
+          name: 'Unit documents property',
+        }),
+      }),
+      adminIdentity,
+    );
+    const property = (await propertyResponse.json()).data;
+
+    const unitResponse = await handler(
+      new Request('https://portfolio.test/units', {
+        method: 'POST',
+        body: JSON.stringify({
+          propertyId: property.id,
+          code: 'UNIT-DOCS',
+          unitNumber: 'D-1',
+          unitType: 'apartment',
+        }),
+      }),
+      adminIdentity,
+    );
+    const unit = (await unitResponse.json()).data;
+
+    const documentResponse = await handler(
+      new Request('https://portfolio.test/documents', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'DOC-UNIT-1',
+          title: 'Unit handover photo set',
+          category: 'photo',
+        }),
+      }),
+      adminIdentity,
+    );
+    const document = (await documentResponse.json()).data;
+
+    const versionResponse = await handler(
+      new Request(
+        `https://portfolio.test/documents/${document.id}/versions?fileName=handover.pdf`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/pdf' },
+          body: new Uint8Array([1, 2, 3]),
+        },
+      ),
+      adminIdentity,
+    );
+    const version = (await versionResponse.json()).data;
+
+    const unitLink = await handler(
+      new Request(`https://portfolio.test/documents/${document.id}/links`, {
+        method: 'POST',
+        body: JSON.stringify({
+          documentVersionId: version.id,
+          relation: 'supporting',
+          targetType: 'unit',
+          targetId: unit.id,
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(unitLink.status).toBe(201);
+
+    const currentDocumentResponse = await handler(
+      new Request(`https://portfolio.test/documents/${document.id}`),
+      inspectorIdentity,
+    );
+    const currentDocument = (await currentDocumentResponse.json()).data;
+
+    const unrelatedDocumentResponse = await handler(
+      new Request('https://portfolio.test/documents', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'DOC-PROPERTY-ONLY',
+          title: 'Property-only document',
+          category: 'technical',
+        }),
+      }),
+      adminIdentity,
+    );
+    const unrelatedDocument = (await unrelatedDocumentResponse.json()).data;
+
+    const propertyLink = await handler(
+      new Request(
+        `https://portfolio.test/documents/${unrelatedDocument.id}/links`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            relation: 'supporting',
+            targetType: 'property',
+            targetId: property.id,
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(propertyLink.status).toBe(201);
+
+    const listed = await handler(
+      new Request(`https://portfolio.test/units/${unit.id}/documents`),
+      inspectorIdentity,
+    );
+
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toEqual({
+      data: {
+        items: [
+          {
+            document: currentDocument,
+            link: {
+              id: ids[4],
+              documentId: document.id,
+              documentVersionId: version.id,
+              relation: 'supporting',
+              targetType: 'unit',
+              targetId: unit.id,
+            },
+            linkedVersion: version,
+          },
+        ],
+      },
+    });
+
+    const missing = await handler(
+      new Request(
+        'https://portfolio.test/units/a1000000-0000-4000-8000-000000000099/documents',
+      ),
+      inspectorIdentity,
+    );
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toMatchObject({
+      error: { code: 'UNIT_NOT_FOUND' },
+    });
+  });
+
+
 });

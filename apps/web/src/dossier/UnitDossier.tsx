@@ -13,6 +13,7 @@ import {
 } from '../navigation/workspace-route.js';
 import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
 import { UnitAssets } from './UnitAssets.js';
+import { UnitDocuments } from './UnitDocuments.js';
 import { UnitOverview } from './UnitOverview.js';
 import { UnitTimeline } from './UnitTimeline.js';
 
@@ -123,12 +124,14 @@ export function UnitDossier({
             >
               Timeline
             </WorkspaceLink>
-            <span
-              className="dossier-tab dossier-tab-disabled"
-              title="Requires a Unit-scoped document read endpoint."
+            <WorkspaceLink
+              ariaCurrent={tab === 'documents' ? 'page' : undefined}
+              className={`dossier-tab ${tab === 'documents' ? 'dossier-tab-active' : ''}`}
+              navigate={navigate}
+              route={unitRoute(propertyId, unitId, asOf, 'documents')}
             >
               Documents
-            </span>
+            </WorkspaceLink>
             <WorkspaceLink
               ariaCurrent={tab === 'assets' ? 'page' : undefined}
               className={`dossier-tab ${tab === 'assets' ? 'dossier-tab-active' : ''}`}
@@ -153,6 +156,7 @@ export function UnitDossier({
             />
           ) : null}
           {tab === 'timeline' ? <UnitTimeline api={api} unitId={unitId} /> : null}
+          {tab === 'documents' ? <UnitDocuments api={api} unitId={unitId} /> : null}
           {tab === 'assets' ? <UnitAssets api={api} unitId={unitId} /> : null}
         </>
       ) : null}

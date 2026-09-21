@@ -12,6 +12,7 @@ import type {
   DocumentLink,
   DocumentVersion,
   DocumentVersionId,
+  UnitId,
 } from '@portfolio/domain';
 
 export class InMemoryDocumentRepository implements DocumentRepository {
@@ -85,6 +86,33 @@ export class InMemoryDocumentRepository implements DocumentRepository {
 
   async listLinksByDocument(documentId: DocumentId) {
     return this.links.filter((link) => link.documentId === documentId);
+  }
+
+  async listUnitDocuments(unitId: UnitId) {
+    return this.links
+      .filter(
+        (link): link is Extract<DocumentLink, { readonly targetType: 'unit' }> =>
+          link.targetType === 'unit' && link.targetId === unitId,
+      )
+      .map((link) => {
+        const document = this.documents.get(link.documentId);
+        if (!document) {
+          throw new Error('In-memory document link references a missing document.');
+        }
+
+        const linkedVersion =
+          link.documentVersionId === null
+            ? null
+            : this.versions.get(link.documentVersionId) ?? null;
+
+        if (link.documentVersionId !== null && linkedVersion === null) {
+          throw new Error(
+            'In-memory document link references a missing document version.',
+          );
+        }
+
+        return { document, link, linkedVersion };
+      });
   }
 }
 

@@ -348,3 +348,48 @@ tbody tr:last-child td { border-bottom: 0; }
   cursor: default;
   opacity: .45;
 }
+
+.document-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+}
+.document-card {
+  padding: 20px;
+  border: 1px solid #ded8cd;
+  border-radius: 13px;
+  background: #fff;
+}
+.document-heading {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  align-items: start;
+  margin-bottom: 20px;
+}
+.document-heading h3 {
+  margin: 0;
+  font-size: 1.12rem;
+}
+.document-version-box {
+  display: grid;
+  gap: 5px;
+  margin-top: 18px;
+  padding: 14px;
+  border-radius: 10px;
+  background: #eef0e9;
+}
+.document-version-box span,
+.document-version-box small {
+  color: #6e7369;
+  font-size: .75rem;
+}
+.document-version-box span {
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.document-version-box strong {
+  overflow-wrap: anywhere;
+  font-size: .92rem;
+}
