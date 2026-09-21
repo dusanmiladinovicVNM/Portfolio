@@ -11,6 +11,7 @@ import {
 } from '../api/paths.js';
 import type { PortfolioApi } from '../api/portfolio-api.js';
 import { WorkspaceLink } from '../navigation/WorkspaceLink.js';
+import { CreateUnitForm } from './CreateUnitForm.js';
 import {
   dashboardRoute,
   unitRoute,
@@ -87,6 +88,25 @@ export function PropertyUnits({
           </p>
         </div>
       </header>
+
+      {data ? (
+        <section className="panel page-panel">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Core setup</p>
+              <h2>Add Unit</h2>
+            </div>
+            <span className="section-note">{data.property.code}</span>
+          </div>
+          <CreateUnitForm
+            api={api}
+            propertyId={propertyId}
+            onCreated={(created) =>
+              navigate(unitRoute(propertyId, created.id, asOf, 'spaces'))
+            }
+          />
+        </section>
+      ) : null}
 
       <section className="panel page-panel">
         <div className="section-heading">

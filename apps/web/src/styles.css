@@ -906,3 +906,72 @@ input:focus-visible {
 @media (max-width: 900px) {
   .party-layout { grid-template-columns: 1fr; }
 }
+
+.button-primary {
+  border: 0;
+  border-radius: 10px;
+  padding: 11px 15px;
+  background: #263126;
+  color: #fff;
+  font: inherit;
+  font-weight: 750;
+}
+.button-primary:disabled,
+.button-secondary:disabled {
+  cursor: progress;
+  opacity: .58;
+}
+.setup-form {
+  display: grid;
+  gap: 18px;
+}
+.setup-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 18px;
+}
+.setup-form label {
+  display: grid;
+  gap: 7px;
+  color: #4f534b;
+  font-size: .82rem;
+  font-weight: 700;
+}
+.setup-form input,
+.setup-form select,
+.setup-form textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #c9c2b5;
+  border-radius: 9px;
+  background: #fff;
+  color: #252722;
+  font: inherit;
+}
+.setup-form textarea { resize: vertical; }
+.setup-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: flex-end;
+}
+.setup-form-error {
+  margin: 0;
+  color: #9a332d;
+  font-size: .82rem;
+}
+.setup-hint {
+  margin: 0;
+  color: #6a6e65;
+  font-size: .78rem;
+  line-height: 1.5;
+}
+@media (max-width: 680px) {
+  .setup-form-grid { grid-template-columns: 1fr; }
+  .setup-form-actions {
+    justify-content: stretch;
+    flex-direction: column;
+  }
+  .setup-form-actions button { width: 100%; }
+}
