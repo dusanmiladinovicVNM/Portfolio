@@ -6,6 +6,8 @@ import {
   listDocumentLinksQuery,
   listDocumentsQuery,
   listDocumentVersionsQuery,
+  listLeaseAgreementDocumentsQuery,
+  listLeaseAmendmentDocumentsQuery,
   listUnitDocumentsQuery,
   uploadDocumentVersionCommand,
   type Actor,
@@ -103,6 +105,60 @@ export async function handleDocumentHttp(
       deps.portfolioRepository,
       actor,
       asUnitId(parsedId.data),
+    );
+
+    return json({
+      data: {
+        items: references.map((reference) => ({
+          document: toDocumentResponse(reference.document),
+          link: toDocumentLinkResponse(reference.link),
+          linkedVersion:
+            reference.linkedVersion === null
+              ? null
+              : toDocumentVersionResponse(reference.linkedVersion),
+        })),
+      },
+    });
+  }
+
+  const agreementDocumentsMatch =
+    /^\/agreements\/([^/]+)\/documents$/.exec(path);
+  if (method === 'GET' && agreementDocumentsMatch) {
+    const parsedId = entityIdSchema.safeParse(agreementDocumentsMatch[1]);
+    if (!parsedId.success) return validationFailure();
+
+    const references = await listLeaseAgreementDocumentsQuery(
+      deps.documentRepository,
+      deps.leaseRepository,
+      actor,
+      asLeaseAgreementId(parsedId.data),
+    );
+
+    return json({
+      data: {
+        items: references.map((reference) => ({
+          document: toDocumentResponse(reference.document),
+          link: toDocumentLinkResponse(reference.link),
+          linkedVersion:
+            reference.linkedVersion === null
+              ? null
+              : toDocumentVersionResponse(reference.linkedVersion),
+        })),
+      },
+    });
+  }
+
+  const amendmentDocumentsMatch =
+    /^\/amendments\/([^/]+)\/documents$/.exec(path);
+  if (method === 'GET' && amendmentDocumentsMatch) {
+    const parsedId = entityIdSchema.safeParse(amendmentDocumentsMatch[1]);
+    if (!parsedId.success) return validationFailure();
+
+    const references = await listLeaseAmendmentDocumentsQuery(
+      deps.documentRepository,
+      deps.leaseRepository,
+      actor,
+      asLeaseAmendmentId(parsedId.data),
     );
 
     return json({

@@ -12,6 +12,11 @@ import {
   type VerifiedIdentity,
 } from '@portfolio/application';
 import {
+  asDocumentId,
+  asDocumentLinkId,
+  asDocumentVersionId,
+  asLeaseAgreementId,
+  asLeaseAmendmentId,
   asPropertyId,
   asUnitId,
   asUserId,
@@ -275,7 +280,12 @@ class SequenceClock implements ClockPort {
 }
 
 class EmptyLeaseRepository implements LeaseRepository {
-  async getAgreementById(_id: LeaseAgreementId): Promise<LeaseAgreement | null> { return null; }
+  readonly agreements = new Map<LeaseAgreementId, LeaseAgreement>();
+  readonly amendments = new Map<LeaseAmendmentId, LeaseAmendment>();
+
+  async getAgreementById(id: LeaseAgreementId): Promise<LeaseAgreement | null> {
+    return this.agreements.get(id) ?? null;
+  }
   async listAgreementsByTenancy(_tenancyId: TenancyId): Promise<readonly LeaseAgreement[]> { return []; }
   async agreementCodeExists(_code: string): Promise<boolean> { return false; }
   async successorExists(_predecessorAgreementId: LeaseAgreementId): Promise<boolean> { return false; }
@@ -289,7 +299,9 @@ class EmptyLeaseRepository implements LeaseRepository {
     _agreement: LeaseAgreement,
     _expectedVersion: number,
   ): Promise<void> {}
-  async getAmendmentById(_id: LeaseAmendmentId): Promise<LeaseAmendment | null> { return null; }
+  async getAmendmentById(id: LeaseAmendmentId): Promise<LeaseAmendment | null> {
+    return this.amendments.get(id) ?? null;
+  }
   async listAmendmentsByAgreement(
     _agreementId: LeaseAgreementId,
   ): Promise<readonly LeaseAmendment[]> { return []; }
@@ -321,6 +333,8 @@ function buildHandler(
     readonly portfolioRepository?: InMemoryPortfolioRepository;
     readonly unitTimelineRepository?: InMemoryUnitTimelineRepository;
     readonly reportingRepository?: InMemoryReportingRepository;
+    readonly leaseRepository?: EmptyLeaseRepository;
+    readonly documentRepository?: InMemoryDocumentRepository;
   } = {},
 ) {
   return createPortfolioHttpHandler({
@@ -341,8 +355,9 @@ function buildHandler(
     partyRepository: new InMemoryPartyRepository(),
     ownershipRepository: new InMemoryOwnershipRepository(),
     tenancyRepository: new InMemoryTenancyRepository(),
-    leaseRepository: new EmptyLeaseRepository(),
-    documentRepository: new InMemoryDocumentRepository(),
+    leaseRepository: overrides.leaseRepository ?? new EmptyLeaseRepository(),
+    documentRepository:
+      overrides.documentRepository ?? new InMemoryDocumentRepository(),
     inspectionRepository: new InMemoryInspectionRepository(),
     staffDirectoryRepository: new InMemoryStaffDirectoryRepository(),
     fileStorage: new MemoryFileStorage(),
@@ -3064,6 +3079,164 @@ describe('Portfolio HTTP boundary', () => {
     expect(missing.status).toBe(404);
     expect(await missing.json()).toMatchObject({
       error: { code: 'PARTY_NOT_FOUND' },
+    });
+  });
+
+
+  it('reads canonical Agreement and Amendment document targets without widening Unit Documents', async () => {
+    const leaseRepository = new EmptyLeaseRepository();
+    const documentRepository = new InMemoryDocumentRepository();
+    const agreementId = asLeaseAgreementId(
+      'e1000000-0000-4000-8000-000000000001',
+    );
+    const amendmentId = asLeaseAmendmentId(
+      'e1000000-0000-4000-8000-000000000002',
+    );
+    const documentId = asDocumentId(
+      'e1000000-0000-4000-8000-000000000003',
+    );
+    const versionId = asDocumentVersionId(
+      'e1000000-0000-4000-8000-000000000004',
+    );
+    const agreementLinkId = asDocumentLinkId(
+      'e1000000-0000-4000-8000-000000000005',
+    );
+    const amendmentLinkId = asDocumentLinkId(
+      'e1000000-0000-4000-8000-000000000006',
+    );
+    const tenancyId = asTenancyId(
+      'e1000000-0000-4000-8000-000000000007',
+    );
+
+    leaseRepository.agreements.set(agreementId, {
+      id: agreementId,
+      tenancyId,
+      code: 'AGR-DOC-HTTP',
+      agreementType: 'initial',
+      predecessorAgreementId: null,
+      effectiveFrom: '2025-01-01' as DateOnly,
+      effectiveTo: null,
+      status: 'signed',
+      signedAt: '2024-12-20' as DateOnly,
+      version: 2,
+      parties: [],
+    });
+    leaseRepository.amendments.set(amendmentId, {
+      id: amendmentId,
+      agreementId,
+      code: 'AMD-DOC-HTTP',
+      title: 'Signed change',
+      description: null,
+      effectiveFrom: '2025-06-01' as DateOnly,
+      status: 'signed',
+      signedAt: '2025-05-20' as DateOnly,
+      version: 2,
+    });
+
+    documentRepository.documents.set(documentId, {
+      id: documentId,
+      code: 'DOC-SIGNED-HTTP',
+      title: 'Signed lease PDF',
+      category: 'legal',
+      status: 'active',
+      latestVersionNumber: 3,
+      revision: 4,
+    });
+    documentRepository.versions.set(versionId, {
+      id: versionId,
+      documentId,
+      versionNumber: 3,
+      fileName: 'LEASE-2026.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 1234,
+      sha256: 'a'.repeat(64),
+      status: 'final',
+      finalizedAt: '2025-05-20T10:00:00.000Z',
+    });
+    documentRepository.links.push(
+      {
+        id: agreementLinkId,
+        documentId,
+        documentVersionId: versionId,
+        relation: 'signed_original',
+        targetType: 'lease_agreement',
+        targetId: agreementId,
+      },
+      {
+        id: amendmentLinkId,
+        documentId,
+        documentVersionId: versionId,
+        relation: 'signed_original',
+        targetType: 'lease_amendment',
+        targetId: amendmentId,
+      },
+    );
+
+    const handler = buildHandler([], new FixedClock(), {
+      leaseRepository,
+      documentRepository,
+    });
+
+    const agreementResponse = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreementId}/documents`,
+      ),
+      inspectorIdentity,
+    );
+    expect(agreementResponse.status).toBe(200);
+    expect(await agreementResponse.json()).toMatchObject({
+      data: {
+        items: [
+          {
+            document: { id: documentId, code: 'DOC-SIGNED-HTTP' },
+            link: {
+              id: agreementLinkId,
+              relation: 'signed_original',
+              targetType: 'lease_agreement',
+              targetId: agreementId,
+            },
+            linkedVersion: {
+              id: versionId,
+              fileName: 'LEASE-2026.pdf',
+              versionNumber: 3,
+              status: 'final',
+            },
+          },
+        ],
+      },
+    });
+
+    const amendmentResponse = await handler(
+      new Request(
+        `https://portfolio.test/amendments/${amendmentId}/documents`,
+      ),
+      inspectorIdentity,
+    );
+    expect(amendmentResponse.status).toBe(200);
+    expect(await amendmentResponse.json()).toMatchObject({
+      data: {
+        items: [
+          {
+            link: {
+              id: amendmentLinkId,
+              targetType: 'lease_amendment',
+              targetId: amendmentId,
+            },
+            linkedVersion: { id: versionId, status: 'final' },
+          },
+        ],
+      },
+    });
+
+    const missing = await handler(
+      new Request(
+        'https://portfolio.test/agreements/e1000000-0000-4000-8000-000000000099/documents',
+      ),
+      inspectorIdentity,
+    );
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toMatchObject({
+      error: { code: 'LEASE_AGREEMENT_NOT_FOUND' },
     });
   });
 

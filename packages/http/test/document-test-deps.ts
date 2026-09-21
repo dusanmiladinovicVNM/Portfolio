@@ -12,7 +12,6 @@ import type {
   DocumentLink,
   DocumentVersion,
   DocumentVersionId,
-  UnitId,
 } from '@portfolio/domain';
 
 export class InMemoryDocumentRepository implements DocumentRepository {
@@ -88,16 +87,21 @@ export class InMemoryDocumentRepository implements DocumentRepository {
     return this.links.filter((link) => link.documentId === documentId);
   }
 
-  async listUnitDocuments(unitId: UnitId) {
+  async listTargetDocuments(
+    target: import('@portfolio/application').DocumentReadTarget,
+  ) {
     return this.links
       .filter(
-        (link): link is Extract<DocumentLink, { readonly targetType: 'unit' }> =>
-          link.targetType === 'unit' && link.targetId === unitId,
+        (link) =>
+          link.targetType === target.targetType &&
+          link.targetId === target.targetId,
       )
       .map((link) => {
         const document = this.documents.get(link.documentId);
         if (!document) {
-          throw new Error('In-memory document link references a missing document.');
+          throw new Error(
+            'In-memory document link references a missing document.',
+          );
         }
 
         const linkedVersion =

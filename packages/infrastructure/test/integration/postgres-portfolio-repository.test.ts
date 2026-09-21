@@ -73,6 +73,8 @@ import {
   listPropertiesQuery,
   listSpacesByUnitQuery,
   listTenanciesByUnitQuery,
+  listLeaseAgreementDocumentsQuery,
+  listLeaseAmendmentDocumentsQuery,
   listUnitDocumentsQuery,
   listUnitsByPropertyQuery,
   listAssetsByPropertyQuery,
@@ -100,6 +102,7 @@ import {
   asCostId,
   asCostReversalId,
   asDocumentVersionId,
+  asLeaseAmendmentId,
   asInspectionResponseId,
   asOwnershipPeriodId,
   asPropertyId,
@@ -2146,6 +2149,8 @@ describe('PostgreSQL infrastructure', () => {
       '61000000-0000-4000-8000-000000000011',
       '61000000-0000-4000-8000-000000000012',
       '61000000-0000-4000-8000-000000000013',
+      '61000000-0000-4000-8000-000000000014',
+      '61000000-0000-4000-8000-000000000015',
     ]);
 
     const property = await createPropertyCommand(
@@ -2376,6 +2381,29 @@ describe('PostgreSQL infrastructure', () => {
 
     expect(link.relation).toBe('signed_original');
 
+    const agreementDocuments = await listLeaseAgreementDocumentsQuery(
+      documentRepository,
+      leaseRepository,
+      actor,
+      agreement.id,
+    );
+    expect(agreementDocuments).toHaveLength(1);
+    expect(agreementDocuments[0]).toMatchObject({
+      document: { id: document.id, code: 'DOC-DOC-INT' },
+      link: {
+        id: link.id,
+        relation: 'signed_original',
+        targetType: 'lease_agreement',
+        targetId: agreement.id,
+      },
+      linkedVersion: {
+        id: final.id,
+        versionNumber: 1,
+        fileName: 'signed-lease.pdf',
+        status: 'final',
+      },
+    });
+
     await expect(
       sql`
         update public.document_links
@@ -2519,6 +2547,62 @@ describe('PostgreSQL infrastructure', () => {
     ).rejects.toMatchObject({
       code: '23514',
       constraint_name: 'document_links_signed_original_amendment_signed',
+    });
+
+    const signedAmendment = await signLeaseAmendmentCommand(
+      {
+        leaseRepository,
+        tenancyRepository,
+        idGenerator: ids,
+      },
+      actor,
+      asLeaseAmendmentId('62000000-0000-4000-8000-000000000004'),
+      1,
+      '2026-10-20',
+      {
+        currency: 'EUR',
+        baseRent: '825',
+      },
+    );
+    expect(signedAmendment.status).toBe('signed');
+
+    const amendmentLink = await linkDocumentCommand(
+      {
+        documentRepository,
+        portfolioRepository,
+        partyRepository,
+        tenancyRepository,
+        leaseRepository,
+        idGenerator: ids,
+      },
+      actor,
+      {
+        documentId: document.id,
+        documentVersionId: final.id,
+        relation: 'signed_original',
+        targetType: 'lease_amendment',
+        targetId: signedAmendment.id,
+      },
+    );
+
+    const amendmentDocuments = await listLeaseAmendmentDocumentsQuery(
+      documentRepository,
+      leaseRepository,
+      actor,
+      signedAmendment.id,
+    );
+    expect(amendmentDocuments).toHaveLength(1);
+    expect(amendmentDocuments[0]).toMatchObject({
+      link: {
+        id: amendmentLink.id,
+        relation: 'signed_original',
+        targetType: 'lease_amendment',
+        targetId: signedAmendment.id,
+      },
+      linkedVersion: {
+        id: final.id,
+        status: 'final',
+      },
     });
 
     const currentDocument = await documentRepository.getDocumentById(document.id);

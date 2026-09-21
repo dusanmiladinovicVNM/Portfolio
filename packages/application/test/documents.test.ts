@@ -15,7 +15,6 @@ import {
   type DocumentLink,
   type DocumentVersion,
   type DocumentVersionId,
-  type UnitId,
 } from '@portfolio/domain';
 
 const actor: Actor = {
@@ -57,7 +56,7 @@ class FailingDocumentRepository implements DocumentRepository {
   ): Promise<StorageObjectReference | null> { return null; }
   async insertLink(_link: DocumentLink) {}
   async listLinksByDocument(): Promise<readonly DocumentLink[]> { return []; }
-  async listUnitDocuments(_unitId: UnitId) { return []; }
+  async listTargetDocuments() { return []; }
 }
 
 class TrackingStorage implements FileStoragePort {

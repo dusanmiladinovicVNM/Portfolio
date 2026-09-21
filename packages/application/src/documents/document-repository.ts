@@ -4,18 +4,26 @@ import type {
   DocumentLink,
   DocumentVersion,
   DocumentVersionId,
+  LeaseAgreementId,
+  LeaseAmendmentId,
   UnitId,
 } from '@portfolio/domain';
 import type { StorageObjectReference } from './file-storage-port.js';
 
-export type UnitDocumentLink = Extract<
-  DocumentLink,
-  { readonly targetType: 'unit' }
->;
+export type DocumentReadTarget =
+  | { readonly targetType: 'unit'; readonly targetId: UnitId }
+  | {
+      readonly targetType: 'lease_agreement';
+      readonly targetId: LeaseAgreementId;
+    }
+  | {
+      readonly targetType: 'lease_amendment';
+      readonly targetId: LeaseAmendmentId;
+    };
 
-export interface UnitDocumentReference {
+export interface TargetDocumentReference {
   readonly document: Document;
-  readonly link: UnitDocumentLink;
+  readonly link: DocumentLink;
   readonly linkedVersion: DocumentVersion | null;
 }
 
@@ -42,5 +50,7 @@ export interface DocumentRepository {
 
   insertLink(link: DocumentLink): Promise<void>;
   listLinksByDocument(documentId: DocumentId): Promise<readonly DocumentLink[]>;
-  listUnitDocuments(unitId: UnitId): Promise<readonly UnitDocumentReference[]>;
+  listTargetDocuments(
+    target: DocumentReadTarget,
+  ): Promise<readonly TargetDocumentReference[]>;
 }
