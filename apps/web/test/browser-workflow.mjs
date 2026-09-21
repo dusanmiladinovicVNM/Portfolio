@@ -215,10 +215,21 @@ try {
     "//a[normalize-space()='Skip to main content']",
   );
   await assertActiveHeading(sessionId, 'Portfolio picture', 'Dashboard focus');
+  const dashboardUrl = `${baseUrl}/dashboard?asOf=2025-06-30`;
   assertEqual(
     await currentUrl(sessionId),
-    `${baseUrl}/dashboard?asOf=2025-06-30`,
+    dashboardUrl,
     'Dashboard canonical URL',
+  );
+  await clearXpath(
+    sessionId,
+    "//input[@aria-label='Reporting business date']",
+  );
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  assertEqual(
+    await currentUrl(sessionId),
+    dashboardUrl,
+    'Empty Dashboard date does not create an invalid route',
   );
 
   await clickXpath(
@@ -251,10 +262,22 @@ try {
     "//h1[normalize-space()='Unit 1A']",
   );
   await assertActiveHeading(sessionId, 'Unit 1A', 'Unit route focus');
+  const unitOverviewUrl =
+    `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=overview&asOf=2025-06-30`;
   assertEqual(
     await currentUrl(sessionId),
-    `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=overview&asOf=2025-06-30`,
+    unitOverviewUrl,
     'Unit overview URL',
+  );
+  await clearXpath(
+    sessionId,
+    "//input[@aria-label='Unit overview business date']",
+  );
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  assertEqual(
+    await currentUrl(sessionId),
+    unitOverviewUrl,
+    'Empty Unit Overview date does not create an invalid route',
   );
 
   await clickXpath(sessionId, "//a[normalize-space()='Contracts']");
