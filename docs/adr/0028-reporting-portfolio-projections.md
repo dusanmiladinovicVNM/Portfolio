@@ -235,8 +235,12 @@ Canonical #23 must prove at minimum:
 17. Portfolio cost totals include all effective Costs independent of Unit
     attribution;
 18. Property dashboard rows cannot leak another Property's Units;
-19. Reporting reads require `portfolio:read`;
-20. reporting projections are not accepted as write commands.
+19. Property rows roll up exactly to Portfolio Unit/occupancy and matching
+    current-operation totals; obvious subcounts such as urgent<=open and
+    active/inactive Asset counts<=located Assets are validated at the domain
+    projection boundary;
+20. Reporting reads require `portfolio:read`;
+21. reporting projections are not accepted as write commands.
 
 ## Deferred
 
