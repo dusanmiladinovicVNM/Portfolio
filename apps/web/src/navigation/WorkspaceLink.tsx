@@ -10,7 +10,7 @@ interface WorkspaceLinkProps {
   readonly navigate: NavigateWorkspace;
   readonly className: string;
   readonly children: ReactNode;
-  readonly ariaCurrent?: 'page';
+  readonly ariaCurrent?: 'page' | undefined;
 }
 
 export function WorkspaceLink({
