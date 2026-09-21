@@ -1,3 +1,13 @@
+import type {
+  CreatePartyRequest,
+  CreatePropertyRequest,
+  CreateSpaceRequest,
+  CreateUnitRequest,
+  PartyResponse,
+  PropertyResponse,
+  SpaceResponse,
+  UnitResponse,
+} from '@portfolio/contracts';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
 import type { SessionGateway } from './auth/session-gateway.js';
@@ -28,6 +38,17 @@ const inspectionNotesItemId = 'a1000000-0000-4000-8000-000000000005';
 const inspectionUserId = 'a1000000-0000-4000-8000-000000000006';
 const inspectionConditionResponseId = 'a1000000-0000-4000-8000-000000000007';
 const inspectionNotesResponseId = 'a1000000-0000-4000-8000-000000000008';
+const setupPropertyId = 'b1000000-0000-4000-8000-000000000001';
+const setupUnitId = 'b1000000-0000-4000-8000-000000000002';
+const setupSpaceId = 'b1000000-0000-4000-8000-000000000003';
+const setupPartyId = 'b1000000-0000-4000-8000-000000000004';
+const setupPartyEmailId = 'b1000000-0000-4000-8000-000000000005';
+const setupPartyAddressId = 'b1000000-0000-4000-8000-000000000006';
+
+let setupProperty: PropertyResponse | null = null;
+let setupUnit: UnitResponse | null = null;
+let setupSpace: SpaceResponse | null = null;
+let setupParty: PartyResponse | null = null;
 
 const operations = {
   openMaintenanceIssueCount: 0,
@@ -324,11 +345,15 @@ function inspectionBundle() {
   };
 }
 
-function requireInspectionAuth(init?: RequestInit) {
+function requirePortfolioAuth(init?: RequestInit) {
   const authorization = new Headers(init?.headers).get('authorization');
   if (authorization !== 'Bearer browser-workflow-token') {
-    throw new Error('Inspection mutation is missing Portfolio auth.');
+    throw new Error('Portfolio mutation is missing Portfolio auth.');
   }
+}
+
+function requireInspectionAuth(init?: RequestInit) {
+  requirePortfolioAuth(init);
 }
 
 const parties = [
@@ -382,10 +407,65 @@ function apiPath(input: RequestInfo | URL): URL {
 
 type BrowserHarnessWindow = Window & {
   __portfolioBinaryReads?: number;
+  __portfolioHoldUnitCreate?: boolean;
+  __portfolioHoldSpaceCreate?: boolean;
+  __portfolioPendingUnitCreate?: boolean;
+  __portfolioPendingSpaceCreate?: boolean;
+  __portfolioReleaseUnitCreate?: () => boolean;
+  __portfolioReleaseSpaceCreate?: () => boolean;
 };
 
 const browserHarnessWindow = window as BrowserHarnessWindow;
 browserHarnessWindow.__portfolioBinaryReads = 0;
+
+let heldUnitCreate:
+  | { readonly response: Response; readonly resolve: (response: Response) => void }
+  | null = null;
+let heldSpaceCreate:
+  | { readonly response: Response; readonly resolve: (response: Response) => void }
+  | null = null;
+
+function maybeHoldUnitCreate(response: Response): Promise<Response> {
+  if (!browserHarnessWindow.__portfolioHoldUnitCreate) {
+    return Promise.resolve(response);
+  }
+
+  browserHarnessWindow.__portfolioPendingUnitCreate = true;
+  return new Promise<Response>((resolve) => {
+    heldUnitCreate = { response, resolve };
+  });
+}
+
+function maybeHoldSpaceCreate(response: Response): Promise<Response> {
+  if (!browserHarnessWindow.__portfolioHoldSpaceCreate) {
+    return Promise.resolve(response);
+  }
+
+  browserHarnessWindow.__portfolioPendingSpaceCreate = true;
+  return new Promise<Response>((resolve) => {
+    heldSpaceCreate = { response, resolve };
+  });
+}
+
+browserHarnessWindow.__portfolioReleaseUnitCreate = () => {
+  if (!heldUnitCreate) return false;
+  const held = heldUnitCreate;
+  heldUnitCreate = null;
+  browserHarnessWindow.__portfolioHoldUnitCreate = false;
+  browserHarnessWindow.__portfolioPendingUnitCreate = false;
+  held.resolve(held.response);
+  return true;
+};
+
+browserHarnessWindow.__portfolioReleaseSpaceCreate = () => {
+  if (!heldSpaceCreate) return false;
+  const held = heldSpaceCreate;
+  heldSpaceCreate = null;
+  browserHarnessWindow.__portfolioHoldSpaceCreate = false;
+  browserHarnessWindow.__portfolioPendingSpaceCreate = false;
+  held.resolve(held.response);
+  return true;
+};
 
 globalThis.fetch = async (
   input: RequestInfo | URL,
@@ -393,6 +473,115 @@ globalThis.fetch = async (
 ): Promise<Response> => {
   const url = apiPath(input);
   const path = url.pathname;
+
+  if (path === '/properties' && init?.method === 'POST') {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as CreatePropertyRequest;
+    setupProperty = {
+      ...body,
+      id: setupPropertyId,
+      status: 'active',
+      yearBuilt: body.yearBuilt ?? null,
+    };
+    return json(setupProperty, 201);
+  }
+
+  if (setupProperty && path === '/properties/' + setupPropertyId) {
+    return json(setupProperty);
+  }
+
+  if (setupProperty && path === '/properties/' + setupPropertyId + '/units') {
+    return json({ items: setupUnit ? [setupUnit] : [] });
+  }
+
+  if (path === '/units' && init?.method === 'POST') {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as CreateUnitRequest;
+    if (body.propertyId !== setupPropertyId) {
+      throw new Error('Setup Unit was created for the wrong Property.');
+    }
+    setupUnit = {
+      id: setupUnitId,
+      propertyId: body.propertyId,
+      code: body.code,
+      unitNumber: body.unitNumber,
+      unitType: body.unitType,
+      floor: body.floor ?? null,
+      areaM2: body.areaM2 ?? null,
+      rooms: body.rooms ?? null,
+      status: 'active',
+      notes: body.notes ?? '',
+    };
+    return maybeHoldUnitCreate(json(setupUnit, 201));
+  }
+
+  if (setupUnit && path === '/units/' + setupUnitId) {
+    return json(setupUnit);
+  }
+
+  if (setupUnit && path === '/units/' + setupUnitId + '/spaces') {
+    return json({ items: setupSpace ? [setupSpace] : [] });
+  }
+
+  if (path === '/units/' + unitId + '/spaces') {
+    return json({ items: [] });
+  }
+
+  if (path === '/spaces' && init?.method === 'POST') {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as CreateSpaceRequest;
+    if (body.unitId !== setupUnitId) {
+      throw new Error('Setup Space was created for the wrong Unit.');
+    }
+    setupSpace = {
+      id: setupSpaceId,
+      unitId: body.unitId,
+      code: body.code,
+      name: body.name,
+      spaceType: body.spaceType,
+      areaM2: body.areaM2 ?? null,
+      sortOrder: body.sortOrder ?? 0,
+      active: true,
+    };
+    return maybeHoldSpaceCreate(json(setupSpace, 201));
+  }
+
+  if (path === '/parties' && init?.method === 'POST') {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as CreatePartyRequest;
+    if (body.partyType !== 'company' || !body.legalName) {
+      throw new Error('Browser setup expects a Company Party.');
+    }
+    setupParty = {
+      id: setupPartyId,
+      code: body.code,
+      displayName: body.displayName ?? body.legalName,
+      status: 'active',
+      contactPoints: (body.contactPoints ?? []).map((contact) => ({
+        id: setupPartyEmailId,
+        partyId: setupPartyId,
+        contactType: contact.contactType,
+        value: contact.value,
+        label: contact.label ?? null,
+        isPrimary: contact.isPrimary ?? false,
+      })),
+      addresses: (body.addresses ?? []).map((address) => ({
+        id: setupPartyAddressId,
+        partyId: setupPartyId,
+        addressType: address.addressType,
+        line1: address.line1,
+        line2: address.line2 ?? null,
+        postalCode: address.postalCode,
+        city: address.city,
+        region: address.region ?? null,
+        countryCode: address.countryCode,
+        isPrimary: address.isPrimary ?? false,
+      })),
+      partyType: 'company',
+      legalName: body.legalName,
+    };
+    return json(setupParty, 201);
+  }
 
   if (path === '/reporting/dashboard') {
     const asOf = url.searchParams.get('asOf');
@@ -647,8 +836,12 @@ globalThis.fetch = async (
 
   if (path === '/parties') {
     const ids = new Set(url.searchParams.getAll('id'));
+    const allParties = setupParty ? [...parties, setupParty] : parties;
     return json({
-      items: parties.filter((party) => ids.has(party.id)),
+      items:
+        ids.size === 0
+          ? allParties
+          : allParties.filter((party) => ids.has(party.id)),
     });
   }
 

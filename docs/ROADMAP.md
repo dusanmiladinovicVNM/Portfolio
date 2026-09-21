@@ -159,26 +159,68 @@ Cost is a financial projection/fact, not a substitute for its source business en
 - asset/service summaries
 - portfolio dashboards
 
-### PR #24 — React/Vite PWA + Unit dossier (IN PROGRESS)
+### PR #24 — React/Vite web + Unit dossier (DONE)
 
 - authenticated internal shell
-- navigation
+- URL-owned navigation
 - Unit-centric UX
 - typed API client
-- Portfolio/Party/Tenancy/Contracts/Documents/Assets surfaces
+- Portfolio/Party/Tenancy/Contracts/Documents/Assets read surfaces
+- authorized DocumentVersion Open/Download
 - no raw database business writes from React
 
-### PR #25 — Field workflow + offline
+### PR #25 — Online Inspection field workflow (DONE)
 
-- inspection field UX
-- section autosave
-- IndexedDB/local cache
-- reconnect/retry
-- optimistic conflict handling
-- photo/signature workflows
-- mobile/PWA behavior
+- Unit-scoped Inspection workspace
+- Start lifecycle CAS
+- schema-driven section editing
+- explicit section Save with revision CAS
+- dirty-navigation protection
+- stale async completion ownership guards
+- concurrent per-target mutation tracking
+- conflict UX that preserves the local draft
 
-## PR #26 — Production hardening + MVP release
+Offline persistence is explicitly not part of the MVP field workflow.
+
+## MVP write surfaces (IN PROGRESS)
+
+The online MVP must be usable without manual SQL or ad-hoc API calls.
+
+Sequence:
+
+1. Core setup
+   - create Party
+   - create Property
+   - create Unit
+   - create Space
+2. Leasing administration
+   - create Tenancy and parties
+   - plan / activate / notice / move-out / end / cancel
+   - create/sign LeaseAgreement and amendments
+   - signed-document workflow
+3. Assets and meters
+   - create/edit/move Assets
+   - basic warranty/service history
+   - create Meters and record readings
+4. Maintenance and service
+   - Issue
+   - WorkOrder
+   - assignment/status
+   - ServiceEvent linkage
+   - Inspection finding → Maintenance Issue
+5. Inspection orchestration and completion
+   - create / schedule / assign
+   - assigned-work view
+   - findings
+   - evidence/photos
+   - signatures
+   - lock/finalize
+   - immutable final report
+
+Before release, run an MVP usability sweep that forbids manual SQL/API intervention
+for the agreed launch workflows.
+
+## Production hardening + MVP release
 
 Final MVP gate:
 
@@ -195,6 +237,25 @@ Final MVP gate:
 
 A release is not complete until restore has been proven.
 
+## Post-MVP — offline field capability
+
+Offline is intentionally frozen until after the online MVP has launched and
+real field usage has established the actual failure modes and sync needs.
+
+Post-MVP scope may include:
+
+- IndexedDB cached Inspection snapshots
+- local section drafts
+- command outbox
+- reconnect/retry
+- idempotent replay
+- photo upload queue
+- stale revision/conflict reconciliation
+- service worker/PWA offline behavior
+
+The server remains canonical. Offline state must not become a parallel source of
+business truth.
+
 ## Professional-stack port
 
 The professional-stack port is deliberately **not** part of the MVP PR sequence.
@@ -204,7 +265,7 @@ Introduce it only when an operational requirement justifies the infrastructure c
 Expected replacement:
 
 ```text
-React/Vite PWA                stays
+React/Vite web                stays
 API contracts                 stay
 application commands/queries  stay
 domain                        stays

@@ -19,9 +19,11 @@ import { UnitAssets } from './UnitAssets.js';
 import { UnitDocuments } from './UnitDocuments.js';
 import { UnitInspections } from './UnitInspections.js';
 import { UnitOverview } from './UnitOverview.js';
+import { UnitSpaces } from './UnitSpaces.js';
 import { UnitTenancies } from './UnitTenancies.js';
 import { UnitContracts } from './UnitContracts.js';
 import { UnitTimeline } from './UnitTimeline.js';
+import { assertUnitRouteOwner } from './route-owner.js';
 
 interface UnitDossierProps {
   readonly api: PortfolioApi;
@@ -65,11 +67,7 @@ export function UnitDossier({
         signal: controller.signal,
       })
       .then((result) => {
-        if (result.propertyId !== propertyId) {
-          throw new Error(
-            'Unit route does not belong to the Property encoded in the URL.',
-          );
-        }
+        assertUnitRouteOwner(propertyId, unitId, result);
         setUnit(result);
       })
       .catch((cause: unknown) => {
@@ -133,6 +131,14 @@ export function UnitDossier({
               route={unitRoute(propertyId, unitId, asOf, 'overview')}
             >
               Overview
+            </WorkspaceLink>
+            <WorkspaceLink
+              ariaCurrent={tab === 'spaces' ? 'page' : undefined}
+              className={'dossier-tab ' + (tab === 'spaces' ? 'dossier-tab-active' : '')}
+              navigate={navigate}
+              route={unitRoute(propertyId, unitId, asOf, 'spaces')}
+            >
+              Spaces
             </WorkspaceLink>
             <WorkspaceLink
               ariaCurrent={tab === 'tenancies' ? 'page' : undefined}
@@ -205,6 +211,9 @@ export function UnitDossier({
               }
               unitId={unitId}
             />
+          ) : null}
+          {tab === 'spaces' ? (
+            <UnitSpaces api={api} unitId={unitId} />
           ) : null}
           {tab === 'tenancies' ? (
             <UnitTenancies

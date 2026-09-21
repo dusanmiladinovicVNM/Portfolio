@@ -1,3 +1,19 @@
+export function propertiesPath(): string {
+  return '/properties';
+}
+
+export function unitsPath(): string {
+  return '/units';
+}
+
+export function spacesPath(): string {
+  return '/spaces';
+}
+
+export function partiesPath(): string {
+  return '/parties';
+}
+
 export function reportingDashboardPath(asOf: string): string {
   return `/reporting/dashboard?asOf=${encodeURIComponent(asOf)}`;
 }
@@ -11,7 +27,11 @@ export function propertyUnitsPath(propertyId: string): string {
 }
 
 export function unitPath(unitId: string): string {
-  return `/units/${encodeURIComponent(unitId)}`;
+  return '/units/' + encodeURIComponent(unitId);
+}
+
+export function unitSpacesPath(unitId: string): string {
+  return unitPath(unitId) + '/spaces';
 }
 
 export function unitOverviewPath(unitId: string, asOf: string): string {

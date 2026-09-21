@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { unitOverviewPath } from '../src/api/paths.js';
 import {
   dashboardRoute,
+  partiesRoute,
   parseWorkspaceLocation,
   isWorkspaceAsOf,
   propertyRoute,
   unitRoute,
   workspaceRouteHref,
+  workspaceRouteOwnerKey,
 } from '../src/navigation/workspace-route.js';
 
 const propertyId = '11111111-1111-4111-8111-111111111111';
@@ -190,6 +192,90 @@ describe('workspace URL navigation', () => {
       ),
     ).toBe(
       `/properties/${propertyId}/units/${unitId}?tab=overview&asOf=2025-06-30`,
+    );
+  });
+
+
+  it('round-trips the global Parties route with the reporting context', () => {
+    const route = partiesRoute('2025-06-30');
+    expect(workspaceRouteHref(route)).toBe('/parties?asOf=2025-06-30');
+    expect(
+      parseWorkspaceLocation(
+        '/parties',
+        '?asOf=2025-06-30',
+        '2026-09-21',
+      ),
+    ).toEqual({
+      kind: 'parties',
+      asOf: '2025-06-30',
+    });
+  });
+
+  it('round-trips the Unit Spaces setup tab', () => {
+    const route = unitRoute(
+      propertyId,
+      unitId,
+      '2025-06-30',
+      'spaces',
+    );
+    expect(workspaceRouteHref(route)).toBe(
+      '/properties/' + propertyId +
+        '/units/' + unitId +
+        '?tab=spaces&asOf=2025-06-30',
+    );
+    expect(
+      parseWorkspaceLocation(
+        '/properties/' + propertyId + '/units/' + unitId,
+        '?tab=spaces&asOf=2025-06-30',
+        '2026-09-21',
+      ),
+    ).toEqual({
+      kind: 'unit',
+      propertyId,
+      unitId,
+      tab: 'spaces',
+      asOf: '2025-06-30',
+    });
+  });
+
+
+  it('changes the React owner key when Property or Unit business ownership changes', () => {
+    const propertyA = propertyRoute(
+      propertyId,
+      '2025-06-30',
+    );
+    const propertyB = propertyRoute(
+      agreementId,
+      '2025-06-30',
+    );
+    expect(workspaceRouteOwnerKey(propertyA)).not.toBe(
+      workspaceRouteOwnerKey(propertyB),
+    );
+
+    const unitAOverview = unitRoute(
+      propertyId,
+      unitId,
+      '2025-06-30',
+      'overview',
+    );
+    const unitASpaces = unitRoute(
+      propertyId,
+      unitId,
+      '2025-06-30',
+      'spaces',
+    );
+    const unitBSpaces = unitRoute(
+      propertyId,
+      agreementId,
+      '2025-06-30',
+      'spaces',
+    );
+
+    expect(workspaceRouteOwnerKey(unitAOverview)).toBe(
+      workspaceRouteOwnerKey(unitASpaces),
+    );
+    expect(workspaceRouteOwnerKey(unitASpaces)).not.toBe(
+      workspaceRouteOwnerKey(unitBSpaces),
     );
   });
 

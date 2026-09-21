@@ -3,6 +3,7 @@ import {
   type PortfolioDashboardResponse,
 } from '@portfolio/contracts';
 import { useEffect, useState } from 'react';
+import { CreatePropertyForm } from '../admin/CreatePropertyForm.js';
 import { reportingDashboardPath } from '../api/paths.js';
 import type { PortfolioApi } from '../api/portfolio-api.js';
 import { WorkspaceLink } from '../navigation/WorkspaceLink.js';
@@ -96,6 +97,22 @@ export function PortfolioDashboard({
           />
         </label>
       </header>
+
+      <section className="panel page-panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Core setup</p>
+            <h2>Add Property</h2>
+          </div>
+          <span className="section-note">Canonical Portfolio master data</span>
+        </div>
+        <CreatePropertyForm
+          api={api}
+          onCreated={(created) =>
+            navigate(propertyRoute(created.id, asOf))
+          }
+        />
+      </section>
 
       {error ? (
         <section className="panel state-panel" role="alert">
