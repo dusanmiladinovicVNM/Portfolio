@@ -182,6 +182,8 @@ function AuthenticatedShell({
             navigate={navigate}
             propertyId={route.propertyId}
             tab={route.tab}
+            tenancyId={route.tenancyId}
+            agreementId={route.agreementId}
             unitId={route.unitId}
           />
         ) : null}

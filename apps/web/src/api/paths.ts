@@ -22,3 +22,20 @@ export function unitOverviewPath(unitId: string, asOf: string): string {
 export function unitDocumentsPath(unitId: string): string {
   return `${unitPath(unitId)}/documents`;
 }
+
+
+export function unitTenanciesPath(unitId: string): string {
+  return `${unitPath(unitId)}/tenancies`;
+}
+
+export function tenancyAgreementsPath(tenancyId: string): string {
+  return `/tenancies/${encodeURIComponent(tenancyId)}/agreements`;
+}
+
+export function tenancyTermsPath(tenancyId: string, at: string): string {
+  return `/tenancies/${encodeURIComponent(tenancyId)}/terms?at=${encodeURIComponent(at)}`;
+}
+
+export function agreementAmendmentsPath(agreementId: string): string {
+  return `/agreements/${encodeURIComponent(agreementId)}/amendments`;
+}

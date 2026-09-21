@@ -15,6 +15,8 @@ import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.j
 import { UnitAssets } from './UnitAssets.js';
 import { UnitDocuments } from './UnitDocuments.js';
 import { UnitOverview } from './UnitOverview.js';
+import { UnitTenancies } from './UnitTenancies.js';
+import { UnitContracts } from './UnitContracts.js';
 import { UnitTimeline } from './UnitTimeline.js';
 
 interface UnitDossierProps {
@@ -23,6 +25,8 @@ interface UnitDossierProps {
   readonly unitId: string;
   readonly tab: DossierTab;
   readonly asOf: string;
+  readonly tenancyId?: string | undefined;
+  readonly agreementId?: string | undefined;
   readonly navigate: NavigateWorkspace;
 }
 
@@ -32,6 +36,8 @@ export function UnitDossier({
   unitId,
   tab,
   asOf,
+  tenancyId,
+  agreementId,
   navigate,
 }: UnitDossierProps) {
   const [unit, setUnit] = useState<UnitResponse | null>(null);
@@ -117,6 +123,25 @@ export function UnitDossier({
               Overview
             </WorkspaceLink>
             <WorkspaceLink
+              ariaCurrent={tab === 'tenancies' ? 'page' : undefined}
+              className={`dossier-tab ${tab === 'tenancies' ? 'dossier-tab-active' : ''}`}
+              navigate={navigate}
+              route={unitRoute(propertyId, unitId, asOf, 'tenancies')}
+            >
+              Tenancies
+            </WorkspaceLink>
+            <WorkspaceLink
+              ariaCurrent={tab === 'contracts' ? 'page' : undefined}
+              className={`dossier-tab ${tab === 'contracts' ? 'dossier-tab-active' : ''}`}
+              navigate={navigate}
+              route={unitRoute(propertyId, unitId, asOf, 'contracts', {
+                ...(tenancyId ? { tenancyId } : {}),
+                ...(agreementId ? { agreementId } : {}),
+              })}
+            >
+              Contracts
+            </WorkspaceLink>
+            <WorkspaceLink
               ariaCurrent={tab === 'timeline' ? 'page' : undefined}
               className={`dossier-tab ${tab === 'timeline' ? 'dossier-tab-active' : ''}`}
               navigate={navigate}
@@ -153,6 +178,26 @@ export function UnitDossier({
                 )
               }
               unitId={unitId}
+            />
+          ) : null}
+          {tab === 'tenancies' ? (
+            <UnitTenancies
+              api={api}
+              propertyId={propertyId}
+              unitId={unitId}
+              asOf={asOf}
+              navigate={navigate}
+            />
+          ) : null}
+          {tab === 'contracts' ? (
+            <UnitContracts
+              api={api}
+              propertyId={propertyId}
+              unitId={unitId}
+              asOf={asOf}
+              tenancyId={tenancyId}
+              agreementId={agreementId}
+              navigate={navigate}
             />
           ) : null}
           {tab === 'timeline' ? <UnitTimeline api={api} unitId={unitId} /> : null}

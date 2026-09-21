@@ -100,6 +100,10 @@ export const leaseAgreementResponseSchema = z.object({
   ),
 });
 
+export const leaseAgreementListResponseSchema = z.object({
+  items: z.array(leaseAgreementResponseSchema),
+});
+
 export const leaseAmendmentResponseSchema = z.object({
   id: entityIdSchema,
   agreementId: entityIdSchema,
@@ -110,6 +114,10 @@ export const leaseAmendmentResponseSchema = z.object({
   status: z.enum(LEASE_AMENDMENT_STATUSES),
   signedAt: isoDateSchema.nullable(),
   version: z.number().int().positive(),
+});
+
+export const leaseAmendmentListResponseSchema = z.object({
+  items: z.array(leaseAmendmentResponseSchema),
 });
 
 export const tenancyTermVersionResponseSchema = z.object({
@@ -133,5 +141,11 @@ export const tenancyTermVersionResponseSchema = z.object({
 
 export type LeaseTermsRequest = z.infer<typeof leaseTermsRequestSchema>;
 export type LeaseAgreementResponse = z.infer<typeof leaseAgreementResponseSchema>;
+export type LeaseAgreementListResponse = z.infer<
+  typeof leaseAgreementListResponseSchema
+>;
 export type LeaseAmendmentResponse = z.infer<typeof leaseAmendmentResponseSchema>;
+export type LeaseAmendmentListResponse = z.infer<
+  typeof leaseAmendmentListResponseSchema
+>;
 export type TenancyTermVersionResponse = z.infer<typeof tenancyTermVersionResponseSchema>;

@@ -10,6 +10,8 @@ import {
 
 const propertyId = '11111111-1111-4111-8111-111111111111';
 const unitId = '22222222-2222-4222-8222-222222222222';
+const tenancyId = '33333333-3333-4333-8333-333333333333';
+const agreementId = '44444444-4444-4444-8444-444444444444';
 
 describe('workspace URL navigation', () => {
   it('preserves dashboard asOf through Property and Unit drill-down', () => {
@@ -81,4 +83,55 @@ describe('workspace URL navigation', () => {
       asOf: '2026-09-21',
     });
   });
+
+  it('deep-links selected Tenancy and Agreement without losing asOf', () => {
+    const route = unitRoute(
+      propertyId,
+      unitId,
+      '2025-06-30',
+      'contracts',
+      { tenancyId, agreementId },
+    );
+
+    expect(workspaceRouteHref(route)).toBe(
+      `/properties/${propertyId}/units/${unitId}?tab=contracts&tenancyId=${tenancyId}&agreementId=${agreementId}&asOf=2025-06-30`,
+    );
+
+    expect(
+      parseWorkspaceLocation(
+        `/properties/${propertyId}/units/${unitId}`,
+        `?tab=contracts&tenancyId=${tenancyId}&agreementId=${agreementId}&asOf=2025-06-30`,
+        '2026-09-21',
+      ),
+    ).toEqual({
+      kind: 'unit',
+      propertyId,
+      unitId,
+      tab: 'contracts',
+      tenancyId,
+      agreementId,
+      asOf: '2025-06-30',
+    });
+  });
+
+  it('drops contract-only identities when navigating to another dossier tab', () => {
+    const contracts = unitRoute(
+      propertyId,
+      unitId,
+      '2025-06-30',
+      'contracts',
+      { tenancyId, agreementId },
+    );
+    const timeline = unitRoute(
+      contracts.propertyId,
+      contracts.unitId,
+      contracts.asOf,
+      'timeline',
+    );
+
+    expect(workspaceRouteHref(timeline)).toBe(
+      `/properties/${propertyId}/units/${unitId}?tab=timeline&asOf=2025-06-30`,
+    );
+  });
+
 });

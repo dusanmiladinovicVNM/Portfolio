@@ -67,5 +67,10 @@ export const tenancyResponseSchema = z.object({
   ),
 });
 
+export const tenancyListResponseSchema = z.object({
+  items: z.array(tenancyResponseSchema),
+});
+
 export type CreateTenancyRequest = z.infer<typeof createTenancyRequestSchema>;
 export type TenancyResponse = z.infer<typeof tenancyResponseSchema>;
+export type TenancyListResponse = z.infer<typeof tenancyListResponseSchema>;

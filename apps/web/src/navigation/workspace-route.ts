@@ -4,7 +4,7 @@ import {
 } from '@portfolio/contracts';
 import { localDateOnly } from '../presentation/format.js';
 
-export const DOSSIER_TABS = ['overview', 'timeline', 'documents', 'assets'] as const;
+export const DOSSIER_TABS = ['overview', 'tenancies', 'contracts', 'timeline', 'documents', 'assets'] as const;
 export type DossierTab = (typeof DOSSIER_TABS)[number];
 
 export type WorkspaceRoute =
@@ -23,6 +23,8 @@ export type WorkspaceRoute =
       readonly unitId: string;
       readonly tab: DossierTab;
       readonly asOf: string;
+      readonly tenancyId?: string;
+      readonly agreementId?: string;
     };
 
 function readAsOf(search: URLSearchParams, fallback: string): string {
@@ -64,13 +66,32 @@ export function propertyRoute(
   return { kind: 'property', propertyId, asOf };
 }
 
+export interface UnitRouteSelection {
+  readonly tenancyId?: string;
+  readonly agreementId?: string;
+}
+
 export function unitRoute(
   propertyId: string,
   unitId: string,
   asOf: string,
   tab: DossierTab = 'overview',
+  selection: UnitRouteSelection = {},
 ): WorkspaceRoute {
-  return { kind: 'unit', propertyId, unitId, tab, asOf };
+  const tenancyId =
+    tab === 'contracts' ? selection.tenancyId : undefined;
+  const agreementId =
+    tab === 'contracts' && tenancyId ? selection.agreementId : undefined;
+
+  return {
+    kind: 'unit',
+    propertyId,
+    unitId,
+    tab,
+    asOf,
+    ...(tenancyId ? { tenancyId } : {}),
+    ...(agreementId ? { agreementId } : {}),
+  };
 }
 
 export function parseWorkspaceLocation(
@@ -92,7 +113,20 @@ export function parseWorkspaceLocation(
     const propertyId = readEntityId(segments[1]);
     const unitId = readEntityId(segments[3]);
     if (propertyId && unitId) {
-      return unitRoute(propertyId, unitId, asOf, readTab(search));
+      const tab = readTab(search);
+      const tenancyId =
+        tab === 'contracts'
+          ? readEntityId(search.get('tenancyId') ?? undefined)
+          : null;
+      const agreementId =
+        tab === 'contracts' && tenancyId
+          ? readEntityId(search.get('agreementId') ?? undefined)
+          : null;
+
+      return unitRoute(propertyId, unitId, asOf, tab, {
+        ...(tenancyId ? { tenancyId } : {}),
+        ...(agreementId ? { agreementId } : {}),
+      });
     }
   }
 
@@ -109,6 +143,12 @@ export function workspaceRouteHref(route: WorkspaceRoute): string {
 
   if (route.kind === 'unit') {
     search.set('tab', route.tab);
+    if (route.tab === 'contracts' && route.tenancyId) {
+      search.set('tenancyId', route.tenancyId);
+      if (route.agreementId) {
+        search.set('agreementId', route.agreementId);
+      }
+    }
   }
   search.set('asOf', route.asOf);
 
