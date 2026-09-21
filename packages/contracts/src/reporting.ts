@@ -65,6 +65,7 @@ export const reportingTermSummaryResponseSchema = z.object({
 
 export const reportingContractSummaryResponseSchema = z.object({
   coverageStatus: z.enum(REPORTING_CONTRACT_COVERAGE_STATUSES),
+  currentDraftAgreementCount: z.number().int().nonnegative(),
   agreementId: entityIdSchema.nullable(),
   agreementCode: z.string().min(1).nullable(),
   agreementCurrentStatus: z.enum(LEASE_AGREEMENT_STATUSES).nullable(),
