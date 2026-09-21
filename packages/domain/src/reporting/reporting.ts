@@ -333,6 +333,36 @@ export function createUnitReportingOverview(input: {
     );
   }
 
+  if (input.tenancy !== null) {
+    required(input.tenancy.code, 'tenancy.code');
+
+    if (input.occupancyStatus === 'occupied') {
+      if (
+        input.tenancy.actualStart === null ||
+        input.tenancy.actualStart > asOf ||
+        (input.tenancy.actualEnd !== null && input.tenancy.actualEnd < asOf)
+      ) {
+        throw new DomainError(
+          'REPORTING_INVALID_PROJECTION',
+          'Occupied reporting Tenancy must have an actual occupancy interval covering asOf.',
+        );
+      }
+    }
+
+    if (input.occupancyStatus === 'planned') {
+      if (
+        input.tenancy.plannedStart === null ||
+        input.tenancy.plannedStart > asOf ||
+        (input.tenancy.plannedEnd !== null && input.tenancy.plannedEnd < asOf)
+      ) {
+        throw new DomainError(
+          'REPORTING_INVALID_PROJECTION',
+          'Planned reporting Tenancy must have a planned interval covering asOf.',
+        );
+      }
+    }
+  }
+
   const currentDraftAgreementCount = nonNegativeInteger(
     input.contract.currentDraftAgreementCount,
     'contract.currentDraftAgreementCount',
