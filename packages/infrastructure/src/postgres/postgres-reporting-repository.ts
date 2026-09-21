@@ -7,6 +7,7 @@ import {
   asTenancyTermVersionId,
   asUnitId,
   createPortfolioDashboard,
+  createReportingTermSummary,
   createUnitReportingOverview,
   type DateOnly,
   type LeaseAgreementStatus,
@@ -202,7 +203,7 @@ export class PostgresReportingRepository implements ReportingRepository {
     const effectiveTerms =
       row.term_version_id === null
         ? null
-        : {
+        : createReportingTermSummary({
             id: asTenancyTermVersionId(row.term_version_id),
             sourceType: row.term_source_type!,
             effectiveFrom: dateOnly(row.term_effective_from)!,
@@ -215,7 +216,7 @@ export class PostgresReportingRepository implements ReportingRepository {
             recurringTotal: decimal(row.term_recurring_total!),
             depositRequired: decimal(row.term_deposit_required!),
             billingFrequency: row.term_billing_frequency!,
-          };
+          });
 
     return createUnitReportingOverview({
       asOf,
