@@ -167,4 +167,88 @@ describe('GoogleDriveFileStorage', () => {
       }),
     ).resolves.toBeUndefined();
   });
+
+  it('reads exact content and computes integrity metadata from downloaded bytes', async () => {
+    const content = new TextEncoder().encode('signed lease binary');
+    const expectedHash = await sha256(content);
+    const requests: Request[] = [];
+
+    const storage = new GoogleDriveFileStorage({
+      folderId: 'folder-1',
+      accessTokenProvider: tokenProvider,
+      fetchImpl: async (input, init) => {
+        const request = new Request(input, init);
+        requests.push(request);
+        const url = new URL(request.url);
+
+        if (url.searchParams.get('alt') === 'media') {
+          return new Response(content);
+        }
+
+        return Response.json({
+          id: 'drive-file-1',
+          size: String(content.byteLength),
+          sha256Checksum: expectedHash,
+          appProperties: {
+            portfolioObjectKey: 'document-version:read-1',
+          },
+        });
+      },
+    });
+
+    const result = await storage.read({
+      provider: 'google-drive',
+      objectId: 'drive-file-1',
+      objectKey: 'document-version:read-1',
+    });
+
+    expect(result).not.toBeNull();
+    expect(result).toMatchObject({
+      provider: 'google-drive',
+      objectId: 'drive-file-1',
+      objectKey: 'document-version:read-1',
+      byteSize: content.byteLength,
+      sha256: expectedHash,
+    });
+    expect([...(result?.content ?? [])]).toEqual([...content]);
+    expect(requests).toHaveLength(2);
+    expect(new URL(requests[1]!.url).searchParams.get('alt')).toBe('media');
+  });
+
+  it('fails closed when downloaded bytes no longer match Drive metadata', async () => {
+    const canonical = new TextEncoder().encode('canonical');
+    const tampered = new TextEncoder().encode('tampered');
+    const canonicalHash = await sha256(canonical);
+
+    const storage = new GoogleDriveFileStorage({
+      folderId: 'folder-1',
+      accessTokenProvider: tokenProvider,
+      fetchImpl: async (input) => {
+        const url = new URL(
+          input instanceof Request ? input.url : input.toString(),
+        );
+        if (url.searchParams.get('alt') === 'media') {
+          return new Response(tampered);
+        }
+
+        return Response.json({
+          id: 'drive-file-1',
+          size: String(canonical.byteLength),
+          sha256Checksum: canonicalHash,
+          appProperties: {
+            portfolioObjectKey: 'document-version:read-2',
+          },
+        });
+      },
+    });
+
+    await expect(
+      storage.read({
+        provider: 'google-drive',
+        objectId: 'drive-file-1',
+        objectKey: 'document-version:read-2',
+      }),
+    ).rejects.toThrowError(/does not match file metadata/);
+  });
+
 });

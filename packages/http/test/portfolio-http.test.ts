@@ -2606,6 +2606,23 @@ describe('Portfolio HTTP boundary', () => {
       status: 'stored',
     });
 
+    const storedContent = await handler(
+      new Request(
+        `https://portfolio.test/document-versions/${version.id}/content`,
+      ),
+      inspectorIdentity,
+    );
+    expect(storedContent.status).toBe(200);
+    expect(storedContent.headers.get('content-type')).toBe('application/pdf');
+    expect(storedContent.headers.get('cache-control')).toBe('private, no-store');
+    expect(storedContent.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(storedContent.headers.get('content-disposition')).toContain(
+      'lease.pdf',
+    );
+    expect([...new Uint8Array(await storedContent.arrayBuffer())]).toEqual([
+      1, 2, 3, 4,
+    ]);
+
     const finalized = await handler(
       new Request(
         `https://portfolio.test/document-versions/${version.id}/finalize`,

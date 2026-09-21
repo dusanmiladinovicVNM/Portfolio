@@ -1,6 +1,7 @@
 import type {
   FileStoragePort,
   FileStoragePutInput,
+  StorageObjectContent,
   StorageObjectReference,
   StoredFile,
 } from '@portfolio/application';
@@ -224,6 +225,49 @@ export class GoogleDriveFileStorage implements FileStoragePort {
       ...reference,
       byteSize: Number(file.size ?? 0),
       sha256,
+    };
+  }
+
+  async read(
+    reference: StorageObjectReference,
+  ): Promise<StorageObjectContent | null> {
+    const metadata = await this.stat(reference);
+    if (!metadata) return null;
+
+    const token = await this.accessTokenProvider.getAccessToken();
+    const url = new URL(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(reference.objectId)}`,
+    );
+    url.searchParams.set('alt', 'media');
+    url.searchParams.set('supportsAllDrives', 'true');
+
+    const response = await this.fetchImpl(url, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(
+        `Google Drive download failed with HTTP ${response.status}: ${detail.slice(0, 500)}`,
+      );
+    }
+
+    const content = new Uint8Array(await response.arrayBuffer());
+    const sha256 = await sha256Hex(this.cryptoImpl, content);
+    if (
+      metadata.byteSize !== content.byteLength ||
+      metadata.sha256 !== sha256
+    ) {
+      throw new Error(
+        'Google Drive downloaded content does not match file metadata.',
+      );
+    }
+
+    return {
+      ...reference,
+      byteSize: content.byteLength,
+      sha256,
+      content,
     };
   }
 

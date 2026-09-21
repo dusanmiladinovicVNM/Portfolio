@@ -103,6 +103,7 @@ function errorStatus(code: string): number {
     code === 'INSPECTION_FINALIZE_FORBIDDEN'
   ) return 403;
   if (code === 'INVALID_REQUEST') return 400;
+  if (code === 'DOCUMENT_STORAGE_READ_FAILED') return 502;
   if (code.endsWith('_NOT_FOUND')) return 404;
   if (
     code.endsWith('_ALREADY_EXISTS') ||
