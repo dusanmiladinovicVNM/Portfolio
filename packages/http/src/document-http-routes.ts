@@ -59,6 +59,14 @@ export interface DocumentHttpDependencies {
   readonly idGenerator: IdGenerator;
 }
 
+function encodeRfc5987ValueChars(value: string): string {
+  return encodeURIComponent(value).replace(
+    /['()*]/g,
+    (character) =>
+      `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+}
+
 function contentDisposition(fileName: string): string {
   const normalized = fileName.replace(/[\r\n]/g, '').trim() || 'document';
   const fallback = normalized
@@ -67,7 +75,7 @@ function contentDisposition(fileName: string): string {
 
   return (
     `attachment; filename="${fallback}"; filename*=UTF-8''` +
-    encodeURIComponent(normalized)
+    encodeRfc5987ValueChars(normalized)
   );
 }
 
