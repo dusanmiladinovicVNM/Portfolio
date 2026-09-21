@@ -35,6 +35,7 @@ export type WorkspaceRoute =
       readonly agreementId?: string;
       readonly amendmentId?: string;
       readonly inspectionId?: string;
+      readonly inspectionSectionId?: string;
     };
 
 export function isWorkspaceAsOf(value: string): boolean {
@@ -97,6 +98,7 @@ export interface UnitRouteSelection {
   readonly agreementId?: string;
   readonly amendmentId?: string;
   readonly inspectionId?: string;
+  readonly inspectionSectionId?: string;
 }
 
 export function unitRoute(
@@ -116,6 +118,10 @@ export function unitRoute(
       : undefined;
   const inspectionId =
     tab === 'inspections' ? selection.inspectionId : undefined;
+  const inspectionSectionId =
+    tab === 'inspections' && inspectionId
+      ? selection.inspectionSectionId
+      : undefined;
 
   return {
     kind: 'unit',
@@ -127,6 +133,7 @@ export function unitRoute(
     ...(agreementId ? { agreementId } : {}),
     ...(amendmentId ? { amendmentId } : {}),
     ...(inspectionId ? { inspectionId } : {}),
+    ...(inspectionSectionId ? { inspectionSectionId } : {}),
   };
 }
 
@@ -166,12 +173,17 @@ export function parseWorkspaceLocation(
         tab === 'inspections'
           ? readEntityId(search.get('inspectionId') ?? undefined)
           : null;
+      const inspectionSectionId =
+        tab === 'inspections' && inspectionId
+          ? readEntityId(search.get('sectionId') ?? undefined)
+          : null;
 
       return unitRoute(propertyId, unitId, asOf, tab, {
         ...(tenancyId ? { tenancyId } : {}),
         ...(agreementId ? { agreementId } : {}),
         ...(amendmentId ? { amendmentId } : {}),
         ...(inspectionId ? { inspectionId } : {}),
+        ...(inspectionSectionId ? { inspectionSectionId } : {}),
       });
     }
   }
@@ -200,6 +212,9 @@ export function workspaceRouteHref(route: WorkspaceRoute): string {
     }
     if (route.tab === 'inspections' && route.inspectionId) {
       search.set('inspectionId', route.inspectionId);
+      if (route.inspectionSectionId) {
+        search.set('sectionId', route.inspectionSectionId);
+      }
     }
   }
   search.set('asOf', route.asOf);

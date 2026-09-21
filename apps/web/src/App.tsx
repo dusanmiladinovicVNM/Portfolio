@@ -173,6 +173,12 @@ function AuthenticatedShell({
                   ...(route.amendmentId
                     ? { amendmentId: route.amendmentId }
                     : {}),
+                  ...(route.inspectionId
+                    ? { inspectionId: route.inspectionId }
+                    : {}),
+                  ...(route.inspectionSectionId
+                    ? { inspectionSectionId: route.inspectionSectionId }
+                    : {}),
                 },
               )}
             >
@@ -220,6 +226,8 @@ function AuthenticatedShell({
             tenancyId={route.tenancyId}
             agreementId={route.agreementId}
             amendmentId={route.amendmentId}
+            inspectionId={route.inspectionId}
+            inspectionSectionId={route.inspectionSectionId}
             unitId={route.unitId}
           />
         ) : null}

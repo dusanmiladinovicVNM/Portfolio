@@ -153,4 +153,58 @@ describe('Portfolio API client', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+
+  it('sends authenticated JSON POST and PATCH requests through the same error boundary', async () => {
+    const requests: Request[] = [];
+    const fetchImpl = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        requests.push(request);
+        return new Response(
+          JSON.stringify({ data: { id: 'ok' } }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        );
+      },
+    );
+
+    const schema = {
+      safeParse(value: unknown) {
+        return typeof value === 'object' && value !== null && 'id' in value
+          ? { success: true as const, data: value as { id: string } }
+          : { success: false as const, error: 'invalid' };
+      },
+    };
+
+    const api = createPortfolioApi({
+      baseUrl: '/api',
+      getAccessToken: () => 'token-123',
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+
+    await api.post('/inspections/one/start', { expectedVersion: 1 }, schema);
+    await api.patch(
+      '/inspections/one/sections/two',
+      { expectedRevision: 0, set: [], clear: ['x'] },
+      schema,
+    );
+
+    expect(requests.map((request) => request.method)).toEqual([
+      'POST',
+      'PATCH',
+    ]);
+    for (const request of requests) {
+      expect(request.headers.get('authorization')).toBe('Bearer token-123');
+      expect(request.headers.get('content-type')).toBe('application/json');
+    }
+    expect(await requests[0]!.json()).toEqual({ expectedVersion: 1 });
+    expect(await requests[1]!.json()).toEqual({
+      expectedRevision: 0,
+      set: [],
+      clear: ['x'],
+    });
+  });
+
 });

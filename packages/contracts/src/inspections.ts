@@ -272,6 +272,9 @@ export type InspectionSignatureResponse = z.infer<
 export type InspectionFinalSnapshotResponse = z.infer<
   typeof inspectionFinalSnapshotResponseSchema
 >;
+export type SaveInspectionSectionRequest = z.infer<
+  typeof saveInspectionSectionRequestSchema
+>;
 
 
 export const inspectionListResponseSchema = z.object({
