@@ -10926,10 +10926,10 @@ describe('PostgreSQL infrastructure', () => {
       actor,
       {
         source: { kind: 'unit', unitId: unitA.id },
-        description: 'Future Unit cost',
+        description: 'Post-asOf Unit cost',
         amount: '999',
         currency: 'CHF',
-        incurredOn: '2027-02-01',
+        incurredOn: '2026-09-01',
         reportingClass: 'opex',
       },
     );
