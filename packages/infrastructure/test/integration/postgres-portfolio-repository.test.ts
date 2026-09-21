@@ -11454,7 +11454,7 @@ describe('PostgreSQL infrastructure', () => {
       actor,
       {
         propertyId: property.id,
-        code: 'UNIT-DOC-INT',
+        code: 'UNIT-DOC-READ-INT',
         unitNumber: 'D-1',
         unitType: 'apartment',
       },
