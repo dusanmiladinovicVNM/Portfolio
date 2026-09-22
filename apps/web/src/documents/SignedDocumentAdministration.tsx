@@ -55,6 +55,8 @@ interface SignedDocumentAdministrationProps {
 
 type PendingAction = 'create' | 'upload' | 'finalize' | 'link' | null;
 
+const MAX_SIGNED_DOCUMENT_UPLOAD_BYTES = 16 * 1024 * 1024;
+
 function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
@@ -258,6 +260,13 @@ export function SignedDocumentAdministration({
     if (!(fileValue instanceof File) || fileValue.size === 0) {
       finish();
       setError('Choose a non-empty file to upload.');
+      return;
+    }
+    if (fileValue.size > MAX_SIGNED_DOCUMENT_UPLOAD_BYTES) {
+      finish();
+      setError(
+        'Signed Document files are currently limited to 16 MiB so every accepted version remains readable through the existing Portfolio binary-delivery path.',
+      );
       return;
     }
 
@@ -528,6 +537,9 @@ export function SignedDocumentAdministration({
               type="file"
             />
           </label>
+          <p className="setup-hint">
+            Current online MVP limit: 16 MiB per Document version.
+          </p>
           {selectedDocument?.status === 'archived' ? (
             <p className="setup-hint">
               Archived Documents cannot receive another version. Select one of
