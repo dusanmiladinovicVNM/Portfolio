@@ -54,6 +54,8 @@ const inspectionNotesResponseId = 'a1000000-0000-4000-8000-000000000008';
 const setupPropertyId = 'b1000000-0000-4000-8000-000000000001';
 const setupUnitId = 'b1000000-0000-4000-8000-000000000002';
 const setupSpaceId = 'b1000000-0000-4000-8000-000000000003';
+const setupDestinationUnitId = 'c1000000-0000-4000-8000-000000000001';
+const setupDestinationSpaceId = 'c1000000-0000-4000-8000-000000000002';
 const setupPartyId = 'b1000000-0000-4000-8000-000000000004';
 const setupPartyEmailId = 'b1000000-0000-4000-8000-000000000005';
 const setupPartyAddressId = 'b1000000-0000-4000-8000-000000000006';
@@ -105,9 +107,33 @@ const setupAssetLocationIds = [
   'b1000000-0000-4000-8000-000000000033',
   'b1000000-0000-4000-8000-000000000034',
   'b1000000-0000-4000-8000-000000000035',
+  'b1000000-0000-4000-8000-000000000037',
 ] as const;
 const setupAssetReplacementId =
   'b1000000-0000-4000-8000-000000000036';
+
+const setupDestinationUnit: UnitResponse = {
+  id: setupDestinationUnitId,
+  propertyId: setupPropertyId,
+  code: 'UNIT-DEST-BRW',
+  unitNumber: '2B',
+  unitType: 'apartment',
+  floor: '2',
+  areaM2: 65,
+  rooms: 2.5,
+  status: 'active',
+  notes: '',
+};
+const setupDestinationSpace: SpaceResponse = {
+  id: setupDestinationSpaceId,
+  unitId: setupDestinationUnitId,
+  code: 'LIV-DEST-BRW',
+  name: 'Destination Living Room',
+  spaceType: 'living_room',
+  areaM2: 25,
+  sortOrder: 1,
+  active: true,
+};
 
 let setupProperty: PropertyResponse | null = null;
 let setupUnit: UnitResponse | null = null;
@@ -141,6 +167,7 @@ function nextSetupAssetInstant(): string {
     '2027-10-01T08:00:00.000Z',
     '2027-10-01T09:00:00.000Z',
     '2027-10-01T10:00:00.000Z',
+    '2027-10-01T11:00:00.000Z',
   ];
   const value = instants[setupAssetMutationSequence++];
   if (!value) throw new Error('Setup Asset mutation clock exhausted.');
@@ -636,6 +663,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioHoldTenancyMutation?: boolean;
   __portfolioHoldContractMutation?: boolean;
   __portfolioHoldAssetMutation?: boolean;
+  __portfolioFailNextAssetMoveAfterCommit?: boolean;
   __portfolioFailNextAssetReplacementAfterCommit?: boolean;
   __portfolioFailNextSignedOriginalLink?: boolean;
   __portfolioPendingUnitCreate?: boolean;
@@ -1043,7 +1071,9 @@ globalThis.fetch = async (
   }
 
   if (setupProperty && path === '/properties/' + setupPropertyId + '/units') {
-    return json({ items: setupUnit ? [setupUnit] : [] });
+    return json({
+      items: setupUnit ? [setupUnit, setupDestinationUnit] : [],
+    });
   }
 
   if (path === '/units' && init?.method === 'POST') {
@@ -1073,6 +1103,22 @@ globalThis.fetch = async (
 
   if (setupUnit && path === '/units/' + setupUnitId + '/spaces') {
     return json({ items: setupSpace ? [setupSpace] : [] });
+  }
+
+  if (setupProperty && path === '/units/' + setupDestinationUnitId) {
+    return json(setupDestinationUnit);
+  }
+
+  if (setupProperty && path === '/units/' + setupDestinationUnitId + '/spaces') {
+    return json({ items: [setupDestinationSpace] });
+  }
+
+  if (setupProperty && path === '/units/' + setupDestinationUnitId + '/assets') {
+    return json({
+      items: setupAssets.filter(
+        (asset) => asset.unitId === setupDestinationUnitId,
+      ),
+    });
   }
 
   if (setupUnit && path === '/units/' + setupUnitId + '/assets') {
@@ -1237,11 +1283,15 @@ globalThis.fetch = async (
         'Asset has changed since the caller last read it.',
       );
     }
-    if (
-      body.propertyId !== setupPropertyId ||
-      body.unitId !== setupUnitId ||
-      (body.spaceId != null && body.spaceId !== setupSpaceId)
-    ) {
+    const validSetupPlacement =
+      body.propertyId === setupPropertyId &&
+      (
+        (body.unitId === setupUnitId &&
+          (body.spaceId == null || body.spaceId === setupSpaceId)) ||
+        (body.unitId === setupDestinationUnitId &&
+          (body.spaceId == null || body.spaceId === setupDestinationSpaceId))
+      );
+    if (!validSetupPlacement) {
       throw new Error('Setup Asset move targeted the wrong placement.');
     }
     const movedAt = nextSetupAssetInstant();
@@ -1256,7 +1306,7 @@ globalThis.fetch = async (
       id: locationId,
       assetId: setupAsset.id,
       propertyId: setupPropertyId,
-      unitId: setupUnitId,
+      unitId: body.unitId ?? null,
       spaceId: body.spaceId ?? null,
       validFrom: movedAt,
       validTo: null,
@@ -1267,13 +1317,23 @@ globalThis.fetch = async (
     const moved: AssetResponse = {
       ...setupAsset,
       propertyId: setupPropertyId,
-      unitId: setupUnitId,
+      unitId: body.unitId ?? null,
       spaceId: body.spaceId ?? null,
       version: setupAsset.version + 1,
     };
     setupAssets = setupAssets.map((asset) =>
       asset.id === moved.id ? moved : asset,
     );
+
+    if (browserHarnessWindow.__portfolioFailNextAssetMoveAfterCommit) {
+      browserHarnessWindow.__portfolioFailNextAssetMoveAfterCommit = false;
+      return apiError(
+        503,
+        'ASSET_MOVE_TEST_ACK_LOST',
+        'Intentional browser-harness move acknowledgement loss.',
+      );
+    }
+
     return json(moved);
   }
 
