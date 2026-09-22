@@ -173,6 +173,13 @@ async function elementValueXpath(sessionId, xpath) {
   );
 }
 
+async function elementDisabledXpath(sessionId, xpath) {
+  const id = await waitForElement(sessionId, 'xpath', xpath);
+  return webdriver(
+    `/session/${sessionId}/element/${id}/property/disabled`,
+  );
+}
+
 async function clickAndDismissConfirm(sessionId, xpath, expectedText) {
   const id = await waitForElement(sessionId, 'xpath', xpath);
   try {
@@ -1048,10 +1055,63 @@ try {
     agreementSignForm + "//input[@name='serviceCharge']",
     '160.00',
   );
+  await executeScript(
+    sessionId,
+    'window.__portfolioHoldContractMutation = true; return true;',
+  );
   await clickXpath(
     sessionId,
     agreementSignForm + "//button[normalize-space()='Sign Agreement']",
   );
+  await waitForScriptTruthy(
+    sessionId,
+    'return window.__portfolioPendingContractMutation === true;',
+    'held replacement Agreement sign',
+  );
+
+  await setInputValueXpath(
+    sessionId,
+    "//input[@aria-label='Contract effective terms business date']",
+    '2027-02-01',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 150));
+
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=contracts&tenancyId=' + setupTenancyId +
+      '&agreementId=' + setupReplacementAgreementId +
+      '&asOf=2027-02-01',
+    'asOf change keeps replacement Agreement owner',
+  );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      agreementSignForm + "//button[normalize-space()='Sign Agreement']",
+    ),
+    true,
+    'Held replacement sign remains serialized across asOf change',
+  );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      "//section[contains(@class,'contract-admin-panel')]//button[normalize-space()='Cancel Agreement']",
+    ),
+    true,
+    'Held replacement cancel remains serialized across asOf change',
+  );
+
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioReleaseContractMutation();',
+    ),
+    true,
+    'Release held replacement Agreement sign',
+  );
+
   await waitForElement(
     sessionId,
     'xpath',
@@ -1061,6 +1121,14 @@ try {
     sessionId,
     'xpath',
     "//a[contains(@class,'agreement-card')][.//span[normalize-space()='AGR-SETUP-BRW']][.//span[contains(@class,'status-chip') and normalize-space()='superseded']]",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//form[@data-contract-form='agreement-sign']",
+    ),
+    false,
+    'No stale draft Agreement sign form survives successful replacement sign',
   );
 
   await navigateWithPopState(
