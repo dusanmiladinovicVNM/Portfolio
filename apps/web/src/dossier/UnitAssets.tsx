@@ -626,8 +626,8 @@ function AssetAdministration({
         writeGate.finish();
         navigate(
           unitRoute(
-            propertyId,
-            target.unitId,
+            canonical.propertyId!,
+            canonical.unitId!,
             asOf,
             'assets',
             { assetId: canonical.id },
@@ -636,11 +636,11 @@ function AssetAdministration({
         return;
       }
 
-      if (canonical.unitId && canonical.unitId !== unitId) {
+      if (canonical.propertyId && canonical.unitId) {
         writeGate.finish();
         navigate(
           unitRoute(
-            propertyId,
+            canonical.propertyId,
             canonical.unitId,
             asOf,
             'assets',
@@ -680,12 +680,12 @@ function AssetAdministration({
         );
         assertAssetReadOwner(links.successor.replacementAssetId, successor);
 
-        if (successor.unitId) {
+        if (successor.propertyId && successor.unitId) {
           onCanonicalWrite();
           writeGate.finish();
           navigate(
             unitRoute(
-              propertyId,
+              successor.propertyId,
               successor.unitId,
               asOf,
               'assets',
@@ -794,11 +794,16 @@ function AssetAdministration({
       if (!guard.isMounted()) return;
 
       if (response.unitId !== unitId) {
+        if (!response.propertyId || !response.unitId) {
+          throw new Error(
+            'Moved Unit Asset response is missing canonical Property/Unit ownership.',
+          );
+        }
         writeGate.finish();
         navigate(
           unitRoute(
-            propertyId,
-            response.unitId!,
+            response.propertyId,
+            response.unitId,
             asOf,
             'assets',
             { assetId: response.id },
@@ -870,8 +875,9 @@ function AssetAdministration({
       assertAssetReplacementMutationOwner(asset, expected, response);
       if (!guard.isMounted()) return;
 
+      const successorPropertyId = response.replacementAsset.propertyId;
       const successorUnitId = response.replacementAsset.unitId;
-      if (!successorUnitId) {
+      if (!successorPropertyId || !successorUnitId) {
         throw new Error(
           'Unit Asset replacement unexpectedly produced an unowned successor.',
         );
@@ -880,7 +886,7 @@ function AssetAdministration({
       writeGate.finish();
       navigate(
         unitRoute(
-          propertyId,
+          successorPropertyId,
           successorUnitId,
           asOf,
           'assets',
