@@ -14,6 +14,9 @@ import type {
   LeaseAgreementResponse,
   LeaseAmendmentDocumentReferenceResponse,
   LeaseAmendmentResponse,
+  MeterReadingBoundaryResponse,
+  MeterReadingResponse,
+  MeterResponse,
   PartyResponse,
   PropertyResponse,
   SpaceResponse,
@@ -114,6 +117,16 @@ const setupAssetLocationIds = [
 ] as const;
 const setupAssetReplacementId =
   'b1000000-0000-4000-8000-000000000036';
+const setupMeterId = 'b1000000-0000-4000-8000-000000000038';
+const setupMeterReadingIds = [
+  'b1000000-0000-4000-8000-000000000039',
+  'b1000000-0000-4000-8000-000000000040',
+  'b1000000-0000-4000-8000-000000000041',
+] as const;
+const setupMeterBoundaryIds = [
+  'b1000000-0000-4000-8000-000000000042',
+  'b1000000-0000-4000-8000-000000000043',
+] as const;
 
 const setupDestinationUnit: UnitResponse = {
   id: setupDestinationUnitId,
@@ -200,6 +213,87 @@ let setupAssetSequence = 0;
 let setupAssetIdentifierSequence = 0;
 let setupAssetLocationSequence = 0;
 let setupAssetMutationSequence = 0;
+let setupMeters: MeterResponse[] = [];
+let setupMeterReadings: MeterReadingResponse[] = [];
+let setupMeterBoundaries: MeterReadingBoundaryResponse[] = [];
+let setupMeterReadingSequence = 0;
+let setupMeterBoundarySequence = 0;
+let setupMeterClockSequence = 0;
+
+function nextSetupMeterRecordedAt(): string {
+  const instants = [
+    '2027-10-01T12:00:00.000Z',
+    '2027-10-01T12:05:00.000Z',
+    '2027-10-01T12:10:00.000Z',
+    '2027-10-01T12:15:00.000Z',
+    '2027-10-01T12:20:00.000Z',
+    '2027-10-01T12:25:00.000Z',
+    '2027-10-01T12:30:00.000Z',
+  ];
+  const value = instants[setupMeterClockSequence++];
+  if (!value) throw new Error('Setup Meter clock exhausted.');
+  return value;
+}
+
+function normalizeSetupMeterValue(raw: string): string {
+  const value = raw.trim();
+  const match = /^(0|[1-9]\d{0,17})(?:\.(\d{1,6}))?$/.exec(value);
+  if (!match) throw new Error('Invalid setup Meter Reading value.');
+  return `${match[1]}.${(match[2] ?? '').padEnd(6, '0')}`;
+}
+
+function setupMeterConsumptionIntervals(meterIdValue: string) {
+  const readings = setupMeterReadings
+    .filter((reading) => reading.meterId === meterIdValue)
+    .sort((left, right) => {
+      const read = left.readAt.localeCompare(right.readAt);
+      if (read !== 0) return read;
+      const recorded = left.recordedAt.localeCompare(right.recordedAt);
+      if (recorded !== 0) return recorded;
+      return left.id.localeCompare(right.id);
+    });
+
+  return readings.slice(1).map((to, index) => {
+    const from = readings[index]!;
+    const fromScaled = BigInt(from.value.replace('.', ''));
+    const toScaled = BigInt(to.value.replace('.', ''));
+    const consumptionScaled =
+      toScaled < fromScaled ? null : toScaled - fromScaled;
+    let consumption: string | null = null;
+    if (consumptionScaled !== null) {
+      const raw = consumptionScaled.toString().padStart(7, '0');
+      consumption = `${raw.slice(0, -6) || '0'}.${raw.slice(-6)}`;
+    }
+    return {
+      fromReadingId: from.id,
+      toReadingId: to.id,
+      fromReadAt: from.readAt,
+      toReadAt: to.readAt,
+      fromValue: from.value,
+      toValue: to.value,
+      consumption,
+      continuity: consumption === null ? 'decrease_detected' : 'continuous',
+    };
+  });
+}
+
+function setupMeterDetail(meterIdValue: string) {
+  const meter = setupMeters.find((candidate) => candidate.id === meterIdValue);
+  if (!meter) throw new Error('Setup Meter not found.');
+  const readings = setupMeterReadings.filter(
+    (reading) => reading.meterId === meterIdValue,
+  );
+  const readingIds = new Set(readings.map((reading) => reading.id));
+  const boundaries = setupMeterBoundaries.filter((boundary) =>
+    readingIds.has(boundary.readingId),
+  );
+  return {
+    meter,
+    readings,
+    boundaries,
+    consumptionIntervals: setupMeterConsumptionIntervals(meterIdValue),
+  };
+}
 
 function nextSetupAssetInstant(): string {
   const instants = [
@@ -702,6 +796,9 @@ type BrowserHarnessWindow = Window & {
   __portfolioHoldTenancyMutation?: boolean;
   __portfolioHoldContractMutation?: boolean;
   __portfolioHoldAssetMutation?: boolean;
+  __portfolioHoldMeterMutation?: boolean;
+  __portfolioFailNextMeterReadingAfterCommit?: boolean;
+  __portfolioFailNextMeterBoundaryAfterCommit?: boolean;
   __portfolioFailNextAssetMoveAfterCommit?: boolean;
   __portfolioConcurrentAssetMoveAcrossProperty?: boolean;
   __portfolioFailNextAssetReplacementAfterCommit?: boolean;
@@ -711,11 +808,13 @@ type BrowserHarnessWindow = Window & {
   __portfolioPendingTenancyMutation?: boolean;
   __portfolioPendingContractMutation?: boolean;
   __portfolioPendingAssetMutation?: boolean;
+  __portfolioPendingMeterMutation?: boolean;
   __portfolioReleaseUnitCreate?: () => boolean;
   __portfolioReleaseSpaceCreate?: () => boolean;
   __portfolioReleaseTenancyMutation?: () => boolean;
   __portfolioReleaseContractMutation?: () => boolean;
   __portfolioReleaseAssetMutation?: () => boolean;
+  __portfolioReleaseMeterMutation?: () => boolean;
 };
 
 const browserHarnessWindow = window as BrowserHarnessWindow;
@@ -735,6 +834,9 @@ let heldContractMutation:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 let heldAssetMutation:
+  | { readonly response: Response; readonly resolve: (response: Response) => void }
+  | null = null;
+let heldMeterMutation:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 
@@ -793,6 +895,17 @@ function maybeHoldAssetMutation(response: Response): Promise<Response> {
   });
 }
 
+function maybeHoldMeterMutation(response: Response): Promise<Response> {
+  if (!browserHarnessWindow.__portfolioHoldMeterMutation) {
+    return Promise.resolve(response);
+  }
+
+  browserHarnessWindow.__portfolioPendingMeterMutation = true;
+  return new Promise<Response>((resolve) => {
+    heldMeterMutation = { response, resolve };
+  });
+}
+
 browserHarnessWindow.__portfolioReleaseUnitCreate = () => {
   if (!heldUnitCreate) return false;
   const held = heldUnitCreate;
@@ -840,6 +953,16 @@ browserHarnessWindow.__portfolioReleaseAssetMutation = () => {
   heldAssetMutation = null;
   browserHarnessWindow.__portfolioHoldAssetMutation = false;
   browserHarnessWindow.__portfolioPendingAssetMutation = false;
+  held.resolve(held.response);
+  return true;
+};
+
+browserHarnessWindow.__portfolioReleaseMeterMutation = () => {
+  if (!heldMeterMutation) return false;
+  const held = heldMeterMutation;
+  heldMeterMutation = null;
+  browserHarnessWindow.__portfolioHoldMeterMutation = false;
+  browserHarnessWindow.__portfolioPendingMeterMutation = false;
   held.resolve(held.response);
   return true;
 };
