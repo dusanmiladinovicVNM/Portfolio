@@ -984,3 +984,101 @@ input:focus-visible {
   margin-bottom: 12px;
   font-size: .95rem;
 }
+
+
+.tenancy-heading-actions {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+.tenancy-admin-grid {
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+}
+.tenancy-workflow {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #e4ded4;
+}
+.tenancy-inline-form {
+  display: grid;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid #e1dcd3;
+  border-radius: 10px;
+  background: #faf8f3;
+}
+.tenancy-inline-form label {
+  display: grid;
+  gap: 6px;
+  color: #4f534b;
+  font-size: .78rem;
+  font-weight: 700;
+}
+.tenancy-inline-form input,
+.tenancy-inline-form select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  border: 1px solid #c9c2b5;
+  border-radius: 8px;
+  background: #fff;
+  color: #252722;
+  font: inherit;
+}
+.tenancy-form-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: baseline;
+}
+.tenancy-form-heading span {
+  color: #6a6e65;
+  font-size: .72rem;
+}
+.tenancy-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.tenancy-checkbox {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  justify-content: start;
+  align-self: end;
+  padding-bottom: 9px;
+}
+.tenancy-checkbox input {
+  width: auto;
+}
+.tenancy-empty-parties {
+  margin: 14px 0 0;
+}
+.tenancy-terminal-action {
+  justify-self: start;
+}
+.tenancy-inline-form button {
+  justify-self: start;
+}
+.tenancy-inline-form button:disabled,
+.tenancy-terminal-action:disabled {
+  cursor: progress;
+  opacity: .58;
+}
+@media (max-width: 760px) {
+  .tenancy-heading-actions {
+    justify-items: start;
+  }
+  .tenancy-admin-grid {
+    grid-template-columns: 1fr;
+  }
+  .tenancy-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .tenancy-form-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

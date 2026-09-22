@@ -8,6 +8,7 @@ const driverUrl = `http://127.0.0.1:${driverPort}`;
 const propertyId = '11111111-1111-4111-8111-111111111111';
 const unitId = '22222222-2222-4222-8222-222222222222';
 const tenancyId = '33333333-3333-4333-8333-333333333333';
+const tenantPartyId = '99999999-9999-4999-8999-999999999999';
 const agreementId = '55555555-5555-4555-8555-555555555555';
 const amendmentId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const inspectionId = 'a1000000-0000-4000-8000-000000000001';
@@ -139,6 +140,25 @@ async function selectOptionXpath(sessionId, selectXpath, optionValue) {
   await webdriver(`/session/${sessionId}/element/${id}/click`, {
     method: 'POST',
     body: {},
+  });
+}
+
+async function setInputValueXpath(sessionId, xpath, value) {
+  const id = await waitForElement(sessionId, 'xpath', xpath);
+  await webdriver(`/session/${sessionId}/execute/sync`, {
+    method: 'POST',
+    body: {
+      script:
+        'const element = arguments[0];' +
+        'element.value = arguments[1];' +
+        'element.dispatchEvent(new Event("input", { bubbles: true }));' +
+        'element.dispatchEvent(new Event("change", { bubbles: true }));' +
+        'return element.value;',
+      args: [
+        { 'element-6066-11e4-a52e-4f735466cecf': id },
+        value,
+      ],
+    },
   });
 }
 
@@ -552,6 +572,224 @@ try {
     await currentUrl(sessionId),
     setupUnitUrl,
     'Space creation keeps Unit Spaces context',
+  );
+
+  await clickXpath(sessionId, "//a[normalize-space()='Tenancies']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[normalize-space()='No Tenancy records exist for this Unit.']",
+  );
+  const setupTenancyUrl =
+    baseUrl +
+    '/properties/' +
+    setupPropertyId +
+    '/units/' +
+    setupUnitId +
+    '?tab=tenancies&asOf=2025-06-30';
+  assertEqual(
+    await currentUrl(sessionId),
+    setupTenancyUrl,
+    'Setup Unit Tenancies URL',
+  );
+
+  await typeXpath(
+    sessionId,
+    "//form[@data-tenancy-form='create']//input[@name='code']",
+    'TEN-SETUP-BRW',
+  );
+  await clickXpath(
+    sessionId,
+    "//form[@data-tenancy-form='create']//button[normalize-space()='Create Tenancy']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'tenancy-card')][.//span[normalize-space()='TEN-SETUP-BRW']][.//span[contains(@class,'status-chip') and normalize-space()='draft']]",
+  );
+
+  await selectOptionXpath(
+    sessionId,
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//form[@data-tenancy-form='party']//select[@name='partyId']",
+    tenantPartyId,
+  );
+  await clickXpath(
+    sessionId,
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//form[@data-tenancy-form='party']//input[@name='isPrimary']",
+  );
+  await clickXpath(
+    sessionId,
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//form[@data-tenancy-form='party']//button[normalize-space()='Attach Party']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//*[normalize-space()='Browser Tenant']",
+  );
+
+  await setInputValueXpath(
+    sessionId,
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//form[@data-tenancy-form='plan']//input[@name='plannedStart']",
+    '2026-10-01',
+  );
+  await setInputValueXpath(
+    sessionId,
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//form[@data-tenancy-form='plan']//input[@name='plannedEnd']",
+    '2027-09-30',
+  );
+  await clickXpath(
+    sessionId,
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//form[@data-tenancy-form='plan']//button[normalize-space()='Plan Tenancy']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//span[contains(@class,'status-chip') and normalize-space()='planned']",
+  );
+
+  await setInputValueXpath(
+    sessionId,
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//form[@data-tenancy-form='activate']//input[@name='actualStart']",
+    '2026-10-01',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioHoldTenancyMutation = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//form[@data-tenancy-form='activate']//button[normalize-space()='Activate Tenancy']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    'return window.__portfolioPendingTenancyMutation === true;',
+    'held Tenancy activation',
+  );
+
+  const existingUnitTenanciesPath =
+    '/properties/' + propertyId +
+    '/units/' + unitId +
+    '?tab=tenancies&asOf=2025-06-30';
+  await navigateWithPopState(sessionId, existingUnitTenanciesPath);
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'tenancy-card')][.//span[normalize-space()='TEN-BRW']]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioReleaseTenancyMutation();',
+    ),
+    true,
+    'Release held Tenancy activation',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl + existingUnitTenanciesPath,
+    'Late Tenancy completion keeps new Unit owner',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//article[contains(@class,'tenancy-card')][.//span[normalize-space()='TEN-SETUP-BRW']]",
+    ),
+    false,
+    'Late Tenancy completion cannot mutate the new Unit workspace',
+  );
+
+  await navigateWithPopState(
+    sessionId,
+    '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=tenancies&asOf=2025-06-30',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//span[contains(@class,'status-chip') and normalize-space()='active']",
+  );
+
+  await setInputValueXpath(
+    sessionId,
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//form[@data-tenancy-form='notice']//input[@name='noticeGivenAt']",
+    '2027-06-01',
+  );
+  await setInputValueXpath(
+    sessionId,
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//form[@data-tenancy-form='notice']//input[@name='terminationEffectiveAt']",
+    '2027-09-30',
+  );
+  await clickXpath(
+    sessionId,
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//form[@data-tenancy-form='notice']//button[normalize-space()='Give Notice']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//span[contains(@class,'status-chip') and normalize-space()='notice_given']",
+  );
+
+  await clickXpath(
+    sessionId,
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//button[normalize-space()='Mark Move-out Pending']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//span[contains(@class,'status-chip') and normalize-space()='move_out_pending']",
+  );
+
+  await setInputValueXpath(
+    sessionId,
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//form[@data-tenancy-form='end']//input[@name='actualEnd']",
+    '2027-09-30',
+  );
+  await clickXpath(
+    sessionId,
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//form[@data-tenancy-form='end']//button[normalize-space()='End Tenancy']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//span[contains(@class,'status-chip') and normalize-space()='ended']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    setupTenancyUrl,
+    'Tenancy lifecycle stays on setup Unit owner',
+  );
+
+  await typeXpath(
+    sessionId,
+    "//form[@data-tenancy-form='create']//input[@name='code']",
+    'TEN-CANCEL-BRW',
+  );
+  await clickXpath(
+    sessionId,
+    "//form[@data-tenancy-form='create']//button[normalize-space()='Create Tenancy']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'tenancy-card')][.//span[normalize-space()='TEN-CANCEL-BRW']][.//span[contains(@class,'status-chip') and normalize-space()='draft']]",
+  );
+  await clickXpath(
+    sessionId,
+    "//article[.//span[normalize-space()='TEN-CANCEL-BRW']]//button[normalize-space()='Cancel Tenancy']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[.//span[normalize-space()='TEN-CANCEL-BRW']]//span[contains(@class,'status-chip') and normalize-space()='cancelled']",
+  );
+
+  await clickXpath(sessionId, "//a[normalize-space()='Spaces']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'space-card')][.//h3[normalize-space()='Setup Bedroom']]",
   );
 
   await executeScript(
