@@ -1084,6 +1084,60 @@ describe('Inspection HTTP backbone', () => {
       inspectorIdentity,
     );
 
+    const globalDocumentDenied = await handler(
+      new Request('https://portfolio.test/documents', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'INSPECTOR-GLOBAL-DOC',
+          title: 'Must be denied',
+          category: 'photo',
+        }),
+      }),
+      inspectorIdentity,
+    );
+    expect(globalDocumentDenied.status).toBe(403);
+
+    const scopedPhotoVersionId =
+      '84000000-0000-4000-8000-000000000001';
+    const scopedPhotoUrl =
+      `https://portfolio.test/inspections/${inspection.id}/binaries?` +
+      new URLSearchParams({
+        purpose: 'photo',
+        uploadKey: scopedPhotoVersionId,
+        fileName: 'scoped-photo.jpg',
+      }).toString();
+
+    const scopedPhoto = await handler(
+      new Request(scopedPhotoUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'image/jpeg' },
+        body: new Uint8Array([1, 2, 3, 4]),
+      }),
+      inspectorIdentity,
+    );
+    expect(scopedPhoto.status).toBe(201);
+    expect(await scopedPhoto.clone().json()).toMatchObject({
+      data: {
+        id: scopedPhotoVersionId,
+        versionNumber: 1,
+        fileName: 'scoped-photo.jpg',
+        mimeType: 'image/jpeg',
+        byteSize: 4,
+        status: 'stored',
+      },
+    });
+
+    const scopedPhotoRetry = await handler(
+      new Request(scopedPhotoUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'image/jpeg' },
+        body: new Uint8Array([1, 2, 3, 4]),
+      }),
+      inspectorIdentity,
+    );
+    expect(scopedPhotoRetry.status).toBe(201);
+    expect((await scopedPhotoRetry.json()).data.id).toBe(scopedPhotoVersionId);
+
     const sectionId = schema.sections[0]!.id;
     const itemId = schema.sections[0]!.items[0]!.id;
     await handler(
@@ -1208,11 +1262,54 @@ describe('Inspection HTTP backbone', () => {
       inspectorIdentity,
     );
 
+    const scopedSignatureVersionId =
+      '84000000-0000-4000-8000-000000000002';
+    const scopedSignatureUrl =
+      `https://portfolio.test/inspections/${inspection.id}/binaries?` +
+      new URLSearchParams({
+        purpose: 'signature',
+        uploadKey: scopedSignatureVersionId,
+        fileName: 'witness-scoped.png',
+      }).toString();
+
+    const scopedSignature = await handler(
+      new Request(scopedSignatureUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'image/png' },
+        body: new Uint8Array([9, 8, 7, 6]),
+      }),
+      inspectorIdentity,
+    );
+    expect(scopedSignature.status).toBe(201);
+    expect(await scopedSignature.clone().json()).toMatchObject({
+      data: {
+        id: scopedSignatureVersionId,
+        versionNumber: 1,
+        fileName: 'witness-scoped.png',
+        mimeType: 'image/png',
+        byteSize: 4,
+        status: 'final',
+      },
+    });
+
+    const scopedSignatureRetry = await handler(
+      new Request(scopedSignatureUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'image/png' },
+        body: new Uint8Array([9, 8, 7, 6]),
+      }),
+      inspectorIdentity,
+    );
+    expect(scopedSignatureRetry.status).toBe(201);
+    expect((await scopedSignatureRetry.json()).data.id).toBe(
+      scopedSignatureVersionId,
+    );
+
     for (const [signerRole, signerName, signatureDocumentVersionId] of [
       [
         'witness',
         'Witness',
-        '83000000-0000-4000-8000-000000000002',
+        scopedSignatureVersionId,
       ],
       [
         'agent',
