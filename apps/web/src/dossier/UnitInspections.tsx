@@ -896,7 +896,22 @@ export function UnitInspections({
     try {
       const fresh = await loadBundle(targetInspectionId);
       if (!isActiveEditorTarget(targetInspectionId, targetSectionId)) return;
+
+      const freshSection = fresh.schema.sections.find(
+        (section) => section.id === targetSectionId,
+      );
+      if (!freshSection) {
+        throw new Error(
+          'Canonical Inspection schema no longer contains the active section.',
+        );
+      }
+
+      // This action explicitly means "discard local edits". Do not rely on
+      // draftResetKey changing: a rejected CAS write can legitimately reread
+      // the same server section revision while the local draft is still dirty.
       setBundle(fresh);
+      setDraft(createDraft(freshSection, fresh.responses));
+      setTouched({});
       setConflict(false);
     } catch (cause) {
       if (!isActiveEditorTarget(targetInspectionId, targetSectionId)) return;
