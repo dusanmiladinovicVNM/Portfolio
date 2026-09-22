@@ -1158,6 +1158,51 @@ describe('Inspection HTTP backbone', () => {
     expect(scopedPhotoRetry.status).toBe(201);
     expect((await scopedPhotoRetry.json()).data.id).toBe(scopedPhotoVersionId);
 
+    const typedScopedPhotoVersionId = asDocumentVersionId(scopedPhotoVersionId);
+    const scopedPhotoVersionBeforeConflict =
+      documentRepository.versions.get(typedScopedPhotoVersionId);
+    expect(scopedPhotoVersionBeforeConflict).toBeDefined();
+    expect(scopedPhotoVersionBeforeConflict?.sha256).toBe(
+      await testSha256.digest(new Uint8Array([1, 2, 3, 4])),
+    );
+    const scopedPhotoStorageBeforeConflict =
+      documentRepository.storage.get(typedScopedPhotoVersionId);
+    expect(scopedPhotoStorageBeforeConflict).toBeDefined();
+    expect([
+      ...(fileStorage.contents.get(
+        scopedPhotoStorageBeforeConflict!.objectKey,
+      ) ?? []),
+    ]).toEqual([1, 2, 3, 4]);
+
+    const conflictingScopedPhotoRetry = await handler(
+      new Request(scopedPhotoUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'image/jpeg' },
+        body: new Uint8Array([4, 3, 2, 1]),
+      }),
+      inspectorIdentity,
+    );
+    expect(conflictingScopedPhotoRetry.status).toBe(409);
+    expect(await conflictingScopedPhotoRetry.json()).toMatchObject({
+      error: { code: 'INSPECTION_BINARY_VERSION_CONFLICT' },
+    });
+
+    const scopedPhotoVersionAfterConflict =
+      documentRepository.versions.get(typedScopedPhotoVersionId);
+    expect(scopedPhotoVersionAfterConflict?.sha256).toBe(
+      scopedPhotoVersionBeforeConflict?.sha256,
+    );
+    expect(
+      await documentRepository.listVersionsByDocument(
+        scopedPhotoVersionBeforeConflict!.documentId,
+      ),
+    ).toHaveLength(1);
+    expect([
+      ...(fileStorage.contents.get(
+        scopedPhotoStorageBeforeConflict!.objectKey,
+      ) ?? []),
+    ]).toEqual([1, 2, 3, 4]);
+
     const sectionId = schema.sections[0]!.id;
     const itemId = schema.sections[0]!.items[0]!.id;
     await handler(
