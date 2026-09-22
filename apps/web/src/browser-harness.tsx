@@ -1047,6 +1047,350 @@ globalThis.fetch = async (
     return json({ items: setupSpace ? [setupSpace] : [] });
   }
 
+  if (setupUnit && path === '/units/' + setupUnitId + '/assets') {
+    return json({
+      items: setupAssets.filter((asset) => asset.unitId === setupUnitId),
+    });
+  }
+
+  if (path === '/assets' && init?.method === 'POST') {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      code: string;
+      name: string;
+      propertyId: string;
+      unitId?: string | null;
+      spaceId?: string | null;
+      manufacturer?: string | null;
+      model?: string | null;
+      identifiers?: Array<{
+        identifierType: AssetResponse['identifiers'][number]['identifierType'];
+        value: string;
+        label?: string | null;
+      }>;
+    };
+    if (
+      body.propertyId !== setupPropertyId ||
+      body.unitId !== setupUnitId ||
+      (body.spaceId != null && body.spaceId !== setupSpaceId)
+    ) {
+      throw new Error('Setup Asset was created for the wrong placement.');
+    }
+    const id = setupAssetIds[setupAssetSequence++];
+    if (!id) throw new Error('Setup Asset id pool exhausted.');
+    const identifiers = (body.identifiers ?? []).map((identifier) => {
+      const identifierId =
+        setupAssetIdentifierIds[setupAssetIdentifierSequence++];
+      if (!identifierId) throw new Error('Setup Asset identifier id pool exhausted.');
+      return {
+        id: identifierId,
+        assetId: id,
+        identifierType: identifier.identifierType,
+        value: identifier.value,
+        label: identifier.label ?? null,
+      };
+    });
+    const created: AssetResponse = {
+      id,
+      code: body.code,
+      name: body.name,
+      propertyId: setupPropertyId,
+      unitId: setupUnitId,
+      spaceId: body.spaceId ?? null,
+      manufacturer: body.manufacturer ?? null,
+      model: body.model ?? null,
+      status: 'active',
+      version: 1,
+      identifiers,
+    };
+    setupAssets.push(created);
+
+    const locationId = setupAssetLocationIds[setupAssetLocationSequence++];
+    if (!locationId) throw new Error('Setup Asset location id pool exhausted.');
+    setupAssetLocations.push({
+      id: locationId,
+      assetId: created.id,
+      propertyId: setupPropertyId,
+      unitId: setupUnitId,
+      spaceId: created.spaceId,
+      validFrom: nextSetupAssetInstant(),
+      validTo: null,
+      changeType: 'asset_created',
+      changedByUserId: inspectionUserId,
+      reason: null,
+    });
+    return json(created, 201);
+  }
+
+  const setupAsset = setupAssets.find((asset) =>
+    path.startsWith('/assets/' + asset.id),
+  );
+
+  if (
+    setupAsset &&
+    path === '/assets/' + setupAsset.id + '/metadata' &&
+    init?.method === 'PATCH'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      name?: string;
+      manufacturer?: string | null;
+      model?: string | null;
+    };
+    if (body.expectedVersion !== setupAsset.version) {
+      return apiError(
+        409,
+        'ASSET_VERSION_CONFLICT',
+        'Asset has changed since the caller last read it.',
+      );
+    }
+    const updated: AssetResponse = {
+      ...setupAsset,
+      name: body.name ?? setupAsset.name,
+      manufacturer:
+        body.manufacturer === undefined
+          ? setupAsset.manufacturer
+          : body.manufacturer,
+      model: body.model === undefined ? setupAsset.model : body.model,
+      version: setupAsset.version + 1,
+    };
+    setupAssets = setupAssets.map((asset) =>
+      asset.id === updated.id ? updated : asset,
+    );
+    return json(updated);
+  }
+
+  if (
+    setupAsset &&
+    path === '/assets/' + setupAsset.id + '/status' &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      status: 'active' | 'inactive' | 'retired';
+    };
+    if (body.expectedVersion !== setupAsset.version) {
+      return apiError(
+        409,
+        'ASSET_VERSION_CONFLICT',
+        'Asset has changed since the caller last read it.',
+      );
+    }
+    const updated: AssetResponse = {
+      ...setupAsset,
+      status: body.status,
+      version: setupAsset.version + 1,
+    };
+    setupAssets = setupAssets.map((asset) =>
+      asset.id === updated.id ? updated : asset,
+    );
+    return json(updated);
+  }
+
+  if (
+    setupAsset &&
+    path === '/assets/' + setupAsset.id + '/move' &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      propertyId: string;
+      unitId?: string | null;
+      spaceId?: string | null;
+      reason?: string | null;
+    };
+    if (body.expectedVersion !== setupAsset.version) {
+      return apiError(
+        409,
+        'ASSET_VERSION_CONFLICT',
+        'Asset has changed since the caller last read it.',
+      );
+    }
+    if (
+      body.propertyId !== setupPropertyId ||
+      body.unitId !== setupUnitId ||
+      (body.spaceId != null && body.spaceId !== setupSpaceId)
+    ) {
+      throw new Error('Setup Asset move targeted the wrong placement.');
+    }
+    const movedAt = nextSetupAssetInstant();
+    setupAssetLocations = setupAssetLocations.map((location) =>
+      location.assetId === setupAsset.id && location.validTo === null
+        ? { ...location, validTo: movedAt }
+        : location,
+    );
+    const locationId = setupAssetLocationIds[setupAssetLocationSequence++];
+    if (!locationId) throw new Error('Setup Asset location id pool exhausted.');
+    setupAssetLocations.push({
+      id: locationId,
+      assetId: setupAsset.id,
+      propertyId: setupPropertyId,
+      unitId: setupUnitId,
+      spaceId: body.spaceId ?? null,
+      validFrom: movedAt,
+      validTo: null,
+      changeType: 'moved',
+      changedByUserId: inspectionUserId,
+      reason: body.reason ?? null,
+    });
+    const moved: AssetResponse = {
+      ...setupAsset,
+      propertyId: setupPropertyId,
+      unitId: setupUnitId,
+      spaceId: body.spaceId ?? null,
+      version: setupAsset.version + 1,
+    };
+    setupAssets = setupAssets.map((asset) =>
+      asset.id === moved.id ? moved : asset,
+    );
+    return json(moved);
+  }
+
+  if (
+    setupAsset &&
+    path === '/assets/' + setupAsset.id + '/replacement' &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      code: string;
+      name: string;
+      manufacturer?: string | null;
+      model?: string | null;
+      identifiers?: Array<{
+        identifierType: AssetResponse['identifiers'][number]['identifierType'];
+        value: string;
+        label?: string | null;
+      }>;
+    };
+    if (body.expectedVersion !== setupAsset.version) {
+      return apiError(
+        409,
+        'ASSET_VERSION_CONFLICT',
+        'Asset has changed since the caller last read it.',
+      );
+    }
+    if (setupAssetReplacement?.replacedAssetId === setupAsset.id) {
+      return apiError(
+        409,
+        'ASSET_ALREADY_REPLACED',
+        'Asset already has a replacement successor.',
+      );
+    }
+    const successorId = setupAssetIds[setupAssetSequence++];
+    if (!successorId) throw new Error('Setup Asset successor id pool exhausted.');
+    const identifiers = (body.identifiers ?? []).map((identifier) => {
+      const identifierId =
+        setupAssetIdentifierIds[setupAssetIdentifierSequence++];
+      if (!identifierId) throw new Error('Setup Asset identifier id pool exhausted.');
+      return {
+        id: identifierId,
+        assetId: successorId,
+        identifierType: identifier.identifierType,
+        value: identifier.value,
+        label: identifier.label ?? null,
+      };
+    });
+    const replacedAt = nextSetupAssetInstant();
+    const successor: AssetResponse = {
+      id: successorId,
+      code: body.code,
+      name: body.name,
+      propertyId: setupAsset.propertyId,
+      unitId: setupAsset.unitId,
+      spaceId: setupAsset.spaceId,
+      manufacturer: body.manufacturer ?? null,
+      model: body.model ?? null,
+      status: 'active',
+      version: 1,
+      identifiers,
+    };
+    const predecessor: AssetResponse = {
+      ...setupAsset,
+      propertyId: null,
+      unitId: null,
+      spaceId: null,
+      status: 'replaced',
+      version: setupAsset.version + 1,
+    };
+    setupAssetLocations = setupAssetLocations.map((location) =>
+      location.assetId === setupAsset.id && location.validTo === null
+        ? { ...location, validTo: replacedAt }
+        : location,
+    );
+    const successorLocationId =
+      setupAssetLocationIds[setupAssetLocationSequence++];
+    if (!successorLocationId) {
+      throw new Error('Setup Asset successor location id pool exhausted.');
+    }
+    setupAssetLocations.push({
+      id: successorLocationId,
+      assetId: successor.id,
+      propertyId: successor.propertyId!,
+      unitId: successor.unitId,
+      spaceId: successor.spaceId,
+      validFrom: replacedAt,
+      validTo: null,
+      changeType: 'replacement_created',
+      changedByUserId: inspectionUserId,
+      reason: 'Replacement for ' + setupAsset.code,
+    });
+    setupAssetReplacement = {
+      id: setupAssetReplacementId,
+      replacedAssetId: predecessor.id,
+      replacementAssetId: successor.id,
+      replacedByUserId: inspectionUserId,
+      replacedAt,
+    };
+    setupAssets = setupAssets.map((asset) =>
+      asset.id === predecessor.id ? predecessor : asset,
+    );
+    setupAssets.push(successor);
+    return json(
+      {
+        replacedAsset: predecessor,
+        replacementAsset: successor,
+        replacement: setupAssetReplacement,
+      },
+      201,
+    );
+  }
+
+  if (
+    setupAsset &&
+    path === '/assets/' + setupAsset.id + '/location-history'
+  ) {
+    return json({
+      items: setupAssetLocations.filter(
+        (location) => location.assetId === setupAsset.id,
+      ),
+    });
+  }
+
+  if (
+    setupAsset &&
+    path === '/assets/' + setupAsset.id + '/replacements'
+  ) {
+    return json({
+      predecessor:
+        setupAssetReplacement?.replacementAssetId === setupAsset.id
+          ? setupAssetReplacement
+          : null,
+      successor:
+        setupAssetReplacement?.replacedAssetId === setupAsset.id
+          ? setupAssetReplacement
+          : null,
+    });
+  }
+
+  if (setupAsset && path === '/assets/' + setupAsset.id) {
+    return json(setupAsset);
+  }
+
   if (setupUnit && path === '/units/' + setupUnitId + '/tenancies') {
     if (init?.method === 'POST') {
       requirePortfolioAuth(init);
