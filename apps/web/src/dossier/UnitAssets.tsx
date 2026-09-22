@@ -681,6 +681,7 @@ function AssetAdministration({
         assertAssetReadOwner(links.successor.replacementAssetId, successor);
 
         if (successor.unitId) {
+          onCanonicalWrite();
           writeGate.finish();
           navigate(
             unitRoute(
