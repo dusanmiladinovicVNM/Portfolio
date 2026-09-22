@@ -20,6 +20,7 @@ import {
   type PdfPort,
   type PortfolioRepository,
   type ReportingRepository,
+  type Sha256Port,
   type StaffDirectoryRepository,
   type TenancyRepository,
   type UnitTimelineRepository,
@@ -66,6 +67,7 @@ export interface PortfolioHttpDependencies {
   readonly staffDirectoryRepository: StaffDirectoryRepository;
   readonly fileStorage: FileStoragePort;
   readonly pdfPort: PdfPort;
+  readonly sha256: Sha256Port;
   readonly clock: ClockPort;
   readonly userAccessRepository: UserAccessRepository;
   readonly idGenerator: IdGenerator;
@@ -307,6 +309,7 @@ export function createPortfolioHttpHandler(
               documentRepository: deps.documentRepository,
               fileStorage: deps.fileStorage,
               pdfPort: deps.pdfPort,
+              sha256: deps.sha256,
               partyRepository: deps.partyRepository,
               ownershipRepository: deps.ownershipRepository,
               portfolioRepository: deps.portfolioRepository,
