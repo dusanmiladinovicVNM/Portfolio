@@ -280,9 +280,16 @@ export class GoogleDriveFileStorage implements FileStoragePort {
 
     // Keep the provider upload bounded without materializing a second
     // concatenated Uint8Array plus a third ArrayBuffer copy.
-    const body = new Blob([prefix, input.content, suffix], {
-      type: `multipart/related; boundary=${boundary}`,
-    });
+    const body = new Blob(
+      [
+        toArrayBuffer(prefix),
+        toArrayBuffer(input.content),
+        toArrayBuffer(suffix),
+      ],
+      {
+        type: `multipart/related; boundary=${boundary}`,
+      },
+    );
 
     const url = new URL('https://www.googleapis.com/upload/drive/v3/files');
     url.searchParams.set('uploadType', 'multipart');
