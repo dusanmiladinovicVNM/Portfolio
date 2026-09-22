@@ -205,12 +205,13 @@ export function InspectionFindingsEvidence({
       </div>
     );
   }
+  const activeSection = selectedSection;
 
   const contentWritable = inspection.status === 'in_progress';
   const blocked =
     writeGate.pending || blockedByDirtySection || !contentWritable;
   const sectionFindings = bundle.findings.filter(
-    (finding) => finding.sectionId === selectedSection.id,
+    (finding) => finding.sectionId === activeSection.id,
   );
 
   function begin(action: Exclude<PendingAction, null>): boolean {
@@ -252,7 +253,7 @@ export function InspectionFindingsEvidence({
     const form = new FormData(formElement);
     const rawItemId = requiredString(form, 'itemId');
     const parsed = createInspectionFindingRequestSchema.safeParse({
-      sectionId: selectedSection.id,
+      sectionId: activeSection.id,
       itemId: rawItemId || null,
       severity: requiredString(form, 'severity'),
       title: requiredString(form, 'title'),
@@ -266,7 +267,7 @@ export function InspectionFindingsEvidence({
 
     const expected: InspectionFindingRegistration = {
       inspectionId: inspection.id,
-      sectionId: selectedSection.id,
+      sectionId: activeSection.id,
       itemId: parsed.data.itemId ?? null,
       severity: parsed.data.severity,
       title: parsed.data.title,
@@ -517,7 +518,7 @@ export function InspectionFindingsEvidence({
 
     if (
       scope === 'item' &&
-      !selectedSection.items.some((item) => item.id === rawItemId)
+      !activeSection.items.some((item) => item.id === rawItemId)
     ) {
       setError('Choose an item from the active Inspection section.');
       return;
@@ -528,7 +529,7 @@ export function InspectionFindingsEvidence({
       kind: requiredString(form, 'kind'),
       ...(scope === 'inspection'
         ? {}
-        : { sectionId: selectedSection.id }),
+        : { sectionId: activeSection.id }),
       ...(scope === 'item' ? { itemId: rawItemId } : {}),
       caption: requiredString(form, 'caption') || null,
     };
@@ -647,7 +648,7 @@ export function InspectionFindingsEvidence({
         <div className="inspection-content-card">
           <div className="tenancy-form-heading">
             <strong>Current section Findings</strong>
-            <span>{selectedSection.title}</span>
+            <span>{activeSection.title}</span>
           </div>
           {sectionFindings.length === 0 ? (
             <p className="muted">No Findings recorded in this section.</p>
@@ -683,7 +684,7 @@ export function InspectionFindingsEvidence({
             Item
             <select disabled={blocked} defaultValue="" name="itemId">
               <option value="">Whole section</option>
-              {selectedSection.items.map((item) => (
+              {activeSection.items.map((item) => (
                 <option key={item.id} value={item.id}>{item.label}</option>
               ))}
             </select>
@@ -951,7 +952,7 @@ export function InspectionFindingsEvidence({
                   Item
                   <select disabled={blocked} defaultValue="" name="itemId" required>
                     <option value="">Select item…</option>
-                    {selectedSection.items.map((item) => (
+                    {activeSection.items.map((item) => (
                       <option key={item.id} value={item.id}>{item.label}</option>
                     ))}
                   </select>
