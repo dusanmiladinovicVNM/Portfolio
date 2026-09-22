@@ -37,6 +37,7 @@ import type {
   SetNavigationBlocker,
 } from '../navigation/use-workspace-navigation.js';
 import { formatDetailKey } from '../presentation/format.js';
+import { InspectionFinalizationPanel } from './InspectionFinalizationPanel.js';
 import { InspectionFindingsEvidence } from './InspectionFindingsEvidence.js';
 import { InspectionOrchestrationPanel } from './InspectionOrchestrationPanel.js';
 import { assertInspectionBundleOwner } from './inspection-content-owner.js';
@@ -1218,6 +1219,26 @@ export function UnitInspections({
               writeGate={inspectionWriteGate}
             />
           ) : null}
+
+          <InspectionFinalizationPanel
+            api={api}
+            blockedByDirtySection={hasUnsavedChanges}
+            bundle={routeBundle}
+            key={`${routeBundle.inspection.id}:finalization`}
+            onCanonicalBundle={(targetInspectionId, canonical) => {
+              if (activeInspectionIdRef.current !== targetInspectionId) return;
+              assertInspectionBundleOwner(targetInspectionId, unitId, canonical);
+              setBundle(canonical);
+              setInspections((current) =>
+                current?.map((item) =>
+                  item.id === canonical.inspection.id
+                    ? canonical.inspection
+                    : item,
+                ) ?? current,
+              );
+            }}
+            writeGate={inspectionWriteGate}
+          />
         </section>
       ) : null}
     </div>
