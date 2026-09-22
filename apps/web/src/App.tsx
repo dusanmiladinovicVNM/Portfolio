@@ -195,6 +195,12 @@ function AuthenticatedShell({
                     : {}),
                   ...(route.assetId ? { assetId: route.assetId } : {}),
                   ...(route.meterId ? { meterId: route.meterId } : {}),
+                  ...(route.maintenanceIssueId
+                    ? { maintenanceIssueId: route.maintenanceIssueId }
+                    : {}),
+                  ...(route.maintenanceWorkOrderId
+                    ? { maintenanceWorkOrderId: route.maintenanceWorkOrderId }
+                    : {}),
                 },
               )}
             >
@@ -252,6 +258,8 @@ function AuthenticatedShell({
             inspectionSectionId={route.inspectionSectionId}
             assetId={route.assetId}
             meterId={route.meterId}
+            maintenanceIssueId={route.maintenanceIssueId}
+            maintenanceWorkOrderId={route.maintenanceWorkOrderId}
             setNavigationBlocker={setNavigationBlocker}
             unitId={route.unitId}
           />
