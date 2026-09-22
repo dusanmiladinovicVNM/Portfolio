@@ -53,6 +53,14 @@ export const documentLinkResponseSchema = z.object({
   targetId: entityIdSchema,
 });
 
+export const documentListResponseSchema = z.object({
+  items: z.array(documentResponseSchema),
+});
+
+export const documentVersionListResponseSchema = z.object({
+  items: z.array(documentVersionResponseSchema),
+});
+
 type DossierDocumentTargetType =
   | 'unit'
   | 'lease_agreement'
@@ -125,6 +133,10 @@ export type DocumentLinkRequest = z.infer<typeof documentLinkRequestSchema>;
 export type DocumentResponse = z.infer<typeof documentResponseSchema>;
 export type DocumentVersionResponse = z.infer<typeof documentVersionResponseSchema>;
 export type DocumentLinkResponse = z.infer<typeof documentLinkResponseSchema>;
+export type DocumentListResponse = z.infer<typeof documentListResponseSchema>;
+export type DocumentVersionListResponse = z.infer<
+  typeof documentVersionListResponseSchema
+>;
 export type UnitDocumentReferenceResponse = z.infer<
   typeof unitDocumentReferenceResponseSchema
 >;
