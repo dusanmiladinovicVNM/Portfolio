@@ -92,6 +92,36 @@ class TrackingStorage implements FileStorageWritePort {
   }
 }
 
+class ConcurrentWinnerDocumentRepository
+  extends FailingDocumentRepository {
+  private persisted: DocumentVersion | null = null;
+  private persistedStorage: StorageObjectReference | null = null;
+
+  override async getVersionById(id: DocumentVersionId) {
+    return this.persisted?.id === id ? this.persisted : null;
+  }
+
+  override async getStorageReference(versionId: DocumentVersionId) {
+    return this.persisted?.id === versionId
+      ? this.persistedStorage
+      : null;
+  }
+
+  override async insertVersion(
+    _document: Document,
+    _expectedDocumentRevision: number,
+    version: DocumentVersion,
+    storage: StorageObjectReference,
+  ) {
+    this.persisted = version;
+    this.persistedStorage = {
+      ...storage,
+      objectId: 'canonical-winner-object',
+    };
+    throw new Error('concurrent winner committed first');
+  }
+}
+
 class AmbiguousCommitDocumentRepository extends FailingDocumentRepository {
   private persisted: DocumentVersion | null = null;
   private persistedStorage: StorageObjectReference | null = null;
@@ -170,6 +200,75 @@ describe('Document application workflow', () => {
     expect(version.id).toBe(
       '50000000-0000-4000-8000-000000000002',
     );
+    expect(storage.removed).toEqual([]);
+  });
+
+  it('reconciles a concurrent same-version storage loser against the canonical DB winner', async () => {
+    const repository = new ConcurrentWinnerDocumentRepository();
+    const storage = new TrackingStorage();
+
+    const version = await uploadDocumentVersionCommand(
+      {
+        documentRepository: repository,
+        fileStorage: storage,
+        idGenerator: new FixedId(),
+      },
+      actor,
+      {
+        documentId: repository.document.id,
+        fileName: 'lease.pdf',
+        mimeType: 'application/pdf',
+        content: new Uint8Array([1, 2, 3]),
+      },
+    );
+
+    expect(version.id).toBe(
+      '50000000-0000-4000-8000-000000000002',
+    );
+    expect(storage.removed).toEqual([
+      {
+        provider: 'test',
+        objectId: 'stored-object',
+        objectKey:
+          'document-version:50000000-0000-4000-8000-000000000002',
+      },
+    ]);
+  });
+
+  it('preserves the losing upload when the concurrent canonical storage cannot be verified', async () => {
+    const repository = new ConcurrentWinnerDocumentRepository();
+
+    class InvalidWinnerStorage extends TrackingStorage {
+      override async stat(reference: StorageObjectReference) {
+        return {
+          ...reference,
+          byteSize: 3,
+          sha256: 'b'.repeat(64),
+        };
+      }
+    }
+
+    const storage = new InvalidWinnerStorage();
+
+    await expect(
+      uploadDocumentVersionCommand(
+        {
+          documentRepository: repository,
+          fileStorage: storage,
+          idGenerator: new FixedId(),
+        },
+        actor,
+        {
+          documentId: repository.document.id,
+          fileName: 'lease.pdf',
+          mimeType: 'application/pdf',
+          content: new Uint8Array([1, 2, 3]),
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'DOCUMENT_STORAGE_RECONCILIATION_REQUIRED',
+    });
+
     expect(storage.removed).toEqual([]);
   });
 
