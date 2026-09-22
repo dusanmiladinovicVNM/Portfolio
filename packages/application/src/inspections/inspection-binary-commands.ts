@@ -11,6 +11,7 @@ import {
 import { requireCapability, type Actor } from '../security/access.js';
 import type { ClockPort } from '../shared/clock.js';
 import type { IdGenerator } from '../shared/id-generator.js';
+import type { Sha256Port } from '../shared/sha256-port.js';
 import type { DocumentRepository } from '../documents/document-repository.js';
 import type { FileStorageWritePort } from '../documents/file-storage-port.js';
 import {
@@ -44,6 +45,7 @@ export interface UploadInspectionBinaryDependencies {
   readonly fileStorage: FileStorageWritePort;
   readonly idGenerator: IdGenerator;
   readonly clock: ClockPort;
+  readonly sha256: Sha256Port;
 }
 
 function assertInspectionAccess(actor: Actor, inspection: Inspection): void {
@@ -147,6 +149,7 @@ function assertExistingVersion(
   version: DocumentVersion,
   document: Document,
   input: UploadInspectionBinaryInput,
+  incomingSha256: string,
 ): void {
   const expectedId = asDocumentVersionId(input.uploadKey);
   const normalizedMimeType = input.mimeType.trim().toLowerCase();
@@ -156,7 +159,8 @@ function assertExistingVersion(
     version.versionNumber !== 1 ||
     version.fileName !== input.fileName.trim() ||
     version.mimeType !== normalizedMimeType ||
-    version.byteSize !== input.content.byteLength
+    version.byteSize !== input.content.byteLength ||
+    version.sha256.toLowerCase() !== incomingSha256.toLowerCase()
   ) {
     throw new DomainError(
       'INSPECTION_BINARY_VERSION_CONFLICT',
@@ -203,6 +207,7 @@ export async function uploadInspectionBinaryCommand(
   }
 
   const expectedVersionId = asDocumentVersionId(input.uploadKey);
+  const incomingSha256 = await deps.sha256.digest(input.content);
   const document = await resolveDocument(deps, inspection, input);
   let versions = await deps.documentRepository.listVersionsByDocument(document.id);
 
@@ -244,7 +249,7 @@ export async function uploadInspectionBinaryCommand(
     }
   }
 
-  assertExistingVersion(version, document, input);
+  assertExistingVersion(version, document, input, incomingSha256);
   await assertDocumentVersionStorageIntegrity(deps, version);
 
   if (input.purpose === 'signature' && version.status !== 'final') {
@@ -253,7 +258,7 @@ export async function uploadInspectionBinaryCommand(
     } catch (error) {
       const winner = await deps.documentRepository.getVersionById(version.id);
       if (!winner || winner.status !== 'final') throw error;
-      assertExistingVersion(winner, document, input);
+      assertExistingVersion(winner, document, input, incomingSha256);
       await assertDocumentVersionStorageIntegrity(deps, winner);
       version = winner;
     }
