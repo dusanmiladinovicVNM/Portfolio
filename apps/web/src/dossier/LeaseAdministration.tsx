@@ -585,10 +585,18 @@ export function LeaseAdministration({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const writeInFlightRef = useRef(false);
+  const mountedRef = useRef(true);
   const activeTenancyIdRef = useRef(tenancy.id);
   const activeAgreementIdRef = useRef(agreement?.id);
   activeTenancyIdRef.current = tenancy.id;
   activeAgreementIdRef.current = agreement?.id;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -626,13 +634,14 @@ export function LeaseAdministration({
 
   function finishWrite(): void {
     writeInFlightRef.current = false;
-    setPending(false);
+    if (mountedRef.current) setPending(false);
   }
 
   function canonicalRefreshIfActive(
     targetTenancyId: string,
     targetAgreementId?: string,
   ): boolean {
+    if (!mountedRef.current) return false;
     if (activeTenancyIdRef.current !== targetTenancyId) return false;
     if (
       targetAgreementId !== undefined &&
@@ -727,7 +736,7 @@ export function LeaseAdministration({
         );
       }
     } catch (cause) {
-      if (activeTenancyIdRef.current === targetTenancyId) {
+      if (mountedRef.current && activeTenancyIdRef.current === targetTenancyId) {
         setError(writeError(cause, 'Agreement could not be created.'));
       }
     } finally {
@@ -771,6 +780,7 @@ export function LeaseAdministration({
       canonicalRefreshIfActive(targetTenancyId, target.id);
     } catch (cause) {
       if (
+        mountedRef.current &&
         activeTenancyIdRef.current === targetTenancyId &&
         activeAgreementIdRef.current === target.id
       ) {
@@ -809,6 +819,7 @@ export function LeaseAdministration({
       canonicalRefreshIfActive(targetTenancyId, target.id);
     } catch (cause) {
       if (
+        mountedRef.current &&
         activeTenancyIdRef.current === targetTenancyId &&
         activeAgreementIdRef.current === target.id
       ) {
@@ -870,6 +881,7 @@ export function LeaseAdministration({
       }
     } catch (cause) {
       if (
+        mountedRef.current &&
         activeTenancyIdRef.current === targetTenancyId &&
         activeAgreementIdRef.current === targetAgreement.id
       ) {
@@ -917,6 +929,7 @@ export function LeaseAdministration({
       canonicalRefreshIfActive(targetTenancyId, targetAgreement.id);
     } catch (cause) {
       if (
+        mountedRef.current &&
         activeTenancyIdRef.current === targetTenancyId &&
         activeAgreementIdRef.current === targetAgreement.id
       ) {
@@ -958,6 +971,7 @@ export function LeaseAdministration({
       canonicalRefreshIfActive(targetTenancyId, targetAgreement.id);
     } catch (cause) {
       if (
+        mountedRef.current &&
         activeTenancyIdRef.current === targetTenancyId &&
         activeAgreementIdRef.current === targetAgreement.id
       ) {
