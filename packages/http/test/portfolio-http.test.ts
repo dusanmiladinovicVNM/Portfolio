@@ -44,6 +44,7 @@ import {
   type UnitId,
 } from '@portfolio/domain';
 import { createPortfolioHttpHandler } from '../src/index.js';
+import { testSha256 } from './hash-test-deps.js';
 import { unusedPdfPort } from './pdf-test-deps.js';
 import { InMemoryAssetInventoryRepository, InMemoryAssetRepository, InMemoryAssetServiceRepository } from './asset-test-deps.js';
 import {
@@ -2538,6 +2539,7 @@ describe('Portfolio HTTP boundary', () => {
         staffDirectoryRepository: new InMemoryStaffDirectoryRepository(),
         fileStorage: new MemoryFileStorage(),
         pdfPort: unusedPdfPort,
+        sha256: testSha256,
         clock: new FixedClock(),
         userAccessRepository: new InMemoryAccessRepository(),
         idGenerator: new FixedIds(['6a644eaa-dae0-4c4a-9ae4-6e5a93ceef3f']),
