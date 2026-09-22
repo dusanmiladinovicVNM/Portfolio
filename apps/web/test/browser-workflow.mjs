@@ -21,6 +21,9 @@ const setupUnitId = 'b1000000-0000-4000-8000-000000000002';
 const setupSpaceId = 'b1000000-0000-4000-8000-000000000003';
 const setupDestinationUnitId = 'c1000000-0000-4000-8000-000000000001';
 const setupDestinationSpaceId = 'c1000000-0000-4000-8000-000000000002';
+const setupRecoveryPropertyId = 'c2000000-0000-4000-8000-000000000001';
+const setupRecoveryUnitId = 'c2000000-0000-4000-8000-000000000002';
+const setupRecoverySpaceId = 'c2000000-0000-4000-8000-000000000003';
 const setupTenancyId = 'b1000000-0000-4000-8000-000000000007';
 const setupSignedAgreementId = 'b1000000-0000-4000-8000-000000000010';
 const setupSignedAmendmentId = 'b1000000-0000-4000-8000-000000000019';
@@ -1772,7 +1775,7 @@ try {
   );
   await executeScript(
     sessionId,
-    'window.__portfolioFailNextAssetMoveAfterCommit = true; return true;',
+    'window.__portfolioConcurrentAssetMoveAcrossProperty = true; return true;',
   );
   await clickXpath(
     sessionId,
@@ -1782,23 +1785,31 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//h1[normalize-space()='Unit 2B']",
+    "//h1[normalize-space()='Unit 9C']",
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//a[contains(@class,'asset-card')][.//span[normalize-space()='AST-SETUP-BRW']][.//dd[normalize-space()='Destination Living Room']]",
+    "//a[contains(@class,'asset-card')][.//span[normalize-space()='AST-SETUP-BRW']][.//dd[normalize-space()='Recovery Room']]",
   );
-  const destinationAssetUrl =
+  const recoveryAssetUrl =
     baseUrl +
-    '/properties/' + setupPropertyId +
-    '/units/' + setupDestinationUnitId +
+    '/properties/' + setupRecoveryPropertyId +
+    '/units/' + setupRecoveryUnitId +
     '?tab=assets&assetId=' + setupAssetId +
     '&asOf=2025-06-30';
   assertEqual(
     await currentUrl(sessionId),
-    destinationAssetUrl,
-    'Lost move acknowledgement reconciles to canonical destination Unit owner',
+    recoveryAssetUrl,
+    'VERSION_CONFLICT recovery navigates to canonical cross-Property owner',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[normalize-space()='Route identity failed']",
+    ),
+    false,
+    'Cross-Property recovery does not construct an invalid Property/Unit route',
   );
   await waitForElement(
     sessionId,
@@ -1808,7 +1819,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Moved']][.//span[contains(normalize-space(),'current')]][.//dd[normalize-space()='Moved to destination Unit']]",
+    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Moved']][.//span[contains(normalize-space(),'current')]][.//dt[normalize-space()='Property']/following-sibling::dd[normalize-space()='" + setupRecoveryPropertyId + "']][.//dt[normalize-space()='Unit']/following-sibling::dd[normalize-space()='" + setupRecoveryUnitId + "']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='" + setupRecoverySpaceId + "']][.//dd[normalize-space()='Concurrent cross-Property move']]",
   );
 
   const assetReplacementForm = "//form[@data-asset-form='replace']";
@@ -1861,16 +1872,16 @@ try {
   assertEqual(
     await currentUrl(sessionId),
     baseUrl +
-      '/properties/' + setupPropertyId +
-      '/units/' + setupDestinationUnitId +
+      '/properties/' + setupRecoveryPropertyId +
+      '/units/' + setupRecoveryUnitId +
       '?tab=assets&assetId=' + setupReplacementAssetId +
       '&asOf=2025-06-30',
-    'Replacement successor deep-link',
+    'Replacement successor deep-link uses canonical Property owner',
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Replacement created']][.//span[contains(normalize-space(),'current')]][.//dt[normalize-space()='Unit']/following-sibling::dd[normalize-space()='" + setupDestinationUnitId + "']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='" + setupDestinationSpaceId + "']]",
+    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Replacement created']][.//span[contains(normalize-space(),'current')]][.//dt[normalize-space()='Property']/following-sibling::dd[normalize-space()='" + setupRecoveryPropertyId + "']][.//dt[normalize-space()='Unit']/following-sibling::dd[normalize-space()='" + setupRecoveryUnitId + "']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='" + setupRecoverySpaceId + "']]",
   );
   await waitForElement(
     sessionId,
