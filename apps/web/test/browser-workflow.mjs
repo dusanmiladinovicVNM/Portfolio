@@ -1430,8 +1430,8 @@ try {
   );
 
   const setupTenanciesRecoveryPath =
-    '/properties/' + setupPropertyId +
-    '/units/' + setupUnitId +
+    '/properties/' + setupRecoveryPropertyId +
+    '/units/' + setupRecoveryUnitId +
     '?tab=tenancies&asOf=2027-02-01';
   await navigateWithPopState(sessionId, setupTenanciesRecoveryPath);
   await waitForElement(
@@ -2938,8 +2938,8 @@ try {
 
   await navigateWithPopState(
     sessionId,
-    '/properties/' + setupPropertyId +
-      '/units/' + setupUnitId +
+    '/properties/' + setupRecoveryPropertyId +
+      '/units/' + setupRecoveryUnitId +
       '?tab=inspections&asOf=2025-06-30',
   );
   await waitForElement(
