@@ -157,6 +157,7 @@ export function createPortfolioApi(options: PortfolioApiOptions): PortfolioApi {
       const accessToken = requireAccessToken(options);
       const response = await fetchImpl(joinPath(options.baseUrl, path), {
         method: 'GET',
+        credentials: 'omit',
         headers: {
           Accept: 'application/json',
           Authorization: `Bearer ${accessToken}`,
@@ -174,6 +175,7 @@ export function createPortfolioApi(options: PortfolioApiOptions): PortfolioApi {
       const accessToken = requireAccessToken(options);
       const response = await fetchImpl(joinPath(options.baseUrl, path), {
         method: 'GET',
+        credentials: 'omit',
         headers: {
           Accept: 'application/octet-stream',
           Authorization: `Bearer ${accessToken}`,
@@ -197,6 +199,7 @@ export function createPortfolioApi(options: PortfolioApiOptions): PortfolioApi {
       const accessToken = requireAccessToken(options);
       const response = await fetchImpl(joinPath(options.baseUrl, path), {
         method: 'POST',
+        credentials: 'omit',
         headers: {
           Accept: 'application/json',
           Authorization: `Bearer ${accessToken}`,
@@ -217,6 +220,7 @@ export function createPortfolioApi(options: PortfolioApiOptions): PortfolioApi {
       const accessToken = requireAccessToken(options);
       const response = await fetchImpl(joinPath(options.baseUrl, path), {
         method: 'POST',
+        credentials: 'omit',
         headers: {
           Accept: 'application/json',
           Authorization: `Bearer ${accessToken}`,
@@ -237,6 +241,7 @@ export function createPortfolioApi(options: PortfolioApiOptions): PortfolioApi {
       const accessToken = requireAccessToken(options);
       const response = await fetchImpl(joinPath(options.baseUrl, path), {
         method: 'PATCH',
+        credentials: 'omit',
         headers: {
           Accept: 'application/json',
           Authorization: `Bearer ${accessToken}`,

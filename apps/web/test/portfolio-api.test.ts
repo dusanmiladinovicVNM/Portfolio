@@ -36,7 +36,7 @@ describe('Portfolio API client', () => {
     await expect(api.get('/reporting/dashboard', stringSchema)).resolves.toBe('ok');
     expect(fetchImpl).toHaveBeenCalledWith(
       '/functions/v1/api/reporting/dashboard',
-      expect.objectContaining({ method: 'GET' }),
+      expect.objectContaining({ method: 'GET', credentials: 'omit' }),
     );
   });
 
@@ -192,6 +192,7 @@ describe('Portfolio API client', () => {
     expect(requests).toHaveLength(1);
     const request = requests[0]!;
     expect(request.method).toBe('POST');
+    expect(request.credentials).toBe('omit');
     expect(request.headers.get('authorization')).toBe('Bearer token-123');
     expect(request.headers.get('content-type')).toBe('application/pdf');
     expect([...new Uint8Array(await request.arrayBuffer())]).toEqual([1, 2, 3]);
@@ -269,6 +270,7 @@ describe('Portfolio API client', () => {
       'PATCH',
     ]);
     for (const request of requests) {
+      expect(request.credentials).toBe('omit');
       expect(request.headers.get('authorization')).toBe('Bearer token-123');
       expect(request.headers.get('content-type')).toBe('application/json');
     }

@@ -131,7 +131,10 @@ export async function getInspectionSchemaVersionQuery(
 ): Promise<InspectionSchemaVersion> {
   requireCapability(actor, 'inspection_schemas:read');
   const schema = await repository.getSchemaVersionById(id);
-  if (!schema) {
+  if (
+    !schema ||
+    (actor.role === 'inspector' && schema.status !== 'published')
+  ) {
     throw new DomainError(
       'INSPECTION_SCHEMA_NOT_FOUND',
       'Inspection schema version not found.',
@@ -145,7 +148,10 @@ export async function listInspectionSchemaVersionsQuery(
   actor: Actor,
 ): Promise<readonly InspectionSchemaVersion[]> {
   requireCapability(actor, 'inspection_schemas:read');
-  return repository.listSchemaVersions();
+  const schemas = await repository.listSchemaVersions();
+  return actor.role === 'inspector'
+    ? schemas.filter((schema) => schema.status === 'published')
+    : schemas;
 }
 
 export interface InspectionBundle {

@@ -596,6 +596,26 @@ describe('Inspection HTTP backbone', () => {
       sections: Array<{ id: string; items: Array<{ id: string }> }>;
     };
 
+    const inspectorDraftSchemas = await handler(
+      new Request('https://portfolio.test/inspection-schemas'),
+      inspectorIdentity,
+    );
+    expect(inspectorDraftSchemas.status).toBe(200);
+    expect(await inspectorDraftSchemas.json()).toMatchObject({
+      data: { items: [] },
+    });
+
+    const inspectorDraftSchema = await handler(
+      new Request(
+        `https://portfolio.test/inspection-schemas/${schema.id}`,
+      ),
+      inspectorIdentity,
+    );
+    expect(inspectorDraftSchema.status).toBe(404);
+    expect(await inspectorDraftSchema.json()).toMatchObject({
+      error: { code: 'INSPECTION_SCHEMA_NOT_FOUND' },
+    });
+
     const inspectorSchemaWrite = await handler(
       new Request('https://portfolio.test/inspection-schemas', {
         method: 'POST',
@@ -631,6 +651,26 @@ describe('Inspection HTTP backbone', () => {
     expect(published.status).toBe(200);
     expect(await published.clone().json()).toMatchObject({
       data: { status: 'published', versionNumber: 1 },
+    });
+
+    const inspectorPublishedSchemas = await handler(
+      new Request('https://portfolio.test/inspection-schemas'),
+      inspectorIdentity,
+    );
+    expect(inspectorPublishedSchemas.status).toBe(200);
+    expect(await inspectorPublishedSchemas.json()).toMatchObject({
+      data: { items: [{ id: schema.id, status: 'published' }] },
+    });
+
+    const inspectorPublishedSchema = await handler(
+      new Request(
+        `https://portfolio.test/inspection-schemas/${schema.id}`,
+      ),
+      inspectorIdentity,
+    );
+    expect(inspectorPublishedSchema.status).toBe(200);
+    expect(await inspectorPublishedSchema.json()).toMatchObject({
+      data: { id: schema.id, status: 'published' },
     });
 
     const property = await handler(
@@ -699,12 +739,36 @@ describe('Inspection HTTP backbone', () => {
       data: { items: [{ id: inspection.id }] },
     });
 
+    const hiddenFromOtherInspector = await handler(
+      new Request(`https://portfolio.test/units/${unitId}/inspections`),
+      otherInspectorIdentity,
+    );
+    expect(hiddenFromOtherInspector.status).toBe(200);
+    expect(await hiddenFromOtherInspector.json()).toMatchObject({
+      data: { items: [] },
+    });
+
     const denied = await handler(
       new Request(`https://portfolio.test/inspections/${inspection.id}`),
       otherInspectorIdentity,
     );
     expect(denied.status).toBe(403);
     expect(await denied.json()).toMatchObject({
+      error: { code: 'INSPECTION_ACCESS_DENIED' },
+    });
+
+    const deniedStart = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/start`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ expectedVersion: 1 }),
+        },
+      ),
+      otherInspectorIdentity,
+    );
+    expect(deniedStart.status).toBe(403);
+    expect(await deniedStart.json()).toMatchObject({
       error: { code: 'INSPECTION_ACCESS_DENIED' },
     });
 

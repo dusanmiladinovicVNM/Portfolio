@@ -19,12 +19,113 @@ function required(name: string, value: string | undefined): string {
   return normalized;
 }
 
+function jwtRole(value: string): string | null {
+  const parts = value.split('.');
+  if (parts.length !== 3 || !parts[1]) return null;
+
+  try {
+    const base64 = parts[1]
+      .replace(/-/g, '+')
+      .replace(/_/g, '/')
+      .padEnd(Math.ceil(parts[1].length / 4) * 4, '=');
+    const payload = JSON.parse(atob(base64)) as unknown;
+    if (
+      typeof payload === 'object' &&
+      payload !== null &&
+      'role' in payload &&
+      typeof (payload as { readonly role?: unknown }).role === 'string'
+    ) {
+      return (payload as { readonly role: string }).role;
+    }
+  } catch {
+    // Opaque/publishable keys are not JWTs and are allowed below.
+  }
+  return null;
+}
+
+function browserSafeSupabaseUrl(value: string | undefined): string {
+  const raw = required('VITE_SUPABASE_URL', value);
+
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new WebConfigurationError(
+      'VITE_SUPABASE_URL must be an absolute URL.',
+    );
+  }
+
+  const localHost =
+    url.hostname === 'localhost' ||
+    url.hostname === '127.0.0.1' ||
+    url.hostname === '[::1]';
+
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && localHost)) {
+    throw new WebConfigurationError(
+      'VITE_SUPABASE_URL must use HTTPS outside local development.',
+    );
+  }
+
+  const normalized = url.toString();
+  return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
+}
+
+function browserSafeApiBaseUrl(
+  value: string | undefined,
+  supabaseUrl: string,
+): string {
+  const raw = value?.trim() || '/functions/v1/api';
+
+  if (raw.startsWith('/') && !raw.startsWith('//')) {
+    return raw.endsWith('/') ? raw.slice(0, -1) : raw;
+  }
+
+  let apiUrl: URL;
+  let authUrl: URL;
+  try {
+    apiUrl = new URL(raw);
+    authUrl = new URL(supabaseUrl);
+  } catch {
+    throw new WebConfigurationError(
+      'VITE_API_BASE_URL must be a same-origin absolute URL or a root-relative path.',
+    );
+  }
+
+  if (apiUrl.origin !== authUrl.origin) {
+    throw new WebConfigurationError(
+      'VITE_API_BASE_URL must use the same origin as VITE_SUPABASE_URL so Portfolio access tokens are not sent to another host.',
+    );
+  }
+
+  const normalized = apiUrl.toString();
+  return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
+}
+
+function browserSafeSupabaseKey(value: string | undefined): string {
+  const key = required('VITE_SUPABASE_ANON_KEY', value);
+
+  if (key.toLowerCase().startsWith('sb_secret_')) {
+    throw new WebConfigurationError(
+      'VITE_SUPABASE_ANON_KEY must be a browser-safe anon/publishable key, not a Supabase secret key.',
+    );
+  }
+
+  const role = jwtRole(key);
+  if (role !== null && role !== 'anon') {
+    throw new WebConfigurationError(
+      `VITE_SUPABASE_ANON_KEY contains a privileged JWT role (${role}) and must not be shipped to the browser.`,
+    );
+  }
+
+  return key;
+}
+
 export function readWebConfig(env: ImportMetaEnv = import.meta.env): WebConfig {
-  const apiBaseUrl = env.VITE_API_BASE_URL?.trim() || '/functions/v1/api';
+  const supabaseUrl = browserSafeSupabaseUrl(env.VITE_SUPABASE_URL);
 
   return {
-    supabaseUrl: required('VITE_SUPABASE_URL', env.VITE_SUPABASE_URL),
-    supabaseAnonKey: required('VITE_SUPABASE_ANON_KEY', env.VITE_SUPABASE_ANON_KEY),
-    apiBaseUrl: apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl,
+    supabaseUrl,
+    supabaseAnonKey: browserSafeSupabaseKey(env.VITE_SUPABASE_ANON_KEY),
+    apiBaseUrl: browserSafeApiBaseUrl(env.VITE_API_BASE_URL, supabaseUrl),
   };
 }
