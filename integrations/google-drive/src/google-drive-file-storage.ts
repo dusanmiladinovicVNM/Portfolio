@@ -334,9 +334,14 @@ export class GoogleDriveFileStorage implements FileStoragePort {
       };
     }
 
-    if (reconciled.id !== createdFile.id) {
-      // A concurrent same-content writer won canonical selection. Remove our
-      // redundant object if it still exists, but never remove the winner.
+    if (
+      reconciled.id !== createdFile.id &&
+      !reconciled.hadDuplicates
+    ) {
+      // The created file was not visible in the reconciliation list while a
+      // concurrent canonical winner was. Remove our redundant object if it
+      // still exists. When duplicates were observed, resolveObjectKey already
+      // removed every non-canonical object.
       await this.deleteById(token, createdFile.id);
     }
 
