@@ -394,7 +394,7 @@ describe('PostgreSQL infrastructure', () => {
       authenticated_timeline_select: boolean;
       authenticated_reporting_execute: boolean;
       timeline_security_invoker: boolean;
-    }[]>\`
+    }[]>`
       select
         has_table_privilege('anon', 'public.properties', 'select')
           as anon_property_select,
@@ -416,7 +416,7 @@ describe('PostgreSQL infrastructure', () => {
             and c.relname = 'unit_business_events'
             and 'security_invoker=true' = any(coalesce(c.reloptions, '{}'))
         ) as timeline_security_invoker
-    \`;
+    `;
 
     expect(privileges[0]).toEqual({
       anon_property_select: false,
