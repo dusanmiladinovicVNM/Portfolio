@@ -2487,16 +2487,6 @@ globalThis.fetch = async (
       body.assignee.kind !== 'party' ||
       ![...parties, ...(setupParty ? [setupParty] : [])].some(
         (party) =>
-          party.id === body.assignee.kind &&
-          party.status === 'active',
-      )
-    ) {
-      // Deliberately checked again below with the actual Party id.
-    }
-    if (
-      body.assignee.kind !== 'party' ||
-      ![...parties, ...(setupParty ? [setupParty] : [])].some(
-        (party) =>
           party.id ===
             (body.assignee.kind === 'party'
               ? body.assignee.partyId
