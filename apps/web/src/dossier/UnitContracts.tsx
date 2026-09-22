@@ -40,6 +40,12 @@ import {
   partyDisplayName,
   usePartyDirectory,
 } from '../parties/use-party-directory.js';
+import {
+  assertAgreementAmendmentsOwner,
+  assertContractTenanciesOwner,
+  assertTenancyAgreementsOwner,
+} from './contract-owner.js';
+import { LeaseAdministration } from './LeaseAdministration.js';
 
 interface UnitContractsProps {
   readonly api: PortfolioApi;
@@ -340,6 +346,7 @@ export function UnitContracts({
   const [amendmentDocumentsError, setAmendmentDocumentsError] =
     useState<string | null>(null);
   const [termsState, setTermsState] = useState<TermsState>({ kind: 'idle' });
+  const [contractRevision, setContractRevision] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -350,7 +357,10 @@ export function UnitContracts({
       .get(unitTenanciesPath(unitId), tenancyListResponseSchema, {
         signal: controller.signal,
       })
-      .then((response) => setTenancies(response.items))
+      .then((response) => {
+        assertContractTenanciesOwner(unitId, response.items);
+        setTenancies(response.items);
+      })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
         setTenancyError(
@@ -383,7 +393,10 @@ export function UnitContracts({
         leaseAgreementListResponseSchema,
         { signal: controller.signal },
       )
-      .then((response) => setAgreements(response.items))
+      .then((response) => {
+        assertTenancyAgreementsOwner(selectedTenancy.id, response.items);
+        setAgreements(response.items);
+      })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
         setAgreementError(
@@ -418,7 +431,7 @@ export function UnitContracts({
       });
 
     return () => controller.abort();
-  }, [api, asOf, selectedTenancy]);
+  }, [api, asOf, contractRevision, selectedTenancy]);
 
   const selectedAgreement = useMemo(
     () => agreements?.find((item) => item.id === agreementId) ?? null,
@@ -455,7 +468,10 @@ export function UnitContracts({
         leaseAmendmentListResponseSchema,
         { signal: controller.signal },
       )
-      .then((response) => setAmendments(response.items))
+      .then((response) => {
+        assertAgreementAmendmentsOwner(selectedAgreement.id, response.items);
+        setAmendments(response.items);
+      })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
         setAmendmentError(
@@ -482,7 +498,7 @@ export function UnitContracts({
       });
 
     return () => controller.abort();
-  }, [api, selectedAgreement]);
+  }, [api, contractRevision, selectedAgreement]);
 
   const selectedAmendment = useMemo(
     () => amendments?.find((item) => item.id === amendmentId) ?? null,
@@ -516,7 +532,7 @@ export function UnitContracts({
       });
 
     return () => controller.abort();
-  }, [api, selectedAmendment]);
+  }, [api, contractRevision, selectedAmendment]);
 
   return (
     <div className="contract-stack">
@@ -614,6 +630,24 @@ export function UnitContracts({
       {selectedTenancy ? (
         <>
           <TermsPanel asOf={asOf} state={termsState} />
+
+          {agreements ? (
+            <LeaseAdministration
+              agreement={selectedAgreement}
+              agreements={agreements}
+              amendment={selectedAmendment}
+              amendments={amendments}
+              api={api}
+              asOf={asOf}
+              navigate={navigate}
+              onCanonicalWrite={() =>
+                setContractRevision((revision) => revision + 1)
+              }
+              propertyId={propertyId}
+              tenancy={selectedTenancy}
+              unitId={unitId}
+            />
+          ) : null}
 
           <section className="panel">
             <div className="section-heading">
