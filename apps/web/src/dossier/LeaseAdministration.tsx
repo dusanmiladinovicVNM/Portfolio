@@ -742,7 +742,11 @@ export function LeaseAdministration({
         );
       }
     } catch (cause) {
-      if (mountedRef.current && activeTenancyIdRef.current === targetTenancyId) {
+      if (
+        mountedRef.current &&
+        activeTenancyIdRef.current === targetTenancyId &&
+        activeAgreementIdRef.current === agreementSelectionAtStart
+      ) {
         setError(writeError(cause, 'Agreement could not be created.'));
       }
     } finally {
@@ -895,7 +899,8 @@ export function LeaseAdministration({
       if (
         mountedRef.current &&
         activeTenancyIdRef.current === targetTenancyId &&
-        activeAgreementIdRef.current === targetAgreement.id
+        activeAgreementIdRef.current === targetAgreement.id &&
+        activeAmendmentIdRef.current === amendmentSelectionAtStart
       ) {
         setError(writeError(cause, 'Amendment could not be created.'));
       }
