@@ -156,7 +156,12 @@ function CreateMeterForm({
   readonly onReconcile: (expected: {
     readonly code: string;
     readonly serialNumber: string;
+    readonly utilityType: MeterResponse['utilityType'];
+    readonly measurementUnit: MeterResponse['measurementUnit'];
     readonly unitId: string;
+    readonly spaceId: string | null;
+    readonly label: string;
+    readonly installedAt: string;
   }) => Promise<void>;
 }) {
   const localSubmission = useCreateSubmissionGuard();
@@ -228,7 +233,12 @@ function CreateMeterForm({
         await onReconcile({
           code: parsed.data.code,
           serialNumber: parsed.data.serialNumber,
+          utilityType: parsed.data.utilityType,
+          measurementUnit: parsed.data.measurementUnit,
           unitId,
+          spaceId: parsed.data.spaceId ?? null,
+          label: parsed.data.label,
+          installedAt: parsed.data.installedAt,
         });
         setError(
           meterError(
@@ -1179,7 +1189,12 @@ export function UnitMeters({
   async function reconcileCreate(expected: {
     readonly code: string;
     readonly serialNumber: string;
+    readonly utilityType: MeterResponse['utilityType'];
+    readonly measurementUnit: MeterResponse['measurementUnit'];
     readonly unitId: string;
+    readonly spaceId: string | null;
+    readonly label: string;
+    readonly installedAt: string;
   }) {
     try {
       const response = await api.get(
@@ -1188,12 +1203,14 @@ export function UnitMeters({
       );
       assertUnitMetersOwner(unitId, response.meters);
       setMeters(response.meters);
-      const committed = response.meters.find(
-        (meter) =>
-          meter.code === expected.code &&
-          meter.serialNumber === expected.serialNumber &&
-          meter.unitId === expected.unitId,
-      );
+      const committed = response.meters.find((meter) => {
+        try {
+          assertCreatedMeter(expected, meter);
+          return true;
+        } catch {
+          return false;
+        }
+      });
       if (committed) {
         writeGate.finish();
         navigate(
