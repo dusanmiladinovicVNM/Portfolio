@@ -1606,3 +1606,62 @@ input:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+
+.asset-service-workspace {
+  display: grid;
+  gap: 18px;
+}
+
+.asset-service-grid,
+.asset-service-history-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 14px;
+}
+
+.asset-service-form,
+.asset-service-register,
+.asset-service-card,
+.asset-service-claim {
+  display: grid;
+  gap: 11px;
+}
+
+.asset-service-register {
+  padding: 14px;
+  border: 1px solid #e1dcd3;
+  border-radius: 11px;
+  background: #faf8f3;
+}
+
+.asset-service-card {
+  padding: 13px;
+  border: 1px solid #e1dcd3;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.asset-service-claim {
+  padding-top: 10px;
+  border-top: 1px solid #ece6dc;
+}
+
+.asset-service-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+}
+
+.compact-service-form {
+  display: grid;
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .asset-service-grid,
+  .asset-service-history-grid {
+    grid-template-columns: 1fr;
+  }
+}
