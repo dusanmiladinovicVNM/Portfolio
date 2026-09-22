@@ -42,8 +42,6 @@ describe('GoogleDriveFileStorage', () => {
       expectedHash,
     );
     const requests: Request[] = [];
-    let listCalls = 0;
-
     const storage = new GoogleDriveFileStorage({
       folderId: 'folder-1',
       accessTokenProvider: tokenProvider,
@@ -55,10 +53,7 @@ describe('GoogleDriveFileStorage', () => {
           return Response.json(created);
         }
 
-        listCalls += 1;
-        return Response.json({
-          files: listCalls === 1 ? [] : [created],
-        });
+        return Response.json({ files: [] });
       },
     });
 
@@ -77,7 +72,7 @@ describe('GoogleDriveFileStorage', () => {
       sha256: expectedHash,
       disposition: 'created',
     });
-    expect(requests).toHaveLength(3);
+    expect(requests).toHaveLength(2);
     expect(requests[0]!.url).toContain('includeItemsFromAllDrives=true');
     expect(requests[1]!.url).toContain('uploadType=multipart');
     expect(requests[1]!.headers.get('authorization')).toBe(
@@ -87,7 +82,6 @@ describe('GoogleDriveFileStorage', () => {
       'multipart/related; boundary=',
     );
     expect(await requests[1]!.text()).toContain('signed lease');
-    expect(requests[2]!.url).toContain('includeItemsFromAllDrives=true');
   });
 
   it('is idempotent for the same object key and exact content identity', async () => {
@@ -159,43 +153,31 @@ describe('GoogleDriveFileStorage', () => {
     ).rejects.toThrowError(/different content/);
   });
 
-  it('collapses same-content duplicate object keys to one deterministic Drive file', async () => {
+  it('fails closed on duplicate object keys even when their bytes match', async () => {
     const content = new TextEncoder().encode('same bytes');
     const objectKey = 'document-version:duplicate';
     const expectedHash = await sha256(content);
-    const deleted: string[] = [];
 
     const storage = new GoogleDriveFileStorage({
       folderId: 'folder-1',
       accessTokenProvider: tokenProvider,
-      fetchImpl: async (input, init) => {
-        const request = new Request(input, init);
-        if (request.method === 'DELETE') {
-          deleted.push(new URL(request.url).pathname.split('/').at(-1)!);
-          return new Response(null, { status: 204 });
-        }
-
-        return Response.json({
+      fetchImpl: async () =>
+        Response.json({
           files: [
             driveFile('drive-b', objectKey, content, expectedHash),
             driveFile('drive-a', objectKey, content, expectedHash),
           ],
-        });
-      },
+        }),
     });
 
-    const stored = await storage.put({
-      objectKey,
-      fileName: 'photo.jpg',
-      mimeType: 'image/jpeg',
-      content,
-    });
-
-    expect(stored).toMatchObject({
-      objectId: 'drive-a',
-      disposition: 'reused',
-    });
-    expect(deleted).toEqual(['drive-b']);
+    await expect(
+      storage.put({
+        objectKey,
+        fileName: 'photo.jpg',
+        mimeType: 'image/jpeg',
+        content,
+      }),
+    ).rejects.toThrowError(/canonical database reconciliation is required/);
   });
 
   it('fails closed when duplicate object keys disagree on content identity', async () => {
@@ -231,57 +213,6 @@ describe('GoogleDriveFileStorage', () => {
         content,
       }),
     ).rejects.toThrowError(/different content/);
-  });
-
-  it('reconciles a concurrent same-key creation after the provider POST', async () => {
-    const content = new TextEncoder().encode('concurrent bytes');
-    const objectKey = 'document-version:race';
-    const expectedHash = await sha256(content);
-    const winner = driveFile(
-      'drive-a',
-      objectKey,
-      content,
-      expectedHash,
-    );
-    const ours = driveFile(
-      'drive-b',
-      objectKey,
-      content,
-      expectedHash,
-    );
-    let listCalls = 0;
-    const deleted: string[] = [];
-
-    const storage = new GoogleDriveFileStorage({
-      folderId: 'folder-1',
-      accessTokenProvider: tokenProvider,
-      fetchImpl: async (input, init) => {
-        const request = new Request(input, init);
-        if (request.method === 'POST') return Response.json(ours);
-        if (request.method === 'DELETE') {
-          deleted.push(new URL(request.url).pathname.split('/').at(-1)!);
-          return new Response(null, { status: 204 });
-        }
-
-        listCalls += 1;
-        return Response.json({
-          files: listCalls === 1 ? [] : [ours, winner],
-        });
-      },
-    });
-
-    const stored = await storage.put({
-      objectKey,
-      fileName: 'signature.png',
-      mimeType: 'image/png',
-      content,
-    });
-
-    expect(stored).toMatchObject({
-      objectId: 'drive-a',
-      disposition: 'reused',
-    });
-    expect(deleted).toEqual(['drive-b']);
   });
 
   it('requires complete provider identity metadata after create', async () => {
