@@ -1,0 +1,176 @@
+import { describe, expect, it } from 'vitest';
+import type {
+  DocumentLinkResponse,
+  DocumentResponse,
+  DocumentVersionResponse,
+} from '@portfolio/contracts';
+import {
+  assertCreatedDocument,
+  assertDocumentVersionListOwner,
+  assertFinalizedDocumentVersion,
+  assertSignedOriginalLink,
+  assertUploadedDocumentVersion,
+} from '../src/documents/signed-document-owner.js';
+
+const documentId = '11111111-1111-4111-8111-111111111111';
+const otherDocumentId = '22222222-2222-4222-8222-222222222222';
+const versionId = '33333333-3333-4333-8333-333333333333';
+const otherVersionId = '44444444-4444-4444-8444-444444444444';
+const agreementId = '55555555-5555-4555-8555-555555555555';
+
+function document(overrides: Partial<DocumentResponse> = {}): DocumentResponse {
+  return {
+    id: documentId,
+    code: 'DOC-1',
+    title: 'Lease',
+    category: 'legal',
+    status: 'active',
+    latestVersionNumber: 0,
+    revision: 1,
+    ...overrides,
+  };
+}
+
+function version(
+  overrides: Partial<DocumentVersionResponse> = {},
+): DocumentVersionResponse {
+  return {
+    id: versionId,
+    documentId,
+    versionNumber: 1,
+    fileName: 'lease.pdf',
+    mimeType: 'application/pdf',
+    byteSize: 3,
+    sha256: 'a'.repeat(64),
+    status: 'stored',
+    finalizedAt: null,
+    ...overrides,
+  };
+}
+
+function link(
+  overrides: Partial<DocumentLinkResponse> = {},
+): DocumentLinkResponse {
+  return {
+    id: '66666666-6666-4666-8666-666666666666',
+    documentId,
+    documentVersionId: versionId,
+    relation: 'signed_original',
+    targetType: 'lease_agreement',
+    targetId: agreementId,
+    ...overrides,
+  };
+}
+
+describe('signed Document owner guards', () => {
+  it('accepts only the canonical initial Document state after create', () => {
+    expect(() => assertCreatedDocument(document())).not.toThrow();
+    expect(() =>
+      assertCreatedDocument(document({ revision: 2 })),
+    ).toThrow('initial canonical lifecycle');
+    expect(() =>
+      assertCreatedDocument(document({ latestVersionNumber: 1 })),
+    ).toThrow('initial canonical lifecycle');
+  });
+
+  it('rejects cross-Document version lists', () => {
+    expect(() =>
+      assertDocumentVersionListOwner(documentId, [version()]),
+    ).not.toThrow();
+
+    expect(() =>
+      assertDocumentVersionListOwner(documentId, [
+        version({ documentId: otherDocumentId }),
+      ]),
+    ).toThrow('another Document');
+  });
+
+  it('binds upload response to the Document and expected next version', () => {
+    expect(() =>
+      assertUploadedDocumentVersion(document(), version()),
+    ).not.toThrow();
+
+    expect(() =>
+      assertUploadedDocumentVersion(
+        document(),
+        version({ documentId: otherDocumentId }),
+      ),
+    ).toThrow('another Document');
+
+    expect(() =>
+      assertUploadedDocumentVersion(
+        document(),
+        version({ versionNumber: 2 }),
+      ),
+    ).toThrow('expected next version');
+
+    expect(() =>
+      assertUploadedDocumentVersion(
+        document(),
+        version({
+          status: 'final',
+          finalizedAt: '2026-09-22T08:00:00.000Z',
+        }),
+      ),
+    ).toThrow('canonical stored state');
+  });
+
+  it('binds finalization response to the exact Version identity', () => {
+    const finalized = version({
+      status: 'final',
+      finalizedAt: '2026-09-22T08:00:00.000Z',
+    });
+
+    expect(() =>
+      assertFinalizedDocumentVersion(documentId, versionId, finalized),
+    ).not.toThrow();
+
+    expect(() =>
+      assertFinalizedDocumentVersion(
+        documentId,
+        versionId,
+        { ...finalized, id: otherVersionId },
+      ),
+    ).toThrow('command target');
+
+    expect(() =>
+      assertFinalizedDocumentVersion(
+        documentId,
+        versionId,
+        { ...finalized, documentId: otherDocumentId },
+      ),
+    ).toThrow('another Document');
+  });
+
+  it('binds signed-original link completion to exact Document, Version and target', () => {
+    expect(() =>
+      assertSignedOriginalLink(
+        documentId,
+        versionId,
+        'lease_agreement',
+        agreementId,
+        link(),
+      ),
+    ).not.toThrow();
+
+    expect(() =>
+      assertSignedOriginalLink(
+        documentId,
+        versionId,
+        'lease_agreement',
+        agreementId,
+        link({ documentVersionId: otherVersionId }),
+      ),
+    ).toThrow('exact version');
+
+    expect(() =>
+      assertSignedOriginalLink(
+        documentId,
+        versionId,
+        'lease_agreement',
+        agreementId,
+        link({ targetId: otherDocumentId }),
+      ),
+    ).toThrow('another legal target');
+  });
+});
