@@ -577,7 +577,7 @@ export function UnitInspections({
     inspectionsOwnerUnitId === unitId ? inspections : null;
 
   const routeBundle =
-    routeBundle !== null &&
+    bundle !== null &&
     bundle.inspection.unitId === unitId &&
     bundle.inspection.id === inspectionId
       ? bundle
@@ -606,8 +606,8 @@ export function UnitInspections({
   activeSectionIdRef.current = selectedSection?.id;
 
   const selectedSectionRevision =
-    bundle && selectedSection
-      ? sectionRevision(bundle, selectedSection.id)
+    routeBundle && selectedSection
+      ? sectionRevision(routeBundle, selectedSection.id)
       : null;
 
   const draftResetKey =
@@ -686,7 +686,7 @@ export function UnitInspections({
     currentSectionOperationKey !== null &&
     inFlightSectionSaves.has(currentSectionOperationKey);
   const editable =
-    bundle !== null &&
+    routeBundle !== null &&
     currentInspectionId !== undefined &&
     currentSectionId !== undefined &&
     canEditInspectionSection(
