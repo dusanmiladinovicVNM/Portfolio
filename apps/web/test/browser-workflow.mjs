@@ -818,10 +818,13 @@ try {
     "//a[contains(@class,'agreement-card')][.//span[normalize-space()='AGR-SETUP-BRW']][.//span[contains(@class,'status-chip') and normalize-space()='signed']]",
   );
 
-  await setInputValueXpath(
+  await navigateWithPopState(
     sessionId,
-    "//input[@aria-label='Contract effective terms business date']",
-    '2026-10-01',
+    '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=contracts&tenancyId=' + setupTenancyId +
+      '&agreementId=' + setupSignedAgreementId +
+      '&asOf=2026-10-01',
   );
   await waitForElement(
     sessionId,
@@ -917,10 +920,13 @@ try {
     "//a[contains(@class,'amendment-card')][.//strong[normalize-space()='AMD-SETUP-BRW']][.//dd[normalize-space()='Signed']]",
   );
 
-  await setInputValueXpath(
+  await navigateWithPopState(
     sessionId,
-    "//input[@aria-label='Contract effective terms business date']",
-    '2027-01-01',
+    '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=contracts&tenancyId=' + setupTenancyId +
+      '&agreementId=' + setupSignedAgreementId +
+      '&asOf=2027-01-01',
   );
   await waitForElement(
     sessionId,
