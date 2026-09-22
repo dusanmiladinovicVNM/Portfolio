@@ -260,6 +260,7 @@ function CreateAssetForm({
   unitId,
   spaces,
   onCreated,
+  writeGate,
 }: {
   readonly api: PortfolioApi;
   readonly propertyId: string;
@@ -282,11 +283,6 @@ function CreateAssetForm({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!submission.tryStart()) return;
-    if (!writeGate.tryStart()) {
-      submission.finish();
-      return;
-    }
 
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
@@ -304,8 +300,13 @@ function CreateAssetForm({
     });
 
     if (!parsed.success) {
-      submission.finish();
       setError(contractErrorMessage());
+      return;
+    }
+
+    if (!submission.tryStart()) return;
+    if (!writeGate.tryStart()) {
+      submission.finish();
       return;
     }
 
@@ -466,6 +467,7 @@ function AssetAdministration({
   units,
   navigate,
   onCanonicalWrite,
+  writeGate,
 }: {
   readonly api: PortfolioApi;
   readonly propertyId: string;
