@@ -3,6 +3,8 @@ import type {
   AssetReplacementLinksResponse,
   AssetResponse,
   ReplaceAssetResponse,
+  SpaceResponse,
+  UnitResponse,
 } from '@portfolio/contracts';
 
 function sameIdentifiers(
@@ -36,6 +38,24 @@ function sameNonPlacementIdentity(
     response.status === current.status &&
     sameIdentifiers(current.identifiers, response.identifiers)
   );
+}
+
+export function assertAssetDestinationUnitsOwner(
+  propertyId: string,
+  units: readonly UnitResponse[],
+): void {
+  if (units.some((unit) => unit.propertyId !== propertyId)) {
+    throw new Error('Asset destination list contains a Unit owned by another Property.');
+  }
+}
+
+export function assertAssetDestinationSpacesOwner(
+  unitId: string,
+  spaces: readonly SpaceResponse[],
+): void {
+  if (spaces.some((space) => space.unitId !== unitId)) {
+    throw new Error('Asset destination list contains a Space owned by another Unit.');
+  }
 }
 
 export function assertUnitAssetsOwner(
