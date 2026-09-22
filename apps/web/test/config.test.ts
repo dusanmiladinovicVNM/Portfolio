@@ -36,6 +36,40 @@ describe('web security configuration', () => {
     expect(readWebConfig(env(key)).supabaseAnonKey).toBe(key);
   });
 
+  it('accepts a same-origin absolute Portfolio API URL', () => {
+    const configured = {
+      ...env('sb_publishable_test'),
+      VITE_API_BASE_URL:
+        'https://example.supabase.co/functions/v1/api/',
+    } as ImportMetaEnv;
+
+    expect(readWebConfig(configured).apiBaseUrl).toBe(
+      'https://example.supabase.co/functions/v1/api',
+    );
+  });
+
+  it('rejects an API origin that could exfiltrate the user access token', () => {
+    const configured = {
+      ...env('sb_publishable_test'),
+      VITE_API_BASE_URL: 'https://evil.example/api',
+    } as ImportMetaEnv;
+
+    expect(() => readWebConfig(configured)).toThrow(
+      /same origin as VITE_SUPABASE_URL/,
+    );
+  });
+
+  it('rejects scheme-relative API URLs instead of treating them as local paths', () => {
+    const configured = {
+      ...env('sb_publishable_test'),
+      VITE_API_BASE_URL: '//evil.example/api',
+    } as ImportMetaEnv;
+
+    expect(() => readWebConfig(configured)).toThrow(
+      /same-origin absolute URL or a root-relative path/,
+    );
+  });
+
   it('rejects a Supabase secret key before browser bootstrap', () => {
     expect(() => readWebConfig(env('sb_secret_never_ship_this'))).toThrow(
       WebConfigurationError,
