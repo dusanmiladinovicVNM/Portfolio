@@ -255,6 +255,20 @@ export async function handleDocumentHttp(
       const url = new URL(request.url);
       const fileName = url.searchParams.get('fileName')?.trim();
       const mimeType = request.headers.get('content-type')?.split(';')[0]?.trim();
+      const expectedRevisionValue =
+        url.searchParams.get('expectedDocumentRevision')?.trim();
+      let expectedDocumentRevision: number | undefined;
+
+      if (expectedRevisionValue !== undefined) {
+        const parsedExpectedRevision = Number(expectedRevisionValue);
+        if (
+          !Number.isInteger(parsedExpectedRevision) ||
+          parsedExpectedRevision <= 0
+        ) {
+          return validationFailure();
+        }
+        expectedDocumentRevision = parsedExpectedRevision;
+      }
 
       if (!fileName || !mimeType) return validationFailure();
 
@@ -271,6 +285,9 @@ export async function handleDocumentHttp(
           fileName,
           mimeType,
           content,
+          ...(expectedDocumentRevision === undefined
+            ? {}
+            : { expectedDocumentRevision }),
         },
       );
 
