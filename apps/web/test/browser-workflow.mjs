@@ -12,6 +12,8 @@ const unitId = '22222222-2222-4222-8222-222222222222';
 const tenancyId = '33333333-3333-4333-8333-333333333333';
 const landlordPartyId = '88888888-8888-4888-8888-888888888888';
 const tenantPartyId = '99999999-9999-4999-8999-999999999999';
+const historicalServiceProviderPartyId =
+  'e1000000-0000-4000-8000-000000000001';
 const agreementId = '55555555-5555-4555-8555-555555555555';
 const amendmentId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const inspectionId = 'a1000000-0000-4000-8000-000000000001';
@@ -47,6 +49,11 @@ const setupInspectionFindingId = 'b1000000-0000-4000-8000-000000000044';
 const setupMaintenanceIssueId = 'b1000000-0000-4000-8000-000000000045';
 const setupMaintenanceWorkOrderId = 'b1000000-0000-4000-8000-000000000046';
 const setupServiceEventId = 'b1000000-0000-4000-8000-000000000047';
+const setupWarrantyId = 'b1000000-0000-4000-8000-000000000057';
+const setupWarrantyClaimId = 'b1000000-0000-4000-8000-000000000058';
+const setupServicePlanId = 'b1000000-0000-4000-8000-000000000059';
+const setupStandaloneServiceEventId =
+  'b1000000-0000-4000-8000-000000000060';
 const setupOrchestrationInspectionId =
   'b1000000-0000-4000-8000-000000000049';
 
@@ -2035,6 +2042,267 @@ try {
     sessionId,
     'xpath',
     "//section[contains(@class,'asset-admin-panel')]//span[contains(@class,'status-chip') and normalize-space()='active']",
+  );
+
+  const warrantyCreateForm =
+    "//form[@data-asset-service-form='warranty-create']";
+  await waitForElement(sessionId, 'xpath', warrantyCreateForm);
+  await selectOptionXpath(
+    sessionId,
+    warrantyCreateForm + "//select[@name='warrantyType']",
+    'manufacturer',
+  );
+  await selectOptionXpath(
+    sessionId,
+    warrantyCreateForm + "//select[@name='providerPartyId']",
+    historicalServiceProviderPartyId,
+  );
+  await typeXpath(
+    sessionId,
+    warrantyCreateForm + "//input[@name='reference']",
+    'WARRANTY-BRW-001',
+  );
+  await setInputValueXpath(
+    sessionId,
+    warrantyCreateForm + "//input[@name='validFrom']",
+    '2027-01-01',
+  );
+  await setInputValueXpath(
+    sessionId,
+    warrantyCreateForm + "//input[@name='validTo']",
+    '2029-01-01',
+  );
+  await typeXpath(
+    sessionId,
+    warrantyCreateForm + "//textarea[@name='terms']",
+    'Parts and labour coverage',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextWarrantyCreateAfterCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    warrantyCreateForm + "//button[normalize-space()='Record Warranty']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Warranty creation outcome is unconfirmed.')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'asset-service-card')][.//strong[normalize-space()='Manufacturer']][.//*[contains(normalize-space(),'WARRANTY-BRW-001')]]",
+  );
+
+  const claimCreateForm =
+    "//form[@data-asset-service-form='claim-create']";
+  await setInputValueXpath(
+    sessionId,
+    claimCreateForm + "//input[@name='incidentOn']",
+    '2027-09-10',
+  );
+  await typeXpath(
+    sessionId,
+    claimCreateForm + "//input[@name='description']",
+    'Drive motor failed',
+  );
+  await clickXpath(
+    sessionId,
+    claimCreateForm + "//button[normalize-space()='Create Claim draft']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//div[contains(@class,'asset-service-claim')][.//strong[contains(normalize-space(),'Drive motor failed')]][.//span[contains(@class,'status-chip') and normalize-space()='draft']]",
+  );
+
+  const claimSubmitForm =
+    "//form[@data-asset-service-form='claim-submit']";
+  await typeXpath(
+    sessionId,
+    claimSubmitForm + "//input[@name='providerReference']",
+    'CLAIM-BRW-001',
+  );
+  await clickXpath(
+    sessionId,
+    claimSubmitForm + "//button[normalize-space()='Submit Claim']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//div[contains(@class,'asset-service-claim')][.//strong[contains(normalize-space(),'Drive motor failed')]][.//span[contains(@class,'status-chip') and normalize-space()='submitted']]",
+  );
+  await clickXpath(
+    sessionId,
+    "//div[contains(@class,'asset-service-claim')][.//strong[contains(normalize-space(),'Drive motor failed')]]//button[normalize-space()='Approve Claim']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//div[contains(@class,'asset-service-claim')][.//strong[contains(normalize-space(),'Drive motor failed')]][.//span[contains(@class,'status-chip') and normalize-space()='approved']]",
+  );
+  await clickXpath(
+    sessionId,
+    "//div[contains(@class,'asset-service-claim')][.//strong[contains(normalize-space(),'Drive motor failed')]]//button[normalize-space()='Close Claim']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//div[contains(@class,'asset-service-claim')][.//strong[contains(normalize-space(),'Drive motor failed')]][.//span[contains(@class,'status-chip') and normalize-space()='closed']]",
+  );
+
+  const planCreateForm =
+    "//form[@data-asset-service-form='plan-create']";
+  await typeXpath(
+    sessionId,
+    planCreateForm + "//input[@name='name']",
+    'Annual washer service',
+  );
+  await selectOptionXpath(
+    sessionId,
+    planCreateForm + "//select[@name='scheduleKind']",
+    'recurring',
+  );
+  await setInputValueXpath(
+    sessionId,
+    planCreateForm + "//input[@name='firstDueOn']",
+    '2028-01-15',
+  );
+  await typeXpath(
+    sessionId,
+    planCreateForm + "//input[@name='intervalMonths']",
+    '12',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      planCreateForm +
+        "//select[@name='providerPartyId']/option[@value='" +
+        historicalServiceProviderPartyId +
+        "']",
+    ),
+    false,
+    'Inactive historical provider is not eligible for future ServicePlan policy',
+  );
+  await selectOptionXpath(
+    sessionId,
+    planCreateForm + "//select[@name='providerPartyId']",
+    setupPartyId,
+  );
+  await typeXpath(
+    sessionId,
+    planCreateForm + "//textarea[@name='notes']",
+    'Preventive service policy',
+  );
+  await clickXpath(
+    sessionId,
+    planCreateForm + "//button[normalize-space()='Create ServicePlan']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'asset-service-card')][.//strong[normalize-space()='Annual washer service']][.//span[contains(@class,'status-chip') and normalize-space()='active']]",
+  );
+
+  await executeScript(
+    sessionId,
+    'window.__portfolioHoldAssetMutation = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    "//article[contains(@class,'asset-service-card')][.//strong[normalize-space()='Annual washer service']]//button[normalize-space()='Pause Plan']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    'return window.__portfolioPendingAssetMutation === true;',
+    'held ServicePlan pause',
+  );
+  await clickXpath(sessionId, "//a[normalize-space()='Meters']");
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assertEqual(
+    await currentUrl(sessionId),
+    createdAssetUrl,
+    'Pending ServicePlan write blocks Asset dossier navigation',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioReleaseAssetMutation();',
+    ),
+    true,
+    'Release held ServicePlan pause',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'asset-service-card')][.//strong[normalize-space()='Annual washer service']][.//span[contains(@class,'status-chip') and normalize-space()='paused']]",
+  );
+  await clickXpath(
+    sessionId,
+    "//article[contains(@class,'asset-service-card')][.//strong[normalize-space()='Annual washer service']]//button[normalize-space()='Reactivate Plan']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'asset-service-card')][.//strong[normalize-space()='Annual washer service']][.//span[contains(@class,'status-chip') and normalize-space()='active']]",
+  );
+
+  const serviceEventCreateForm =
+    "//form[@data-asset-service-form='event-create']";
+  await selectOptionXpath(
+    sessionId,
+    serviceEventCreateForm + "//select[@name='eventType']",
+    'warranty_service',
+  );
+  await setInputValueXpath(
+    sessionId,
+    serviceEventCreateForm + "//input[@name='performedDate']",
+    '2027-09-15',
+  );
+  await setInputValueXpath(
+    sessionId,
+    serviceEventCreateForm + "//input[@name='performedTime']",
+    '08:30',
+  );
+  await selectOptionXpath(
+    sessionId,
+    serviceEventCreateForm + "//select[@name='servicePlanId']",
+    setupServicePlanId,
+  );
+  await selectOptionXpath(
+    sessionId,
+    serviceEventCreateForm + "//select[@name='warrantyClaimId']",
+    setupWarrantyClaimId,
+  );
+  await selectOptionXpath(
+    sessionId,
+    serviceEventCreateForm + "//select[@name='providerPartyId']",
+    historicalServiceProviderPartyId,
+  );
+  await typeXpath(
+    sessionId,
+    serviceEventCreateForm + "//textarea[@name='description']",
+    'Warranty motor replacement completed',
+  );
+  await typeXpath(
+    sessionId,
+    serviceEventCreateForm + "//input[@name='reference']",
+    'SERVICE-BRW-001',
+  );
+  await clickXpath(
+    sessionId,
+    serviceEventCreateForm + "//button[normalize-space()='Record ServiceEvent']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'maintenance-service-card')][.//p[normalize-space()='Warranty motor replacement completed']][.//small[contains(normalize-space(),'" +
+      setupServicePlanId +
+      "') and contains(normalize-space(),'" +
+      setupWarrantyClaimId +
+      "')]]",
   );
 
   const assetMoveForm = "//form[@data-asset-form='move']";

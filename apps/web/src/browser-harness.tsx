@@ -21,6 +21,9 @@ import type {
   MaintenanceWorkOrderEntryResponse,
   MaintenanceWorkOrderResponse,
   ServiceEventResponse,
+  ServicePlanResponse,
+  WarrantyClaimResponse,
+  WarrantyResponse,
   InspectionEvidenceResponse,
   InspectionFindingResponse,
   InspectionResponseDto,
@@ -46,6 +49,8 @@ const landlordAgreementPartyId = '66666666-6666-4666-8666-666666666666';
 const tenantAgreementPartyId = '77777777-7777-4777-8777-777777777777';
 const landlordPartyId = '88888888-8888-4888-8888-888888888888';
 const tenantPartyId = '99999999-9999-4999-8999-999999999999';
+const historicalServiceProviderPartyId =
+  'e1000000-0000-4000-8000-000000000001';
 const termId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const amendmentId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const agreementDocumentId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
@@ -173,6 +178,14 @@ const setupMaintenanceWorkOrderId =
   'b1000000-0000-4000-8000-000000000046';
 const setupServiceEventId =
   'b1000000-0000-4000-8000-000000000047';
+const setupWarrantyId =
+  'b1000000-0000-4000-8000-000000000057';
+const setupWarrantyClaimId =
+  'b1000000-0000-4000-8000-000000000058';
+const setupServicePlanId =
+  'b1000000-0000-4000-8000-000000000059';
+const setupStandaloneServiceEventId =
+  'b1000000-0000-4000-8000-000000000060';
 const setupMaintenanceInspectionId =
   'b1000000-0000-4000-8000-000000000048';
 const setupOrchestrationInspectionId =
@@ -304,6 +317,9 @@ let setupMeterBoundarySequence = 0;
 let setupMeterClockSequence = 0;
 let setupMaintenanceIssues: MaintenanceIssueResponse[] = [];
 let setupMaintenanceWorkOrders: MaintenanceWorkOrderEntryResponse[] = [];
+let setupWarranties: WarrantyResponse[] = [];
+let setupWarrantyClaims: WarrantyClaimResponse[] = [];
+let setupServicePlans: ServicePlanResponse[] = [];
 let setupServiceEvents: ServiceEventResponse[] = [];
 let setupMaintenanceClockSequence = 0;
 let setupOrchestrationInspection: InspectionResponseDto | null = null;
@@ -843,6 +859,16 @@ const parties = [
     middleName: null,
     lastName: 'Tenant',
   },
+  {
+    id: historicalServiceProviderPartyId,
+    code: 'PTY-HIST-SERVICE-BRW',
+    displayName: 'Historic Service GmbH',
+    status: 'inactive',
+    contactPoints: [],
+    addresses: [],
+    partyType: 'company',
+    legalName: 'Historic Service GmbH',
+  },
 ];
 
 function json(data: unknown, status = 200): Response {
@@ -1025,6 +1051,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioFailNextAssetMoveAfterCommit?: boolean;
   __portfolioConcurrentAssetMoveAcrossProperty?: boolean;
   __portfolioFailNextAssetReplacementAfterCommit?: boolean;
+  __portfolioFailNextWarrantyCreateAfterCommit?: boolean;
   __portfolioFailNextSignedOriginalLink?: boolean;
   __portfolioPendingUnitCreate?: boolean;
   __portfolioPendingSpaceCreate?: boolean;
@@ -3085,29 +3112,309 @@ globalThis.fetch = async (
 
   if (
     setupAsset &&
+    path === '/assets/' + setupAsset.id + '/warranties'
+  ) {
+    if (init?.method === 'POST') {
+      requirePortfolioAuth(init);
+      const body = JSON.parse(String(init.body)) as {
+        warrantyType: WarrantyResponse['warrantyType'];
+        providerPartyId?: string | null;
+        reference?: string | null;
+        validFrom: string;
+        validTo?: string | null;
+        terms?: string | null;
+      };
+      const created: WarrantyResponse = {
+        id: setupWarrantyId,
+        assetId: setupAsset.id,
+        warrantyType: body.warrantyType,
+        providerPartyId: body.providerPartyId ?? null,
+        reference: body.reference ?? null,
+        validFrom: body.validFrom,
+        validTo: body.validTo ?? null,
+        terms: body.terms ?? null,
+        recordedAt: '2027-09-15T09:00:00.000Z',
+        recordedByUserId: inspectionUserId,
+      };
+      setupWarranties.push(created);
+      if (browserHarnessWindow.__portfolioFailNextWarrantyCreateAfterCommit) {
+        browserHarnessWindow.__portfolioFailNextWarrantyCreateAfterCommit =
+          false;
+        return apiError(
+          503,
+          'WARRANTY_CREATE_TEST_ACK_LOST',
+          'Intentional Warranty create acknowledgement loss.',
+        );
+      }
+      return json(created, 201);
+    }
+    return json({
+      items: setupWarranties.filter(
+        (warranty) => warranty.assetId === setupAsset.id,
+      ),
+    });
+  }
+
+  const setupWarrantyForPath = setupWarranties.find((warranty) =>
+    path.startsWith('/warranties/' + warranty.id),
+  );
+  if (
+    setupWarrantyForPath &&
+    path === '/warranties/' + setupWarrantyForPath.id + '/claims'
+  ) {
+    if (init?.method === 'POST') {
+      requirePortfolioAuth(init);
+      const body = JSON.parse(String(init.body)) as {
+        incidentOn: string;
+        description: string;
+      };
+      const created: WarrantyClaimResponse = {
+        id: setupWarrantyClaimId,
+        warrantyId: setupWarrantyForPath.id,
+        incidentOn: body.incidentOn,
+        description: body.description,
+        status: 'draft',
+        providerReference: null,
+        submittedAt: null,
+        resolvedAt: null,
+        closedAt: null,
+        cancelledAt: null,
+        recordedAt: '2027-09-15T09:05:00.000Z',
+        recordedByUserId: inspectionUserId,
+        version: 1,
+      };
+      setupWarrantyClaims.push(created);
+      return json(created, 201);
+    }
+    return json({
+      items: setupWarrantyClaims.filter(
+        (claim) => claim.warrantyId === setupWarrantyForPath.id,
+      ),
+    });
+  }
+
+  const setupClaimForPath = setupWarrantyClaims.find((claim) =>
+    path.startsWith('/warranty-claims/' + claim.id),
+  );
+  if (
+    setupClaimForPath &&
+    init?.method === 'POST'
+  ) {
+    const action = path.slice(
+      ('/warranty-claims/' + setupClaimForPath.id + '/').length,
+    );
+    if (['submit', 'resolve', 'close', 'cancel'].includes(action)) {
+      requirePortfolioAuth(init);
+      const body = JSON.parse(String(init.body)) as {
+        expectedVersion: number;
+        providerReference?: string | null;
+        decision?: 'approved' | 'rejected';
+      };
+      if (body.expectedVersion !== setupClaimForPath.version) {
+        return apiError(
+          409,
+          'WARRANTY_CLAIM_VERSION_CONFLICT',
+          'WarrantyClaim changed before transition.',
+        );
+      }
+
+      let updated: WarrantyClaimResponse;
+      if (action === 'submit' && setupClaimForPath.status === 'draft') {
+        updated = {
+          ...setupClaimForPath,
+          status: 'submitted',
+          providerReference: body.providerReference ?? null,
+          submittedAt: '2027-09-15T09:10:00.000Z',
+          version: setupClaimForPath.version + 1,
+        };
+      } else if (
+        action === 'resolve' &&
+        setupClaimForPath.status === 'submitted' &&
+        (body.decision === 'approved' || body.decision === 'rejected')
+      ) {
+        updated = {
+          ...setupClaimForPath,
+          status: body.decision,
+          resolvedAt: '2027-09-15T09:15:00.000Z',
+          version: setupClaimForPath.version + 1,
+        };
+      } else if (
+        action === 'close' &&
+        setupClaimForPath.status === 'approved'
+      ) {
+        updated = {
+          ...setupClaimForPath,
+          status: 'closed',
+          closedAt: '2027-09-15T09:20:00.000Z',
+          version: setupClaimForPath.version + 1,
+        };
+      } else if (
+        action === 'cancel' &&
+        (setupClaimForPath.status === 'draft' ||
+          setupClaimForPath.status === 'submitted')
+      ) {
+        updated = {
+          ...setupClaimForPath,
+          status: 'cancelled',
+          cancelledAt: '2027-09-15T09:20:00.000Z',
+          version: setupClaimForPath.version + 1,
+        };
+      } else {
+        return apiError(
+          422,
+          'WARRANTY_CLAIM_INVALID_TRANSITION',
+          'WarrantyClaim transition is invalid.',
+        );
+      }
+      setupWarrantyClaims = setupWarrantyClaims.map((claim) =>
+        claim.id === updated.id ? updated : claim,
+      );
+      return json(updated);
+    }
+  }
+
+  if (
+    setupAsset &&
+    path === '/assets/' + setupAsset.id + '/service-plans'
+  ) {
+    if (init?.method === 'POST') {
+      requirePortfolioAuth(init);
+      const body = JSON.parse(String(init.body)) as {
+        name: string;
+        scheduleKind: ServicePlanResponse['scheduleKind'];
+        firstDueOn: string;
+        intervalMonths?: number | null;
+        providerPartyId?: string | null;
+        notes?: string | null;
+      };
+      const created: ServicePlanResponse = {
+        id: setupServicePlanId,
+        assetId: setupAsset.id,
+        name: body.name,
+        scheduleKind: body.scheduleKind,
+        firstDueOn: body.firstDueOn,
+        intervalMonths: body.intervalMonths ?? null,
+        providerPartyId: body.providerPartyId ?? null,
+        notes: body.notes ?? null,
+        status: 'active',
+        version: 1,
+        createdAt: '2027-09-15T09:25:00.000Z',
+        createdByUserId: inspectionUserId,
+      };
+      setupServicePlans.push(created);
+      return json(created, 201);
+    }
+    return json({
+      items: setupServicePlans.filter((plan) => plan.assetId === setupAsset.id),
+    });
+  }
+
+  const setupPlanForPath = setupServicePlans.find((plan) =>
+    path.startsWith('/service-plans/' + plan.id),
+  );
+  if (
+    setupPlanForPath &&
+    path === '/service-plans/' + setupPlanForPath.id + '/status' &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      status: ServicePlanResponse['status'];
+    };
+    if (body.expectedVersion !== setupPlanForPath.version) {
+      return apiError(
+        409,
+        'SERVICE_PLAN_VERSION_CONFLICT',
+        'ServicePlan changed before transition.',
+      );
+    }
+    const allowed =
+      (setupPlanForPath.status === 'active' &&
+        ['paused', 'ended', 'cancelled'].includes(body.status)) ||
+      (setupPlanForPath.status === 'paused' &&
+        ['active', 'ended', 'cancelled'].includes(body.status));
+    if (!allowed) {
+      return apiError(
+        422,
+        'SERVICE_PLAN_INVALID_TRANSITION',
+        'ServicePlan transition is invalid.',
+      );
+    }
+    const updated: ServicePlanResponse = {
+      ...setupPlanForPath,
+      status: body.status,
+      version: setupPlanForPath.version + 1,
+    };
+    setupServicePlans = setupServicePlans.map((plan) =>
+      plan.id === updated.id ? updated : plan,
+    );
+    return maybeHoldAssetMutation(json(updated));
+  }
+
+  if (
+    setupAsset &&
     path === '/assets/' + setupAsset.id + '/service-events'
   ) {
     if (init?.method === 'POST') {
       requirePortfolioAuth(init);
       const body = JSON.parse(String(init.body)) as {
+        servicePlanId?: string | null;
+        warrantyClaimId?: string | null;
         eventType: ServiceEventResponse['eventType'];
         performedAt: string;
         providerPartyId?: string | null;
         description: string;
         reference?: string | null;
       };
+      if (
+        body.servicePlanId != null &&
+        !setupServicePlans.some(
+          (plan) => plan.id === body.servicePlanId && plan.assetId === setupAsset.id,
+        )
+      ) {
+        return apiError(
+          422,
+          'SERVICE_EVENT_PLAN_ASSET_MISMATCH',
+          'ServicePlan belongs to another Asset.',
+        );
+      }
+      if (
+        body.warrantyClaimId != null &&
+        !setupWarrantyClaims.some((claim) => {
+          const warranty = setupWarranties.find(
+            (candidate) => candidate.id === claim.warrantyId,
+          );
+          return (
+            claim.id === body.warrantyClaimId &&
+            warranty?.assetId === setupAsset.id
+          );
+        })
+      ) {
+        return apiError(
+          422,
+          'SERVICE_EVENT_CLAIM_ASSET_MISMATCH',
+          'WarrantyClaim belongs to another Asset.',
+        );
+      }
       const created: ServiceEventResponse = {
-        id: setupServiceEventId,
+        id:
+          body.servicePlanId != null || body.warrantyClaimId != null
+            ? setupStandaloneServiceEventId
+            : setupServiceEventId,
         assetId: setupAsset.id,
-        servicePlanId: null,
-        warrantyClaimId: null,
+        servicePlanId: body.servicePlanId ?? null,
+        warrantyClaimId: body.warrantyClaimId ?? null,
         eventType: body.eventType,
         performedAt: body.performedAt,
         providerPartyId: body.providerPartyId ?? null,
         description: body.description,
         reference: body.reference ?? null,
         parts: [],
-        recordedAt: nextSetupMaintenanceAt(),
+        recordedAt:
+          body.servicePlanId != null || body.warrantyClaimId != null
+            ? '2027-09-15T09:30:00.000Z'
+            : nextSetupMaintenanceAt(),
         recordedByUserId: inspectionUserId,
       };
       setupServiceEvents.push(created);

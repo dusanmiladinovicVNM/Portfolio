@@ -55,6 +55,7 @@ import type {
   SetNavigationBlocker,
 } from '../navigation/use-workspace-navigation.js';
 import { formatDetailKey } from '../presentation/format.js';
+import { AssetServiceAdministration } from './AssetServiceAdministration.js';
 import {
   assertAssetDestinationSpacesOwner,
   assertAssetDestinationUnitsOwner,
@@ -1079,6 +1080,15 @@ function AssetAdministration({
         ) : (
           <LocationHistory history={history} />
         )}
+      </div>
+
+      <div className="asset-admin-section">
+        <AssetServiceAdministration
+          api={api}
+          assetId={asset.id}
+          assetStatus={asset.status}
+          writeGate={writeGate}
+        />
       </div>
 
       <div className="asset-admin-section">
