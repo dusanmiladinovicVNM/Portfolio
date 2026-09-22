@@ -230,18 +230,29 @@ the production hardening and release gates below are complete.
 
 ## Production hardening + MVP release
 
-Final MVP gate:
+The functional/write-surface gate is complete. Production hardening is intentionally
+split so security, storage, recovery and release proof do not become one unreviewable PR.
 
-- backup automation
-- restore rehearsal
-- migration rehearsal
-- full lifecycle E2E
-- authorization/security gates
-- bounded/streaming document upload ingestion (pre-existing buffered request/multipart path)
-- audit checks
-- observability
-- deployment runbook
-- recovery runbook
+| PR | Scope | Status |
+| --- | --- | --- |
+| #39 | Authorization + security release hardening | IN PROGRESS |
+| #40 | Storage/upload production hardening | PLANNED |
+| #41 | Backup + restore + migration rehearsal | PLANNED |
+| #42 | Observability + deployment/recovery runbooks | PLANNED |
+| #43 | Full lifecycle MVP release gate | PLANNED |
+
+Final MVP gate includes:
+
+- authorization/security gates;
+- bounded/streaming document upload ingestion;
+- backup automation;
+- restore rehearsal;
+- migration rehearsal;
+- audit checks;
+- observability;
+- deployment runbook;
+- recovery runbook;
+- full lifecycle E2E on the release candidate.
 
 A release is not complete until restore has been proven.
 
