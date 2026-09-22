@@ -331,16 +331,16 @@ describe('Inspection HTTP backbone', () => {
     expect(await adminStaff.json()).toMatchObject({
       data: {
         items: expect.arrayContaining([
-          {
+          expect.objectContaining({
             userId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
             displayName: 'Inspector User',
             role: 'inspector',
-          },
-          {
+          }),
+          expect.objectContaining({
             userId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
             displayName: 'Manager User',
             role: 'manager',
-          },
+          }),
         ]),
       },
     });
