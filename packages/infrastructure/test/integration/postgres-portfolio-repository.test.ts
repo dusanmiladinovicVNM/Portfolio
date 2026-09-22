@@ -388,6 +388,19 @@ describe('PostgreSQL infrastructure', () => {
     `;
   });
 
+  it('keeps every public business table behind row-level security', async () => {
+    const unprotected = await sql<{ relname: string }[]>`
+      select c.relname
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public'
+        and c.relkind in ('r', 'p')
+        and not c.relrowsecurity
+      order by c.relname
+    `;
+
+    expect(unprotected).toEqual([]);
+  });
   it('denies direct browser-role access to business tables, views and reporting RPCs', async () => {
     const privileges = await sql<{
       anon_property_select: boolean;
@@ -423,6 +436,59 @@ describe('PostgreSQL infrastructure', () => {
       authenticated_timeline_select: false,
       authenticated_reporting_execute: false,
       timeline_security_invoker: true,
+    });
+
+    const directRelationPrivileges = await sql<{
+      role_name: string;
+      relname: string;
+    }[]>`
+      select roles.role_name, c.relname
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      cross join (values ('anon'), ('authenticated')) roles(role_name)
+      where n.nspname = 'public'
+        and c.relkind in ('r', 'p', 'v', 'm', 'f')
+        and (
+          has_table_privilege(roles.role_name, c.oid, 'select')
+          or has_table_privilege(roles.role_name, c.oid, 'insert')
+          or has_table_privilege(roles.role_name, c.oid, 'update')
+          or has_table_privilege(roles.role_name, c.oid, 'delete')
+        )
+      order by roles.role_name, c.relname
+    `;
+    expect(directRelationPrivileges).toEqual([]);
+
+    const directFunctionPrivileges = await sql<{
+      role_name: string;
+      routine: string;
+    }[]>`
+      select
+        roles.role_name,
+        p.oid::regprocedure::text as routine
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+      cross join (values ('anon'), ('authenticated')) roles(role_name)
+      where n.nspname = 'public'
+        and has_function_privilege(roles.role_name, p.oid, 'execute')
+      order by roles.role_name, routine
+    `;
+    expect(directFunctionPrivileges).toEqual([]);
+
+    const schemaPrivileges = await sql<{
+      anon_create: boolean;
+      authenticated_create: boolean;
+    }[]>`
+      select
+        has_schema_privilege('anon', 'public', 'create') as anon_create,
+        has_schema_privilege(
+          'authenticated',
+          'public',
+          'create'
+        ) as authenticated_create
+    `;
+    expect(schemaPrivileges[0]).toEqual({
+      anon_create: false,
+      authenticated_create: false,
     });
 
     await expect(
