@@ -14,6 +14,9 @@ import type {
   LeaseAgreementResponse,
   LeaseAmendmentDocumentReferenceResponse,
   LeaseAmendmentResponse,
+  MeterReadingBoundaryResponse,
+  MeterReadingResponse,
+  MeterResponse,
   PartyResponse,
   PropertyResponse,
   SpaceResponse,
@@ -114,6 +117,16 @@ const setupAssetLocationIds = [
 ] as const;
 const setupAssetReplacementId =
   'b1000000-0000-4000-8000-000000000036';
+const setupMeterId = 'b1000000-0000-4000-8000-000000000038';
+const setupMeterReadingIds = [
+  'b1000000-0000-4000-8000-000000000039',
+  'b1000000-0000-4000-8000-000000000040',
+  'b1000000-0000-4000-8000-000000000041',
+] as const;
+const setupMeterBoundaryIds = [
+  'b1000000-0000-4000-8000-000000000042',
+  'b1000000-0000-4000-8000-000000000043',
+] as const;
 
 const setupDestinationUnit: UnitResponse = {
   id: setupDestinationUnitId,
@@ -200,6 +213,87 @@ let setupAssetSequence = 0;
 let setupAssetIdentifierSequence = 0;
 let setupAssetLocationSequence = 0;
 let setupAssetMutationSequence = 0;
+let setupMeters: MeterResponse[] = [];
+let setupMeterReadings: MeterReadingResponse[] = [];
+let setupMeterBoundaries: MeterReadingBoundaryResponse[] = [];
+let setupMeterReadingSequence = 0;
+let setupMeterBoundarySequence = 0;
+let setupMeterClockSequence = 0;
+
+function nextSetupMeterRecordedAt(): string {
+  const instants = [
+    '2027-10-01T12:00:00.000Z',
+    '2027-10-01T12:05:00.000Z',
+    '2027-10-01T12:10:00.000Z',
+    '2027-10-01T12:15:00.000Z',
+    '2027-10-01T12:20:00.000Z',
+    '2027-10-01T12:25:00.000Z',
+    '2027-10-01T12:30:00.000Z',
+  ];
+  const value = instants[setupMeterClockSequence++];
+  if (!value) throw new Error('Setup Meter clock exhausted.');
+  return value;
+}
+
+function normalizeSetupMeterValue(raw: string): string {
+  const value = raw.trim();
+  const match = /^(0|[1-9]\d{0,17})(?:\.(\d{1,6}))?$/.exec(value);
+  if (!match) throw new Error('Invalid setup Meter Reading value.');
+  return `${match[1]}.${(match[2] ?? '').padEnd(6, '0')}`;
+}
+
+function setupMeterConsumptionIntervals(meterIdValue: string) {
+  const readings = setupMeterReadings
+    .filter((reading) => reading.meterId === meterIdValue)
+    .sort((left, right) => {
+      const read = left.readAt.localeCompare(right.readAt);
+      if (read !== 0) return read;
+      const recorded = left.recordedAt.localeCompare(right.recordedAt);
+      if (recorded !== 0) return recorded;
+      return left.id.localeCompare(right.id);
+    });
+
+  return readings.slice(1).map((to, index) => {
+    const from = readings[index]!;
+    const fromScaled = BigInt(from.value.replace('.', ''));
+    const toScaled = BigInt(to.value.replace('.', ''));
+    const consumptionScaled =
+      toScaled < fromScaled ? null : toScaled - fromScaled;
+    let consumption: string | null = null;
+    if (consumptionScaled !== null) {
+      const raw = consumptionScaled.toString().padStart(7, '0');
+      consumption = `${raw.slice(0, -6) || '0'}.${raw.slice(-6)}`;
+    }
+    return {
+      fromReadingId: from.id,
+      toReadingId: to.id,
+      fromReadAt: from.readAt,
+      toReadAt: to.readAt,
+      fromValue: from.value,
+      toValue: to.value,
+      consumption,
+      continuity: consumption === null ? 'decrease_detected' : 'continuous',
+    };
+  });
+}
+
+function setupMeterDetail(meterIdValue: string) {
+  const meter = setupMeters.find((candidate) => candidate.id === meterIdValue);
+  if (!meter) throw new Error('Setup Meter not found.');
+  const readings = setupMeterReadings.filter(
+    (reading) => reading.meterId === meterIdValue,
+  );
+  const readingIds = new Set(readings.map((reading) => reading.id));
+  const boundaries = setupMeterBoundaries.filter((boundary) =>
+    readingIds.has(boundary.readingId),
+  );
+  return {
+    meter,
+    readings,
+    boundaries,
+    consumptionIntervals: setupMeterConsumptionIntervals(meterIdValue),
+  };
+}
 
 function nextSetupAssetInstant(): string {
   const instants = [
@@ -702,6 +796,9 @@ type BrowserHarnessWindow = Window & {
   __portfolioHoldTenancyMutation?: boolean;
   __portfolioHoldContractMutation?: boolean;
   __portfolioHoldAssetMutation?: boolean;
+  __portfolioHoldMeterMutation?: boolean;
+  __portfolioFailNextMeterReadingAfterCommit?: boolean;
+  __portfolioFailNextMeterBoundaryAfterCommit?: boolean;
   __portfolioFailNextAssetMoveAfterCommit?: boolean;
   __portfolioConcurrentAssetMoveAcrossProperty?: boolean;
   __portfolioFailNextAssetReplacementAfterCommit?: boolean;
@@ -711,11 +808,13 @@ type BrowserHarnessWindow = Window & {
   __portfolioPendingTenancyMutation?: boolean;
   __portfolioPendingContractMutation?: boolean;
   __portfolioPendingAssetMutation?: boolean;
+  __portfolioPendingMeterMutation?: boolean;
   __portfolioReleaseUnitCreate?: () => boolean;
   __portfolioReleaseSpaceCreate?: () => boolean;
   __portfolioReleaseTenancyMutation?: () => boolean;
   __portfolioReleaseContractMutation?: () => boolean;
   __portfolioReleaseAssetMutation?: () => boolean;
+  __portfolioReleaseMeterMutation?: () => boolean;
 };
 
 const browserHarnessWindow = window as BrowserHarnessWindow;
@@ -735,6 +834,9 @@ let heldContractMutation:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 let heldAssetMutation:
+  | { readonly response: Response; readonly resolve: (response: Response) => void }
+  | null = null;
+let heldMeterMutation:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 
@@ -793,6 +895,17 @@ function maybeHoldAssetMutation(response: Response): Promise<Response> {
   });
 }
 
+function maybeHoldMeterMutation(response: Response): Promise<Response> {
+  if (!browserHarnessWindow.__portfolioHoldMeterMutation) {
+    return Promise.resolve(response);
+  }
+
+  browserHarnessWindow.__portfolioPendingMeterMutation = true;
+  return new Promise<Response>((resolve) => {
+    heldMeterMutation = { response, resolve };
+  });
+}
+
 browserHarnessWindow.__portfolioReleaseUnitCreate = () => {
   if (!heldUnitCreate) return false;
   const held = heldUnitCreate;
@@ -840,6 +953,16 @@ browserHarnessWindow.__portfolioReleaseAssetMutation = () => {
   heldAssetMutation = null;
   browserHarnessWindow.__portfolioHoldAssetMutation = false;
   browserHarnessWindow.__portfolioPendingAssetMutation = false;
+  held.resolve(held.response);
+  return true;
+};
+
+browserHarnessWindow.__portfolioReleaseMeterMutation = () => {
+  if (!heldMeterMutation) return false;
+  const held = heldMeterMutation;
+  heldMeterMutation = null;
+  browserHarnessWindow.__portfolioHoldMeterMutation = false;
+  browserHarnessWindow.__portfolioPendingMeterMutation = false;
   held.resolve(held.response);
   return true;
 };
@@ -1151,6 +1274,314 @@ globalThis.fetch = async (
 
   if (setupUnit && path === '/units/' + setupUnitId + '/spaces') {
     return json({ items: setupSpace ? [setupSpace] : [] });
+  }
+
+  if (setupUnit && path === '/units/' + setupUnitId + '/meters') {
+    return json({
+      meters: setupMeters.filter((meter) => meter.unitId === setupUnitId),
+    });
+  }
+
+  if (path === '/meters' && init?.method === 'POST') {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      code: string;
+      serialNumber: string;
+      utilityType: MeterResponse['utilityType'];
+      measurementUnit: MeterResponse['measurementUnit'];
+      unitId: string;
+      spaceId?: string | null;
+      label: string;
+      installedAt: string;
+    };
+    if (
+      body.unitId !== setupUnitId ||
+      (body.spaceId != null && body.spaceId !== setupSpaceId)
+    ) {
+      throw new Error('Setup Meter was created for the wrong Unit/Space.');
+    }
+    if (
+      setupMeters.some(
+        (meter) => meter.code.toLowerCase() === body.code.toLowerCase(),
+      )
+    ) {
+      return apiError(
+        409,
+        'METER_CODE_ALREADY_EXISTS',
+        'Meter code already exists.',
+      );
+    }
+    if (
+      (body.utilityType === 'water' && body.measurementUnit !== 'm3') ||
+      ((body.utilityType === 'electricity' || body.utilityType === 'heat') &&
+        body.measurementUnit !== 'kwh')
+    ) {
+      return apiError(
+        422,
+        'METER_MEASUREMENT_UNIT_INVALID',
+        'Measurement unit is not valid for this utility type.',
+      );
+    }
+
+    const created: MeterResponse = {
+      id: setupMeterId,
+      code: body.code,
+      serialNumber: body.serialNumber,
+      utilityType: body.utilityType,
+      measurementUnit: body.measurementUnit,
+      unitId: setupUnitId,
+      spaceId: body.spaceId ?? null,
+      label: body.label,
+      installedAt: body.installedAt,
+      status: 'active',
+      retiredAt: null,
+      retirementRecordedAt: null,
+      retiredByUserId: null,
+      retirementReason: null,
+      version: 1,
+      recordedAt: nextSetupMeterRecordedAt(),
+      recordedByUserId: inspectionUserId,
+    };
+    setupMeters.push(created);
+    return json(created, 201);
+  }
+
+  const setupMeter = setupMeters.find((meter) =>
+    path.startsWith('/meters/' + meter.id),
+  );
+
+  if (setupMeter && path === '/meters/' + setupMeter.id) {
+    if (init?.method === 'PATCH') {
+      requirePortfolioAuth(init);
+      const body = JSON.parse(String(init.body)) as {
+        expectedVersion: number;
+        label: string;
+      };
+      if (body.expectedVersion !== setupMeter.version) {
+        return apiError(
+          409,
+          'METER_VERSION_CONFLICT',
+          'Meter has changed since the caller last read it.',
+        );
+      }
+      const updated: MeterResponse = {
+        ...setupMeter,
+        label: body.label,
+        version:
+          body.label === setupMeter.label
+            ? setupMeter.version
+            : setupMeter.version + 1,
+      };
+      setupMeters = setupMeters.map((meter) =>
+        meter.id === updated.id ? updated : meter,
+      );
+      return maybeHoldMeterMutation(json(updated));
+    }
+    return json(setupMeterDetail(setupMeter.id));
+  }
+
+  if (
+    setupMeter &&
+    path === '/meters/' + setupMeter.id + '/readings' &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      value: string;
+      readAt: string;
+      note?: string | null;
+    };
+    if (
+      setupMeterReadings.some(
+        (reading) =>
+          reading.meterId === setupMeter.id && reading.readAt === body.readAt,
+      )
+    ) {
+      return apiError(
+        409,
+        'METER_READING_AT_TIME_ALREADY_EXISTS',
+        'Meter already has a reading at this exact occurrence time.',
+      );
+    }
+    if (
+      setupMeter.status === 'retired' &&
+      setupMeter.retiredAt !== null &&
+      body.readAt > setupMeter.retiredAt
+    ) {
+      return apiError(
+        422,
+        'METER_READING_AFTER_RETIREMENT',
+        'Meter reading cannot occur after Meter retirement.',
+      );
+    }
+    const id = setupMeterReadingIds[setupMeterReadingSequence++];
+    if (!id) throw new Error('Setup Meter Reading id pool exhausted.');
+    const reading: MeterReadingResponse = {
+      id,
+      meterId: setupMeter.id,
+      value: normalizeSetupMeterValue(body.value),
+      readAt: body.readAt,
+      recordedAt: nextSetupMeterRecordedAt(),
+      recordedByUserId: inspectionUserId,
+      note: body.note ?? null,
+    };
+    setupMeterReadings.push(reading);
+
+    if (browserHarnessWindow.__portfolioFailNextMeterReadingAfterCommit) {
+      browserHarnessWindow.__portfolioFailNextMeterReadingAfterCommit = false;
+      return apiError(
+        503,
+        'METER_READING_TEST_ACK_LOST',
+        'Intentional browser-harness Reading acknowledgement loss.',
+      );
+    }
+
+    return json(reading, 201);
+  }
+
+  if (
+    setupMeter &&
+    path === '/meters/' + setupMeter.id + '/retire' &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      retiredAt: string;
+      retirementReason: string;
+    };
+    if (body.expectedVersion !== setupMeter.version) {
+      return apiError(
+        409,
+        'METER_VERSION_CONFLICT',
+        'Meter has changed since the caller last read it.',
+      );
+    }
+    const latestReadAt = setupMeterReadings
+      .filter((reading) => reading.meterId === setupMeter.id)
+      .map((reading) => reading.readAt)
+      .sort()
+      .at(-1);
+    if (latestReadAt && body.retiredAt < latestReadAt) {
+      return apiError(
+        422,
+        'METER_RETIREMENT_BEFORE_READING',
+        'Meter retirement cannot predate existing reading history.',
+      );
+    }
+    const retired: MeterResponse = {
+      ...setupMeter,
+      status: 'retired',
+      retiredAt: body.retiredAt,
+      retirementRecordedAt: nextSetupMeterRecordedAt(),
+      retiredByUserId: inspectionUserId,
+      retirementReason: body.retirementReason,
+      version: setupMeter.version + 1,
+    };
+    setupMeters = setupMeters.map((meter) =>
+      meter.id === retired.id ? retired : meter,
+    );
+    return json(retired);
+  }
+
+  const setupMeterBoundaryMatch =
+    /^\/meter-readings\/([^/]+)\/boundaries$/.exec(path);
+  if (setupMeterBoundaryMatch && init?.method === 'POST') {
+    requirePortfolioAuth(init);
+    const reading = setupMeterReadings.find(
+      (candidate) => candidate.id === setupMeterBoundaryMatch[1],
+    );
+    if (!reading) {
+      return apiError(
+        404,
+        'METER_READING_NOT_FOUND',
+        'Meter reading not found.',
+      );
+    }
+    const meter = setupMeters.find(
+      (candidate) => candidate.id === reading.meterId,
+    );
+    if (!meter) throw new Error('Setup Reading has no Meter.');
+    const body = JSON.parse(String(init.body)) as {
+      tenancyId: string;
+      type: MeterReadingBoundaryResponse['type'];
+    };
+    if (!setupTenancy || body.tenancyId !== setupTenancy.id) {
+      return apiError(404, 'TENANCY_NOT_FOUND', 'Tenancy not found.');
+    }
+    if (setupTenancy.unitId !== meter.unitId) {
+      return apiError(
+        422,
+        'METER_READING_TENANCY_UNIT_MISMATCH',
+        'Meter reading boundary Tenancy must belong to the Meter Unit.',
+      );
+    }
+
+    const readDate = reading.readAt.slice(0, 10);
+    const expectedDate =
+      body.type === 'move_in'
+        ? setupTenancy.actualStart
+        : setupTenancy.actualEnd;
+    if (!expectedDate) {
+      return apiError(
+        422,
+        body.type === 'move_in'
+          ? 'METER_MOVE_IN_REQUIRES_ACTUAL_START'
+          : 'METER_MOVE_OUT_REQUIRES_ACTUAL_END',
+        'Tenancy occurrence date is missing.',
+      );
+    }
+    if (readDate !== expectedDate) {
+      return apiError(
+        422,
+        body.type === 'move_in'
+          ? 'METER_MOVE_IN_DATE_MISMATCH'
+          : 'METER_MOVE_OUT_DATE_MISMATCH',
+        'Meter Reading UTC date does not match the Tenancy boundary date.',
+      );
+    }
+    const readingIdsForMeter = new Set(
+      setupMeterReadings
+        .filter((candidate) => candidate.meterId === meter.id)
+        .map((candidate) => candidate.id),
+    );
+    if (
+      setupMeterBoundaries.some(
+        (boundary) =>
+          readingIdsForMeter.has(boundary.readingId) &&
+          boundary.tenancyId === body.tenancyId &&
+          boundary.type === body.type,
+      )
+    ) {
+      return apiError(
+        409,
+        'METER_READING_BOUNDARY_ALREADY_EXISTS',
+        'This Meter already has the requested Tenancy boundary reading.',
+      );
+    }
+
+    const id = setupMeterBoundaryIds[setupMeterBoundarySequence++];
+    if (!id) throw new Error('Setup Meter Boundary id pool exhausted.');
+    const boundary: MeterReadingBoundaryResponse = {
+      id,
+      readingId: reading.id,
+      tenancyId: body.tenancyId,
+      type: body.type,
+      recordedAt: nextSetupMeterRecordedAt(),
+      recordedByUserId: inspectionUserId,
+    };
+    setupMeterBoundaries.push(boundary);
+
+    if (browserHarnessWindow.__portfolioFailNextMeterBoundaryAfterCommit) {
+      browserHarnessWindow.__portfolioFailNextMeterBoundaryAfterCommit = false;
+      return apiError(
+        503,
+        'METER_BOUNDARY_TEST_ACK_LOST',
+        'Intentional browser-harness Boundary acknowledgement loss.',
+      );
+    }
+
+    return json(boundary, 201);
   }
 
   if (setupProperty && path === '/units/' + setupDestinationUnitId) {

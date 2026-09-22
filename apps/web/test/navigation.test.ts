@@ -19,6 +19,7 @@ const amendmentId = '55555555-5555-4555-8555-555555555555';
 const inspectionId = '66666666-6666-4666-8666-666666666666';
 const inspectionSectionId = '77777777-7777-4777-8777-777777777777';
 const assetId = '88888888-8888-4888-8888-888888888888';
+const meterId = '99999999-9999-4999-8999-999999999999';
 
 describe('workspace URL navigation', () => {
   it('preserves dashboard asOf through Property and Unit drill-down', () => {
@@ -248,6 +249,49 @@ describe('workspace URL navigation', () => {
           '2025-06-30',
           'overview',
           { assetId },
+        ),
+      ),
+    ).toBe(
+      `/properties/${propertyId}/units/${unitId}?tab=overview&asOf=2025-06-30`,
+    );
+  });
+
+  it('deep-links one Meter only inside the Meters dossier tab', () => {
+    const selected = unitRoute(
+      propertyId,
+      unitId,
+      '2025-06-30',
+      'meters',
+      { meterId },
+    );
+
+    expect(workspaceRouteHref(selected)).toBe(
+      `/properties/${propertyId}/units/${unitId}?tab=meters&meterId=${meterId}&asOf=2025-06-30`,
+    );
+
+    expect(
+      parseWorkspaceLocation(
+        `/properties/${propertyId}/units/${unitId}`,
+        `?tab=meters&meterId=${meterId}&asOf=2025-06-30`,
+        '2026-09-21',
+      ),
+    ).toEqual({
+      kind: 'unit',
+      propertyId,
+      unitId,
+      tab: 'meters',
+      meterId,
+      asOf: '2025-06-30',
+    });
+
+    expect(
+      workspaceRouteHref(
+        unitRoute(
+          propertyId,
+          unitId,
+          '2025-06-30',
+          'overview',
+          { meterId },
         ),
       ),
     ).toBe(

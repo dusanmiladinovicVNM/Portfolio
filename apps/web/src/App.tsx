@@ -194,6 +194,7 @@ function AuthenticatedShell({
                     ? { inspectionSectionId: route.inspectionSectionId }
                     : {}),
                   ...(route.assetId ? { assetId: route.assetId } : {}),
+                  ...(route.meterId ? { meterId: route.meterId } : {}),
                 },
               )}
             >
@@ -250,6 +251,7 @@ function AuthenticatedShell({
             inspectionId={route.inspectionId}
             inspectionSectionId={route.inspectionSectionId}
             assetId={route.assetId}
+            meterId={route.meterId}
             setNavigationBlocker={setNavigationBlocker}
             unitId={route.unitId}
           />

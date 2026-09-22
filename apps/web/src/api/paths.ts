@@ -203,6 +203,36 @@ export function assetLocationHistoryPath(assetId: string): string {
   return `${assetPath(assetId)}/location-history`;
 }
 
+export function metersPath(): string {
+  return '/meters';
+}
+
+export function unitMetersPath(unitId: string): string {
+  return `${unitPath(unitId)}/meters`;
+}
+
+export function meterPath(meterId: string): string {
+  return `/meters/${encodeURIComponent(meterId)}`;
+}
+
+export function meterRetirePath(meterId: string): string {
+  return `${meterPath(meterId)}/retire`;
+}
+
+export function meterReadingsPath(meterId: string): string {
+  return `${meterPath(meterId)}/readings`;
+}
+
+export function meterReadingBoundariesPath(readingId: string): string {
+  return `/meter-readings/${encodeURIComponent(readingId)}/boundaries`;
+}
+
+export function tenancyMeterReadingBoundariesPath(
+  tenancyId: string,
+): string {
+  return `${tenancyPath(tenancyId)}/meter-reading-boundaries`;
+}
+
 export function unitInspectionsPath(unitId: string): string {
   return `/units/${encodeURIComponent(unitId)}/inspections`;
 }

@@ -91,6 +91,19 @@ export const meterConsumptionIntervalResponseSchema = z.object({
   continuity: z.enum(['continuous', 'decrease_detected']),
 });
 
+export const meterListResponseSchema = z.object({
+  meters: z.array(meterResponseSchema),
+});
+
+export const meterBoundaryEntryResponseSchema = z.object({
+  boundary: meterReadingBoundaryResponseSchema,
+  reading: meterReadingResponseSchema,
+});
+
+export const meterBoundaryEntryListResponseSchema = z.object({
+  entries: z.array(meterBoundaryEntryResponseSchema),
+});
+
 export const meterDetailResponseSchema = z.object({
   meter: meterResponseSchema,
   readings: z.array(meterReadingResponseSchema),
@@ -99,10 +112,18 @@ export const meterDetailResponseSchema = z.object({
 });
 
 export type MeterResponse = z.infer<typeof meterResponseSchema>;
+export type MeterListResponse = z.infer<typeof meterListResponseSchema>;
 export type MeterReadingResponse = z.infer<typeof meterReadingResponseSchema>;
 export type MeterReadingBoundaryResponse = z.infer<
   typeof meterReadingBoundaryResponseSchema
 >;
+export type MeterBoundaryEntryResponse = z.infer<
+  typeof meterBoundaryEntryResponseSchema
+>;
+export type MeterBoundaryEntryListResponse = z.infer<
+  typeof meterBoundaryEntryListResponseSchema
+>;
 export type MeterConsumptionIntervalResponse = z.infer<
   typeof meterConsumptionIntervalResponseSchema
 >;
+export type MeterDetailResponse = z.infer<typeof meterDetailResponseSchema>;

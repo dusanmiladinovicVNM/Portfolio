@@ -18,6 +18,7 @@ import type {
 import { UnitAssets } from './UnitAssets.js';
 import { UnitDocuments } from './UnitDocuments.js';
 import { UnitInspections } from './UnitInspections.js';
+import { UnitMeters } from './UnitMeters.js';
 import { UnitOverview } from './UnitOverview.js';
 import { UnitSpaces } from './UnitSpaces.js';
 import { UnitTenancies } from './UnitTenancies.js';
@@ -37,6 +38,7 @@ interface UnitDossierProps {
   readonly inspectionId?: string | undefined;
   readonly inspectionSectionId?: string | undefined;
   readonly assetId?: string | undefined;
+  readonly meterId?: string | undefined;
   readonly navigate: NavigateWorkspace;
   readonly setNavigationBlocker: SetNavigationBlocker;
 }
@@ -53,6 +55,7 @@ export function UnitDossier({
   inspectionId,
   inspectionSectionId,
   assetId,
+  meterId,
   navigate,
   setNavigationBlocker,
 }: UnitDossierProps) {
@@ -201,6 +204,16 @@ export function UnitDossier({
             >
               Assets
             </WorkspaceLink>
+            <WorkspaceLink
+              ariaCurrent={tab === 'meters' ? 'page' : undefined}
+              className={`dossier-tab ${tab === 'meters' ? 'dossier-tab-active' : ''}`}
+              navigate={navigate}
+              route={unitRoute(propertyId, unitId, asOf, 'meters', {
+                ...(meterId ? { meterId } : {}),
+              })}
+            >
+              Meters
+            </WorkspaceLink>
           </nav>
 
           {tab === 'overview' ? (
@@ -259,6 +272,17 @@ export function UnitDossier({
               api={api}
               asOf={asOf}
               assetId={assetId}
+              navigate={navigate}
+              propertyId={propertyId}
+              setNavigationBlocker={setNavigationBlocker}
+              unitId={unitId}
+            />
+          ) : null}
+          {tab === 'meters' ? (
+            <UnitMeters
+              api={api}
+              asOf={asOf}
+              meterId={meterId}
               navigate={navigate}
               propertyId={propertyId}
               setNavigationBlocker={setNavigationBlocker}
