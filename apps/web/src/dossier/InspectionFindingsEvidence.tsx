@@ -362,7 +362,7 @@ export function InspectionFindingsEvidence({
     }
     if (fileValue.size > MAX_EVIDENCE_UPLOAD_BYTES) {
       setError(
-        'Inspection evidence files are currently limited to 16 MiB until bounded streaming upload is implemented.',
+        'Inspection evidence files are limited to the 16 MiB online production ceiling.',
       );
       return;
     }
@@ -1019,7 +1019,7 @@ export function InspectionFindingsEvidence({
                 />
               </label>
               <p className="setup-hint">
-                Online MVP limit: 16 MiB. Streaming/bounded ingestion remains #40.
+                Online production ceiling: 16 MiB. The server enforces the same bounded upload limit.
               </p>
               <button
                 className="button-primary"
