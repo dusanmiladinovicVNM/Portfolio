@@ -138,8 +138,22 @@ async function waitForElement(sessionId, using, value, timeoutMs = 10000) {
     }
   }
 
+  let diagnostic = '';
+  try {
+    const [url, bodyText] = await Promise.all([
+      currentUrl(sessionId),
+      executeScript(
+        sessionId,
+        'return document.body ? document.body.innerText.slice(0, 4000) : "";',
+      ),
+    ]);
+    diagnostic = ` URL=${url} BODY=${JSON.stringify(bodyText)}`;
+  } catch {
+    // Keep the original WebDriver failure when diagnostics are unavailable.
+  }
+
   throw new Error(
-    `Timed out waiting for ${using}=${value}. Last error: ${lastError}`,
+    `Timed out waiting for ${using}=${value}. Last error: ${lastError}.${diagnostic}`,
   );
 }
 
