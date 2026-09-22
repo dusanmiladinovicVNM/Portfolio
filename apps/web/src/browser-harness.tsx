@@ -904,6 +904,9 @@ type BrowserHarnessWindow = Window & {
   __portfolioHoldAssetMutation?: boolean;
   __portfolioHoldMeterMutation?: boolean;
   __portfolioHoldMaintenanceMutation?: boolean;
+  __portfolioFailNextMaintenanceIssueCreateAfterCommit?: boolean;
+  __portfolioFailNextMaintenanceWorkOrderCreateAfterCommit?: boolean;
+  __portfolioFailNextServiceEventCreateAfterCommit?: boolean;
   __portfolioFailNextServiceEventLink?: boolean;
   __portfolioFailNextMeterReadingAfterCommit?: boolean;
   __portfolioFailNextMeterBoundaryAfterCommit?: boolean;
@@ -2263,6 +2266,17 @@ globalThis.fetch = async (
       recordedByUserId: inspectionUserId,
     };
     setupMaintenanceIssues.push(created);
+    if (
+      browserHarnessWindow.__portfolioFailNextMaintenanceIssueCreateAfterCommit
+    ) {
+      browserHarnessWindow.__portfolioFailNextMaintenanceIssueCreateAfterCommit =
+        false;
+      return apiError(
+        503,
+        'MAINTENANCE_ISSUE_CREATE_TEST_ACK_LOST',
+        'Intentional Maintenance Issue create acknowledgement loss.',
+      );
+    }
     return json(created, 201);
   }
 
@@ -2344,6 +2358,17 @@ globalThis.fetch = async (
         workOrder: order,
         serviceEventIds: [],
       });
+      if (
+        browserHarnessWindow.__portfolioFailNextMaintenanceWorkOrderCreateAfterCommit
+      ) {
+        browserHarnessWindow.__portfolioFailNextMaintenanceWorkOrderCreateAfterCommit =
+          false;
+        return apiError(
+          503,
+          'MAINTENANCE_WORK_ORDER_CREATE_TEST_ACK_LOST',
+          'Intentional WorkOrder create acknowledgement loss.',
+        );
+      }
       return json(order, 201);
     }
     return json({
@@ -2702,6 +2727,17 @@ globalThis.fetch = async (
         recordedByUserId: inspectionUserId,
       };
       setupServiceEvents.push(created);
+      if (
+        browserHarnessWindow.__portfolioFailNextServiceEventCreateAfterCommit
+      ) {
+        browserHarnessWindow.__portfolioFailNextServiceEventCreateAfterCommit =
+          false;
+        return apiError(
+          503,
+          'SERVICE_EVENT_CREATE_TEST_ACK_LOST',
+          'Intentional ServiceEvent create acknowledgement loss.',
+        );
+      }
       return json(created, 201);
     }
     return json({
