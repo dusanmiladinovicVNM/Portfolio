@@ -348,6 +348,7 @@ export function UnitContracts({
     useState<string | null>(null);
   const [termsState, setTermsState] = useState<TermsState>({ kind: 'idle' });
   const [contractRevision, setContractRevision] = useState(0);
+  const [documentRevision, setDocumentRevision] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -463,10 +464,6 @@ export function UnitContracts({
   useEffect(() => {
     setAmendments(null);
     setAmendmentError(null);
-    setAgreementDocuments(null);
-    setAgreementDocumentsError(null);
-    setAmendmentDocuments(null);
-    setAmendmentDocumentsError(null);
 
     if (!selectedAgreement) return;
 
@@ -491,6 +488,16 @@ export function UnitContracts({
         );
       });
 
+    return () => controller.abort();
+  }, [api, contractRevision, selectedAgreement]);
+
+  useEffect(() => {
+    setAgreementDocuments(null);
+    setAgreementDocumentsError(null);
+
+    if (!selectedAgreement) return;
+
+    const controller = new AbortController();
     void api
       .get(
         agreementDocumentsPath(selectedAgreement.id),
@@ -508,7 +515,7 @@ export function UnitContracts({
       });
 
     return () => controller.abort();
-  }, [api, contractRevision, selectedAgreement]);
+  }, [api, documentRevision, selectedAgreement]);
 
   const selectedAmendment = useMemo(
     () => amendments?.find((item) => item.id === amendmentId) ?? null,
@@ -542,7 +549,7 @@ export function UnitContracts({
       });
 
     return () => controller.abort();
-  }, [api, contractRevision, selectedAmendment]);
+  }, [api, documentRevision, selectedAmendment]);
 
   return (
     <div className="contract-stack">
@@ -777,7 +784,7 @@ export function UnitContracts({
                 api={api}
                 key={`signed-document:agreement:${selectedAgreement.id}`}
                 onCanonicalWrite={() =>
-                  setContractRevision((revision) => revision + 1)
+                  setDocumentRevision((revision) => revision + 1)
                 }
                 target={{
                   targetType: 'lease_agreement',
@@ -850,7 +857,7 @@ export function UnitContracts({
               api={api}
               key={`signed-document:amendment:${selectedAmendment.id}`}
               onCanonicalWrite={() =>
-                setContractRevision((revision) => revision + 1)
+                setDocumentRevision((revision) => revision + 1)
               }
               target={{
                 targetType: 'lease_amendment',
