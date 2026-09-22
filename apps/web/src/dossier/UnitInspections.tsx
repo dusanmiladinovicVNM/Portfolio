@@ -708,11 +708,13 @@ export function UnitInspections({
         return false;
       }
       orchestrationPendingRef.current = true;
+      setNavigationBlocker(() => false);
       setOrchestrationPending(true);
       return true;
     },
     finish: () => {
       orchestrationPendingRef.current = false;
+      setNavigationBlocker(null);
       setOrchestrationPending(false);
     },
   };
