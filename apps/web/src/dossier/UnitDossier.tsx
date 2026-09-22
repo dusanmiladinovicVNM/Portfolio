@@ -36,6 +36,7 @@ interface UnitDossierProps {
   readonly amendmentId?: string | undefined;
   readonly inspectionId?: string | undefined;
   readonly inspectionSectionId?: string | undefined;
+  readonly assetId?: string | undefined;
   readonly navigate: NavigateWorkspace;
   readonly setNavigationBlocker: SetNavigationBlocker;
 }
@@ -51,6 +52,7 @@ export function UnitDossier({
   amendmentId,
   inspectionId,
   inspectionSectionId,
+  assetId,
   navigate,
   setNavigationBlocker,
 }: UnitDossierProps) {
@@ -193,7 +195,9 @@ export function UnitDossier({
               ariaCurrent={tab === 'assets' ? 'page' : undefined}
               className={`dossier-tab ${tab === 'assets' ? 'dossier-tab-active' : ''}`}
               navigate={navigate}
-              route={unitRoute(propertyId, unitId, asOf, 'assets')}
+              route={unitRoute(propertyId, unitId, asOf, 'assets', {
+                ...(assetId ? { assetId } : {}),
+              })}
             >
               Assets
             </WorkspaceLink>
@@ -250,7 +254,16 @@ export function UnitDossier({
           ) : null}
           {tab === 'timeline' ? <UnitTimeline api={api} unitId={unitId} /> : null}
           {tab === 'documents' ? <UnitDocuments api={api} unitId={unitId} /> : null}
-          {tab === 'assets' ? <UnitAssets api={api} unitId={unitId} /> : null}
+          {tab === 'assets' ? (
+            <UnitAssets
+              api={api}
+              asOf={asOf}
+              assetId={assetId}
+              navigate={navigate}
+              propertyId={propertyId}
+              unitId={unitId}
+            />
+          ) : null}
         </>
       ) : null}
     </>
