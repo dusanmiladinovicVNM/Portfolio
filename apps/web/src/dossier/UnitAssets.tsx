@@ -29,6 +29,7 @@ import {
 import {
   assetLocationHistoryPath,
   assetMetadataPath,
+  assetPath,
   assetMovePath,
   assetReplacementLinksPath,
   assetReplacementPath,
@@ -60,6 +61,7 @@ import {
   assertAssetLocationHistoryOwner,
   assertAssetMetadataMutationOwner,
   assertAssetMoveMutationOwner,
+  assertAssetReadOwner,
   assertAssetReplacementLinksOwner,
   assertAssetReplacementMutationOwner,
   assertAssetStatusMutationOwner,
@@ -598,6 +600,119 @@ function AssetAdministration({
     setError(assetError(cause, fallback));
   }
 
+  async function reconcileMoveOutcome(
+    cause: unknown,
+    target: {
+      readonly propertyId: string;
+      readonly unitId: string;
+      readonly spaceId: string | null;
+    },
+  ) {
+    if (!guard.isMounted()) return;
+
+    try {
+      const canonical = await api.get(
+        assetPath(asset.id),
+        assetResponseSchema,
+      );
+      assertAssetReadOwner(asset.id, canonical);
+
+      if (
+        canonical.propertyId === target.propertyId &&
+        canonical.unitId === target.unitId &&
+        canonical.spaceId === target.spaceId &&
+        canonical.version === asset.version + 1
+      ) {
+        writeGate.finish();
+        navigate(
+          unitRoute(
+            propertyId,
+            target.unitId,
+            asOf,
+            'assets',
+            { assetId: canonical.id },
+          ),
+        );
+        return;
+      }
+
+      if (canonical.unitId && canonical.unitId !== unitId) {
+        writeGate.finish();
+        navigate(
+          unitRoute(
+            propertyId,
+            canonical.unitId,
+            asOf,
+            'assets',
+            { assetId: canonical.id },
+          ),
+        );
+        return;
+      }
+
+      onCanonicalWrite();
+      setError(assetError(cause, 'Asset move outcome could not be confirmed.'));
+    } catch {
+      onCanonicalWrite();
+      setError(
+        assetError(
+          cause,
+          'Asset move outcome could not be confirmed. Canonical Unit Asset state was reloaded.',
+        ),
+      );
+    }
+  }
+
+  async function reconcileReplacementOutcome(cause: unknown) {
+    if (!guard.isMounted()) return;
+
+    try {
+      const links = await api.get(
+        assetReplacementLinksPath(asset.id),
+        assetReplacementLinksResponseSchema,
+      );
+      assertAssetReplacementLinksOwner(asset.id, links);
+
+      if (links.successor) {
+        const successor = await api.get(
+          assetPath(links.successor.replacementAssetId),
+          assetResponseSchema,
+        );
+        assertAssetReadOwner(links.successor.replacementAssetId, successor);
+
+        if (successor.unitId) {
+          writeGate.finish();
+          navigate(
+            unitRoute(
+              propertyId,
+              successor.unitId,
+              asOf,
+              'assets',
+              { assetId: successor.id },
+            ),
+          );
+          return;
+        }
+      }
+
+      onCanonicalWrite();
+      setError(
+        assetError(
+          cause,
+          'Asset replacement outcome could not be confirmed.',
+        ),
+      );
+    } catch {
+      onCanonicalWrite();
+      setError(
+        assetError(
+          cause,
+          'Asset replacement outcome could not be confirmed. Canonical Asset state was reloaded.',
+        ),
+      );
+    }
+  }
+
   async function submitMetadata(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -692,7 +807,7 @@ function AssetAdministration({
         onCanonicalWrite();
       }
     } catch (cause) {
-      reconcile(cause, 'Asset could not be moved.');
+      await reconcileMoveOutcome(cause, target);
     } finally {
       finish();
     }
@@ -772,7 +887,7 @@ function AssetAdministration({
         ),
       );
     } catch (cause) {
-      reconcile(cause, 'Asset replacement could not be completed.');
+      await reconcileReplacementOutcome(cause);
     } finally {
       finish();
     }
