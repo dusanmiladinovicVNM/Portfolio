@@ -1785,7 +1785,7 @@ try {
   );
   await selectOptionXpath(
     sessionId,
-    meterBoundaryForm + "//select[not(@name='readingId') and not(@name='tenancyId')]",
+    meterBoundaryForm + "//select[@name='boundaryType']",
     'move_out',
   );
   await waitForElement(
