@@ -80,6 +80,7 @@ let setupSpace: SpaceResponse | null = null;
 let setupParty: PartyResponse | null = null;
 let setupTenancy: TenancyResponse | null = null;
 let setupAgreements: LeaseAgreementResponse[] = [];
+let heldContractAgreementRead: LeaseAgreementResponse[] | null = null;
 let setupAmendments: LeaseAmendmentResponse[] = [];
 let setupTerms: TenancyTermVersionResponse[] = [];
 let setupAgreementSequence = 0;
@@ -624,6 +625,7 @@ browserHarnessWindow.__portfolioReleaseContractMutation = () => {
   if (!heldContractMutation) return false;
   const held = heldContractMutation;
   heldContractMutation = null;
+  heldContractAgreementRead = null;
   browserHarnessWindow.__portfolioHoldContractMutation = false;
   browserHarnessWindow.__portfolioPendingContractMutation = false;
   held.resolve(held.response);
@@ -867,7 +869,9 @@ globalThis.fetch = async (
       setupAgreements.push(created);
       return json(created, 201);
     }
-    return json({ items: setupAgreements });
+    return json({
+      items: heldContractAgreementRead ?? setupAgreements,
+    });
   }
 
   const setupAgreement = setupAgreements.find((item) =>
@@ -898,6 +902,13 @@ globalThis.fetch = async (
     };
     if (body.expectedVersion !== setupAgreement.version) {
       return contractVersionConflict('LEASE_AGREEMENT_VERSION_CONFLICT');
+    }
+
+    if (browserHarnessWindow.__portfolioHoldContractMutation) {
+      heldContractAgreementRead = setupAgreements.map((item) => ({
+        ...item,
+        parties: item.parties.map((party) => ({ ...party })),
+      }));
     }
 
     if (setupAgreement.predecessorAgreementId) {
