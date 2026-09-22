@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createPortfolioApi,
+  isAmbiguousWriteFailure,
   PortfolioApiError,
   type ResponseSchema,
 } from '../src/api/portfolio-api.js';
@@ -194,6 +195,36 @@ describe('Portfolio API client', () => {
     expect(request.headers.get('authorization')).toBe('Bearer token-123');
     expect(request.headers.get('content-type')).toBe('application/pdf');
     expect([...new Uint8Array(await request.arrayBuffer())]).toEqual([1, 2, 3]);
+  });
+
+  it('reconciles only genuinely ambiguous write failures', () => {
+    expect(
+      isAmbiguousWriteFailure(
+        new PortfolioApiError(503, 'ACK_LOST', 'Acknowledgement lost.'),
+      ),
+    ).toBe(true);
+    expect(
+      isAmbiguousWriteFailure(
+        new PortfolioApiError(502, 'API_RESPONSE_INVALID', 'Invalid response.'),
+      ),
+    ).toBe(true);
+    expect(isAmbiguousWriteFailure(new TypeError('network failed'))).toBe(true);
+
+    expect(
+      isAmbiguousWriteFailure(
+        new PortfolioApiError(409, 'VERSION_CONFLICT', 'Version conflict.'),
+      ),
+    ).toBe(false);
+    expect(
+      isAmbiguousWriteFailure(
+        new PortfolioApiError(422, 'VALIDATION_FAILED', 'Rejected.'),
+      ),
+    ).toBe(false);
+    expect(
+      isAmbiguousWriteFailure(
+        new PortfolioApiError(403, 'FORBIDDEN', 'Forbidden.'),
+      ),
+    ).toBe(false);
   });
 
   it('sends authenticated JSON POST and PATCH requests through the same error boundary', async () => {
