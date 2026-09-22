@@ -2,7 +2,31 @@ import type {
   DocumentLinkResponse,
   DocumentResponse,
   DocumentVersionResponse,
+  LeaseAgreementDocumentReferenceResponse,
+  LeaseAmendmentDocumentReferenceResponse,
 } from '@portfolio/contracts';
+
+export function assertAgreementDocumentReferencesOwner(
+  agreementId: string,
+  references: readonly LeaseAgreementDocumentReferenceResponse[],
+): void {
+  if (references.some((reference) => reference.link.targetId !== agreementId)) {
+    throw new Error(
+      'Agreement Document list contains a link owned by another Agreement.',
+    );
+  }
+}
+
+export function assertAmendmentDocumentReferencesOwner(
+  amendmentId: string,
+  references: readonly LeaseAmendmentDocumentReferenceResponse[],
+): void {
+  if (references.some((reference) => reference.link.targetId !== amendmentId)) {
+    throw new Error(
+      'Amendment Document list contains a link owned by another Amendment.',
+    );
+  }
+}
 
 export function assertDocumentVersionListOwner(
   documentId: string,
