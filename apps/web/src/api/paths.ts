@@ -167,6 +167,42 @@ export function documentVersionContentPath(versionId: string): string {
   return `/document-versions/${encodeURIComponent(versionId)}/content`;
 }
 
+export function assetsPath(): string {
+  return '/assets';
+}
+
+export function unitAssetsPath(unitId: string): string {
+  return `${unitPath(unitId)}/assets`;
+}
+
+export function assetPath(assetId: string): string {
+  return `/assets/${encodeURIComponent(assetId)}`;
+}
+
+export function assetMetadataPath(assetId: string): string {
+  return `${assetPath(assetId)}/metadata`;
+}
+
+export function assetMovePath(assetId: string): string {
+  return `${assetPath(assetId)}/move`;
+}
+
+export function assetStatusPath(assetId: string): string {
+  return `${assetPath(assetId)}/status`;
+}
+
+export function assetReplacementPath(assetId: string): string {
+  return `${assetPath(assetId)}/replacement`;
+}
+
+export function assetReplacementLinksPath(assetId: string): string {
+  return `${assetPath(assetId)}/replacements`;
+}
+
+export function assetLocationHistoryPath(assetId: string): string {
+  return `${assetPath(assetId)}/location-history`;
+}
+
 export function unitInspectionsPath(unitId: string): string {
   return `/units/${encodeURIComponent(unitId)}/inspections`;
 }
