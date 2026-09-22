@@ -1123,6 +1123,7 @@ export function UnitMeters({
       }),
     ])
       .then(([meterResponse, spaceResponse, tenancyResponse]) => {
+        if (controller.signal.aborted) return;
         assertUnitMetersOwner(unitId, meterResponse.meters);
         if (
           spaceResponse.items.some((space) => space.unitId !== unitId)
@@ -1159,6 +1160,7 @@ export function UnitMeters({
         signal: controller.signal,
       })
       .then((response) => {
+        if (controller.signal.aborted) return;
         assertMeterDetailOwner(unitId, meterId, response);
         setDetail(response);
       })
