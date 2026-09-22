@@ -3810,6 +3810,412 @@ globalThis.fetch = async (
   }
 
   if (
+    path === `/inspections/${inspectionId}/binaries` &&
+    init?.method === 'POST'
+  ) {
+    requireInspectionAuth(init);
+    const purpose = url.searchParams.get('purpose');
+    const uploadKey = url.searchParams.get('uploadKey');
+    const fileName = url.searchParams.get('fileName')?.trim();
+    const mimeType =
+      new Headers(init.headers).get('content-type')?.split(';')[0]?.trim();
+
+    if (
+      !uploadKey ||
+      !fileName ||
+      !mimeType ||
+      !['photo', 'attachment', 'signature'].includes(purpose ?? '')
+    ) {
+      return apiError(400, 'VALIDATION_ERROR', 'Invalid Inspection binary upload.');
+    }
+    if (
+      purpose === 'signature'
+        ? inspectionStatus !== 'locked'
+        : inspectionStatus !== 'in_progress'
+    ) {
+      return apiError(
+        422,
+        purpose === 'signature'
+          ? 'INSPECTION_SIGNATURE_STATE_INVALID'
+          : 'INSPECTION_CONTENT_LOCKED',
+        'Inspection binary upload is not allowed in the current lifecycle state.',
+      );
+    }
+
+    let bytes: Uint8Array;
+    if (init.body instanceof Blob) {
+      bytes = new Uint8Array(await init.body.arrayBuffer());
+    } else if (init.body instanceof ArrayBuffer) {
+      bytes = new Uint8Array(init.body);
+    } else if (ArrayBuffer.isView(init.body)) {
+      bytes = new Uint8Array(
+        init.body.buffer,
+        init.body.byteOffset,
+        init.body.byteLength,
+      );
+    } else {
+      throw new Error('Unexpected Inspection binary body.');
+    }
+    if (bytes.byteLength === 0) {
+      return apiError(422, 'INSPECTION_BINARY_INVALID_UPLOAD', 'Upload is empty.');
+    }
+
+    const existing = setupDocumentVersions.find(
+      (version) => version.id === uploadKey,
+    );
+    if (existing) {
+      if (
+        existing.fileName !== fileName ||
+        existing.mimeType !== mimeType ||
+        existing.byteSize !== bytes.byteLength
+      ) {
+        return apiError(
+          409,
+          'INSPECTION_BINARY_VERSION_CONFLICT',
+          'Inspection upload key already represents another binary.',
+        );
+      }
+      return json(existing, 201);
+    }
+
+    const document: DocumentResponse = {
+      id: uploadKey,
+      code: `INSPECTION-${inspectionId}-${purpose}-${uploadKey}`,
+      title: `INS-BRW-001 ${purpose}: ${fileName}`,
+      category:
+        purpose === 'photo'
+          ? 'photo'
+          : purpose === 'signature'
+            ? 'signature'
+            : 'inspection',
+      status: 'active',
+      latestVersionNumber: 1,
+      revision: 2,
+    };
+    const version: DocumentVersionResponse = {
+      id: uploadKey,
+      documentId: document.id,
+      versionNumber: 1,
+      fileName,
+      mimeType,
+      byteSize: bytes.byteLength,
+      sha256: '9'.repeat(64),
+      status: purpose === 'signature' ? 'final' : 'stored',
+      finalizedAt:
+        purpose === 'signature' ? '2025-06-30T09:05:00.000Z' : null,
+    };
+    setupDocuments.push(document);
+    setupDocumentVersions.push(version);
+    browserHarnessWindow.__portfolioDocumentUploadCount =
+      (browserHarnessWindow.__portfolioDocumentUploadCount ?? 0) + 1;
+
+    if (browserHarnessWindow.__portfolioFailNextInspectionBinaryAfterCommit) {
+      browserHarnessWindow.__portfolioFailNextInspectionBinaryAfterCommit = false;
+      return apiError(
+        503,
+        'INSPECTION_BINARY_TEST_ACK_LOST',
+        'Intentional Inspection binary acknowledgement loss.',
+      );
+    }
+    return json(version, 201);
+  }
+
+  if (
+    path === `/inspections/${inspectionId}/lock` &&
+    init?.method === 'POST'
+  ) {
+    requireInspectionAuth(init);
+    const body = JSON.parse(String(init.body)) as { expectedVersion: number };
+    if (
+      body.expectedVersion !== inspectionVersion ||
+      inspectionStatus !== 'in_progress'
+    ) {
+      return apiError(
+        409,
+        'INSPECTION_VERSION_CONFLICT',
+        'Inspection changed before it could be locked.',
+      );
+    }
+    const condition = inspectionResponses.find(
+      (response) => response.itemId === inspectionConditionItemId,
+    );
+    const notes = inspectionResponses.find(
+      (response) => response.itemId === inspectionNotesItemId,
+    );
+    if (
+      !condition ||
+      (condition.value === 'damaged' && !notes)
+    ) {
+      return apiError(
+        422,
+        'INSPECTION_REQUIRED_RESPONSES_MISSING',
+        'Required Inspection responses are missing.',
+      );
+    }
+    inspectionStatus = 'locked';
+    inspectionVersion += 1;
+    return maybeHoldInspectionLifecycle(json(inspectionRecord()));
+  }
+
+  if (
+    path === `/inspections/${inspectionId}/signatures` &&
+    init?.method === 'POST'
+  ) {
+    requireInspectionAuth(init);
+    if (inspectionStatus !== 'locked') {
+      return apiError(
+        422,
+        'INSPECTION_SIGNATURE_STATE_INVALID',
+        'Signatures require a locked Inspection.',
+      );
+    }
+    const body = JSON.parse(String(init.body)) as {
+      signerRole: InspectionSignatureResponse['signerRole'];
+      signerPartyId?: string | null;
+      signerName: string;
+      signatureDocumentVersionId: string;
+    };
+    const version = setupDocumentVersions.find(
+      (candidate) => candidate.id === body.signatureDocumentVersionId,
+    );
+    const document = setupDocuments.find(
+      (candidate) => candidate.id === version?.documentId,
+    );
+    if (
+      !version ||
+      version.status !== 'final' ||
+      document?.category !== 'signature'
+    ) {
+      return apiError(
+        422,
+        'INSPECTION_SIGNATURE_DOCUMENT_NOT_FINAL',
+        'Signature requires a final signature DocumentVersion.',
+      );
+    }
+    if (
+      (body.signerRole === 'tenant' && body.signerPartyId !== tenantPartyId) ||
+      (body.signerRole === 'landlord' && body.signerPartyId !== landlordPartyId)
+    ) {
+      return apiError(
+        422,
+        'INSPECTION_SIGNATURE_PARTY_MISMATCH',
+        'Signer Party does not hold the requested Inspection role.',
+      );
+    }
+    if (
+      inspectionSignatures.some(
+        (signature) =>
+          signature.signerRole === body.signerRole &&
+          signature.invalidatedAt === null,
+      )
+    ) {
+      return apiError(
+        409,
+        'INSPECTION_SIGNATURE_ROLE_ALREADY_SIGNED',
+        'This signature role already has an active signature.',
+      );
+    }
+
+    const id = inspectionSignatureIds[inspectionSignatureSequence++];
+    if (!id) throw new Error('Inspection Signature id pool exhausted.');
+    const created: InspectionSignatureResponse = {
+      id,
+      inspectionId,
+      signerRole: body.signerRole,
+      signerPartyId: body.signerPartyId ?? null,
+      signerName: body.signerName.trim(),
+      signatureDocumentVersionId: body.signatureDocumentVersionId,
+      signedByUserId: inspectionUserId,
+      signedAt: '2025-06-30T09:10:00.000Z',
+      invalidatedAt: null,
+      invalidationReason: null,
+    };
+    inspectionSignatures = [...inspectionSignatures, created];
+    inspectionContentRevision += 1;
+
+    if (browserHarnessWindow.__portfolioFailNextInspectionSignatureAfterCommit) {
+      browserHarnessWindow.__portfolioFailNextInspectionSignatureAfterCommit =
+        false;
+      return apiError(
+        503,
+        'INSPECTION_SIGNATURE_TEST_ACK_LOST',
+        'Intentional signature acknowledgement loss.',
+      );
+    }
+    return json(created, 201);
+  }
+
+  if (
+    path === `/inspections/${inspectionId}/unlock` &&
+    init?.method === 'POST'
+  ) {
+    requireInspectionAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      reason: string;
+    };
+    if (
+      inspectionStatus !== 'locked' ||
+      body.expectedVersion !== inspectionVersion ||
+      !body.reason.trim()
+    ) {
+      return apiError(
+        409,
+        'INSPECTION_VERSION_CONFLICT',
+        'Inspection changed before it could be unlocked.',
+      );
+    }
+    inspectionSignatures = inspectionSignatures.map((signature) =>
+      signature.invalidatedAt === null
+        ? {
+            ...signature,
+            invalidatedAt: '2025-06-30T09:20:00.000Z',
+            invalidationReason: body.reason.trim(),
+          }
+        : signature,
+    );
+    inspectionStatus = 'in_progress';
+    inspectionVersion += 1;
+    inspectionContentRevision += 1;
+    return json(inspectionRecord());
+  }
+
+  if (
+    path === `/inspections/${inspectionId}/finalize` &&
+    init?.method === 'POST'
+  ) {
+    requireInspectionAuth(init);
+    const body = JSON.parse(String(init.body)) as { expectedVersion: number };
+    if (
+      inspectionStatus !== 'locked' ||
+      body.expectedVersion !== inspectionVersion
+    ) {
+      return apiError(
+        409,
+        'INSPECTION_FINALIZATION_CONFLICT',
+        'Inspection changed before finalization.',
+      );
+    }
+    const activeRoles = new Set(
+      inspectionSignatures
+        .filter((signature) => signature.invalidatedAt === null)
+        .map((signature) => signature.signerRole),
+    );
+    if (
+      inspectionSchema.requiredSignatureRoles.some(
+        (role) => !activeRoles.has(role),
+      )
+    ) {
+      return apiError(
+        422,
+        'INSPECTION_REQUIRED_SIGNATURES_MISSING',
+        'Required Inspection signatures are missing.',
+      );
+    }
+
+    const sourceVersion = inspectionVersion;
+    const sourceContentRevision = inspectionContentRevision;
+    inspectionStatus = 'finalized';
+    inspectionVersion += 1;
+    inspectionFinalSnapshot = {
+      id: inspectionFinalSnapshotId,
+      inspectionId,
+      snapshotVersion: 1,
+      inspectionVersion: sourceVersion,
+      contentRevision: sourceContentRevision,
+      createdByUserId: inspectionUserId,
+      createdAt: '2025-06-30T10:00:00.000Z',
+    };
+
+    const response = json({
+      inspection: inspectionRecord(),
+      snapshot: inspectionFinalSnapshot,
+    });
+    if (browserHarnessWindow.__portfolioFailNextInspectionFinalizeAfterCommit) {
+      browserHarnessWindow.__portfolioFailNextInspectionFinalizeAfterCommit =
+        false;
+      return apiError(
+        503,
+        'INSPECTION_FINALIZE_TEST_ACK_LOST',
+        'Intentional finalization acknowledgement loss.',
+      );
+    }
+    return response;
+  }
+
+  if (
+    path === `/inspections/${inspectionId}/final-report` &&
+    init?.method === 'POST'
+  ) {
+    requireInspectionAuth(init);
+    if (inspectionStatus !== 'finalized' || !inspectionFinalSnapshot) {
+      return apiError(
+        422,
+        'INSPECTION_FINAL_REPORT_STATE_INVALID',
+        'Final report requires a finalized Inspection.',
+      );
+    }
+
+    let version = setupDocumentVersions.find(
+      (candidate) => candidate.id === inspectionFinalReportVersionId,
+    );
+    if (!version) {
+      browserHarnessWindow.__portfolioFinalReportRenderCount =
+        (browserHarnessWindow.__portfolioFinalReportRenderCount ?? 0) + 1;
+      const document: DocumentResponse = {
+        id: inspectionFinalReportDocumentId,
+        code: `INSPECTION-FINAL-${inspectionId}`,
+        title: 'INS-BRW-001 final inspection report',
+        category: 'inspection',
+        status: 'active',
+        latestVersionNumber: 1,
+        revision: 2,
+      };
+      version = {
+        id: inspectionFinalReportVersionId,
+        documentId: inspectionFinalReportDocumentId,
+        versionNumber: 1,
+        fileName: 'INS-BRW-001-final.pdf',
+        mimeType: 'application/pdf',
+        byteSize: 8,
+        sha256: '8'.repeat(64),
+        status: 'final',
+        finalizedAt: '2025-06-30T10:05:00.000Z',
+      };
+      setupDocuments.push(document);
+      setupDocumentVersions.push(version);
+
+      const evidenceId = inspectionEvidenceIds[inspectionEvidenceSequence++];
+      if (!evidenceId) throw new Error('Inspection Evidence id pool exhausted.');
+      inspectionEvidence = [
+        ...inspectionEvidence,
+        {
+          id: evidenceId,
+          inspectionId,
+          sectionId: null,
+          itemId: null,
+          documentVersionId: version.id,
+          kind: 'final_report',
+          caption: null,
+          createdByUserId: inspectionUserId,
+          createdAt: '2025-06-30T10:05:00.000Z',
+        },
+      ];
+    }
+
+    if (browserHarnessWindow.__portfolioFailNextInspectionReportAfterCommit) {
+      browserHarnessWindow.__portfolioFailNextInspectionReportAfterCommit =
+        false;
+      return apiError(
+        503,
+        'INSPECTION_REPORT_TEST_ACK_LOST',
+        'Intentional final-report acknowledgement loss.',
+      );
+    }
+    return json(version);
+  }
+
+  if (
     path ===
       `/inspections/${inspectionId}/sections/${inspectionSectionId}` &&
     init?.method === 'PATCH'
