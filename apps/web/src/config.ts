@@ -43,6 +43,37 @@ function jwtRole(value: string): string | null {
   return null;
 }
 
+function browserSafeApiBaseUrl(
+  value: string | undefined,
+  supabaseUrl: string,
+): string {
+  const raw = value?.trim() || '/functions/v1/api';
+
+  if (raw.startsWith('/') && !raw.startsWith('//')) {
+    return raw.endsWith('/') ? raw.slice(0, -1) : raw;
+  }
+
+  let apiUrl: URL;
+  let authUrl: URL;
+  try {
+    apiUrl = new URL(raw);
+    authUrl = new URL(supabaseUrl);
+  } catch {
+    throw new WebConfigurationError(
+      'VITE_API_BASE_URL must be a same-origin absolute URL or a root-relative path.',
+    );
+  }
+
+  if (apiUrl.origin !== authUrl.origin) {
+    throw new WebConfigurationError(
+      'VITE_API_BASE_URL must use the same origin as VITE_SUPABASE_URL so Portfolio access tokens are not sent to another host.',
+    );
+  }
+
+  const normalized = apiUrl.toString();
+  return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
+}
+
 function browserSafeSupabaseKey(value: string | undefined): string {
   const key = required('VITE_SUPABASE_ANON_KEY', value);
 
@@ -63,11 +94,11 @@ function browserSafeSupabaseKey(value: string | undefined): string {
 }
 
 export function readWebConfig(env: ImportMetaEnv = import.meta.env): WebConfig {
-  const apiBaseUrl = env.VITE_API_BASE_URL?.trim() || '/functions/v1/api';
+  const supabaseUrl = required('VITE_SUPABASE_URL', env.VITE_SUPABASE_URL);
 
   return {
-    supabaseUrl: required('VITE_SUPABASE_URL', env.VITE_SUPABASE_URL),
+    supabaseUrl,
     supabaseAnonKey: browserSafeSupabaseKey(env.VITE_SUPABASE_ANON_KEY),
-    apiBaseUrl: apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl,
+    apiBaseUrl: browserSafeApiBaseUrl(env.VITE_API_BASE_URL, supabaseUrl),
   };
 }
