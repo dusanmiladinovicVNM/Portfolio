@@ -36,10 +36,11 @@ import type {
   StorageObjectReference,
 } from './file-storage-port.js';
 import {
-  assertStorageObjectMatchesVersion,
-  storageMatchesVersion,
-  storageReferenceMatches,
-} from './document-storage-integrity.js';
+  createDocumentRecord,
+  finalizeDocumentVersionRecord,
+  uploadDocumentVersionRecord,
+} from './document-write-service.js';
+export { assertDocumentVersionStorageIntegrity } from './document-write-service.js';
 
 export interface CreateDocumentCommandInput {
   readonly code: string;
@@ -140,58 +141,7 @@ export async function createDocumentCommand(
   input: CreateDocumentCommandInput,
 ): Promise<Document> {
   requireCapability(actor, 'documents:write');
-
-  const document = createDocument({
-    id: asDocumentId(deps.idGenerator.next()),
-    code: input.code,
-    title: input.title,
-    category: input.category,
-  });
-
-  if (await deps.documentRepository.documentCodeExists(document.code)) {
-    throw new DomainError(
-      'DOCUMENT_CODE_ALREADY_EXISTS',
-      `Document code '${document.code}' already exists.`,
-    );
-  }
-
-  await deps.documentRepository.insertDocument(document);
-  return document;
-}
-
-export async function assertDocumentVersionStorageIntegrity(
-  deps: {
-    readonly documentRepository: DocumentRepository;
-    readonly fileStorage: Pick<FileStorageWritePort, 'stat'>;
-  },
-  version: DocumentVersion,
-): Promise<StorageObjectMetadata> {
-  const reference = await deps.documentRepository.getStorageReference(version.id);
-  if (!reference) {
-    throw new DomainError(
-      'DOCUMENT_STORAGE_REFERENCE_MISSING',
-      'Document version has no registered storage reference.',
-    );
-  }
-
-  let metadata: StorageObjectMetadata | null;
-  try {
-    metadata = await deps.fileStorage.stat(reference);
-  } catch {
-    throw new ApplicationError(
-      'DOCUMENT_STORAGE_VERIFICATION_FAILED',
-      'Document binary could not be verified against its storage provider.',
-    );
-  }
-
-  if (!metadata) {
-    throw new DomainError(
-      'DOCUMENT_BINARY_MISSING',
-      'Document binary is missing from storage.',
-    );
-  }
-  assertStorageObjectMatchesVersion(metadata, reference, version);
-  return metadata;
+  return createDocumentRecord(deps, input);
 }
 
 export async function uploadDocumentVersionCommand(
@@ -200,121 +150,7 @@ export async function uploadDocumentVersionCommand(
   input: UploadDocumentVersionCommandInput,
 ): Promise<DocumentVersion> {
   requireCapability(actor, 'documents:write');
-
-  const document = await requireDocument(
-    deps.documentRepository,
-    input.documentId,
-  );
-
-  if (document.status !== 'active') {
-    throw new DomainError(
-      'DOCUMENT_NOT_ACTIVE',
-      'A new version may only be added to an active document.',
-    );
-  }
-
-  if (
-    input.expectedDocumentRevision !== undefined &&
-    document.revision !== input.expectedDocumentRevision
-  ) {
-    throw new DomainError(
-      'DOCUMENT_VERSION_CONFLICT',
-      'Document changed before the new version upload started.',
-    );
-  }
-
-  if (!input.fileName.trim() || !input.mimeType.trim() || input.content.byteLength === 0) {
-    throw new DomainError(
-      'DOCUMENT_INVALID_UPLOAD',
-      'fileName, mimeType and non-empty content are required.',
-    );
-  }
-
-  const versionId = asDocumentVersionId(deps.idGenerator.next());
-  const objectKey = `document-version:${versionId}`;
-
-  const stored = await deps.fileStorage.put({
-    objectKey,
-    fileName: input.fileName.trim(),
-    mimeType: input.mimeType.trim().toLowerCase(),
-    content: input.content,
-  });
-
-  const added = addStoredDocumentVersion(document, {
-    id: versionId,
-    fileName: input.fileName,
-    mimeType: input.mimeType,
-    byteSize: stored.byteSize,
-    sha256: stored.sha256,
-  });
-
-  const storage: StorageObjectReference = {
-    provider: stored.provider,
-    objectId: stored.objectId,
-    objectKey: stored.objectKey,
-  };
-
-  try {
-    await deps.documentRepository.insertVersion(
-      added.document,
-      document.revision,
-      added.version,
-      storage,
-    );
-  } catch (persistenceError) {
-    // The database may have committed even if the commit acknowledgement was
-    // lost. Re-read the exact deterministic version id before deleting bytes.
-    try {
-      const persisted = await deps.documentRepository.getVersionById(versionId);
-      if (persisted) {
-        const persistedStorage =
-          await deps.documentRepository.getStorageReference(versionId);
-        if (
-          persistedStorage &&
-          storageReferenceMatches(persistedStorage, storage) &&
-          persisted.documentId === added.version.documentId &&
-          persisted.versionNumber === added.version.versionNumber &&
-          persisted.fileName === added.version.fileName &&
-          persisted.mimeType === added.version.mimeType &&
-          storageMatchesVersion(stored, persisted)
-        ) {
-          return persisted;
-        }
-
-        throw new ApplicationError(
-          'DOCUMENT_STORAGE_RECONCILIATION_REQUIRED',
-          'Document registration returned an error but persisted state does not match the uploaded binary.',
-        );
-      }
-    } catch (reconciliationError) {
-      if (
-        reconciliationError instanceof ApplicationError &&
-        reconciliationError.code === 'DOCUMENT_STORAGE_RECONCILIATION_REQUIRED'
-      ) {
-        throw reconciliationError;
-      }
-      throw new ApplicationError(
-        'DOCUMENT_STORAGE_RECONCILIATION_REQUIRED',
-        'Document registration outcome could not be verified. The storage object was preserved for reconciliation.',
-      );
-    }
-
-    // Only a newly-created object is eligible for compensation. A reused
-    // object may belong to a prior retry/reconciliation attempt and is kept.
-    if (stored.disposition === 'created') {
-      try {
-        await deps.fileStorage.remove(storage);
-      } catch {
-        throw new ApplicationError(
-          'DOCUMENT_STORAGE_COMPENSATION_FAILED',
-          'Document metadata was confirmed absent but the newly created storage object could not be removed. Manual storage reconciliation is required.',
-        );
-      }
-    }
-    throw persistenceError;
-  }
-
-  return added.version;
+  return uploadDocumentVersionRecord(deps, input);
 }
 
 export async function finalizeDocumentVersionCommand(
@@ -323,12 +159,7 @@ export async function finalizeDocumentVersionCommand(
   versionId: DocumentVersionId,
 ): Promise<DocumentVersion> {
   requireCapability(actor, 'documents:write');
-
-  const current = await requireVersion(deps.documentRepository, versionId);
-  await assertDocumentVersionStorageIntegrity(deps, current);
-  const finalized = finalizeDocumentVersion(current, deps.clock.now());
-  await deps.documentRepository.finalizeVersion(finalized);
-  return finalized;
+  return finalizeDocumentVersionRecord(deps, versionId);
 }
 
 async function assertTargetExists(
