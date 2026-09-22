@@ -19,6 +19,7 @@ import { UnitAssets } from './UnitAssets.js';
 import { UnitDocuments } from './UnitDocuments.js';
 import { UnitInspections } from './UnitInspections.js';
 import { UnitMeters } from './UnitMeters.js';
+import { UnitMaintenance } from './UnitMaintenance.js';
 import { UnitOverview } from './UnitOverview.js';
 import { UnitSpaces } from './UnitSpaces.js';
 import { UnitTenancies } from './UnitTenancies.js';
@@ -39,6 +40,8 @@ interface UnitDossierProps {
   readonly inspectionSectionId?: string | undefined;
   readonly assetId?: string | undefined;
   readonly meterId?: string | undefined;
+  readonly maintenanceIssueId?: string | undefined;
+  readonly maintenanceWorkOrderId?: string | undefined;
   readonly navigate: NavigateWorkspace;
   readonly setNavigationBlocker: SetNavigationBlocker;
 }
@@ -56,6 +59,8 @@ export function UnitDossier({
   inspectionSectionId,
   assetId,
   meterId,
+  maintenanceIssueId,
+  maintenanceWorkOrderId,
   navigate,
   setNavigationBlocker,
 }: UnitDossierProps) {
@@ -214,6 +219,21 @@ export function UnitDossier({
             >
               Meters
             </WorkspaceLink>
+            <WorkspaceLink
+              ariaCurrent={tab === 'maintenance' ? 'page' : undefined}
+              className={`dossier-tab ${tab === 'maintenance' ? 'dossier-tab-active' : ''}`}
+              navigate={navigate}
+              route={unitRoute(propertyId, unitId, asOf, 'maintenance', {
+                ...(maintenanceIssueId
+                  ? { maintenanceIssueId }
+                  : {}),
+                ...(maintenanceWorkOrderId
+                  ? { maintenanceWorkOrderId }
+                  : {}),
+              })}
+            >
+              Maintenance
+            </WorkspaceLink>
           </nav>
 
           {tab === 'overview' ? (
@@ -287,6 +307,18 @@ export function UnitDossier({
               propertyId={propertyId}
               setNavigationBlocker={setNavigationBlocker}
               unitId={unitId}
+            />
+          ) : null}
+          {tab === 'maintenance' ? (
+            <UnitMaintenance
+              api={api}
+              asOf={asOf}
+              issueId={maintenanceIssueId}
+              navigate={navigate}
+              propertyId={propertyId}
+              setNavigationBlocker={setNavigationBlocker}
+              unitId={unitId}
+              workOrderId={maintenanceWorkOrderId}
             />
           ) : null}
         </>

@@ -14,6 +14,7 @@ export const DOSSIER_TABS = [
   'documents',
   'assets',
   'meters',
+  'maintenance',
 ] as const;
 export type DossierTab = (typeof DOSSIER_TABS)[number];
 
@@ -44,6 +45,8 @@ export type WorkspaceRoute =
       readonly inspectionSectionId?: string;
       readonly assetId?: string;
       readonly meterId?: string;
+      readonly maintenanceIssueId?: string;
+      readonly maintenanceWorkOrderId?: string;
     };
 
 export function workspaceRouteOwnerKey(route: WorkspaceRoute): string {
@@ -120,6 +123,8 @@ export interface UnitRouteSelection {
   readonly inspectionSectionId?: string;
   readonly assetId?: string;
   readonly meterId?: string;
+  readonly maintenanceIssueId?: string;
+  readonly maintenanceWorkOrderId?: string;
 }
 
 export function unitRoute(
@@ -147,6 +152,12 @@ export function unitRoute(
     tab === 'assets' ? selection.assetId : undefined;
   const meterId =
     tab === 'meters' ? selection.meterId : undefined;
+  const maintenanceIssueId =
+    tab === 'maintenance' ? selection.maintenanceIssueId : undefined;
+  const maintenanceWorkOrderId =
+    tab === 'maintenance' && maintenanceIssueId
+      ? selection.maintenanceWorkOrderId
+      : undefined;
 
   return {
     kind: 'unit',
@@ -161,6 +172,8 @@ export function unitRoute(
     ...(inspectionSectionId ? { inspectionSectionId } : {}),
     ...(assetId ? { assetId } : {}),
     ...(meterId ? { meterId } : {}),
+    ...(maintenanceIssueId ? { maintenanceIssueId } : {}),
+    ...(maintenanceWorkOrderId ? { maintenanceWorkOrderId } : {}),
   };
 }
 
@@ -212,6 +225,14 @@ export function parseWorkspaceLocation(
         tab === 'meters'
           ? readEntityId(search.get('meterId') ?? undefined)
           : null;
+      const maintenanceIssueId =
+        tab === 'maintenance'
+          ? readEntityId(search.get('issueId') ?? undefined)
+          : null;
+      const maintenanceWorkOrderId =
+        tab === 'maintenance' && maintenanceIssueId
+          ? readEntityId(search.get('workOrderId') ?? undefined)
+          : null;
 
       return unitRoute(propertyId, unitId, asOf, tab, {
         ...(tenancyId ? { tenancyId } : {}),
@@ -221,6 +242,8 @@ export function parseWorkspaceLocation(
         ...(inspectionSectionId ? { inspectionSectionId } : {}),
         ...(assetId ? { assetId } : {}),
         ...(meterId ? { meterId } : {}),
+        ...(maintenanceIssueId ? { maintenanceIssueId } : {}),
+        ...(maintenanceWorkOrderId ? { maintenanceWorkOrderId } : {}),
       });
     }
   }
@@ -262,6 +285,12 @@ export function workspaceRouteHref(route: WorkspaceRoute): string {
     }
     if (route.tab === 'meters' && route.meterId) {
       search.set('meterId', route.meterId);
+    }
+    if (route.tab === 'maintenance' && route.maintenanceIssueId) {
+      search.set('issueId', route.maintenanceIssueId);
+      if (route.maintenanceWorkOrderId) {
+        search.set('workOrderId', route.maintenanceWorkOrderId);
+      }
     }
   }
   search.set('asOf', route.asOf);

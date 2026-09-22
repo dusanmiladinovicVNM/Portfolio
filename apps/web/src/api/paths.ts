@@ -233,6 +233,48 @@ export function tenancyMeterReadingBoundariesPath(
   return `${tenancyPath(tenancyId)}/meter-reading-boundaries`;
 }
 
+export function maintenanceIssuesPath(): string {
+  return '/maintenance-issues';
+}
+
+export function unitMaintenanceIssuesPath(unitId: string): string {
+  return `${unitPath(unitId)}/maintenance-issues`;
+}
+
+export function maintenanceIssuePath(issueId: string): string {
+  return `/maintenance-issues/${encodeURIComponent(issueId)}`;
+}
+
+export function maintenanceIssueStatusPath(issueId: string): string {
+  return `${maintenanceIssuePath(issueId)}/status`;
+}
+
+export function maintenanceIssueWorkOrdersPath(issueId: string): string {
+  return `${maintenanceIssuePath(issueId)}/work-orders`;
+}
+
+export function maintenanceWorkOrderPath(workOrderId: string): string {
+  return `/maintenance-work-orders/${encodeURIComponent(workOrderId)}`;
+}
+
+export function maintenanceWorkOrderAssignPath(workOrderId: string): string {
+  return `${maintenanceWorkOrderPath(workOrderId)}/assign`;
+}
+
+export function maintenanceWorkOrderStatusPath(workOrderId: string): string {
+  return `${maintenanceWorkOrderPath(workOrderId)}/status`;
+}
+
+export function maintenanceWorkOrderServiceEventsPath(
+  workOrderId: string,
+): string {
+  return `${maintenanceWorkOrderPath(workOrderId)}/service-events`;
+}
+
+export function assetServiceEventsPath(assetId: string): string {
+  return `${assetPath(assetId)}/service-events`;
+}
+
 export function unitInspectionsPath(unitId: string): string {
   return `/units/${encodeURIComponent(unitId)}/inspections`;
 }

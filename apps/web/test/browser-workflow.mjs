@@ -24,6 +24,7 @@ const setupDestinationSpaceId = 'c1000000-0000-4000-8000-000000000002';
 const setupRecoveryPropertyId = 'c2000000-0000-4000-8000-000000000001';
 const setupRecoveryUnitId = 'c2000000-0000-4000-8000-000000000002';
 const setupRecoverySpaceId = 'c2000000-0000-4000-8000-000000000003';
+const setupPartyId = 'b1000000-0000-4000-8000-000000000004';
 const setupTenancyId = 'b1000000-0000-4000-8000-000000000007';
 const setupSignedAgreementId = 'b1000000-0000-4000-8000-000000000010';
 const setupSignedAmendmentId = 'b1000000-0000-4000-8000-000000000019';
@@ -37,6 +38,10 @@ const setupReplacementAssetId = 'b1000000-0000-4000-8000-000000000030';
 const setupMeterId = 'b1000000-0000-4000-8000-000000000038';
 const setupMeterMoveInReadingId = 'b1000000-0000-4000-8000-000000000039';
 const setupMeterMoveOutReadingId = 'b1000000-0000-4000-8000-000000000040';
+const setupInspectionFindingId = 'b1000000-0000-4000-8000-000000000044';
+const setupMaintenanceIssueId = 'b1000000-0000-4000-8000-000000000045';
+const setupMaintenanceWorkOrderId = 'b1000000-0000-4000-8000-000000000046';
+const setupServiceEventId = 'b1000000-0000-4000-8000-000000000047';
 
 const amendmentSignedFilePath = join(
   tmpdir(),
@@ -2040,6 +2045,342 @@ try {
     "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Moved']][.//span[contains(normalize-space(),'current')]][.//dd[normalize-space()='Moved into bedroom']]",
   );
 
+  await clickXpath(sessionId, "//a[normalize-space()='Maintenance']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[@data-maintenance-form='create-issue']",
+  );
+
+  const issueCreateForm =
+    "//form[@data-maintenance-form='create-issue']";
+  await typeXpath(
+    sessionId,
+    issueCreateForm + "//input[@name='code']",
+    'ISS-SETUP-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    issueCreateForm + "//input[@name='title']",
+    'Washer leak',
+  );
+  await typeXpath(
+    sessionId,
+    issueCreateForm + "//textarea[@name='description']",
+    'Leak observed during handover',
+  );
+  await selectOptionXpath(
+    sessionId,
+    issueCreateForm + "//select[@name='assetId']",
+    setupAssetId,
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    issueCreateForm +
+      "//select[@name='spaceId']/option[@value='" +
+      setupSpaceId +
+      "']",
+  );
+  await selectOptionXpath(
+    sessionId,
+    issueCreateForm + "//select[@name='inspectionFindingId']",
+    setupInspectionFindingId,
+  );
+  await selectOptionXpath(
+    sessionId,
+    issueCreateForm + "//select[not(@name='assetId') and not(@name='spaceId') and not(@name='inspectionFindingId')]",
+    'high',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextMaintenanceIssueCreateAfterCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    issueCreateForm + "//button[normalize-space()='Create Issue']",
+  );
+
+  const maintenanceIssueUrl =
+    baseUrl +
+    '/properties/' + setupPropertyId +
+    '/units/' + setupUnitId +
+    '?tab=maintenance&issueId=' + setupMaintenanceIssueId +
+    '&asOf=2025-06-30';
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'maintenance-admin-panel')]//h2[normalize-space()='ISS-SETUP-BRW · Washer leak']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    maintenanceIssueUrl,
+    'Created Maintenance Issue deep-link',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'maintenance-admin-panel')]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='" + setupSpaceId + "']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='" + setupAssetId + "']][.//dt[normalize-space()='Inspection Finding']/following-sibling::dd[normalize-space()='" + setupInspectionFindingId + "']]",
+  );
+
+  const issueUpdateForm =
+    "//form[@data-maintenance-form='issue-update']";
+  await clearXpath(
+    sessionId,
+    issueUpdateForm + "//input[@name='title']",
+  );
+  await typeXpath(
+    sessionId,
+    issueUpdateForm + "//input[@name='title']",
+    'Washer leak - urgent',
+  );
+  await selectOptionXpath(
+    sessionId,
+    issueUpdateForm + "//select[@name='priority']",
+    'urgent',
+  );
+  await clickXpath(
+    sessionId,
+    issueUpdateForm + "//button[normalize-space()='Save Issue']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'maintenance-admin-panel')]//h2[normalize-space()='ISS-SETUP-BRW · Washer leak - urgent']",
+  );
+
+  const workOrderCreateForm =
+    "//form[@data-maintenance-form='create-work-order']";
+  await typeXpath(
+    sessionId,
+    workOrderCreateForm + "//input[@name='code']",
+    'WO-SETUP-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    workOrderCreateForm + "//input[@name='title']",
+    'Repair washer',
+  );
+  await typeXpath(
+    sessionId,
+    workOrderCreateForm + "//textarea[@name='description']",
+    'Diagnose and repair leak',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextMaintenanceWorkOrderCreateAfterCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    workOrderCreateForm +
+      "//button[normalize-space()='Create WorkOrder']",
+  );
+
+  const maintenanceWorkOrderUrl =
+    baseUrl +
+    '/properties/' + setupPropertyId +
+    '/units/' + setupUnitId +
+    '?tab=maintenance&issueId=' + setupMaintenanceIssueId +
+    '&workOrderId=' + setupMaintenanceWorkOrderId +
+    '&asOf=2025-06-30';
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'maintenance-admin-panel')]//h3[normalize-space()='WO-SETUP-BRW · Repair washer']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    maintenanceWorkOrderUrl,
+    'Created WorkOrder deep-link',
+  );
+
+  const workOrderUpdateForm =
+    "//form[@data-maintenance-form='work-order-update']";
+  await clearXpath(
+    sessionId,
+    workOrderUpdateForm + "//input[@name='title']",
+  );
+  await typeXpath(
+    sessionId,
+    workOrderUpdateForm + "//input[@name='title']",
+    'Repair leaking washer',
+  );
+  await clickXpath(
+    sessionId,
+    workOrderUpdateForm +
+      "//button[normalize-space()='Save WorkOrder']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'maintenance-admin-panel')]//h3[normalize-space()='WO-SETUP-BRW · Repair leaking washer']",
+  );
+
+  const assignForm = "//form[@data-maintenance-form='assign']";
+  await selectOptionXpath(
+    sessionId,
+    assignForm + "//select[@name='partyId']",
+    setupPartyId,
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioHoldMaintenanceMutation = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    assignForm + "//button[normalize-space()='Assign WorkOrder']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    'return window.__portfolioPendingMaintenanceMutation === true;',
+    'held Maintenance assignment',
+  );
+  await clickXpath(sessionId, "//a[normalize-space()='Assets']");
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assertEqual(
+    await currentUrl(sessionId),
+    maintenanceWorkOrderUrl,
+    'Pending Maintenance write blocks dossier navigation',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioReleaseMaintenanceMutation();',
+    ),
+    true,
+    'Release held Maintenance assignment',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'maintenance-admin-panel')]//span[contains(@class,'status-chip') and normalize-space()='assigned']",
+  );
+
+  await clickXpath(
+    sessionId,
+    "//section[contains(@class,'maintenance-admin-panel')]//button[normalize-space()='Start WorkOrder']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'maintenance-admin-panel')]//span[contains(@class,'status-chip') and normalize-space()='in_progress']",
+  );
+
+  const serviceForm =
+    "//form[@data-maintenance-form='record-service']";
+  await selectOptionXpath(
+    sessionId,
+    serviceForm + "//select[@name='eventType']",
+    'repair',
+  );
+  await selectOptionXpath(
+    sessionId,
+    serviceForm + "//select[@name='providerPartyId']",
+    setupPartyId,
+  );
+  await setInputValueXpath(
+    sessionId,
+    serviceForm + "//input[@name='performedDate']",
+    '2027-10-01',
+  );
+  await setInputValueXpath(
+    sessionId,
+    serviceForm + "//input[@name='performedTime']",
+    '09:32',
+  );
+  await typeXpath(
+    sessionId,
+    serviceForm + "//input[@name='reference']",
+    'SRV-SETUP-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    serviceForm + "//textarea[@name='description']",
+    'Replaced leaking inlet hose',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextServiceEventCreateAfterCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    serviceForm +
+      "//button[normalize-space()='Record + link ServiceEvent']",
+  );
+
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'maintenance-service-card')][.//strong[normalize-space()='Repair']][.//p[normalize-space()='Replaced leaking inlet hose']][.//small[normalize-space()='Unlinked']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[@data-maintenance-form='link-service']//option[@value='" + setupServiceEventId + "']",
+  );
+
+  const existingLinkForm =
+    "//form[@data-maintenance-form='link-service']";
+  await selectOptionXpath(
+    sessionId,
+    existingLinkForm + "//select[@name='serviceEventId']",
+    setupServiceEventId,
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextServiceEventLink = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    existingLinkForm + "//button[normalize-space()='Link ServiceEvent']",
+  );
+
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'maintenance-service-card')][.//strong[normalize-space()='Repair']][.//p[normalize-space()='Replaced leaking inlet hose']][.//small[normalize-space()='Linked to selected WorkOrder']]",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//form[@data-maintenance-form='link-service']//option[@value='" + setupServiceEventId + "']",
+    ),
+    false,
+    'Committed ServiceEvent link is recovered after lost acknowledgement',
+  );
+
+  await clickXpath(
+    sessionId,
+    "//section[contains(@class,'maintenance-admin-panel')]//button[normalize-space()='Complete WorkOrder']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'maintenance-admin-panel')]//span[contains(@class,'status-chip') and normalize-space()='completed']",
+  );
+  await clickXpath(
+    sessionId,
+    "//section[contains(@class,'maintenance-admin-panel')]//button[normalize-space()='Resolve Issue']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'maintenance-admin-panel')]//span[contains(@class,'status-chip') and normalize-space()='resolved']",
+  );
+
+  await navigateWithPopState(
+    sessionId,
+    '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=assets&assetId=' + setupAssetId +
+      '&asOf=2025-06-30',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'asset-admin-panel')]//h2[normalize-space()='AST-SETUP-BRW · Setup Washer 8 kg']",
+  );
+
   await selectOptionXpath(
     sessionId,
     assetMoveForm + "//select[@name='unitId']",
@@ -2189,6 +2530,29 @@ try {
     ),
     false,
     'Replaced predecessor leaves the current Unit registry',
+  );
+
+  await navigateWithPopState(
+    sessionId,
+    '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=maintenance&issueId=' + setupMaintenanceIssueId +
+      '&asOf=2025-06-30',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'maintenance-admin-panel')]//h2[normalize-space()='ISS-SETUP-BRW · Washer leak - urgent']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'maintenance-admin-panel')]//span[contains(@class,'status-chip') and normalize-space()='resolved']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'maintenance-admin-panel')]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Property']/following-sibling::dd[normalize-space()='" + setupPropertyId + "']][.//dt[normalize-space()='Unit']/following-sibling::dd[normalize-space()='" + setupUnitId + "']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='" + setupSpaceId + "']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='" + setupAssetId + "']]",
   );
 
   await navigateWithPopState(

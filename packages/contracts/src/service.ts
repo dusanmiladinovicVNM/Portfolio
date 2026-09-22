@@ -141,6 +141,10 @@ export const serviceEventResponseSchema = z.object({
   recordedByUserId: entityIdSchema,
 });
 
+export const serviceEventListResponseSchema = z.object({
+  items: z.array(serviceEventResponseSchema),
+});
+
 export type CreateWarrantyRequest = z.infer<typeof createWarrantyRequestSchema>;
 export type CreateWarrantyClaimRequest = z.infer<typeof createWarrantyClaimRequestSchema>;
 export type SubmitWarrantyClaimRequest = z.infer<typeof submitWarrantyClaimRequestSchema>;
@@ -152,3 +156,4 @@ export type WarrantyResponse = z.infer<typeof warrantyResponseSchema>;
 export type WarrantyClaimResponse = z.infer<typeof warrantyClaimResponseSchema>;
 export type ServicePlanResponse = z.infer<typeof servicePlanResponseSchema>;
 export type ServiceEventResponse = z.infer<typeof serviceEventResponseSchema>;
+export type ServiceEventListResponse = z.infer<typeof serviceEventListResponseSchema>;
