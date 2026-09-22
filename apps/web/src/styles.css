@@ -1082,3 +1082,66 @@ input:focus-visible {
     flex-direction: column;
   }
 }
+
+
+.contract-admin-panel {
+  display: grid;
+  gap: 20px;
+}
+.contract-admin-stack,
+.contract-admin-actions {
+  display: grid;
+  gap: 16px;
+}
+.contract-admin-form {
+  padding: 18px;
+  border: 1px solid #ded8cd;
+  border-radius: 12px;
+  background: #faf8f3;
+}
+.contract-admin-form h3 {
+  margin: 0;
+}
+.contract-admin-terms {
+  display: grid;
+  gap: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #e4ded4;
+}
+.contract-party-checklist {
+  display: grid;
+  gap: 8px;
+}
+.contract-party-checklist label {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  color: #4f534b;
+  font-size: .82rem;
+  font-weight: 650;
+}
+.contract-party-checklist input {
+  width: auto;
+}
+.contract-terminal-box {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  padding: 15px 17px;
+  border: 1px solid #e1dcd3;
+  border-radius: 11px;
+  background: #fff;
+}
+.contract-terminal-box p {
+  margin: 5px 0 0;
+}
+.contract-admin-form button {
+  justify-self: start;
+}
+@media (max-width: 760px) {
+  .contract-terminal-box {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
