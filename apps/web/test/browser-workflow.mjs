@@ -3308,6 +3308,62 @@ try {
     "//ul[contains(@class,'inspection-content-list')]//strong[contains(normalize-space(),'Recovered window Finding')]",
   );
 
+  const scopedEvidenceForm =
+    "//form[@data-inspection-content-form='evidence-scoped-upload']";
+  const evidenceAttachForm =
+    "//form[@data-inspection-content-form='evidence-attach']";
+  const scopedUploadsBefore = await executeScript(
+    sessionId,
+    'return window.__portfolioDocumentUploadCount || 0;',
+  );
+  await setFileXpath(
+    sessionId,
+    scopedEvidenceForm + "//input[@name='file']",
+    inspectionEvidencePhotoPath,
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextInspectionBinaryAfterCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    scopedEvidenceForm +
+      "//button[normalize-space()='Upload Inspection evidence']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Inspection-scoped evidence binary stored.')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    scopedUploadsBefore + 1,
+    'Ambiguous Inspection-scoped Evidence upload reuses one binary',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    evidenceAttachForm +
+      "//button[normalize-space()='Attach exact version' and not(@disabled)]",
+  );
+  await setInputValueXpath(
+    sessionId,
+    evidenceAttachForm + "//textarea[@name='caption']",
+    'Scoped field evidence',
+  );
+  await clickXpath(
+    sessionId,
+    evidenceAttachForm + "//button[normalize-space()='Attach exact version']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//ul[contains(@class,'inspection-content-list')]//span[normalize-space()='Scoped field evidence']",
+  );
+
   await setInputValueXpath(
     sessionId,
     evidenceDocumentForm + "//input[@name='code']",
@@ -3360,8 +3416,6 @@ try {
     'Inspection Evidence binary uploaded exactly once',
   );
 
-  const evidenceAttachForm =
-    "//form[@data-inspection-content-form='evidence-attach']";
   await waitForElement(
     sessionId,
     'xpath',
