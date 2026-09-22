@@ -142,7 +142,7 @@ const setupRecoveryProperty: PropertyResponse = {
   id: setupRecoveryPropertyId,
   code: 'PROP-RECOVERY-BRW',
   name: 'Recovery Property',
-  propertyType: 'residential',
+  propertyType: 'apartment_building',
   street: 'Canonical Street',
   houseNumber: '2',
   postalCode: '8000',
