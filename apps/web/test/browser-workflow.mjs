@@ -766,6 +766,196 @@ try {
     'Late Tenancy completion cannot mutate the new Unit workspace',
   );
 
+  const agreementDocumentsSection =
+    "//section[.//p[normalize-space()='Step 3 · Agreement Documents']]";
+  const agreementDocumentCreateForm =
+    agreementDocumentsSection +
+    "//form[@data-signed-document-form='create']";
+  const agreementDocumentUploadForm =
+    agreementDocumentsSection +
+    "//form[@data-signed-document-form='upload']";
+
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementDocumentCreateForm,
+  );
+  await typeXpath(
+    sessionId,
+    agreementDocumentCreateForm + "//input[@name='code']",
+    'DOC-AGR-RECOVER-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    agreementDocumentCreateForm + "//input[@name='title']",
+    'Replacement signed lease recovery',
+  );
+  await clickXpath(
+    sessionId,
+    agreementDocumentCreateForm +
+      "//button[normalize-space()='Create Document']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementDocumentsSection +
+      "//select[@aria-label='Signed original Document']" +
+      "/option[@value='" + setupAgreementDocumentId + "']",
+  );
+  await selectOptionXpath(
+    sessionId,
+    agreementDocumentsSection +
+      "//select[@aria-label='Signed original Document']",
+    setupAgreementDocumentId,
+  );
+  await setFileXpath(
+    sessionId,
+    agreementDocumentUploadForm + "//input[@name='file']",
+    agreementSignedFilePath,
+  );
+  await clickXpath(
+    sessionId,
+    agreementDocumentUploadForm +
+      "//button[normalize-space()='Upload version']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementDocumentsSection +
+      "//select[@aria-label='Signed original Document version']" +
+      "/option[@value='" + setupAgreementDocumentVersionId + "']",
+  );
+  await selectOptionXpath(
+    sessionId,
+    agreementDocumentsSection +
+      "//select[@aria-label='Signed original Document version']",
+    setupAgreementDocumentVersionId,
+  );
+  await clickXpath(
+    sessionId,
+    agreementDocumentsSection +
+      "//button[normalize-space()='Finalize version']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementDocumentsSection +
+      "//select[@aria-label='Signed original Document version']" +
+      "/option[@value='" + setupAgreementDocumentVersionId +
+      "' and contains(normalize-space(),'final')]",
+  );
+
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextSignedOriginalLink = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    agreementDocumentsSection +
+      "//button[normalize-space()='Link signed original to AGR-REPLACEMENT-BRW']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementDocumentsSection +
+      "//*[normalize-space()='Intentional browser-harness link failure.']",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    2,
+    'Agreement failed-link upload count before recovery',
+  );
+
+  const setupTenanciesRecoveryPath =
+    '/properties/' + setupPropertyId +
+    '/units/' + setupUnitId +
+    '?tab=tenancies&asOf=2027-02-01';
+  await navigateWithPopState(sessionId, setupTenanciesRecoveryPath);
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//span[contains(@class,'status-chip') and normalize-space()='active']",
+  );
+
+  const replacementContractRecoveryPath =
+    '/properties/' + setupPropertyId +
+    '/units/' + setupUnitId +
+    '?tab=contracts&tenancyId=' + setupTenancyId +
+    '&agreementId=' + setupReplacementAgreementId +
+    '&asOf=2027-02-01';
+  await navigateWithPopState(sessionId, replacementContractRecoveryPath);
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementDocumentCreateForm,
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementDocumentsSection +
+      "//select[@aria-label='Signed original Document']" +
+      "/option[@value='" + setupAgreementDocumentId + "']",
+  );
+  await selectOptionXpath(
+    sessionId,
+    agreementDocumentsSection +
+      "//select[@aria-label='Signed original Document']",
+    setupAgreementDocumentId,
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementDocumentsSection +
+      "//select[@aria-label='Signed original Document version']" +
+      "/option[@value='" + setupAgreementDocumentVersionId +
+      "' and contains(normalize-space(),'final')]",
+  );
+  await selectOptionXpath(
+    sessionId,
+    agreementDocumentsSection +
+      "//select[@aria-label='Signed original Document version']",
+    setupAgreementDocumentVersionId,
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    2,
+    'Recovery remount does not re-upload finalized Agreement binary',
+  );
+  await clickXpath(
+    sessionId,
+    agreementDocumentsSection +
+      "//button[normalize-space()='Link signed original to AGR-REPLACEMENT-BRW']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementDocumentsSection +
+      "//*[normalize-space()='portfolio-agreement-signed-original.pdf']",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    2,
+    'Successful recovery link reuses existing final DocumentVersion',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      agreementDocumentsSection +
+        "//form[@data-signed-document-form='create']",
+    ),
+    false,
+    'Agreement signed-original workflow closes after recovery link',
+  );
+
   await navigateWithPopState(
     sessionId,
     '/properties/' + setupPropertyId +
