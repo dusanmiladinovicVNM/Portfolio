@@ -7,7 +7,9 @@ import type {
   DocumentLinkResponse,
   DocumentResponse,
   DocumentVersionResponse,
+  LeaseAgreementDocumentReferenceResponse,
   LeaseAgreementResponse,
+  LeaseAmendmentDocumentReferenceResponse,
   LeaseAmendmentResponse,
   PartyResponse,
   PropertyResponse,
@@ -229,7 +231,7 @@ const amendment = {
   version: 2,
 };
 
-const agreementDocumentReference = {
+const agreementDocumentReference: LeaseAgreementDocumentReferenceResponse = {
   document: {
     id: agreementDocumentId,
     code: 'DOC-AGR-BRW',
@@ -260,7 +262,7 @@ const agreementDocumentReference = {
   },
 };
 
-const amendmentDocumentReference = {
+const amendmentDocumentReference: LeaseAmendmentDocumentReferenceResponse = {
   document: {
     id: amendmentDocumentId,
     code: 'DOC-AMD-BRW',
