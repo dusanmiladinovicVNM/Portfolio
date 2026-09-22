@@ -6,6 +6,10 @@ import {
 } from '@portfolio/contracts';
 import {
   agreementAmendmentsPath,
+  agreementCancelPath,
+  agreementSignPath,
+  amendmentCancelPath,
+  amendmentSignPath,
   tenancyActivatePath,
   tenancyAgreementsPath,
   tenancyCancelPath,
@@ -59,6 +63,24 @@ describe('Tenancy and Contract dossier contracts', () => {
     );
     expect(tenancyCancelPath(tenancyId)).toBe(
       `/tenancies/${tenancyId}/cancel`,
+    );
+  });
+
+  it('keeps Agreement and Amendment lifecycle writes on named command paths', () => {
+    const agreementId = '33333333-3333-4333-8333-333333333333';
+    const amendmentId = '44444444-4444-4444-8444-444444444444';
+
+    expect(agreementSignPath(agreementId)).toBe(
+      `/agreements/${agreementId}/sign`,
+    );
+    expect(agreementCancelPath(agreementId)).toBe(
+      `/agreements/${agreementId}/cancel`,
+    );
+    expect(amendmentSignPath(amendmentId)).toBe(
+      `/amendments/${amendmentId}/sign`,
+    );
+    expect(amendmentCancelPath(amendmentId)).toBe(
+      `/amendments/${amendmentId}/cancel`,
     );
   });
 
