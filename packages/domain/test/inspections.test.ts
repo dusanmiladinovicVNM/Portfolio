@@ -28,6 +28,7 @@ import {
   publishInspectionSchemaVersion,
   startInspection,
   unlockInspection,
+  updateInspectionOrchestration,
 } from '../src/index.js';
 
 const schema = createInspectionSchemaVersion({
@@ -112,6 +113,53 @@ describe('Inspection schema and lifecycle', () => {
     expect(() => publishInspectionSchemaVersion(published)).toThrowError(
       /Only a draft schema version/,
     );
+  });
+
+  it('updates draft assignment/schedule as a separate versioned orchestration grain', () => {
+    const reassigned = updateInspectionOrchestration(inspection, {
+      assignedToUserId: asUserId(
+        '72000000-0000-4000-8000-000000000099',
+      ),
+      scheduledFor: '2026-09-25',
+    });
+
+    expect(reassigned).toMatchObject({
+      id: inspection.id,
+      code: inspection.code,
+      unitId: inspection.unitId,
+      tenancyId: inspection.tenancyId,
+      schemaVersionId: inspection.schemaVersionId,
+      createdByUserId: inspection.createdByUserId,
+      assignedToUserId:
+        '72000000-0000-4000-8000-000000000099',
+      scheduledFor: '2026-09-25',
+      status: 'draft',
+      version: 2,
+      contentRevision: inspection.contentRevision,
+    });
+  });
+
+  it('freezes assignment/schedule once field work starts', () => {
+    const started = startInspection(
+      inspection,
+      '2026-09-18T20:00:00.000Z',
+    );
+
+    expect(() =>
+      updateInspectionOrchestration(started, {
+        assignedToUserId: inspection.assignedToUserId,
+        scheduledFor: '2026-09-25',
+      }),
+    ).toThrowError(/only change while the inspection is draft/i);
+  });
+
+  it('validates orchestration schedule as a canonical date', () => {
+    expect(() =>
+      updateInspectionOrchestration(inspection, {
+        assignedToUserId: inspection.assignedToUserId,
+        scheduledFor: '2026-02-30',
+      }),
+    ).toThrow();
   });
 
   it('requires draft → in_progress before lock', () => {
