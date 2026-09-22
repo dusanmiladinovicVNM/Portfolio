@@ -20,6 +20,8 @@ const inspectionId = '66666666-6666-4666-8666-666666666666';
 const inspectionSectionId = '77777777-7777-4777-8777-777777777777';
 const assetId = '88888888-8888-4888-8888-888888888888';
 const meterId = '99999999-9999-4999-8999-999999999999';
+const maintenanceIssueId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const maintenanceWorkOrderId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
 describe('workspace URL navigation', () => {
   it('preserves dashboard asOf through Property and Unit drill-down', () => {
@@ -293,6 +295,47 @@ describe('workspace URL navigation', () => {
           'overview',
           { meterId },
         ),
+      ),
+    ).toBe(
+      `/properties/${propertyId}/units/${unitId}?tab=overview&asOf=2025-06-30`,
+    );
+  });
+
+  it('deep-links Maintenance Issue and WorkOrder only inside Maintenance', () => {
+    const selected = unitRoute(
+      propertyId,
+      unitId,
+      '2025-06-30',
+      'maintenance',
+      { maintenanceIssueId, maintenanceWorkOrderId },
+    );
+
+    expect(workspaceRouteHref(selected)).toBe(
+      `/properties/${propertyId}/units/${unitId}?tab=maintenance&issueId=${maintenanceIssueId}&workOrderId=${maintenanceWorkOrderId}&asOf=2025-06-30`,
+    );
+
+    expect(
+      parseWorkspaceLocation(
+        `/properties/${propertyId}/units/${unitId}`,
+        `?tab=maintenance&issueId=${maintenanceIssueId}&workOrderId=${maintenanceWorkOrderId}&asOf=2025-06-30`,
+        '2026-09-21',
+      ),
+    ).toEqual({
+      kind: 'unit',
+      propertyId,
+      unitId,
+      tab: 'maintenance',
+      maintenanceIssueId,
+      maintenanceWorkOrderId,
+      asOf: '2025-06-30',
+    });
+
+    expect(
+      workspaceRouteHref(
+        unitRoute(propertyId, unitId, '2025-06-30', 'overview', {
+          maintenanceIssueId,
+          maintenanceWorkOrderId,
+        }),
       ),
     ).toBe(
       `/properties/${propertyId}/units/${unitId}?tab=overview&asOf=2025-06-30`,
