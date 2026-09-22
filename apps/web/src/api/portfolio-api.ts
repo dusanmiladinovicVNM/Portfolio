@@ -20,6 +20,10 @@ export class PortfolioApiError extends Error {
   }
 }
 
+export function isAmbiguousWriteFailure(cause: unknown): boolean {
+  return !(cause instanceof PortfolioApiError) || cause.status >= 500;
+}
+
 export interface PortfolioApiRequestOptions {
   readonly signal?: AbortSignal;
 }
