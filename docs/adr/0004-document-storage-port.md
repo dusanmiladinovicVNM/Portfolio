@@ -67,8 +67,26 @@ delivery path. Streaming with incremental hashing can replace the buffered
 adapter without changing DocumentVersion identity, authorization or browser API
 boundaries.
 
-Upload ingestion is a separate pre-existing hardening debt:
-`POST /documents/:id/versions` still buffers `request.arrayBuffer()` and the
-Google Drive multipart upload path creates additional copies. Production
-hardening must introduce an upload size ceiling and/or streaming upload without
-moving that older issue into this read-delivery PR.
+Upload ingestion is now bounded by the same 16 MiB production policy.
+
+The HTTP layer no longer calls unbounded `request.arrayBuffer()`. It consumes
+the request body through a bounded reader that:
+
+- rejects an announced oversized `Content-Length` before normal body consumption;
+- counts actual bytes for chunked/missing-length bodies;
+- aborts as soon as the real byte count crosses the ceiling;
+- rejects body/`Content-Length` mismatches;
+- never invokes storage for a rejected upload.
+
+The application write service enforces the same ceiling again, so internal
+producers such as generated reports cannot bypass the storage write policy.
+
+Google Drive also enforces the ceiling before hashing or network I/O. Its
+multipart request remains a bounded buffered provider adapter for the MVP;
+moving to resumable/chunked Drive upload later is a performance optimization,
+not a correctness or unbounded-memory prerequisite.
+
+For concurrent same-`DocumentVersionId` writes, PostgreSQL remains the only
+canonical winner. A losing newly-created storage object is removed only after
+the persisted winner's exact storage reference, byte size and SHA-256 have been
+verified. Provider metadata search is not treated as a uniqueness constraint.
