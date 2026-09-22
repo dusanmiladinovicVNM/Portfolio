@@ -9,10 +9,13 @@ import {
   assertAssetLocationHistoryOwner,
   assertAssetMetadataMutationOwner,
   assertAssetMoveMutationOwner,
+  assertAssetReadOwner,
   assertAssetReplacementLinksOwner,
   assertAssetReplacementMutationOwner,
   assertAssetStatusMutationOwner,
   assertCreatedAsset,
+  assertAssetDestinationSpacesOwner,
+  assertAssetDestinationUnitsOwner,
   assertUnitAssetsOwner,
 } from '../src/dossier/asset-owner.js';
 
@@ -67,6 +70,78 @@ function history(
 }
 
 describe('Asset browser ownership guards', () => {
+  it('fails closed for destination and direct Asset read ownership', () => {
+    expect(() =>
+      assertAssetDestinationUnitsOwner(propertyId, [
+        {
+          id: unitId,
+          propertyId,
+          code: 'UNIT-A',
+          unitNumber: '1A',
+          unitType: 'apartment',
+          floor: null,
+          areaM2: null,
+          rooms: null,
+          status: 'active',
+          notes: '',
+        },
+      ]),
+    ).not.toThrow();
+
+    expect(() =>
+      assertAssetDestinationUnitsOwner(propertyId, [
+        {
+          id: otherUnitId,
+          propertyId: successorId,
+          code: 'UNIT-B',
+          unitNumber: '2B',
+          unitType: 'apartment',
+          floor: null,
+          areaM2: null,
+          rooms: null,
+          status: 'active',
+          notes: '',
+        },
+      ]),
+    ).toThrow('another Property');
+
+    expect(() =>
+      assertAssetDestinationSpacesOwner(unitId, [
+        {
+          id: spaceId,
+          unitId,
+          code: 'BED-1',
+          name: 'Bedroom',
+          spaceType: 'bedroom',
+          areaM2: null,
+          sortOrder: 0,
+          active: true,
+        },
+      ]),
+    ).not.toThrow();
+
+    expect(() =>
+      assertAssetDestinationSpacesOwner(unitId, [
+        {
+          id: spaceId,
+          unitId: otherUnitId,
+          code: 'BED-2',
+          name: 'Other bedroom',
+          spaceType: 'bedroom',
+          areaM2: null,
+          sortOrder: 0,
+          active: true,
+        },
+      ]),
+    ).toThrow('another Unit');
+
+    expect(() => assertAssetReadOwner(assetId, asset())).not.toThrow();
+    expect(() =>
+      assertAssetReadOwner(assetId, asset({ id: successorId })),
+    ).toThrow('another Asset');
+  });
+
+
   it('rejects Unit Asset lists containing another current Unit owner', () => {
     expect(() => assertUnitAssetsOwner(unitId, [asset()])).not.toThrow();
     expect(() =>
