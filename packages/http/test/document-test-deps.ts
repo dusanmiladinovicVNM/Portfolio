@@ -14,6 +14,7 @@ import type {
   DocumentVersion,
   DocumentVersionId,
 } from '@portfolio/domain';
+import { testSha256 } from './hash-test-deps.js';
 
 export class InMemoryDocumentRepository implements DocumentRepository {
   readonly documents = new Map<DocumentId, Document>();
@@ -147,7 +148,7 @@ export class MemoryFileStorage implements FileStoragePort {
       objectId: input.objectKey,
       objectKey: input.objectKey,
       byteSize: input.content.byteLength,
-      sha256: 'a'.repeat(64),
+      sha256: await testSha256.digest(input.content),
       disposition: 'created',
     };
     this.objects.set(input.objectKey, stored);
