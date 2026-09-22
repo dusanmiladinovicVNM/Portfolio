@@ -1768,6 +1768,10 @@ try {
       "//div[contains(@class,'asset-identifier-row')]//input[@placeholder='Serial / inventory tag']",
     'SN-SETUP-002',
   );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextAssetReplacementAfterCommit = true; return true;',
+  );
   await clickXpath(
     sessionId,
     assetReplacementForm +
