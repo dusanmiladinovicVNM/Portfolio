@@ -1851,7 +1851,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//a[contains(@class,'asset-card')][.//span[normalize-space()='AST-REPLACEMENT-BRW']][.//h3[normalize-space()='Setup Washer Replacement']][.//dd[normalize-space()='Destination Living Room']]",
+    "//a[contains(@class,'asset-card')][.//span[normalize-space()='AST-REPLACEMENT-BRW']][.//h3[normalize-space()='Setup Washer Replacement']]",
   );
   await waitForElement(
     sessionId,
@@ -1870,7 +1870,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Replacement created']][.//span[contains(normalize-space(),'current')]]",
+    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Replacement created']][.//span[contains(normalize-space(),'current')]][.//dt[normalize-space()='Unit']/following-sibling::dd[normalize-space()='" + setupDestinationUnitId + "']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='" + setupDestinationSpaceId + "']]",
   );
   await waitForElement(
     sessionId,
