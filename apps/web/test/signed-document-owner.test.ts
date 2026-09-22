@@ -3,8 +3,12 @@ import type {
   DocumentLinkResponse,
   DocumentResponse,
   DocumentVersionResponse,
+  LeaseAgreementDocumentReferenceResponse,
+  LeaseAmendmentDocumentReferenceResponse,
 } from '@portfolio/contracts';
 import {
+  assertAgreementDocumentReferencesOwner,
+  assertAmendmentDocumentReferencesOwner,
   assertCreatedDocument,
   assertDocumentVersionListOwner,
   assertFinalizedDocumentVersion,
@@ -48,6 +52,40 @@ function version(
   };
 }
 
+function agreementReference(
+  targetId = agreementId,
+): LeaseAgreementDocumentReferenceResponse {
+  return {
+    document: document({ latestVersionNumber: 1, revision: 2 }),
+    link: {
+      ...link(),
+      targetType: 'lease_agreement',
+      targetId,
+    },
+    linkedVersion: version({
+      status: 'final',
+      finalizedAt: '2026-09-22T08:00:00.000Z',
+    }),
+  };
+}
+
+function amendmentReference(
+  targetId = agreementId,
+): LeaseAmendmentDocumentReferenceResponse {
+  return {
+    document: document({ latestVersionNumber: 1, revision: 2 }),
+    link: {
+      ...link(),
+      targetType: 'lease_amendment',
+      targetId,
+    },
+    linkedVersion: version({
+      status: 'final',
+      finalizedAt: '2026-09-22T08:00:00.000Z',
+    }),
+  };
+}
+
 function link(
   overrides: Partial<DocumentLinkResponse> = {},
 ): DocumentLinkResponse {
@@ -63,6 +101,35 @@ function link(
 }
 
 describe('signed Document owner guards', () => {
+  it('rejects legal Document references owned by another target', () => {
+    expect(() =>
+      assertAgreementDocumentReferencesOwner(
+        agreementId,
+        [agreementReference()],
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertAgreementDocumentReferencesOwner(
+        agreementId,
+        [agreementReference(otherDocumentId)],
+      ),
+    ).toThrow('another Agreement');
+
+    expect(() =>
+      assertAmendmentDocumentReferencesOwner(
+        agreementId,
+        [amendmentReference()],
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertAmendmentDocumentReferencesOwner(
+        agreementId,
+        [amendmentReference(otherDocumentId)],
+      ),
+    ).toThrow('another Amendment');
+  });
+
+
   it('accepts only the canonical initial Document state after create', () => {
     const expected = {
       code: 'DOC-1',
