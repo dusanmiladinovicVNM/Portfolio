@@ -13,7 +13,11 @@ import {
   type UnitId,
 } from '@portfolio/domain';
 import { requireCapability, type Actor } from '../security/access.js';
-import type { InspectionRepository } from './inspection-repository.js';
+import type {
+  InspectionRepository,
+  StaffDirectoryEntry,
+  StaffDirectoryRepository,
+} from './inspection-repository.js';
 
 function assertInspectionReadAccess(actor: Actor, inspection: Inspection): void {
   if (
@@ -53,6 +57,25 @@ export async function listInspectionsByUnitQuery(
         (inspection) => inspection.assignedToUserId === actor.userId,
       )
     : inspections;
+}
+
+export async function listAssignedInspectionsQuery(
+  repository: InspectionRepository,
+  actor: Actor,
+): Promise<readonly Inspection[]> {
+  requireCapability(actor, 'inspections:read');
+  return repository.listAssignedTo(actor.userId);
+}
+
+export async function listAssignableInspectionStaffQuery(
+  repository: StaffDirectoryRepository,
+  actor: Actor,
+): Promise<readonly StaffDirectoryEntry[]> {
+  requireCapability(actor, 'inspections:read');
+  const staff = await repository.listActiveStaff();
+  return actor.role === 'inspector'
+    ? staff.filter((entry) => entry.userId === actor.userId)
+    : staff;
 }
 
 export async function listInspectionResponsesQuery(
