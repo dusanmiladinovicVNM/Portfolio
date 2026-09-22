@@ -37,6 +37,11 @@ import type {
   SetNavigationBlocker,
 } from '../navigation/use-workspace-navigation.js';
 import { formatDetailKey } from '../presentation/format.js';
+import {
+  InspectionOrchestrationPanel,
+  type InspectionOrchestrationWriteGate,
+} from './InspectionOrchestrationPanel.js';
+import { assertUnitInspectionListOwner } from './inspection-orchestration-owner.js';
 
 type SchemaSection = InspectionBundleResponse['schema']['sections'][number];
 type SchemaItem = SchemaSection['items'][number];
@@ -475,6 +480,8 @@ export function UnitInspections({
   const [inspections, setInspections] =
     useState<readonly InspectionResponseDto[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
+  const [listRevision, setListRevision] = useState(0);
+  const [bundleRevision, setBundleRevision] = useState(0);
   const [bundle, setBundle] = useState<InspectionBundleResponse | null>(null);
   const [bundleError, setBundleError] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftByItem>({});
@@ -487,6 +494,8 @@ export function UnitInspections({
   const inFlightStartsRef = useRef<Set<string>>(new Set());
   const [saveError, setSaveError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
+  const [orchestrationPending, setOrchestrationPending] = useState(false);
+  const orchestrationPendingRef = useRef(false);
   const activeInspectionIdRef = useRef(inspectionId);
   activeInspectionIdRef.current = inspectionId;
 
@@ -499,7 +508,11 @@ export function UnitInspections({
       .get(unitInspectionsPath(unitId), inspectionListResponseSchema, {
         signal: controller.signal,
       })
-      .then((response) => setInspections(response.items))
+      .then((response) => {
+        if (controller.signal.aborted) return;
+        assertUnitInspectionListOwner(unitId, response.items);
+        setInspections(response.items);
+      })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
         setListError(
@@ -510,7 +523,7 @@ export function UnitInspections({
       });
 
     return () => controller.abort();
-  }, [api, unitId]);
+  }, [api, listRevision, unitId]);
 
   async function loadBundle(id: string): Promise<InspectionBundleResponse> {
     const result = await api.get(
@@ -554,7 +567,14 @@ export function UnitInspections({
     return () => {
       active = false;
     };
-  }, [api, inspectionId, unitId]);
+  }, [api, bundleRevision, inspectionId, unitId]);
+
+  const selectedListInspection = useMemo(
+    () =>
+      inspections?.find((inspection) => inspection.id === inspectionId) ??
+      null,
+    [inspectionId, inspections],
+  );
 
   const selectedSection = useMemo(() => {
     if (!bundle) return null;
@@ -662,6 +682,26 @@ export function UnitInspections({
     );
   const hasUnsavedChanges = patch !== null;
 
+  const orchestrationWriteGate: InspectionOrchestrationWriteGate = {
+    pending: orchestrationPending,
+    tryStart: () => {
+      if (
+        orchestrationPendingRef.current ||
+        inFlightStartsRef.current.size > 0 ||
+        inFlightSectionSavesRef.current.size > 0
+      ) {
+        return false;
+      }
+      orchestrationPendingRef.current = true;
+      setOrchestrationPending(true);
+      return true;
+    },
+    finish: () => {
+      orchestrationPendingRef.current = false;
+      setOrchestrationPending(false);
+    },
+  };
+
   function isActiveInspection(targetInspectionId: string): boolean {
     return activeInspectionIdRef.current === targetInspectionId;
   }
@@ -677,6 +717,11 @@ export function UnitInspections({
   }
 
   useEffect(() => {
+    if (orchestrationPending) {
+      setNavigationBlocker(() => false);
+      return () => setNavigationBlocker(null);
+    }
+
     if (!hasUnsavedChanges) {
       setNavigationBlocker(null);
       return;
@@ -689,7 +734,11 @@ export function UnitInspections({
     );
 
     return () => setNavigationBlocker(null);
-  }, [hasUnsavedChanges, setNavigationBlocker]);
+  }, [
+    hasUnsavedChanges,
+    orchestrationPending,
+    setNavigationBlocker,
+  ]);
 
   function changeItem(itemId: string, entry: DraftEntry) {
     setDraft((current) => ({ ...current, [itemId]: entry }));
@@ -701,7 +750,12 @@ export function UnitInspections({
     if (!bundle) return;
 
     const targetInspectionId = bundle.inspection.id;
-    if (inFlightStartsRef.current.has(targetInspectionId)) return;
+    if (
+      orchestrationPendingRef.current ||
+      inFlightStartsRef.current.has(targetInspectionId)
+    ) {
+      return;
+    }
 
     const expectedVersion = bundle.inspection.version;
     inFlightStartsRef.current.add(targetInspectionId);
@@ -754,7 +808,12 @@ export function UnitInspections({
       targetInspectionId,
       targetSectionId,
     );
-    if (inFlightSectionSavesRef.current.has(targetKey)) return;
+    if (
+      orchestrationPendingRef.current ||
+      inFlightSectionSavesRef.current.has(targetKey)
+    ) {
+      return;
+    }
 
     const requestPatch = patch;
     inFlightSectionSavesRef.current.add(targetKey);
@@ -847,6 +906,52 @@ export function UnitInspections({
 
   return (
     <div className="inspection-workspace">
+      {inspections ? (
+        <InspectionOrchestrationPanel
+          api={api}
+          asOf={asOf}
+          inspections={inspections}
+          navigate={navigate}
+          onCanonicalReload={() => {
+            setListRevision((revision) => revision + 1);
+            setBundleRevision((revision) => revision + 1);
+          }}
+          onCreated={(created) => {
+            setInspections((current) =>
+              current
+                ? [
+                    ...current.filter((item) => item.id !== created.id),
+                    created,
+                  ]
+                : [created],
+            );
+            navigate(
+              unitRoute(propertyId, unitId, asOf, 'inspections', {
+                inspectionId: created.id,
+              }),
+            );
+          }}
+          onUpdated={(updated) => {
+            setInspections((current) =>
+              current?.map((item) =>
+                item.id === updated.id ? updated : item,
+              ) ?? current,
+            );
+            setBundle((current) =>
+              current?.inspection.id === updated.id
+                ? { ...current, inspection: updated }
+                : current,
+            );
+          }}
+          propertyId={propertyId}
+          selectedInspection={
+            bundle?.inspection ?? selectedListInspection
+          }
+          unitId={unitId}
+          writeGate={orchestrationWriteGate}
+        />
+      ) : null}
+
       <section className="panel">
         <div className="section-heading">
           <div>
@@ -937,7 +1042,7 @@ export function UnitInspections({
               </div>
               <button
                 className="button-secondary"
-                disabled={starting}
+                disabled={starting || orchestrationPending}
                 onClick={startInspection}
                 type="button"
               >
@@ -1032,7 +1137,7 @@ export function UnitInspections({
                         <small>{formatDetailKey(item.type)}</small>
                       </label>
                       <Field
-                        disabled={!editable || saving}
+                        disabled={!editable || saving || orchestrationPending}
                         entry={entry}
                         item={item}
                         onChange={(next) => changeItem(item.id, next)}
@@ -1064,7 +1169,12 @@ export function UnitInspections({
                       : 'Section matches canonical server state'}
                   </span>
                   <button
-                    disabled={!editable || !patch || saving}
+                    disabled={
+                      !editable ||
+                      !patch ||
+                      saving ||
+                      orchestrationPending
+                    }
                     type="submit"
                   >
                     {saving ? 'Saving…' : 'Save section'}
