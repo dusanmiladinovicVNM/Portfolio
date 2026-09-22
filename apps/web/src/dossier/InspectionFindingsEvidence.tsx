@@ -213,14 +213,22 @@ export function InspectionFindingsEvidence({
     (finding) => finding.sectionId === activeSection.id,
   );
 
-  function begin(action: Exclude<PendingAction, null>): boolean {
+  function rejectContentWriteBlocked(): boolean {
     if (blockedByDirtySection) {
       setError(
         'Save or discard the current section before recording Findings or Evidence.',
       );
-      return false;
+      return true;
     }
-    if (!contentWritable || !writeGate.tryStart()) return false;
+    if (!contentWritable) {
+      setError('Start the Inspection before recording Findings or Evidence.');
+      return true;
+    }
+    return false;
+  }
+
+  function begin(action: Exclude<PendingAction, null>): boolean {
+    if (rejectContentWriteBlocked() || !writeGate.tryStart()) return false;
     setPendingAction(action);
     setError(null);
     setSuccess(null);
@@ -248,12 +256,7 @@ export function InspectionFindingsEvidence({
 
   async function createFinding(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (blockedByDirtySection) {
-      setError(
-        'Save or discard the current section before recording Findings or Evidence.',
-      );
-      return;
-    }
+    if (rejectContentWriteBlocked()) return;
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const rawItemId = requiredString(form, 'itemId');
@@ -278,6 +281,7 @@ export function InspectionFindingsEvidence({
       title: parsed.data.title,
       description: parsed.data.description ?? null,
     };
+    let writeAcknowledged = false;
     try {
       let created: InspectionFindingResponse;
       try {
@@ -286,6 +290,7 @@ export function InspectionFindingsEvidence({
           parsed.data,
           inspectionFindingResponseSchema,
         );
+        writeAcknowledged = true;
       } catch (cause) {
         if (!isAmbiguousWriteFailure(cause)) throw cause;
         const canonical = await readCanonical();
@@ -313,7 +318,11 @@ export function InspectionFindingsEvidence({
       }
     } catch (cause) {
       if (mountedRef.current) {
-        setError(errorMessage(cause, 'Finding could not be recorded.'));
+        setError(
+          writeAcknowledged
+            ? `Finding write was acknowledged by the server, but follow-up verification failed: ${errorMessage(cause, 'canonical verification failed')}. Do not retry until the canonical Finding list has been checked.`
+            : errorMessage(cause, 'Finding could not be recorded.'),
+        );
       }
     } finally {
       finish();
@@ -322,12 +331,7 @@ export function InspectionFindingsEvidence({
 
   async function createEvidenceDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (blockedByDirtySection) {
-      setError(
-        'Save or discard the current section before recording Findings or Evidence.',
-      );
-      return;
-    }
+    if (rejectContentWriteBlocked()) return;
     if (documents === null) {
       setError(
         'Wait for the canonical Document catalog before creating Evidence.',
@@ -351,6 +355,7 @@ export function InspectionFindingsEvidence({
       (documents ?? []).map((document) => document.id),
     );
 
+    let writeAcknowledged = false;
     try {
       let created: DocumentResponse;
       let recoveredCreate = false;
@@ -360,6 +365,7 @@ export function InspectionFindingsEvidence({
           parsed.data,
           documentResponseSchema,
         );
+        writeAcknowledged = true;
       } catch (cause) {
         if (!isAmbiguousWriteFailure(cause)) throw cause;
         const canonical = await api.get(
@@ -397,7 +403,9 @@ export function InspectionFindingsEvidence({
       if (mountedRef.current) {
         setCatalogRevision((revision) => revision + 1);
         setError(
-          errorMessage(cause, 'Evidence Document could not be created.'),
+          writeAcknowledged
+            ? `Evidence Document creation was acknowledged by the server, but response verification failed: ${errorMessage(cause, 'verification failed')}. Reload the canonical Document catalog before retrying.`
+            : errorMessage(cause, 'Evidence Document could not be created.'),
         );
       }
     } finally {
@@ -407,6 +415,7 @@ export function InspectionFindingsEvidence({
 
   async function uploadEvidenceVersion(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (rejectContentWriteBlocked()) return;
     if (!selectedDocument || versions === null) return;
 
     const formElement = event.currentTarget;
@@ -434,6 +443,7 @@ export function InspectionFindingsEvidence({
     };
     const preExistingIds = new Set(versions.map((version) => version.id));
 
+    let writeAcknowledged = false;
     try {
       let uploaded: DocumentVersionResponse;
       let recoveredUpload = false;
@@ -447,6 +457,7 @@ export function InspectionFindingsEvidence({
           fileValue,
           documentVersionResponseSchema,
         );
+        writeAcknowledged = true;
       } catch (cause) {
         if (!isAmbiguousWriteFailure(cause)) throw cause;
         const canonical = await api.get(
@@ -491,10 +502,12 @@ export function InspectionFindingsEvidence({
         setCatalogRevision((revision) => revision + 1);
         setVersionRevision((revision) => revision + 1);
         setError(
-          errorMessage(
-            cause,
-            'Evidence upload could not be confirmed. Canonical Document versions are being reloaded.',
-          ),
+          writeAcknowledged
+            ? `Evidence upload was acknowledged by the server, but response verification failed: ${errorMessage(cause, 'verification failed')}. Do not upload again until canonical Document versions have been checked.`
+            : errorMessage(
+                cause,
+                'Evidence upload could not be confirmed. Canonical Document versions are being reloaded.',
+              ),
         );
       }
     } finally {
@@ -504,6 +517,7 @@ export function InspectionFindingsEvidence({
 
   async function attachEvidence(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (rejectContentWriteBlocked()) return;
     if (!selectedVersion) return;
 
     const formElement = event.currentTarget;
@@ -553,6 +567,7 @@ export function InspectionFindingsEvidence({
       bundle.evidence.map((evidence) => evidence.id),
     );
 
+    let writeAcknowledged = false;
     try {
       let attached: InspectionEvidenceResponse;
       try {
@@ -561,6 +576,7 @@ export function InspectionFindingsEvidence({
           parsed.data,
           inspectionEvidenceResponseSchema,
         );
+        writeAcknowledged = true;
       } catch (cause) {
         if (!isAmbiguousWriteFailure(cause)) throw cause;
         const canonical = await readCanonical();
@@ -607,7 +623,11 @@ export function InspectionFindingsEvidence({
       }
     } catch (cause) {
       if (mountedRef.current) {
-        setError(errorMessage(cause, 'Evidence could not be attached.'));
+        setError(
+          writeAcknowledged
+            ? `Evidence relation was acknowledged by the server, but follow-up verification failed: ${errorMessage(cause, 'canonical verification failed')}. Do not upload the binary again; reload canonical Inspection state before retrying the relation.`
+            : errorMessage(cause, 'Evidence could not be attached.'),
+        );
       }
     } finally {
       finish();
