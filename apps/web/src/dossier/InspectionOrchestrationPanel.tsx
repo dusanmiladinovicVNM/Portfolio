@@ -66,6 +66,7 @@ interface InspectionOrchestrationPanelProps {
   readonly asOf: string;
   readonly inspections: readonly InspectionResponseDto[];
   readonly selectedInspection: InspectionResponseDto | null;
+  readonly createBlockedByDirtySection: boolean;
   readonly navigate: NavigateWorkspace;
   readonly writeGate: InspectionOrchestrationWriteGate;
   readonly onCreated: (inspection: InspectionResponseDto) => void;
@@ -94,6 +95,7 @@ export function InspectionOrchestrationPanel({
   asOf,
   inspections,
   selectedInspection,
+  createBlockedByDirtySection,
   navigate,
   writeGate,
   onCreated,
@@ -250,6 +252,13 @@ export function InspectionOrchestrationPanel({
 
   async function createInspection(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (createBlockedByDirtySection) {
+      setWriteError(
+        'Save or discard the current section before creating another Inspection.',
+      );
+      return;
+    }
+
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const expected = {
@@ -534,10 +543,16 @@ export function InspectionOrchestrationPanel({
                 No published schema is available for this Inspection type.
               </p>
             ) : null}
+            {createBlockedByDirtySection ? (
+              <p className="setup-hint" role="status">
+                Save or discard the current section before creating another Inspection.
+              </p>
+            ) : null}
             <button
               className="button-primary"
               disabled={
                 writeGate.pending ||
+                createBlockedByDirtySection ||
                 staff.length === 0 ||
                 publishedSchemas.length === 0
               }
