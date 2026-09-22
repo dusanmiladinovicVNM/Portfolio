@@ -86,8 +86,32 @@ export function tenancyTermsPath(tenancyId: string, at: string): string {
   return `${tenancyPath(tenancyId)}/terms?at=${encodeURIComponent(at)}`;
 }
 
+export function agreementPath(agreementId: string): string {
+  return `/agreements/${encodeURIComponent(agreementId)}`;
+}
+
+export function agreementSignPath(agreementId: string): string {
+  return `${agreementPath(agreementId)}/sign`;
+}
+
+export function agreementCancelPath(agreementId: string): string {
+  return `${agreementPath(agreementId)}/cancel`;
+}
+
 export function agreementAmendmentsPath(agreementId: string): string {
-  return `/agreements/${encodeURIComponent(agreementId)}/amendments`;
+  return `${agreementPath(agreementId)}/amendments`;
+}
+
+export function amendmentPath(amendmentId: string): string {
+  return `/amendments/${encodeURIComponent(amendmentId)}`;
+}
+
+export function amendmentSignPath(amendmentId: string): string {
+  return `${amendmentPath(amendmentId)}/sign`;
+}
+
+export function amendmentCancelPath(amendmentId: string): string {
+  return `${amendmentPath(amendmentId)}/cancel`;
 }
 
 export function partiesByIdsPath(ids: readonly string[]): string {

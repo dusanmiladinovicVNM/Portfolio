@@ -4,10 +4,13 @@ import type {
   CreateSpaceRequest,
   CreateTenancyRequest,
   CreateUnitRequest,
+  LeaseAgreementResponse,
+  LeaseAmendmentResponse,
   PartyResponse,
   PropertyResponse,
   SpaceResponse,
   TenancyResponse,
+  TenancyTermVersionResponse,
   UnitResponse,
 } from '@portfolio/contracts';
 import { createRoot } from 'react-dom/client';
@@ -48,12 +51,42 @@ const setupPartyEmailId = 'b1000000-0000-4000-8000-000000000005';
 const setupPartyAddressId = 'b1000000-0000-4000-8000-000000000006';
 const setupTenancyId = 'b1000000-0000-4000-8000-000000000007';
 const setupTenancyPartyId = 'b1000000-0000-4000-8000-000000000008';
+const setupAgreementIds = [
+  'b1000000-0000-4000-8000-000000000009',
+  'b1000000-0000-4000-8000-000000000010',
+  'b1000000-0000-4000-8000-000000000011',
+] as const;
+const setupAgreementPartyIds = [
+  'b1000000-0000-4000-8000-000000000012',
+  'b1000000-0000-4000-8000-000000000013',
+  'b1000000-0000-4000-8000-000000000014',
+  'b1000000-0000-4000-8000-000000000015',
+  'b1000000-0000-4000-8000-000000000016',
+  'b1000000-0000-4000-8000-000000000017',
+] as const;
+const setupAmendmentIds = [
+  'b1000000-0000-4000-8000-000000000018',
+  'b1000000-0000-4000-8000-000000000019',
+] as const;
+const setupTermIds = [
+  'b1000000-0000-4000-8000-000000000020',
+  'b1000000-0000-4000-8000-000000000021',
+  'b1000000-0000-4000-8000-000000000022',
+] as const;
 
 let setupProperty: PropertyResponse | null = null;
 let setupUnit: UnitResponse | null = null;
 let setupSpace: SpaceResponse | null = null;
 let setupParty: PartyResponse | null = null;
 let setupTenancy: TenancyResponse | null = null;
+let setupAgreements: LeaseAgreementResponse[] = [];
+let heldContractAgreementRead: LeaseAgreementResponse[] | null = null;
+let setupAmendments: LeaseAmendmentResponse[] = [];
+let setupTerms: TenancyTermVersionResponse[] = [];
+let setupAgreementSequence = 0;
+let setupAgreementPartySequence = 0;
+let setupAmendmentSequence = 0;
+let setupTermSequence = 0;
 
 const operations = {
   openMaintenanceIssueCount: 0,
@@ -394,18 +427,75 @@ function json(data: unknown, status = 200): Response {
 }
 
 function tenancyVersionConflict(): Response {
+  return apiError(
+    409,
+    'TENANCY_VERSION_CONFLICT',
+    'Tenancy version conflict.',
+  );
+}
+
+function apiError(status: number, code: string, message: string): Response {
   return new Response(
-    JSON.stringify({
-      error: {
-        code: 'TENANCY_VERSION_CONFLICT',
-        message: 'Tenancy version conflict.',
-      },
-    }),
+    JSON.stringify({ error: { code, message } }),
     {
-      status: 409,
+      status,
       headers: { 'content-type': 'application/json' },
     },
   );
+}
+
+function contractVersionConflict(code: string): Response {
+  return apiError(409, code, 'Contract version conflict.');
+}
+
+function exactMoney(value: string | undefined): string {
+  if (!value) return '0.00';
+  const [whole, fraction = ''] = value.split('.');
+  return `${whole}.${fraction.padEnd(2, '0')}`;
+}
+
+function setupTermSnapshot(
+  tenancyIdValue: string,
+  source: {
+    sourceType: 'agreement' | 'amendment';
+    sourceAgreementId: string | null;
+    sourceAmendmentId: string | null;
+    effectiveFrom: string;
+  },
+  termsInput: {
+    currency: string;
+    baseRent: string;
+    serviceCharge?: string;
+    utilitiesAdvance?: string;
+    parkingRent?: string;
+    otherRecurringCharge?: string;
+    depositRequired?: string;
+    billingFrequency?: 'monthly' | 'quarterly' | 'yearly';
+    noticePeriodTenantDays?: number;
+    noticePeriodLandlordDays?: number;
+  },
+): TenancyTermVersionResponse {
+  const id = setupTermIds[setupTermSequence++];
+  if (!id) throw new Error('Setup term id pool exhausted.');
+
+  return {
+    id,
+    tenancyId: tenancyIdValue,
+    sourceType: source.sourceType,
+    sourceAgreementId: source.sourceAgreementId,
+    sourceAmendmentId: source.sourceAmendmentId,
+    effectiveFrom: source.effectiveFrom,
+    currency: termsInput.currency.toUpperCase(),
+    baseRent: exactMoney(termsInput.baseRent),
+    serviceCharge: exactMoney(termsInput.serviceCharge),
+    utilitiesAdvance: exactMoney(termsInput.utilitiesAdvance),
+    parkingRent: exactMoney(termsInput.parkingRent),
+    otherRecurringCharge: exactMoney(termsInput.otherRecurringCharge),
+    depositRequired: exactMoney(termsInput.depositRequired),
+    billingFrequency: termsInput.billingFrequency ?? 'monthly',
+    noticePeriodTenantDays: termsInput.noticePeriodTenantDays ?? 0,
+    noticePeriodLandlordDays: termsInput.noticePeriodLandlordDays ?? 0,
+  };
 }
 
 function apiPath(input: RequestInfo | URL): URL {
@@ -430,12 +520,15 @@ type BrowserHarnessWindow = Window & {
   __portfolioHoldUnitCreate?: boolean;
   __portfolioHoldSpaceCreate?: boolean;
   __portfolioHoldTenancyMutation?: boolean;
+  __portfolioHoldContractMutation?: boolean;
   __portfolioPendingUnitCreate?: boolean;
   __portfolioPendingSpaceCreate?: boolean;
   __portfolioPendingTenancyMutation?: boolean;
+  __portfolioPendingContractMutation?: boolean;
   __portfolioReleaseUnitCreate?: () => boolean;
   __portfolioReleaseSpaceCreate?: () => boolean;
   __portfolioReleaseTenancyMutation?: () => boolean;
+  __portfolioReleaseContractMutation?: () => boolean;
 };
 
 const browserHarnessWindow = window as BrowserHarnessWindow;
@@ -448,6 +541,9 @@ let heldSpaceCreate:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 let heldTenancyMutation:
+  | { readonly response: Response; readonly resolve: (response: Response) => void }
+  | null = null;
+let heldContractMutation:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 
@@ -484,6 +580,17 @@ function maybeHoldTenancyMutation(response: Response): Promise<Response> {
   });
 }
 
+function maybeHoldContractMutation(response: Response): Promise<Response> {
+  if (!browserHarnessWindow.__portfolioHoldContractMutation) {
+    return Promise.resolve(response);
+  }
+
+  browserHarnessWindow.__portfolioPendingContractMutation = true;
+  return new Promise<Response>((resolve) => {
+    heldContractMutation = { response, resolve };
+  });
+}
+
 browserHarnessWindow.__portfolioReleaseUnitCreate = () => {
   if (!heldUnitCreate) return false;
   const held = heldUnitCreate;
@@ -510,6 +617,17 @@ browserHarnessWindow.__portfolioReleaseTenancyMutation = () => {
   heldTenancyMutation = null;
   browserHarnessWindow.__portfolioHoldTenancyMutation = false;
   browserHarnessWindow.__portfolioPendingTenancyMutation = false;
+  held.resolve(held.response);
+  return true;
+};
+
+browserHarnessWindow.__portfolioReleaseContractMutation = () => {
+  if (!heldContractMutation) return false;
+  const held = heldContractMutation;
+  heldContractMutation = null;
+  heldContractAgreementRead = null;
+  browserHarnessWindow.__portfolioHoldContractMutation = false;
+  browserHarnessWindow.__portfolioPendingContractMutation = false;
   held.resolve(held.response);
   return true;
 };
@@ -628,6 +746,14 @@ globalThis.fetch = async (
   if (
     setupTenancy &&
     path.startsWith('/tenancies/' + setupTenancyId + '/') &&
+    [
+      '/plan',
+      '/activate',
+      '/give-notice',
+      '/move-out-pending',
+      '/end',
+      '/cancel',
+    ].some((suffix) => path.endsWith(suffix)) &&
     init?.method === 'POST'
   ) {
     requirePortfolioAuth(init);
@@ -691,6 +817,311 @@ globalThis.fetch = async (
       throw new Error('Unexpected setup Tenancy action: ' + path);
     }
     return maybeHoldTenancyMutation(json(setupTenancy));
+  }
+
+  if (
+    setupTenancy &&
+    path === '/tenancies/' + setupTenancyId + '/agreements'
+  ) {
+    if (init?.method === 'POST') {
+      requirePortfolioAuth(init);
+      const body = JSON.parse(String(init.body)) as {
+        code: string;
+        agreementType: 'initial' | 'renewal' | 'replacement';
+        predecessorAgreementId?: string;
+        effectiveFrom: string;
+        effectiveTo?: string | null;
+        parties: Array<{
+          partyId: string;
+          role:
+            | 'landlord'
+            | 'tenant'
+            | 'co_tenant'
+            | 'guarantor'
+            | 'authorized_signatory';
+        }>;
+      };
+      const id = setupAgreementIds[setupAgreementSequence++];
+      if (!id) throw new Error('Setup Agreement id pool exhausted.');
+      const agreementParties = body.parties.map((party) => {
+        const partyId = setupAgreementPartyIds[setupAgreementPartySequence++];
+        if (!partyId) throw new Error('Setup AgreementParty id pool exhausted.');
+        return {
+          id: partyId,
+          agreementId: id,
+          partyId: party.partyId,
+          role: party.role,
+        };
+      });
+      const created: LeaseAgreementResponse = {
+        id,
+        tenancyId: setupTenancyId,
+        code: body.code,
+        agreementType: body.agreementType,
+        predecessorAgreementId: body.predecessorAgreementId ?? null,
+        effectiveFrom: body.effectiveFrom,
+        effectiveTo: body.effectiveTo ?? null,
+        status: 'draft',
+        signedAt: null,
+        version: 1,
+        parties: agreementParties,
+      };
+      setupAgreements.push(created);
+      return json(created, 201);
+    }
+    return json({
+      items: heldContractAgreementRead ?? setupAgreements,
+    });
+  }
+
+  const setupAgreement = setupAgreements.find((item) =>
+    path.startsWith('/agreements/' + item.id),
+  );
+
+  if (
+    setupAgreement &&
+    path === '/agreements/' + setupAgreement.id + '/sign' &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      signedAt: string;
+      terms: {
+        currency: string;
+        baseRent: string;
+        serviceCharge?: string;
+        utilitiesAdvance?: string;
+        parkingRent?: string;
+        otherRecurringCharge?: string;
+        depositRequired?: string;
+        billingFrequency?: 'monthly' | 'quarterly' | 'yearly';
+        noticePeriodTenantDays?: number;
+        noticePeriodLandlordDays?: number;
+      };
+    };
+    if (body.expectedVersion !== setupAgreement.version) {
+      return contractVersionConflict('LEASE_AGREEMENT_VERSION_CONFLICT');
+    }
+
+    if (browserHarnessWindow.__portfolioHoldContractMutation) {
+      heldContractAgreementRead = setupAgreements.map((item) => ({
+        ...item,
+        parties: item.parties.map((party) => ({ ...party })),
+      }));
+    }
+
+    if (setupAgreement.predecessorAgreementId) {
+      const predecessor = setupAgreements.find(
+        (item) => item.id === setupAgreement.predecessorAgreementId,
+      );
+      if (!predecessor || predecessor.status !== 'signed') {
+        return apiError(
+          409,
+          'LEASE_AGREEMENT_PREDECESSOR_NOT_SIGNABLE',
+          'Predecessor is not signed.',
+        );
+      }
+      setupAgreements = setupAgreements.map((item) =>
+        item.id === predecessor.id
+          ? {
+              ...item,
+              status: 'superseded',
+              version: item.version + 1,
+            }
+          : item,
+      );
+    }
+
+    const signed: LeaseAgreementResponse = {
+      ...setupAgreement,
+      status: 'signed',
+      signedAt: body.signedAt,
+      version: setupAgreement.version + 1,
+    };
+    setupAgreements = setupAgreements.map((item) =>
+      item.id === signed.id ? signed : item,
+    );
+    setupTerms.push(
+      setupTermSnapshot(
+        setupTenancyId,
+        {
+          sourceType: 'agreement',
+          sourceAgreementId: signed.id,
+          sourceAmendmentId: null,
+          effectiveFrom: signed.effectiveFrom,
+        },
+        body.terms,
+      ),
+    );
+    return maybeHoldContractMutation(json(signed));
+  }
+
+  if (
+    setupAgreement &&
+    path === '/agreements/' + setupAgreement.id + '/cancel' &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as { expectedVersion: number };
+    if (body.expectedVersion !== setupAgreement.version) {
+      return contractVersionConflict('LEASE_AGREEMENT_VERSION_CONFLICT');
+    }
+    const cancelled: LeaseAgreementResponse = {
+      ...setupAgreement,
+      status: 'cancelled',
+      version: setupAgreement.version + 1,
+    };
+    setupAgreements = setupAgreements.map((item) =>
+      item.id === cancelled.id ? cancelled : item,
+    );
+    return json(cancelled);
+  }
+
+  if (
+    setupAgreement &&
+    path === '/agreements/' + setupAgreement.id + '/amendments'
+  ) {
+    if (init?.method === 'POST') {
+      requirePortfolioAuth(init);
+      const body = JSON.parse(String(init.body)) as {
+        code: string;
+        title: string;
+        description?: string | null;
+        effectiveFrom: string;
+      };
+      const id = setupAmendmentIds[setupAmendmentSequence++];
+      if (!id) throw new Error('Setup Amendment id pool exhausted.');
+      const created: LeaseAmendmentResponse = {
+        id,
+        agreementId: setupAgreement.id,
+        code: body.code,
+        title: body.title,
+        description: body.description ?? null,
+        effectiveFrom: body.effectiveFrom,
+        status: 'draft',
+        signedAt: null,
+        version: 1,
+      };
+      setupAmendments.push(created);
+      return json(created, 201);
+    }
+    return json({
+      items: setupAmendments.filter(
+        (item) => item.agreementId === setupAgreement.id,
+      ),
+    });
+  }
+
+  const setupAmendment = setupAmendments.find((item) =>
+    path.startsWith('/amendments/' + item.id),
+  );
+
+  if (
+    setupAmendment &&
+    path === '/amendments/' + setupAmendment.id + '/sign' &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      signedAt: string;
+      terms: {
+        currency: string;
+        baseRent: string;
+        serviceCharge?: string;
+        utilitiesAdvance?: string;
+        parkingRent?: string;
+        otherRecurringCharge?: string;
+        depositRequired?: string;
+        billingFrequency?: 'monthly' | 'quarterly' | 'yearly';
+        noticePeriodTenantDays?: number;
+        noticePeriodLandlordDays?: number;
+      };
+    };
+    if (body.expectedVersion !== setupAmendment.version) {
+      return contractVersionConflict('LEASE_AMENDMENT_VERSION_CONFLICT');
+    }
+    const parent = setupAgreements.find(
+      (item) => item.id === setupAmendment.agreementId,
+    );
+    if (!parent) throw new Error('Setup Amendment parent is missing.');
+
+    const signed: LeaseAmendmentResponse = {
+      ...setupAmendment,
+      status: 'signed',
+      signedAt: body.signedAt,
+      version: setupAmendment.version + 1,
+    };
+    setupAmendments = setupAmendments.map((item) =>
+      item.id === signed.id ? signed : item,
+    );
+    setupTerms.push(
+      setupTermSnapshot(
+        setupTenancyId,
+        {
+          sourceType: 'amendment',
+          sourceAgreementId: null,
+          sourceAmendmentId: signed.id,
+          effectiveFrom: signed.effectiveFrom,
+        },
+        body.terms,
+      ),
+    );
+    return json(signed);
+  }
+
+  if (
+    setupAmendment &&
+    path === '/amendments/' + setupAmendment.id + '/cancel' &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as { expectedVersion: number };
+    if (body.expectedVersion !== setupAmendment.version) {
+      return contractVersionConflict('LEASE_AMENDMENT_VERSION_CONFLICT');
+    }
+    const cancelled: LeaseAmendmentResponse = {
+      ...setupAmendment,
+      status: 'cancelled',
+      version: setupAmendment.version + 1,
+    };
+    setupAmendments = setupAmendments.map((item) =>
+      item.id === cancelled.id ? cancelled : item,
+    );
+    return json(cancelled);
+  }
+
+  if (setupTenancy && path === '/tenancies/' + setupTenancyId + '/terms') {
+    const at = url.searchParams.get('at');
+    const eligible = setupTerms
+      .filter((item) => at !== null && item.effectiveFrom <= at)
+      .sort((left, right) =>
+        right.effectiveFrom.localeCompare(left.effectiveFrom),
+      );
+    const effective = eligible[0];
+    if (!effective) {
+      return apiError(
+        404,
+        'TENANCY_TERMS_NOT_FOUND',
+        'No effective tenancy terms exist for the requested date.',
+      );
+    }
+    return json(effective);
+  }
+
+  if (
+    setupAgreement &&
+    path === '/agreements/' + setupAgreement.id + '/documents'
+  ) {
+    return json({ items: [] });
+  }
+
+  if (
+    setupAmendment &&
+    path === '/amendments/' + setupAmendment.id + '/documents'
+  ) {
+    return json({ items: [] });
   }
 
   if (path === '/units/' + unitId + '/spaces') {

@@ -8,6 +8,7 @@ const driverUrl = `http://127.0.0.1:${driverPort}`;
 const propertyId = '11111111-1111-4111-8111-111111111111';
 const unitId = '22222222-2222-4222-8222-222222222222';
 const tenancyId = '33333333-3333-4333-8333-333333333333';
+const landlordPartyId = '88888888-8888-4888-8888-888888888888';
 const tenantPartyId = '99999999-9999-4999-8999-999999999999';
 const agreementId = '55555555-5555-4555-8555-555555555555';
 const amendmentId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -15,6 +16,9 @@ const inspectionId = 'a1000000-0000-4000-8000-000000000001';
 const inspectionSectionId = 'a1000000-0000-4000-8000-000000000003';
 const setupPropertyId = 'b1000000-0000-4000-8000-000000000001';
 const setupUnitId = 'b1000000-0000-4000-8000-000000000002';
+const setupTenancyId = 'b1000000-0000-4000-8000-000000000007';
+const setupSignedAgreementId = 'b1000000-0000-4000-8000-000000000010';
+const setupReplacementAgreementId = 'b1000000-0000-4000-8000-000000000011';
 
 const logs = [];
 
@@ -162,10 +166,38 @@ async function setInputValueXpath(sessionId, xpath, value) {
   });
 }
 
+async function setReactInputValueXpath(sessionId, xpath, value) {
+  const id = await waitForElement(sessionId, 'xpath', xpath);
+  await webdriver(`/session/${sessionId}/execute/sync`, {
+    method: 'POST',
+    body: {
+      script:
+        'const element = arguments[0];' +
+        'const setter = Object.getOwnPropertyDescriptor(' +
+        'HTMLInputElement.prototype, "value").set;' +
+        'setter.call(element, arguments[1]);' +
+        'element.dispatchEvent(new Event("input", { bubbles: true }));' +
+        'element.dispatchEvent(new Event("change", { bubbles: true }));' +
+        'return element.value;',
+      args: [
+        { 'element-6066-11e4-a52e-4f735466cecf': id },
+        value,
+      ],
+    },
+  });
+}
+
 async function elementValueXpath(sessionId, xpath) {
   const id = await waitForElement(sessionId, 'xpath', xpath);
   return webdriver(
     `/session/${sessionId}/element/${id}/property/value`,
+  );
+}
+
+async function elementDisabledXpath(sessionId, xpath) {
+  const id = await waitForElement(sessionId, 'xpath', xpath);
+  return webdriver(
+    `/session/${sessionId}/element/${id}/property/disabled`,
   );
 }
 
@@ -697,6 +729,427 @@ try {
     ),
     false,
     'Late Tenancy completion cannot mutate the new Unit workspace',
+  );
+
+  await navigateWithPopState(
+    sessionId,
+    '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=tenancies&asOf=2025-06-30',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//span[contains(@class,'status-chip') and normalize-space()='active']",
+  );
+
+  await clickXpath(sessionId, "//a[normalize-space()='Contracts']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//h2[normalize-space()='Select the lifecycle record']",
+  );
+  await clickXpath(
+    sessionId,
+    "//a[contains(@class,'selection-card')][.//strong[normalize-space()='TEN-SETUP-BRW']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[@data-contract-form='agreement-create']",
+  );
+
+  const agreementCreateForm =
+    "//form[@data-contract-form='agreement-create']";
+  await typeXpath(
+    sessionId,
+    agreementCreateForm + "//input[@name='code']",
+    'AGR-CANCEL-BRW',
+  );
+  await setInputValueXpath(
+    sessionId,
+    agreementCreateForm + "//input[@name='effectiveFrom']",
+    '2026-10-01',
+  );
+  await selectOptionXpath(
+    sessionId,
+    agreementCreateForm + "//select[@name='landlordPartyId']",
+    landlordPartyId,
+  );
+  await clickXpath(
+    sessionId,
+    agreementCreateForm + "//button[normalize-space()='Create Agreement draft']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'agreement-card')][.//span[normalize-space()='AGR-CANCEL-BRW']][.//span[contains(@class,'status-chip') and normalize-space()='draft']]",
+  );
+  await clickXpath(
+    sessionId,
+    "//section[contains(@class,'contract-admin-panel')]//button[normalize-space()='Cancel Agreement']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'agreement-card')][.//span[normalize-space()='AGR-CANCEL-BRW']][.//span[contains(@class,'status-chip') and normalize-space()='cancelled']]",
+  );
+
+  await typeXpath(
+    sessionId,
+    agreementCreateForm + "//input[@name='code']",
+    'AGR-SETUP-BRW',
+  );
+  await setInputValueXpath(
+    sessionId,
+    agreementCreateForm + "//input[@name='effectiveFrom']",
+    '2026-10-01',
+  );
+  await selectOptionXpath(
+    sessionId,
+    agreementCreateForm + "//select[@name='landlordPartyId']",
+    landlordPartyId,
+  );
+  await clickXpath(
+    sessionId,
+    agreementCreateForm + "//button[normalize-space()='Create Agreement draft']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'agreement-card')][.//span[normalize-space()='AGR-SETUP-BRW']][.//span[contains(@class,'status-chip') and normalize-space()='draft']]",
+  );
+
+  const agreementSignForm =
+    "//form[@data-contract-form='agreement-sign']";
+  await setInputValueXpath(
+    sessionId,
+    agreementSignForm + "//input[@name='signedAt']",
+    '2026-09-20',
+  );
+  await typeXpath(
+    sessionId,
+    agreementSignForm + "//input[@name='baseRent']",
+    '1000.00',
+  );
+  await typeXpath(
+    sessionId,
+    agreementSignForm + "//input[@name='serviceCharge']",
+    '150.00',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioHoldContractMutation = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    agreementSignForm + "//button[normalize-space()='Sign Agreement']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    'return window.__portfolioPendingContractMutation === true;',
+    'held Agreement sign',
+  );
+
+  const existingContractPath =
+    '/properties/' + propertyId +
+    '/units/' + unitId +
+    '?tab=contracts&tenancyId=' + tenancyId +
+    '&agreementId=' + agreementId +
+    '&asOf=2025-06-30';
+  await navigateWithPopState(sessionId, existingContractPath);
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'agreement-card')][.//span[normalize-space()='AGR-BRW']]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioReleaseContractMutation();',
+    ),
+    true,
+    'Release held Agreement sign',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl + existingContractPath,
+    'Late Agreement completion keeps new Unit owner',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//a[contains(@class,'agreement-card')][.//span[normalize-space()='AGR-SETUP-BRW']]",
+    ),
+    false,
+    'Late Agreement completion cannot mutate the new Unit Contract workspace',
+  );
+
+  await navigateWithPopState(
+    sessionId,
+    '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=contracts&tenancyId=' + setupTenancyId +
+      '&agreementId=' + setupSignedAgreementId +
+      '&asOf=2025-06-30',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'agreement-card')][.//span[normalize-space()='AGR-SETUP-BRW']][.//span[contains(@class,'status-chip') and normalize-space()='signed']]",
+  );
+
+  await navigateWithPopState(
+    sessionId,
+    '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=contracts&tenancyId=' + setupTenancyId +
+      '&agreementId=' + setupSignedAgreementId +
+      '&asOf=2026-10-01',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'contract-terms-panel')]//h3[contains(normalize-space(),'terms from 2026-10-01')]",
+  );
+
+  const amendmentCreateForm =
+    "//form[@data-contract-form='amendment-create']";
+  await typeXpath(
+    sessionId,
+    amendmentCreateForm + "//input[@name='code']",
+    'AMD-CANCEL-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    amendmentCreateForm + "//input[@name='title']",
+    'Cancelled adjustment',
+  );
+  await setInputValueXpath(
+    sessionId,
+    amendmentCreateForm + "//input[@name='effectiveFrom']",
+    '2027-01-01',
+  );
+  await clickXpath(
+    sessionId,
+    amendmentCreateForm + "//button[normalize-space()='Create Amendment draft']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'amendment-card')][.//strong[normalize-space()='AMD-CANCEL-BRW']]",
+  );
+  await clickXpath(
+    sessionId,
+    "//section[contains(@class,'contract-admin-panel')]//button[normalize-space()='Cancel Amendment']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'amendment-card')][.//strong[normalize-space()='AMD-CANCEL-BRW']][.//dd[normalize-space()='Cancelled']]",
+  );
+
+  await typeXpath(
+    sessionId,
+    amendmentCreateForm + "//input[@name='code']",
+    'AMD-SETUP-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    amendmentCreateForm + "//input[@name='title']",
+    'Rent adjustment',
+  );
+  await setInputValueXpath(
+    sessionId,
+    amendmentCreateForm + "//input[@name='effectiveFrom']",
+    '2027-01-01',
+  );
+  await clickXpath(
+    sessionId,
+    amendmentCreateForm + "//button[normalize-space()='Create Amendment draft']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'amendment-card')][.//strong[normalize-space()='AMD-SETUP-BRW']]",
+  );
+
+  const amendmentSignForm =
+    "//form[@data-contract-form='amendment-sign']";
+  await setInputValueXpath(
+    sessionId,
+    amendmentSignForm + "//input[@name='signedAt']",
+    '2026-12-15',
+  );
+  await typeXpath(
+    sessionId,
+    amendmentSignForm + "//input[@name='baseRent']",
+    '1100.00',
+  );
+  await typeXpath(
+    sessionId,
+    amendmentSignForm + "//input[@name='serviceCharge']",
+    '150.00',
+  );
+  await clickXpath(
+    sessionId,
+    amendmentSignForm + "//button[normalize-space()='Sign Amendment']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'amendment-card')][.//strong[normalize-space()='AMD-SETUP-BRW']][.//dd[normalize-space()='Signed']]",
+  );
+
+  await navigateWithPopState(
+    sessionId,
+    '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=contracts&tenancyId=' + setupTenancyId +
+      '&agreementId=' + setupSignedAgreementId +
+      '&asOf=2027-01-01',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'contract-terms-panel')]//h3[contains(normalize-space(),'terms from 2027-01-01')]",
+  );
+
+  await selectOptionXpath(
+    sessionId,
+    agreementCreateForm + "//select[@name='agreementType']",
+    'replacement',
+  );
+  await typeXpath(
+    sessionId,
+    agreementCreateForm + "//input[@name='code']",
+    'AGR-REPLACEMENT-BRW',
+  );
+  await selectOptionXpath(
+    sessionId,
+    agreementCreateForm + "//select[@name='predecessorAgreementId']",
+    setupSignedAgreementId,
+  );
+  await setInputValueXpath(
+    sessionId,
+    agreementCreateForm + "//input[@name='effectiveFrom']",
+    '2027-07-01',
+  );
+  await selectOptionXpath(
+    sessionId,
+    agreementCreateForm + "//select[@name='landlordPartyId']",
+    landlordPartyId,
+  );
+  await clickXpath(
+    sessionId,
+    agreementCreateForm + "//button[normalize-space()='Create Agreement draft']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'agreement-card')][.//span[normalize-space()='AGR-REPLACEMENT-BRW']][.//span[contains(@class,'status-chip') and normalize-space()='draft']]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=contracts&tenancyId=' + setupTenancyId +
+      '&agreementId=' + setupReplacementAgreementId +
+      '&asOf=2027-01-01',
+    'Replacement Agreement deep-link',
+  );
+
+  await setInputValueXpath(
+    sessionId,
+    agreementSignForm + "//input[@name='signedAt']",
+    '2027-06-15',
+  );
+  await typeXpath(
+    sessionId,
+    agreementSignForm + "//input[@name='baseRent']",
+    '1200.00',
+  );
+  await typeXpath(
+    sessionId,
+    agreementSignForm + "//input[@name='serviceCharge']",
+    '160.00',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioHoldContractMutation = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    agreementSignForm + "//button[normalize-space()='Sign Agreement']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    'return window.__portfolioPendingContractMutation === true;',
+    'held replacement Agreement sign',
+  );
+
+  await setReactInputValueXpath(
+    sessionId,
+    "//input[@aria-label='Contract effective terms business date']",
+    '2027-02-01',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 150));
+
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=contracts&tenancyId=' + setupTenancyId +
+      '&agreementId=' + setupReplacementAgreementId +
+      '&asOf=2027-02-01',
+    'asOf change keeps replacement Agreement owner',
+  );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      agreementSignForm + "//button[normalize-space()='Sign Agreement']",
+    ),
+    true,
+    'Held replacement sign remains serialized across asOf change',
+  );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      "//section[contains(@class,'contract-admin-panel')]//button[normalize-space()='Cancel Agreement']",
+    ),
+    true,
+    'Held replacement cancel remains serialized across asOf change',
+  );
+
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioReleaseContractMutation();',
+    ),
+    true,
+    'Release held replacement Agreement sign',
+  );
+
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'agreement-card')][.//span[normalize-space()='AGR-REPLACEMENT-BRW']][.//span[contains(@class,'status-chip') and normalize-space()='signed']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'agreement-card')][.//span[normalize-space()='AGR-SETUP-BRW']][.//span[contains(@class,'status-chip') and normalize-space()='superseded']]",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//form[@data-contract-form='agreement-sign']",
+    ),
+    false,
+    'No stale draft Agreement sign form survives successful replacement sign',
   );
 
   await navigateWithPopState(
