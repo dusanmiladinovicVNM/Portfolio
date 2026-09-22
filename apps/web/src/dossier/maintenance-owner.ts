@@ -113,6 +113,7 @@ export function assertCreatedMaintenanceIssue(
     readonly title: string;
     readonly description: string | null;
     readonly priority: MaintenanceIssueResponse['priority'];
+    readonly reportedAt?: string;
   },
   issue: MaintenanceIssueResponse,
 ): void {
@@ -126,6 +127,8 @@ export function assertCreatedMaintenanceIssue(
     issue.title !== expected.title ||
     issue.description !== expected.description ||
     issue.priority !== expected.priority ||
+    (expected.reportedAt !== undefined &&
+      issue.reportedAt !== expected.reportedAt) ||
     issue.status !== 'open' ||
     issue.resolvedAt !== null ||
     issue.cancelledAt !== null ||
