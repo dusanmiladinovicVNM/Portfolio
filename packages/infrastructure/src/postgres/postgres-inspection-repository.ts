@@ -44,6 +44,7 @@ import {
   type InspectionStatus,
   type InspectionType,
   type UnitId,
+  type UserId,
 } from '@portfolio/domain';
 
 type Sql = ReturnType<typeof postgres>;
@@ -540,6 +541,16 @@ export class PostgresInspectionRepository implements InspectionRepository {
     return rows.map(mapInspection);
   }
 
+  async listAssignedTo(userId: UserId): Promise<readonly Inspection[]> {
+    const rows = await this.sql<InspectionRow[]>`
+      ${this.sql.unsafe(inspectionSelect)}
+      where assigned_to_user_id = ${userId}
+        and status in ('draft', 'in_progress', 'locked')
+      order by scheduled_for asc nulls last, id
+    `;
+    return rows.map(mapInspection);
+  }
+
   async codeExists(code: string): Promise<boolean> {
     const rows = await this.sql<{ exists: boolean }[]>`
       select exists(
@@ -630,6 +641,31 @@ export class PostgresInspectionRepository implements InspectionRepository {
         expectedContentRevision === undefined
           ? 'Inspection was modified concurrently.'
           : 'Inspection content changed while the lock was being validated.',
+      );
+    }
+  }
+
+  async updateOrchestration(
+    inspection: Inspection,
+    expectedVersion: number,
+  ): Promise<void> {
+    const rows = await translated(() => this.sql<{ id: string }[]>`
+      update public.inspections
+      set
+        assigned_to_user_id = ${inspection.assignedToUserId},
+        scheduled_for = ${inspection.scheduledFor},
+        version = ${inspection.version},
+        updated_at = now()
+      where id = ${inspection.id}
+        and version = ${expectedVersion}
+        and status = 'draft'
+      returning id
+    `);
+
+    if (rows.length === 0) {
+      throw new DomainError(
+        'INSPECTION_VERSION_CONFLICT',
+        'Inspection was modified concurrently.',
       );
     }
   }

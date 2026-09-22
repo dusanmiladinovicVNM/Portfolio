@@ -83,6 +83,12 @@ export const expectedInspectionVersionRequestSchema = z.object({
   expectedVersion: z.number().int().positive(),
 });
 
+export const updateInspectionOrchestrationRequestSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+  assignedToUserId: entityIdSchema,
+  scheduledFor: dateOnlySchema.nullable(),
+});
+
 export const saveInspectionSectionRequestSchema = z
   .object({
     expectedRevision: z.number().int().nonnegative(),
@@ -193,6 +199,9 @@ export type CreateInspectionSchemaVersionRequest = z.infer<
   typeof createInspectionSchemaVersionRequestSchema
 >;
 export type CreateInspectionRequest = z.infer<typeof createInspectionRequestSchema>;
+export type UpdateInspectionOrchestrationRequest = z.infer<
+  typeof updateInspectionOrchestrationRequestSchema
+>;
 export type InspectionResponseDto = z.infer<typeof inspectionResponseSchema>;
 export type InspectionSchemaVersionResponse = z.infer<
   typeof inspectionSchemaVersionResponseSchema
@@ -277,8 +286,34 @@ export type SaveInspectionSectionRequest = z.infer<
 >;
 
 
+export const inspectionSchemaVersionListResponseSchema = z.object({
+  items: z.array(inspectionSchemaVersionResponseSchema),
+});
+
 export const inspectionListResponseSchema = z.object({
   items: z.array(inspectionResponseSchema),
+});
+
+export const inspectionStaffResponseSchema = z.object({
+  userId: entityIdSchema,
+  displayName: z.string().trim().min(1),
+  email: z.string().nullable(),
+  role: z.enum(['admin', 'manager', 'inspector']),
+});
+
+export const inspectionStaffListResponseSchema = z.object({
+  items: z.array(inspectionStaffResponseSchema),
+});
+
+export const assignedInspectionWorkItemResponseSchema = z.object({
+  inspection: inspectionResponseSchema,
+  propertyId: entityIdSchema,
+  unitCode: z.string(),
+  unitNumber: z.string(),
+});
+
+export const assignedInspectionWorkListResponseSchema = z.object({
+  items: z.array(assignedInspectionWorkItemResponseSchema),
 });
 
 export const inspectionBundleResponseSchema = z.object({
@@ -299,8 +334,23 @@ export const saveInspectionSectionResponseSchema = z.object({
   clearedItemIds: z.array(entityIdSchema),
 });
 
+export type InspectionSchemaVersionListResponse = z.infer<
+  typeof inspectionSchemaVersionListResponseSchema
+>;
 export type InspectionListResponse = z.infer<
   typeof inspectionListResponseSchema
+>;
+export type InspectionStaffResponse = z.infer<
+  typeof inspectionStaffResponseSchema
+>;
+export type InspectionStaffListResponse = z.infer<
+  typeof inspectionStaffListResponseSchema
+>;
+export type AssignedInspectionWorkItemResponse = z.infer<
+  typeof assignedInspectionWorkItemResponseSchema
+>;
+export type AssignedInspectionWorkListResponse = z.infer<
+  typeof assignedInspectionWorkListResponseSchema
 >;
 export type InspectionBundleResponse = z.infer<
   typeof inspectionBundleResponseSchema

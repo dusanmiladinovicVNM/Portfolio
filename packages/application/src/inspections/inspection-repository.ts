@@ -12,6 +12,7 @@ import type {
   InspectionSchemaVersion,
   InspectionSchemaVersionId,
   UnitId,
+  UserId,
 } from '@portfolio/domain';
 
 export interface SaveInspectionSectionResult {
@@ -24,6 +25,7 @@ export interface SaveInspectionSectionResult {
 export interface InspectionRepository {
   getById(id: InspectionId): Promise<Inspection | null>;
   listByUnit(unitId: UnitId): Promise<readonly Inspection[]>;
+  listAssignedTo(userId: UserId): Promise<readonly Inspection[]>;
   codeExists(code: string): Promise<boolean>;
   insert(
     inspection: Inspection,
@@ -33,6 +35,10 @@ export interface InspectionRepository {
     inspection: Inspection,
     expectedVersion: number,
     expectedContentRevision?: number,
+  ): Promise<void>;
+  updateOrchestration(
+    inspection: Inspection,
+    expectedVersion: number,
   ): Promise<void>;
 
   getSectionRevision(
@@ -97,6 +103,8 @@ export interface InspectionRepository {
 
 export interface StaffDirectoryEntry {
   readonly userId: import('@portfolio/domain').UserId;
+  readonly displayName: string;
+  readonly email: string | null;
   readonly role: 'admin' | 'manager' | 'inspector';
 }
 
@@ -104,4 +112,5 @@ export interface StaffDirectoryRepository {
   getActiveStaffById(
     userId: import('@portfolio/domain').UserId,
   ): Promise<StaffDirectoryEntry | null>;
+  listActiveStaff(): Promise<readonly StaffDirectoryEntry[]>;
 }

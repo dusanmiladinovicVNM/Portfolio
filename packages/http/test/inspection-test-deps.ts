@@ -44,6 +44,14 @@ export class InMemoryInspectionRepository implements InspectionRepository {
     );
   }
 
+  async listAssignedTo(userId: UserId) {
+    return [...this.inspections.values()].filter(
+      (inspection) =>
+        inspection.assignedToUserId === userId &&
+        ['draft', 'in_progress', 'locked'].includes(inspection.status),
+    );
+  }
+
   async codeExists(code: string) {
     return [...this.inspections.values()].some(
       (inspection) => inspection.code.toLowerCase() === code.toLowerCase(),
@@ -80,6 +88,20 @@ export class InMemoryInspectionRepository implements InspectionRepository {
       throw new DomainError(
         'INSPECTION_CONTENT_REVISION_CONFLICT',
         'Inspection content changed while the lock was being validated.',
+      );
+    }
+    this.inspections.set(inspection.id, inspection);
+  }
+
+  async updateOrchestration(
+    inspection: Inspection,
+    expectedVersion: number,
+  ) {
+    const current = this.inspections.get(inspection.id);
+    if (!current || current.version !== expectedVersion) {
+      throw new DomainError(
+        'INSPECTION_VERSION_CONFLICT',
+        'Inspection was modified concurrently.',
       );
     }
     this.inspections.set(inspection.id, inspection);
@@ -364,11 +386,25 @@ export class InMemoryStaffDirectoryRepository
       ['cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'manager'],
     ] as const) {
       const userId = asUserId(id);
-      this.users.set(userId, { userId, role });
+      this.users.set(userId, {
+        userId,
+        displayName:
+          role === 'admin'
+            ? 'Admin User'
+            : role === 'manager'
+              ? 'Manager User'
+              : 'Inspector User',
+        email: `${role}@portfolio.test`,
+        role,
+      });
     }
   }
 
   async getActiveStaffById(userId: UserId) {
     return this.users.get(userId) ?? null;
+  }
+
+  async listActiveStaff() {
+    return [...this.users.values()];
   }
 }

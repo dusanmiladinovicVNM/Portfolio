@@ -275,6 +275,24 @@ export function assetServiceEventsPath(assetId: string): string {
   return `${assetPath(assetId)}/service-events`;
 }
 
+export function inspectionSchemasPath(): string {
+  return '/inspection-schemas';
+}
+
+export function inspectionStaffPath(): string {
+  return '/inspection-staff';
+}
+
+export function assignedInspectionsPath(): string {
+  return '/inspections/assigned-to-me';
+}
+
+export function inspectionOrchestrationPath(
+  inspectionId: string,
+): string {
+  return `${inspectionPath(inspectionId)}/orchestration`;
+}
+
 export function unitInspectionsPath(unitId: string): string {
   return `/units/${encodeURIComponent(unitId)}/inspections`;
 }

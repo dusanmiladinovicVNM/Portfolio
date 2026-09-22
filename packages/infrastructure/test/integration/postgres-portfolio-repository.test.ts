@@ -90,6 +90,7 @@ import {
   saveInspectionSectionCommand,
   startInspectionCommand,
   unlockInspectionCommand,
+  updateInspectionOrchestrationCommand,
   signLeaseAgreementCommand,
   signLeaseAmendmentCommand,
   uploadDocumentVersionCommand,
@@ -3272,15 +3273,60 @@ describe('PostgreSQL infrastructure', () => {
       },
     );
 
-    await startInspectionCommand(
+    await expect(
+      sql`
+        update public.inspections
+        set scheduled_for = '2026-09-22'
+        where id = ${editableInspection.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_orchestration_version_progression',
+    });
+
+    const orchestratedInspection =
+      await updateInspectionOrchestrationCommand(
+        {
+          inspectionRepository,
+          staffDirectoryRepository: accessRepository,
+        },
+        actor,
+        editableInspection.id,
+        editableInspection.version,
+        {
+          assignedToUserId: editableInspection.assignedToUserId,
+          scheduledFor: '2026-09-22',
+        },
+      );
+    expect(orchestratedInspection).toMatchObject({
+      scheduledFor: '2026-09-22',
+      version: 2,
+      status: 'draft',
+    });
+
+    const startedEditableInspection = await startInspectionCommand(
       {
         inspectionRepository,
         clock: { now: () => '2026-09-20T09:06:00.000Z' },
       },
       actor,
       editableInspection.id,
-      1,
+      orchestratedInspection.version,
     );
+
+    await expect(
+      sql`
+        update public.inspections
+        set scheduled_for = '2026-09-23',
+            version = version + 1
+        where id = ${editableInspection.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_orchestration_draft_only',
+    });
+
+    expect(startedEditableInspection.status).toBe('in_progress');
 
     const lockedResponseRows = await sql<{ id: string }[]>`
       select id

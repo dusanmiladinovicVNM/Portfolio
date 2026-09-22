@@ -14,7 +14,12 @@ import {
 import {
   asDocumentId,
   asDocumentVersionId,
+  asInspectionId,
+  asInspectionSchemaVersionId,
+  asPropertyId,
+  asUnitId,
   asUserId,
+  createInspection,
   type DateOnly,
   type LeaseAgreement,
   type LeaseAgreementId,
@@ -217,6 +222,8 @@ function buildHandler() {
     asUserId('dddddddd-dddd-4ddd-8ddd-dddddddddddd'),
     {
       userId: asUserId('dddddddd-dddd-4ddd-8ddd-dddddddddddd'),
+      displayName: 'Other Inspector',
+      email: 'other.inspector@portfolio.test',
       role: 'inspector',
     },
   );
@@ -263,10 +270,227 @@ function buildHandler() {
     ]),
   });
 
-  return { handler, inspectionRepository, documentRepository, fileStorage };
+  return {
+    handler,
+    inspectionRepository,
+    portfolioRepository,
+    documentRepository,
+    fileStorage,
+  };
 }
 
 describe('Inspection HTTP backbone', () => {
+  it('orchestrates draft assignment/schedule and exposes a routable assigned-work queue', async () => {
+    const { handler, inspectionRepository, portfolioRepository } =
+      buildHandler();
+
+    const propertyId = asPropertyId(
+      '89000000-0000-4000-8000-000000000001',
+    );
+    const unitId = asUnitId(
+      '89000000-0000-4000-8000-000000000002',
+    );
+    await portfolioRepository.insertUnit({
+      id: unitId,
+      propertyId,
+      code: 'UNIT-ORCH',
+      unitNumber: '7A',
+      unitType: 'apartment',
+      floor: null,
+      areaM2: null,
+      rooms: null,
+      status: 'active',
+      notes: '',
+    });
+
+    const inspection = createInspection({
+      id: asInspectionId(
+        '89000000-0000-4000-8000-000000000003',
+      ),
+      code: 'INS-ORCH',
+      inspectionType: 'move_in',
+      unitId,
+      schemaVersionId: asInspectionSchemaVersionId(
+        '89000000-0000-4000-8000-000000000004',
+      ),
+      assignedToUserId: asUserId(
+        'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      ),
+      createdByUserId: asUserId(
+        'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      ),
+      scheduledFor: '2026-09-24',
+    });
+    inspectionRepository.inspections.set(inspection.id, inspection);
+
+    const adminStaff = await handler(
+      new Request('https://portfolio.test/inspection-staff'),
+      adminIdentity,
+    );
+    expect(adminStaff.status).toBe(200);
+    expect(await adminStaff.json()).toMatchObject({
+      data: {
+        items: expect.arrayContaining([
+          expect.objectContaining({
+            userId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            displayName: 'Inspector User',
+            role: 'inspector',
+          }),
+          expect.objectContaining({
+            userId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+            displayName: 'Manager User',
+            role: 'manager',
+          }),
+        ]),
+      },
+    });
+
+    const inspectorStaff = await handler(
+      new Request('https://portfolio.test/inspection-staff'),
+      inspectorIdentity,
+    );
+    expect(inspectorStaff.status).toBe(200);
+    expect(await inspectorStaff.json()).toMatchObject({
+      data: {
+        items: [
+          {
+            userId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            displayName: 'Inspector User',
+            role: 'inspector',
+          },
+        ],
+      },
+    });
+
+    const assigned = await handler(
+      new Request(
+        'https://portfolio.test/inspections/assigned-to-me',
+      ),
+      inspectorIdentity,
+    );
+    expect(assigned.status).toBe(200);
+    expect(await assigned.json()).toMatchObject({
+      data: {
+        items: [
+          {
+            inspection: {
+              id: inspection.id,
+              assignedToUserId:
+                'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            },
+            propertyId,
+            unitCode: 'UNIT-ORCH',
+            unitNumber: '7A',
+          },
+        ],
+      },
+    });
+
+    const forbiddenReassign = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/orchestration`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            expectedVersion: 1,
+            assignedToUserId:
+              'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+            scheduledFor: '2026-09-25',
+          }),
+        },
+      ),
+      inspectorIdentity,
+    );
+    expect(forbiddenReassign.status).toBe(403);
+    expect(await forbiddenReassign.json()).toMatchObject({
+      error: { code: 'INSPECTION_ASSIGNMENT_FORBIDDEN' },
+    });
+
+    const rescheduled = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/orchestration`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            expectedVersion: 1,
+            assignedToUserId:
+              'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+            scheduledFor: '2026-09-25',
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(rescheduled.status).toBe(200);
+    expect(await rescheduled.json()).toMatchObject({
+      data: {
+        id: inspection.id,
+        assignedToUserId:
+          'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        scheduledFor: '2026-09-25',
+        status: 'draft',
+        version: 2,
+        contentRevision: 0,
+      },
+    });
+
+    const stale = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/orchestration`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            expectedVersion: 1,
+            assignedToUserId:
+              'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+            scheduledFor: '2026-09-26',
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({
+      error: { code: 'INSPECTION_VERSION_CONFLICT' },
+    });
+
+    const started = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/start`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ expectedVersion: 2 }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(started.status).toBe(200);
+    expect(await started.json()).toMatchObject({
+      data: { status: 'in_progress', version: 3 },
+    });
+
+    const afterStart = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/orchestration`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            expectedVersion: 3,
+            assignedToUserId:
+              'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+            scheduledFor: '2026-09-27',
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(afterStart.status).toBe(422);
+    expect(await afterStart.json()).toMatchObject({
+      error: { code: 'INSPECTION_ORCHESTRATION_LOCKED' },
+    });
+  });
+
+
   it('runs schema → inspection → section autosave → finding → lock with ownership guards', async () => {
     const { handler } = buildHandler();
 

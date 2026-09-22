@@ -15,7 +15,9 @@ const tenantPartyId = '99999999-9999-4999-8999-999999999999';
 const agreementId = '55555555-5555-4555-8555-555555555555';
 const amendmentId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const inspectionId = 'a1000000-0000-4000-8000-000000000001';
+const inspectionSchemaVersionId = 'a1000000-0000-4000-8000-000000000002';
 const inspectionSectionId = 'a1000000-0000-4000-8000-000000000003';
+const inspectionUserId = 'a1000000-0000-4000-8000-000000000006';
 const setupPropertyId = 'b1000000-0000-4000-8000-000000000001';
 const setupUnitId = 'b1000000-0000-4000-8000-000000000002';
 const setupSpaceId = 'b1000000-0000-4000-8000-000000000003';
@@ -24,6 +26,8 @@ const setupDestinationSpaceId = 'c1000000-0000-4000-8000-000000000002';
 const setupRecoveryPropertyId = 'c2000000-0000-4000-8000-000000000001';
 const setupRecoveryUnitId = 'c2000000-0000-4000-8000-000000000002';
 const setupRecoverySpaceId = 'c2000000-0000-4000-8000-000000000003';
+const orchestrationPropertyId = 'd2000000-0000-4000-8000-000000000001';
+const orchestrationUnitId = 'd2000000-0000-4000-8000-000000000002';
 const setupPartyId = 'b1000000-0000-4000-8000-000000000004';
 const setupTenancyId = 'b1000000-0000-4000-8000-000000000007';
 const setupSignedAgreementId = 'b1000000-0000-4000-8000-000000000010';
@@ -42,6 +46,8 @@ const setupInspectionFindingId = 'b1000000-0000-4000-8000-000000000044';
 const setupMaintenanceIssueId = 'b1000000-0000-4000-8000-000000000045';
 const setupMaintenanceWorkOrderId = 'b1000000-0000-4000-8000-000000000046';
 const setupServiceEventId = 'b1000000-0000-4000-8000-000000000047';
+const setupOrchestrationInspectionId =
+  'b1000000-0000-4000-8000-000000000049';
 
 const amendmentSignedFilePath = join(
   tmpdir(),
@@ -136,8 +142,22 @@ async function waitForElement(sessionId, using, value, timeoutMs = 10000) {
     }
   }
 
+  let diagnostic = '';
+  try {
+    const [url, bodyText] = await Promise.all([
+      currentUrl(sessionId),
+      executeScript(
+        sessionId,
+        'return document.body ? document.body.innerText.slice(0, 4000) : "";',
+      ),
+    ]);
+    diagnostic = ` URL=${url} BODY=${JSON.stringify(bodyText)}`;
+  } catch {
+    // Keep the original WebDriver failure when diagnostics are unavailable.
+  }
+
   throw new Error(
-    `Timed out waiting for ${using}=${value}. Last error: ${lastError}`,
+    `Timed out waiting for ${using}=${value}. Last error: ${lastError}.${diagnostic}`,
   );
 }
 
@@ -2920,19 +2940,170 @@ try {
     'Deep link after browser refresh',
   );
 
-  await clickXpath(sessionId, "//a[normalize-space()='Inspections']");
+  await navigateWithPopState(
+    sessionId,
+    '/properties/' + orchestrationPropertyId +
+      '/units/' + orchestrationUnitId +
+      '?tab=inspections&asOf=2025-06-30',
+  );
   await waitForElement(
     sessionId,
     'xpath',
-    "//h2[normalize-space()='Inspections']",
+    "//form[@data-inspection-form='create']",
+  );
+
+  const inspectionCreateForm =
+    "//form[@data-inspection-form='create']";
+  await typeXpath(
+    sessionId,
+    inspectionCreateForm + "//input[@name='code']",
+    'INS-ORCH-BRW',
+  );
+  await selectOptionXpath(
+    sessionId,
+    inspectionCreateForm + "//select[@name='schemaVersionId']",
+    inspectionSchemaVersionId,
+  );
+  await selectOptionXpath(
+    sessionId,
+    inspectionCreateForm + "//select[@name='assignedToUserId']",
+    inspectionUserId,
+  );
+  await setInputValueXpath(
+    sessionId,
+    inspectionCreateForm + "//input[@name='scheduledFor']",
+    '2027-10-02',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextInspectionCreateAfterCommit = true; return true;',
   );
   await clickXpath(
     sessionId,
-    "//a[contains(@class,'inspection-card')][.//strong[normalize-space()='INS-BRW-001']]",
+    inspectionCreateForm +
+      "//button[normalize-space()='Create Inspection']",
+  );
+
+  const orchestrationInspectionUrl =
+    baseUrl +
+    '/properties/' + orchestrationPropertyId +
+    '/units/' + orchestrationUnitId +
+    '?tab=inspections&inspectionId=' +
+    setupOrchestrationInspectionId +
+    '&sectionId=' + inspectionSectionId +
+    '&asOf=2025-06-30';
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'inspection-editor')]//h2[normalize-space()='INS-ORCH-BRW']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'creation was committed and recovered')]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    orchestrationInspectionUrl,
+    'Lost Inspection create acknowledgement recovers canonical deep-link',
+  );
+
+  const orchestrationForm =
+    "//form[@data-inspection-form='orchestration']";
+  await setInputValueXpath(
+    sessionId,
+    orchestrationForm + "//input[@name='scheduledFor']",
+    '2027-10-03',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioHoldInspectionOrchestration = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    orchestrationForm +
+      "//button[normalize-space()='Save orchestration']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    'return window.__portfolioPendingInspectionOrchestration === true;',
+    'held Inspection orchestration mutation',
+  );
+  await clickXpath(sessionId, "//a[normalize-space()='Assets']");
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assertEqual(
+    await currentUrl(sessionId),
+    orchestrationInspectionUrl,
+    'Pending Inspection orchestration blocks dossier navigation',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioReleaseInspectionOrchestration();',
+    ),
+    true,
+    'Release held Inspection orchestration mutation',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Draft orchestration · v2')]",
+  );
+
+  await setInputValueXpath(
+    sessionId,
+    orchestrationForm + "//input[@name='scheduledFor']",
+    '2027-10-04',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextInspectionOrchestrationAfterCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    orchestrationForm +
+      "//button[normalize-space()='Save orchestration']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Draft orchestration · v3')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'orchestration was committed and recovered')]",
+  );
+
+  await clickXpath(
+    sessionId,
+    "//section[contains(@class,'inspection-editor')]//button[normalize-space()='Start Inspection']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'inspection-editor')]//span[contains(@class,'status-chip')][normalize-space()='in_progress']",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//form[@data-inspection-form='orchestration']",
+    ),
+    false,
+    'Starting field work freezes draft orchestration UI',
   );
 
   const inspectionUrl =
     `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionId=${inspectionSectionId}&asOf=2025-06-30`;
+  await clickXpath(
+    sessionId,
+    "//button[contains(@class,'inspection-assigned-work-card')][.//strong[normalize-space()='INS-BRW-001']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'inspection-editor')]//h2[normalize-space()='INS-BRW-001']",
+  );
   await waitForElement(
     sessionId,
     'xpath',
@@ -2941,7 +3112,7 @@ try {
   assertEqual(
     await currentUrl(sessionId),
     inspectionUrl,
-    'Inspection section deep-link URL',
+    'Assigned-work queue navigates with canonical cross-Unit Property owner',
   );
 
   await clickXpath(
@@ -2962,6 +3133,61 @@ try {
     "//div[contains(@class,'inspection-item')][.//span[contains(normalize-space(),'Damage notes')]]//input[@type='text']";
   await waitForElement(sessionId, 'xpath', notesInput);
   await typeXpath(sessionId, notesInput, 'Window scratch');
+
+  const dirtyCreateForm =
+    "//form[@data-inspection-form='create']";
+  await typeXpath(
+    sessionId,
+    dirtyCreateForm + "//input[@name='code']",
+    'INS-DIRTY-BRW',
+  );
+  await selectOptionXpath(
+    sessionId,
+    dirtyCreateForm + "//select[@name='schemaVersionId']",
+    inspectionSchemaVersionId,
+  );
+  await selectOptionXpath(
+    sessionId,
+    dirtyCreateForm + "//select[@name='assignedToUserId']",
+    inspectionUserId,
+  );
+
+  const dirtyCreateButton =
+    dirtyCreateForm + "//button[normalize-space()='Create Inspection']";
+  assertEqual(
+    await elementDisabledXpath(sessionId, dirtyCreateButton),
+    true,
+    'Dirty field section disables Create Inspection',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Save or discard the current section before creating another Inspection.')]",
+  );
+
+  await executeScript(
+    sessionId,
+    "document.querySelector('form[data-inspection-form=\"create\"]').requestSubmit(); return true;",
+  );
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'Programmatic create submit cannot replace dirty Inspection owner',
+  );
+  assertEqual(
+    await elementValueXpath(sessionId, notesInput),
+    'Window scratch',
+    'Dirty Inspection answer survives blocked Create Inspection',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//a[contains(@class,'inspection-card')][.//strong[normalize-space()='INS-DIRTY-BRW']]",
+    ),
+    false,
+    'Blocked dirty create does not create another Inspection',
+  );
 
   await clickAndDismissConfirm(
     sessionId,
@@ -3016,7 +3242,7 @@ try {
   );
 
   process.stdout.write(
-    'Browser workflow PASS: Core setup + route-owner late-completion guards → existing Contracts/documents → Inspection workflow\n',
+    'Browser workflow PASS: Core setup + route-owner guards → Contracts/documents → Inspection orchestration → field workflow\n',
   );
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.stack : error}\n`);

@@ -31,6 +31,7 @@ import {
   publishInspectionSchemaVersion,
   startInspection,
   unlockInspection,
+  updateInspectionOrchestration,
   type Inspection,
   type InspectionAnswerValue,
   type InspectionEvidence,
@@ -288,6 +289,42 @@ export async function createInspectionCommand(
 
   await deps.inspectionRepository.insert(inspection, schema);
   return inspection;
+}
+
+export async function updateInspectionOrchestrationCommand(
+  deps: Pick<
+    InspectionDependencies,
+    'inspectionRepository' | 'staffDirectoryRepository'
+  >,
+  actor: Actor,
+  id: InspectionId,
+  expectedVersion: number,
+  input: {
+    readonly assignedToUserId: UserId;
+    readonly scheduledFor: string | null;
+  },
+): Promise<Inspection> {
+  requireCapability(actor, 'inspections:write');
+  const current = await requireInspection(deps.inspectionRepository, id);
+  assertInspectionAccess(actor, current);
+  assertExpectedVersion(current, expectedVersion);
+
+  const assignedToUserId = await resolveAssignee(
+    deps,
+    actor,
+    input.assignedToUserId,
+  );
+
+  const updated = updateInspectionOrchestration(current, {
+    assignedToUserId,
+    scheduledFor: input.scheduledFor,
+  });
+
+  await deps.inspectionRepository.updateOrchestration(
+    updated,
+    expectedVersion,
+  );
+  return updated;
 }
 
 export async function startInspectionCommand(

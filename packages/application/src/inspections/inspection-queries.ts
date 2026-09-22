@@ -10,10 +10,16 @@ import {
   type InspectionSchemaVersion,
   type InspectionSignature,
   type InspectionSchemaVersionId,
+  type PropertyId,
   type UnitId,
 } from '@portfolio/domain';
 import { requireCapability, type Actor } from '../security/access.js';
-import type { InspectionRepository } from './inspection-repository.js';
+import type { PortfolioRepository } from '../portfolio/portfolio-repository.js';
+import type {
+  InspectionRepository,
+  StaffDirectoryEntry,
+  StaffDirectoryRepository,
+} from './inspection-repository.js';
 
 function assertInspectionReadAccess(actor: Actor, inspection: Inspection): void {
   if (
@@ -53,6 +59,51 @@ export async function listInspectionsByUnitQuery(
         (inspection) => inspection.assignedToUserId === actor.userId,
       )
     : inspections;
+}
+
+export interface AssignedInspectionWorkItem {
+  readonly inspection: Inspection;
+  readonly propertyId: PropertyId;
+  readonly unitCode: string;
+  readonly unitNumber: string;
+}
+
+export async function listAssignedInspectionsQuery(
+  inspectionRepository: InspectionRepository,
+  portfolioRepository: PortfolioRepository,
+  actor: Actor,
+): Promise<readonly AssignedInspectionWorkItem[]> {
+  requireCapability(actor, 'inspections:read');
+  const inspections = await inspectionRepository.listAssignedTo(actor.userId);
+
+  return Promise.all(
+    inspections.map(async (inspection) => {
+      const unit = await portfolioRepository.getUnitById(inspection.unitId);
+      if (!unit) {
+        throw new DomainError(
+          'UNIT_NOT_FOUND',
+          'Assigned Inspection references a missing Unit.',
+        );
+      }
+      return {
+        inspection,
+        propertyId: unit.propertyId,
+        unitCode: unit.code,
+        unitNumber: unit.unitNumber,
+      };
+    }),
+  );
+}
+
+export async function listAssignableInspectionStaffQuery(
+  repository: StaffDirectoryRepository,
+  actor: Actor,
+): Promise<readonly StaffDirectoryEntry[]> {
+  requireCapability(actor, 'inspections:read');
+  const staff = await repository.listActiveStaff();
+  return actor.role === 'inspector'
+    ? staff.filter((entry) => entry.userId === actor.userId)
+    : staff;
 }
 
 export async function listInspectionResponsesQuery(
