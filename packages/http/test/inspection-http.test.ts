@@ -217,6 +217,8 @@ function buildHandler() {
     asUserId('dddddddd-dddd-4ddd-8ddd-dddddddddddd'),
     {
       userId: asUserId('dddddddd-dddd-4ddd-8ddd-dddddddddddd'),
+      displayName: 'Other Inspector',
+      email: 'other.inspector@portfolio.test',
       role: 'inspector',
     },
   );
