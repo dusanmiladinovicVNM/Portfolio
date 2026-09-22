@@ -109,10 +109,10 @@ function errorMessage(cause: unknown, fallback: string): string {
   return cause instanceof Error ? cause.message : fallback;
 }
 
-function partyOptions(parties: readonly PartyResponse[]) {
-  return parties
-    .filter((party) => party.status === 'active')
-    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+function sortedParties(parties: readonly PartyResponse[]) {
+  return [...parties].sort((a, b) =>
+    a.displayName.localeCompare(b.displayName),
+  );
 }
 
 function allClaims(claimsByWarranty: ClaimMap): readonly WarrantyClaimResponse[] {
@@ -147,8 +147,12 @@ export function AssetServiceAdministration({
   const [planKind, setPlanKind] = useState<ServicePlanKind>('one_time');
 
   const providers = useMemo(
-    () => partyOptions(parties ?? []),
+    () => sortedParties(parties ?? []),
     [parties],
+  );
+  const activeProviders = useMemo(
+    () => providers.filter((party) => party.status === 'active'),
+    [providers],
   );
   const claims = useMemo(
     () => allClaims(claimsByWarranty),
@@ -733,7 +737,7 @@ export function AssetServiceAdministration({
                 Provider Party
                 <select defaultValue="" disabled={pending} name="providerPartyId">
                   <option value="">No provider</option>
-                  {providers.map((party) => (
+                  {activeProviders.map((party) => (
                     <option key={party.id} value={party.id}>
                       {party.displayName} · {party.code}
                     </option>
