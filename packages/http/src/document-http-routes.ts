@@ -1,4 +1,5 @@
 import {
+  ApplicationError,
   createDocumentCommand,
   DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
   finalizeDocumentVersionCommand,
@@ -273,6 +274,13 @@ export async function handleDocumentHttp(
       if (!fileName || !mimeType) return validationFailure();
 
       const content = new Uint8Array(await request.arrayBuffer());
+      if (content.byteLength > DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY.maxBytes) {
+        throw new ApplicationError(
+          'DOCUMENT_BINARY_UPLOAD_LIMIT_EXCEEDED',
+          `Buffered Document upload supports files up to ${DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY.maxBytes} bytes until streaming upload is implemented.`,
+        );
+      }
+
       const version = await uploadDocumentVersionCommand(
         {
           documentRepository: deps.documentRepository,
