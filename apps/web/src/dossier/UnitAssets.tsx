@@ -260,6 +260,7 @@ function CreateAssetForm({
   unitId,
   spaces,
   onCreated,
+  onReconcile,
   writeGate,
 }: {
   readonly api: PortfolioApi;
@@ -267,6 +268,7 @@ function CreateAssetForm({
   readonly unitId: string;
   readonly spaces: readonly SpaceResponse[];
   readonly onCreated: (asset: AssetResponse) => void;
+  readonly onReconcile: () => void;
   readonly writeGate: AssetWriteGate;
 }) {
   const submission = useCreateSubmissionGuard();
@@ -350,7 +352,13 @@ function CreateAssetForm({
       }
     } catch (cause) {
       if (submission.isMounted()) {
-        setError(assetError(cause, 'Asset could not be created.'));
+        onReconcile();
+        setError(
+          assetError(
+            cause,
+            'Asset creation outcome could not be confirmed. Canonical Unit Asset state was reloaded.',
+          ),
+        );
       }
     } finally {
       submission.finish();
@@ -1134,6 +1142,7 @@ export function UnitAssets({
                 }),
               );
             }}
+            onReconcile={refresh}
             propertyId={propertyId}
             spaces={spaces}
             unitId={unitId}
