@@ -37,10 +37,10 @@ import type {
   SetNavigationBlocker,
 } from '../navigation/use-workspace-navigation.js';
 import { formatDetailKey } from '../presentation/format.js';
-import {
-  InspectionOrchestrationPanel,
-  type InspectionOrchestrationWriteGate,
-} from './InspectionOrchestrationPanel.js';
+import { InspectionFindingsEvidence } from './InspectionFindingsEvidence.js';
+import { InspectionOrchestrationPanel } from './InspectionOrchestrationPanel.js';
+import { assertInspectionBundleOwner } from './inspection-content-owner.js';
+import type { InspectionWriteGate } from './inspection-write-gate.js';
 import { assertUnitInspectionListOwner } from './inspection-orchestration-owner.js';
 
 type SchemaSection = InspectionBundleResponse['schema']['sections'][number];
@@ -496,8 +496,8 @@ export function UnitInspections({
   const inFlightStartsRef = useRef<Set<string>>(new Set());
   const [saveError, setSaveError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
-  const [orchestrationPending, setOrchestrationPending] = useState(false);
-  const orchestrationPendingRef = useRef(false);
+  const [inspectionWritePending, setOrchestrationPending] = useState(false);
+  const inspectionWritePendingRef = useRef(false);
   const activeInspectionIdRef = useRef(inspectionId);
   activeInspectionIdRef.current = inspectionId;
 
@@ -534,16 +534,7 @@ export function UnitInspections({
       inspectionPath(id),
       inspectionBundleResponseSchema,
     );
-    if (result.inspection.id !== id) {
-      throw new Error(
-        'Inspection endpoint returned a different aggregate identity.',
-      );
-    }
-    if (result.inspection.unitId !== unitId) {
-      throw new Error(
-        'Inspection route does not belong to the Unit encoded in the URL.',
-      );
-    }
+    assertInspectionBundleOwner(id, unitId, result);
     return result;
   }
 
@@ -697,23 +688,23 @@ export function UnitInspections({
     );
   const hasUnsavedChanges = patch !== null;
 
-  const orchestrationWriteGate: InspectionOrchestrationWriteGate = {
-    pending: orchestrationPending,
+  const inspectionWriteGate: InspectionWriteGate = {
+    pending: inspectionWritePending,
     tryStart: () => {
       if (
-        orchestrationPendingRef.current ||
+        inspectionWritePendingRef.current ||
         inFlightStartsRef.current.size > 0 ||
         inFlightSectionSavesRef.current.size > 0
       ) {
         return false;
       }
-      orchestrationPendingRef.current = true;
+      inspectionWritePendingRef.current = true;
       setNavigationBlocker(() => false);
       setOrchestrationPending(true);
       return true;
     },
     finish: () => {
-      orchestrationPendingRef.current = false;
+      inspectionWritePendingRef.current = false;
       setNavigationBlocker(null);
       setOrchestrationPending(false);
     },
@@ -734,7 +725,7 @@ export function UnitInspections({
   }
 
   useEffect(() => {
-    if (orchestrationPending) {
+    if (inspectionWritePending) {
       setNavigationBlocker(() => false);
       return () => setNavigationBlocker(null);
     }
@@ -753,7 +744,7 @@ export function UnitInspections({
     return () => setNavigationBlocker(null);
   }, [
     hasUnsavedChanges,
-    orchestrationPending,
+    inspectionWritePending,
     setNavigationBlocker,
   ]);
 
@@ -768,7 +759,7 @@ export function UnitInspections({
 
     const targetInspectionId = routeBundle.inspection.id;
     if (
-      orchestrationPendingRef.current ||
+      inspectionWritePendingRef.current ||
       inFlightStartsRef.current.has(targetInspectionId)
     ) {
       return;
@@ -826,7 +817,7 @@ export function UnitInspections({
       targetSectionId,
     );
     if (
-      orchestrationPendingRef.current ||
+      inspectionWritePendingRef.current ||
       inFlightSectionSavesRef.current.has(targetKey)
     ) {
       return;
@@ -966,7 +957,7 @@ export function UnitInspections({
             routeBundle?.inspection ?? selectedListInspection
           }
           unitId={unitId}
-          writeGate={orchestrationWriteGate}
+          writeGate={inspectionWriteGate}
           key={unitId}
         />
       ) : null}
@@ -1061,7 +1052,7 @@ export function UnitInspections({
               </div>
               <button
                 className="button-secondary"
-                disabled={starting || orchestrationPending}
+                disabled={starting || inspectionWritePending}
                 onClick={startInspection}
                 type="button"
               >
@@ -1156,7 +1147,7 @@ export function UnitInspections({
                         <small>{formatDetailKey(item.type)}</small>
                       </label>
                       <Field
-                        disabled={!editable || saving || orchestrationPending}
+                        disabled={!editable || saving || inspectionWritePending}
                         entry={entry}
                         item={item}
                         onChange={(next) => changeItem(item.id, next)}
@@ -1192,7 +1183,7 @@ export function UnitInspections({
                       !editable ||
                       !patch ||
                       saving ||
-                      orchestrationPending
+                      inspectionWritePending
                     }
                     type="submit"
                   >
@@ -1204,6 +1195,29 @@ export function UnitInspections({
               <p className="muted">This Inspection schema has no sections.</p>
             )}
           </div>
+
+          {selectedSection ? (
+            <InspectionFindingsEvidence
+              api={api}
+              blockedByDirtySection={hasUnsavedChanges}
+              bundle={routeBundle}
+              key={`${routeBundle.inspection.id}:${selectedSection.id}`}
+              onCanonicalBundle={(targetInspectionId, canonical) => {
+                if (activeInspectionIdRef.current !== targetInspectionId) return;
+                assertInspectionBundleOwner(targetInspectionId, unitId, canonical);
+                setBundle(canonical);
+                setInspections((current) =>
+                  current?.map((item) =>
+                    item.id === canonical.inspection.id
+                      ? canonical.inspection
+                      : item,
+                  ) ?? current,
+                );
+              }}
+              selectedSectionId={selectedSection.id}
+              writeGate={inspectionWriteGate}
+            />
+          ) : null}
         </section>
       ) : null}
     </div>
