@@ -341,3 +341,18 @@ export function inspectionFinalizePath(inspectionId: string): string {
 export function inspectionFinalReportPath(inspectionId: string): string {
   return `${inspectionPath(inspectionId)}/final-report`;
 }
+
+
+export function inspectionBinaryUploadPath(
+  inspectionId: string,
+  purpose: 'photo' | 'attachment' | 'signature',
+  uploadKey: string,
+  fileName: string,
+): string {
+  const params = new URLSearchParams({
+    purpose,
+    uploadKey,
+    fileName,
+  });
+  return `${inspectionPath(inspectionId)}/binaries?${params.toString()}`;
+}
