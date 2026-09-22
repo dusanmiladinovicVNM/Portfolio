@@ -17,6 +17,11 @@ import type {
   MeterReadingBoundaryResponse,
   MeterReadingResponse,
   MeterResponse,
+  MaintenanceIssueResponse,
+  MaintenanceWorkOrderEntryResponse,
+  MaintenanceWorkOrderResponse,
+  ServiceEventResponse,
+  InspectionFindingResponse,
   PartyResponse,
   PropertyResponse,
   SpaceResponse,
@@ -127,6 +132,14 @@ const setupMeterBoundaryIds = [
   'b1000000-0000-4000-8000-000000000042',
   'b1000000-0000-4000-8000-000000000043',
 ] as const;
+const setupInspectionFindingId =
+  'b1000000-0000-4000-8000-000000000044';
+const setupMaintenanceIssueId =
+  'b1000000-0000-4000-8000-000000000045';
+const setupMaintenanceWorkOrderId =
+  'b1000000-0000-4000-8000-000000000046';
+const setupServiceEventId =
+  'b1000000-0000-4000-8000-000000000047';
 
 const setupDestinationUnit: UnitResponse = {
   id: setupDestinationUnitId,
@@ -219,6 +232,27 @@ let setupMeterBoundaries: MeterReadingBoundaryResponse[] = [];
 let setupMeterReadingSequence = 0;
 let setupMeterBoundarySequence = 0;
 let setupMeterClockSequence = 0;
+let setupMaintenanceIssues: MaintenanceIssueResponse[] = [];
+let setupMaintenanceWorkOrders: MaintenanceWorkOrderEntryResponse[] = [];
+let setupServiceEvents: ServiceEventResponse[] = [];
+let setupMaintenanceClockSequence = 0;
+
+function nextSetupMaintenanceAt(): string {
+  const instants = [
+    '2027-10-01T09:15:00.000Z',
+    '2027-10-01T09:20:00.000Z',
+    '2027-10-01T09:25:00.000Z',
+    '2027-10-01T09:30:00.000Z',
+    '2027-10-01T09:35:00.000Z',
+    '2027-10-01T09:45:00.000Z',
+    '2027-10-01T09:46:00.000Z',
+    '2027-10-01T09:50:00.000Z',
+    '2027-10-01T09:55:00.000Z',
+  ];
+  const value = instants[setupMaintenanceClockSequence++];
+  if (!value) throw new Error('Setup Maintenance clock exhausted.');
+  return value;
+}
 
 function nextSetupMeterRecordedAt(): string {
   const instants = [
@@ -584,6 +618,18 @@ function inspectionRecord() {
   };
 }
 
+const setupInspectionFinding: InspectionFindingResponse = {
+  id: setupInspectionFindingId,
+  inspectionId,
+  sectionId: inspectionSectionId,
+  itemId: inspectionNotesItemId,
+  severity: 'major',
+  title: 'Washer leak observed',
+  description: 'Water below appliance during handover.',
+  createdByUserId: inspectionUserId,
+  createdAt: '2025-06-30T08:30:00.000Z',
+};
+
 function inspectionBundle() {
   return {
     inspection: inspectionRecord(),
@@ -595,7 +641,7 @@ function inspectionBundle() {
       },
     ],
     responses: inspectionResponses,
-    findings: [],
+    findings: [setupInspectionFinding],
     evidence: [],
     signatures: [],
     finalSnapshot: null,
@@ -797,6 +843,8 @@ type BrowserHarnessWindow = Window & {
   __portfolioHoldContractMutation?: boolean;
   __portfolioHoldAssetMutation?: boolean;
   __portfolioHoldMeterMutation?: boolean;
+  __portfolioHoldMaintenanceMutation?: boolean;
+  __portfolioFailNextServiceEventLink?: boolean;
   __portfolioFailNextMeterReadingAfterCommit?: boolean;
   __portfolioFailNextMeterBoundaryAfterCommit?: boolean;
   __portfolioFailNextAssetMoveAfterCommit?: boolean;
@@ -809,12 +857,14 @@ type BrowserHarnessWindow = Window & {
   __portfolioPendingContractMutation?: boolean;
   __portfolioPendingAssetMutation?: boolean;
   __portfolioPendingMeterMutation?: boolean;
+  __portfolioPendingMaintenanceMutation?: boolean;
   __portfolioReleaseUnitCreate?: () => boolean;
   __portfolioReleaseSpaceCreate?: () => boolean;
   __portfolioReleaseTenancyMutation?: () => boolean;
   __portfolioReleaseContractMutation?: () => boolean;
   __portfolioReleaseAssetMutation?: () => boolean;
   __portfolioReleaseMeterMutation?: () => boolean;
+  __portfolioReleaseMaintenanceMutation?: () => boolean;
 };
 
 const browserHarnessWindow = window as BrowserHarnessWindow;
@@ -837,6 +887,9 @@ let heldAssetMutation:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 let heldMeterMutation:
+  | { readonly response: Response; readonly resolve: (response: Response) => void }
+  | null = null;
+let heldMaintenanceMutation:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 
@@ -906,6 +959,17 @@ function maybeHoldMeterMutation(response: Response): Promise<Response> {
   });
 }
 
+function maybeHoldMaintenanceMutation(response: Response): Promise<Response> {
+  if (!browserHarnessWindow.__portfolioHoldMaintenanceMutation) {
+    return Promise.resolve(response);
+  }
+
+  browserHarnessWindow.__portfolioPendingMaintenanceMutation = true;
+  return new Promise<Response>((resolve) => {
+    heldMaintenanceMutation = { response, resolve };
+  });
+}
+
 browserHarnessWindow.__portfolioReleaseUnitCreate = () => {
   if (!heldUnitCreate) return false;
   const held = heldUnitCreate;
@@ -963,6 +1027,16 @@ browserHarnessWindow.__portfolioReleaseMeterMutation = () => {
   heldMeterMutation = null;
   browserHarnessWindow.__portfolioHoldMeterMutation = false;
   browserHarnessWindow.__portfolioPendingMeterMutation = false;
+  held.resolve(held.response);
+  return true;
+};
+
+browserHarnessWindow.__portfolioReleaseMaintenanceMutation = () => {
+  if (!heldMaintenanceMutation) return false;
+  const held = heldMaintenanceMutation;
+  heldMaintenanceMutation = null;
+  browserHarnessWindow.__portfolioHoldMaintenanceMutation = false;
+  browserHarnessWindow.__portfolioPendingMaintenanceMutation = false;
   held.resolve(held.response);
   return true;
 };
