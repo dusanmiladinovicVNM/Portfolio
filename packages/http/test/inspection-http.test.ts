@@ -699,12 +699,36 @@ describe('Inspection HTTP backbone', () => {
       data: { items: [{ id: inspection.id }] },
     });
 
+    const hiddenFromOtherInspector = await handler(
+      new Request(`https://portfolio.test/units/${unitId}/inspections`),
+      otherInspectorIdentity,
+    );
+    expect(hiddenFromOtherInspector.status).toBe(200);
+    expect(await hiddenFromOtherInspector.json()).toMatchObject({
+      data: { items: [] },
+    });
+
     const denied = await handler(
       new Request(`https://portfolio.test/inspections/${inspection.id}`),
       otherInspectorIdentity,
     );
     expect(denied.status).toBe(403);
     expect(await denied.json()).toMatchObject({
+      error: { code: 'INSPECTION_ACCESS_DENIED' },
+    });
+
+    const deniedStart = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/start`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ expectedVersion: 1 }),
+        },
+      ),
+      otherInspectorIdentity,
+    );
+    expect(deniedStart.status).toBe(403);
+    expect(await deniedStart.json()).toMatchObject({
       error: { code: 'INSPECTION_ACCESS_DENIED' },
     });
 
