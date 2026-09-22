@@ -166,6 +166,27 @@ async function setInputValueXpath(sessionId, xpath, value) {
   });
 }
 
+async function setReactInputValueXpath(sessionId, xpath, value) {
+  const id = await waitForElement(sessionId, 'xpath', xpath);
+  await webdriver(`/session/${sessionId}/execute/sync`, {
+    method: 'POST',
+    body: {
+      script:
+        'const element = arguments[0];' +
+        'const setter = Object.getOwnPropertyDescriptor(' +
+        'HTMLInputElement.prototype, "value").set;' +
+        'setter.call(element, arguments[1]);' +
+        'element.dispatchEvent(new Event("input", { bubbles: true }));' +
+        'element.dispatchEvent(new Event("change", { bubbles: true }));' +
+        'return element.value;',
+      args: [
+        { 'element-6066-11e4-a52e-4f735466cecf': id },
+        value,
+      ],
+    },
+  });
+}
+
 async function elementValueXpath(sessionId, xpath) {
   const id = await waitForElement(sessionId, 'xpath', xpath);
   return webdriver(
@@ -1069,7 +1090,7 @@ try {
     'held replacement Agreement sign',
   );
 
-  await setInputValueXpath(
+  await setReactInputValueXpath(
     sessionId,
     "//input[@aria-label='Contract effective terms business date']",
     '2027-02-01',
