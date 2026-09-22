@@ -201,6 +201,13 @@ function AgreementCreateForm({
   const [agreementType, setAgreementType] = useState<LeaseAgreementType>(
     hasInitial ? 'replacement' : 'initial',
   );
+
+  useEffect(() => {
+    if (hasInitial && agreementType === 'initial') {
+      setAgreementType('replacement');
+    }
+  }, [agreementType, hasInitial]);
+
   const activeParties = useMemo(
     () =>
       [...(parties ?? [])]
