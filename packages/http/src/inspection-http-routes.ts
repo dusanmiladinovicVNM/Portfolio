@@ -193,12 +193,20 @@ export async function handleInspectionHttp(
   }
 
   if (method === 'GET' && path === '/inspections/assigned-to-me') {
-    const inspections = await listAssignedInspectionsQuery(
+    const work = await listAssignedInspectionsQuery(
       deps.inspectionRepository,
+      deps.portfolioRepository,
       actor,
     );
     return json({
-      data: { items: inspections.map(toInspectionResponse) },
+      data: {
+        items: work.map((item) => ({
+          inspection: toInspectionResponse(item.inspection),
+          propertyId: item.propertyId,
+          unitCode: item.unitCode,
+          unitNumber: item.unitNumber,
+        })),
+      },
     });
   }
 
