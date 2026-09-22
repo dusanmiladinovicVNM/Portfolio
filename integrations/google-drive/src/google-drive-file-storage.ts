@@ -1,10 +1,11 @@
-import type {
-  BufferedDocumentBinaryPolicy,
-  FileStoragePort,
-  FileStoragePutInput,
-  StorageObjectContent,
-  StorageObjectReference,
-  StoredFile,
+import {
+  DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
+  type BufferedDocumentBinaryPolicy,
+  type FileStoragePort,
+  type FileStoragePutInput,
+  type StorageObjectContent,
+  type StorageObjectReference,
+  type StoredFile,
 } from '@portfolio/application';
 
 export interface GoogleDriveAccessTokenProvider {
@@ -16,6 +17,7 @@ export interface GoogleDriveFileStorageOptions {
   readonly accessTokenProvider: GoogleDriveAccessTokenProvider;
   readonly fetchImpl?: typeof fetch;
   readonly cryptoImpl?: Crypto;
+  readonly maxUploadBytes?: number;
 }
 
 interface DriveFile {
@@ -27,6 +29,17 @@ interface DriveFile {
 
 interface DriveListResponse {
   files?: DriveFile[];
+  nextPageToken?: string;
+}
+
+interface ResolvedDriveFile {
+  readonly id: string;
+  readonly byteSize: number;
+  readonly sha256: string;
+}
+
+interface ResolvedObjectKey extends ResolvedDriveFile {
+  readonly hadDuplicates: boolean;
 }
 
 const PROVIDER = 'google-drive';
@@ -37,6 +50,71 @@ function required(value: string, field: string): string {
     throw new Error(`${field} is required.`);
   }
   return normalized;
+}
+
+function positiveSafeInteger(value: number, field: string): number {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${field} must be a positive safe integer.`);
+  }
+  return value;
+}
+
+function driveSize(value: string | undefined): number {
+  if (!value || !/^\d+$/.test(value)) {
+    throw new Error('Google Drive object does not expose a valid byte size.');
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new Error('Google Drive object byte size is outside the supported range.');
+  }
+  return parsed;
+}
+
+function driveSha256(value: string | undefined): string {
+  const normalized = value?.toLowerCase();
+  if (!normalized || !/^[0-9a-f]{64}$/.test(normalized)) {
+    throw new Error(
+      'Google Drive object does not expose a valid SHA-256 checksum.',
+    );
+  }
+  return normalized;
+}
+
+function resolveDriveFile(
+  file: DriveFile,
+  objectKey: string,
+  expected?: {
+    readonly byteSize: number;
+    readonly sha256: string;
+  },
+): ResolvedDriveFile {
+  if (!file.id) {
+    throw new Error('Google Drive returned a file without an id.');
+  }
+  if (file.appProperties?.portfolioObjectKey !== objectKey) {
+    throw new Error(
+      'Google Drive object metadata does not match the Portfolio object key.',
+    );
+  }
+
+  const byteSize = driveSize(file.size);
+  const sha256 = driveSha256(file.sha256Checksum);
+
+  if (
+    expected &&
+    (byteSize !== expected.byteSize ||
+      sha256 !== expected.sha256.toLowerCase())
+  ) {
+    throw new Error(
+      'Google Drive object key already exists with different content.',
+    );
+  }
+
+  return {
+    id: file.id,
+    byteSize,
+    sha256,
+  };
 }
 
 function escapeDriveQueryValue(value: string): string {
@@ -82,6 +160,9 @@ async function readBodyBounded(
   if (announcedLength !== null) {
     const parsedLength = Number(announcedLength);
     if (Number.isFinite(parsedLength) && parsedLength > maxBytes) {
+      try {
+        await response.body?.cancel('buffered read limit exceeded');
+      } catch {}
       throw new Error('Google Drive response exceeds buffered read limit.');
     }
   }
@@ -129,12 +210,18 @@ export class GoogleDriveFileStorage implements FileStoragePort {
   private readonly accessTokenProvider: GoogleDriveAccessTokenProvider;
   private readonly fetchImpl: typeof fetch;
   private readonly cryptoImpl: Crypto;
+  private readonly maxUploadBytes: number;
 
   constructor(options: GoogleDriveFileStorageOptions) {
     this.folderId = required(options.folderId, 'folderId');
     this.accessTokenProvider = options.accessTokenProvider;
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.cryptoImpl = options.cryptoImpl ?? crypto;
+    this.maxUploadBytes = positiveSafeInteger(
+      options.maxUploadBytes ??
+        DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY.maxBytes,
+      'maxUploadBytes',
+    );
   }
 
   async put(input: FileStoragePutInput): Promise<StoredFile> {
@@ -143,30 +230,33 @@ export class GoogleDriveFileStorage implements FileStoragePort {
     const mimeType = required(input.mimeType, 'mimeType').toLowerCase();
 
     if (input.content.byteLength === 0) {
-      throw new Error('Google Drive storage does not accept empty document content.');
+      throw new Error(
+        'Google Drive storage does not accept empty document content.',
+      );
+    }
+    if (input.content.byteLength > this.maxUploadBytes) {
+      throw new Error('Google Drive upload exceeds buffered write limit.');
     }
 
     const sha256 = await sha256Hex(this.cryptoImpl, input.content);
+    const expected = {
+      byteSize: input.content.byteLength,
+      sha256,
+    };
     const token = await this.accessTokenProvider.getAccessToken();
-    const existing = await this.findByObjectKey(token, objectKey);
 
+    const existing = await this.resolveObjectKey(
+      token,
+      objectKey,
+      expected,
+    );
     if (existing) {
-      if (existing.sha256Checksum !== sha256) {
-        throw new Error(
-          'Google Drive object key already exists with different content.',
-        );
-      }
-
-      if (!existing.id) {
-        throw new Error('Google Drive returned an existing file without an id.');
-      }
-
       return {
         provider: PROVIDER,
         objectId: existing.id,
         objectKey,
-        byteSize: Number(existing.size ?? input.content.byteLength),
-        sha256,
+        byteSize: existing.byteSize,
+        sha256: existing.sha256,
         disposition: 'reused',
       };
     }
@@ -190,14 +280,19 @@ export class GoogleDriveFileStorage implements FileStoragePort {
       `Content-Type: ${mimeType}\r\n\r\n`,
     );
     const suffix = encoder.encode(`\r\n--${boundary}--\r\n`);
-    const body = concatBytes([prefix, input.content, suffix]);
+
+    // Keep the provider upload bounded without materializing a second
+    // concatenated Uint8Array plus a third ArrayBuffer copy.
+    const body = new Blob([prefix, input.content, suffix], {
+      type: `multipart/related; boundary=${boundary}`,
+    });
 
     const url = new URL('https://www.googleapis.com/upload/drive/v3/files');
     url.searchParams.set('uploadType', 'multipart');
     url.searchParams.set('supportsAllDrives', 'true');
     url.searchParams.set(
       'fields',
-      'id,name,mimeType,size,sha256Checksum,appProperties',
+      'id,size,sha256Checksum,appProperties',
     );
 
     const created = await readJson<DriveFile>(
@@ -205,27 +300,58 @@ export class GoogleDriveFileStorage implements FileStoragePort {
         method: 'POST',
         headers: {
           authorization: `Bearer ${token}`,
-          'content-type': `multipart/related; boundary=${boundary}`,
+          'content-type': body.type,
         },
-        body: toArrayBuffer(body),
+        body,
       }),
     );
 
-    if (!created.id) {
-      throw new Error('Google Drive upload succeeded without returning a file id.');
+    const createdFile = resolveDriveFile(
+      created,
+      objectKey,
+      expected,
+    );
+
+    // appProperties are searchable metadata, not a uniqueness constraint.
+    // Re-list after create so concurrent same-key uploads converge on one
+    // deterministic canonical file when they contain the same exact bytes.
+    const reconciled = await this.resolveObjectKey(
+      token,
+      objectKey,
+      expected,
+    );
+
+    if (!reconciled) {
+      // A just-created file may not yet be visible through list/search.
+      // The create response itself was fully verified, so it remains safe.
+      return {
+        provider: PROVIDER,
+        objectId: createdFile.id,
+        objectKey,
+        byteSize: createdFile.byteSize,
+        sha256: createdFile.sha256,
+        disposition: 'created',
+      };
     }
 
-    if (created.sha256Checksum && created.sha256Checksum !== sha256) {
-      throw new Error('Google Drive SHA-256 checksum does not match uploaded content.');
+    if (reconciled.id !== createdFile.id) {
+      // A concurrent same-content writer won canonical selection. Remove our
+      // redundant object if it still exists, but never remove the winner.
+      await this.deleteById(token, createdFile.id);
     }
 
     return {
       provider: PROVIDER,
-      objectId: created.id,
+      objectId: reconciled.id,
       objectKey,
-      byteSize: Number(created.size ?? input.content.byteLength),
-      sha256,
-      disposition: 'created',
+      byteSize: reconciled.byteSize,
+      sha256: reconciled.sha256,
+      // Any duplicate observation is treated as reused so application-level
+      // compensation cannot delete an object another concurrent request won.
+      disposition:
+        reconciled.id === createdFile.id && !reconciled.hadDuplicates
+          ? 'created'
+          : 'reused',
     };
   }
 
@@ -237,35 +363,14 @@ export class GoogleDriveFileStorage implements FileStoragePort {
     }
 
     const token = await this.accessTokenProvider.getAccessToken();
-    const url = new URL(
-      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(reference.objectId)}`,
-    );
-    url.searchParams.set('supportsAllDrives', 'true');
-    url.searchParams.set('fields', 'id,size,sha256Checksum,appProperties');
+    const file = await this.getById(token, reference.objectId);
+    if (!file) return null;
 
-    const response = await this.fetchImpl(url, {
-      headers: { authorization: `Bearer ${token}` },
-    });
-    if (response.status === 404) return null;
-
-    const file = await readJson<DriveFile>(response);
-    if (file.appProperties?.portfolioObjectKey !== reference.objectKey) {
-      throw new Error(
-        'Google Drive object metadata does not match the Portfolio object key.',
-      );
-    }
-
-    const sha256 = file.sha256Checksum?.toLowerCase();
-    if (!sha256 || !/^[0-9a-f]{64}$/.test(sha256)) {
-      throw new Error(
-        'Google Drive object does not expose a valid SHA-256 checksum.',
-      );
-    }
-
+    const resolved = resolveDriveFile(file, reference.objectKey);
     return {
       ...reference,
-      byteSize: Number(file.size ?? 0),
-      sha256,
+      byteSize: resolved.byteSize,
+      sha256: resolved.sha256,
     };
   }
 
@@ -324,8 +429,38 @@ export class GoogleDriveFileStorage implements FileStoragePort {
     }
 
     const token = await this.accessTokenProvider.getAccessToken();
+    const file = await this.getById(token, reference.objectId);
+    if (!file) return;
+
+    // Refuse to delete a Drive id whose Portfolio object identity no longer
+    // matches the reference supplied by canonical metadata.
+    resolveDriveFile(file, reference.objectKey);
+    await this.deleteById(token, reference.objectId);
+  }
+
+  private async getById(
+    token: string,
+    objectId: string,
+  ): Promise<DriveFile | null> {
     const url = new URL(
-      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(reference.objectId)}`,
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(objectId)}`,
+    );
+    url.searchParams.set('supportsAllDrives', 'true');
+    url.searchParams.set('fields', 'id,size,sha256Checksum,appProperties');
+
+    const response = await this.fetchImpl(url, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (response.status === 404) return null;
+    return readJson<DriveFile>(response);
+  }
+
+  private async deleteById(
+    token: string,
+    objectId: string,
+  ): Promise<void> {
+    const url = new URL(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(objectId)}`,
     );
     url.searchParams.set('supportsAllDrives', 'true');
 
@@ -342,10 +477,10 @@ export class GoogleDriveFileStorage implements FileStoragePort {
     }
   }
 
-  private async findByObjectKey(
+  private async listByObjectKey(
     token: string,
     objectKey: string,
-  ): Promise<DriveFile | null> {
+  ): Promise<readonly DriveFile[]> {
     const q =
       `'${escapeDriveQueryValue(this.folderId)}' in parents and trashed = false and ` +
       `appProperties has { key='portfolioObjectKey' and value='${escapeDriveQueryValue(objectKey)}' }`;
@@ -353,12 +488,12 @@ export class GoogleDriveFileStorage implements FileStoragePort {
     const url = new URL('https://www.googleapis.com/drive/v3/files');
     url.searchParams.set('q', q);
     url.searchParams.set('spaces', 'drive');
-    url.searchParams.set('pageSize', '2');
+    url.searchParams.set('pageSize', '100');
     url.searchParams.set('supportsAllDrives', 'true');
     url.searchParams.set('includeItemsFromAllDrives', 'true');
     url.searchParams.set(
       'fields',
-      'files(id,name,mimeType,size,sha256Checksum,appProperties)',
+      'nextPageToken,files(id,size,sha256Checksum,appProperties)',
     );
 
     const result = await readJson<DriveListResponse>(
@@ -367,13 +502,40 @@ export class GoogleDriveFileStorage implements FileStoragePort {
       }),
     );
 
-    const files = result.files ?? [];
-    if (files.length > 1) {
+    if (result.nextPageToken) {
       throw new Error(
-        'Google Drive contains multiple files for the same Portfolio object key.',
+        'Google Drive contains too many files for one Portfolio object key; manual reconciliation is required.',
       );
     }
 
-    return files[0] ?? null;
+    return result.files ?? [];
+  }
+
+  private async resolveObjectKey(
+    token: string,
+    objectKey: string,
+    expected: {
+      readonly byteSize: number;
+      readonly sha256: string;
+    },
+  ): Promise<ResolvedObjectKey | null> {
+    const files = await this.listByObjectKey(token, objectKey);
+    if (files.length === 0) return null;
+
+    const resolved = files
+      .map((file) => resolveDriveFile(file, objectKey, expected))
+      .sort((left, right) => left.id.localeCompare(right.id));
+
+    const canonical = resolved[0]!;
+    if (resolved.length > 1) {
+      for (const duplicate of resolved.slice(1)) {
+        await this.deleteById(token, duplicate.id);
+      }
+    }
+
+    return {
+      ...canonical,
+      hadDuplicates: resolved.length > 1,
+    };
   }
 }
