@@ -178,6 +178,19 @@ class SequenceIds implements IdGenerator {
 }
 
 async function resetAndMigrate(): Promise<void> {
+  await sql.unsafe(`
+    do $test_roles$
+    begin
+      if not exists (select 1 from pg_roles where rolname = 'anon') then
+        create role anon nologin;
+      end if;
+      if not exists (select 1 from pg_roles where rolname = 'authenticated') then
+        create role authenticated nologin;
+      end if;
+    end
+    $test_roles$;
+  `);
+
   await sql.unsafe(
     `drop table if exists
       public.meter_reading_boundaries,
@@ -373,6 +386,69 @@ describe('PostgreSQL infrastructure', () => {
       set status = 'active'
       where id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     `;
+  });
+
+  it('denies direct browser-role access to business tables, views and reporting RPCs', async () => {
+    const privileges = await sql<{
+      anon_property_select: boolean;
+      authenticated_timeline_select: boolean;
+      authenticated_reporting_execute: boolean;
+      timeline_security_invoker: boolean;
+    }[]>\`
+      select
+        has_table_privilege('anon', 'public.properties', 'select')
+          as anon_property_select,
+        has_table_privilege(
+          'authenticated',
+          'public.unit_business_events',
+          'select'
+        ) as authenticated_timeline_select,
+        has_function_privilege(
+          'authenticated',
+          'public.reporting_unit_snapshots(date)',
+          'execute'
+        ) as authenticated_reporting_execute,
+        exists (
+          select 1
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+          where n.nspname = 'public'
+            and c.relname = 'unit_business_events'
+            and 'security_invoker=true' = any(coalesce(c.reloptions, '{}'))
+        ) as timeline_security_invoker
+    \`;
+
+    expect(privileges[0]).toEqual({
+      anon_property_select: false,
+      authenticated_timeline_select: false,
+      authenticated_reporting_execute: false,
+      timeline_security_invoker: true,
+    });
+
+    await expect(
+      sql.begin(async (tx) => {
+        await tx.unsafe('set local role authenticated');
+        await tx.unsafe(
+          'select * from public.unit_business_events limit 1',
+        );
+      }),
+    ).rejects.toMatchObject({ code: '42501' });
+
+    await expect(
+      sql.begin(async (tx) => {
+        await tx.unsafe('set local role authenticated');
+        await tx.unsafe(
+          'select * from public.reporting_unit_snapshots(current_date) limit 1',
+        );
+      }),
+    ).rejects.toMatchObject({ code: '42501' });
+
+    await expect(
+      sql.begin(async (tx) => {
+        await tx.unsafe('set local role anon');
+        await tx.unsafe('select * from public.properties limit 1');
+      }),
+    ).rejects.toMatchObject({ code: '42501' });
   });
 
   it('persists the full Portfolio application slice', async () => {
