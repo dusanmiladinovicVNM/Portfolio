@@ -261,10 +261,6 @@ export async function finalizeDocumentVersionRecord(
   versionId: DocumentVersionId,
 ): Promise<DocumentVersion> {
   const current = await requireVersion(deps.documentRepository, versionId);
-  if (current.status === 'final') {
-    await assertDocumentVersionStorageIntegrity(deps, current);
-    return current;
-  }
   await assertDocumentVersionStorageIntegrity(deps, current);
   const finalized = finalizeDocumentVersion(current, deps.clock.now());
   await deps.documentRepository.finalizeVersion(finalized);
