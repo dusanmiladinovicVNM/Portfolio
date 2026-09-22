@@ -22,6 +22,7 @@ import type {
   MaintenanceWorkOrderResponse,
   ServiceEventResponse,
   InspectionFindingResponse,
+  InspectionResponseDto,
   PartyResponse,
   PropertyResponse,
   SpaceResponse,
@@ -142,6 +143,10 @@ const setupServiceEventId =
   'b1000000-0000-4000-8000-000000000047';
 const setupMaintenanceInspectionId =
   'b1000000-0000-4000-8000-000000000048';
+const setupOrchestrationInspectionId =
+  'b1000000-0000-4000-8000-000000000049';
+const setupOrchestrationOtherStaffId =
+  'b1000000-0000-4000-8000-000000000050';
 
 const setupDestinationUnit: UnitResponse = {
   id: setupDestinationUnitId,
@@ -238,6 +243,28 @@ let setupMaintenanceIssues: MaintenanceIssueResponse[] = [];
 let setupMaintenanceWorkOrders: MaintenanceWorkOrderEntryResponse[] = [];
 let setupServiceEvents: ServiceEventResponse[] = [];
 let setupMaintenanceClockSequence = 0;
+let setupOrchestrationInspection: InspectionResponseDto | null = null;
+
+function setupOrchestrationInspectionBundle() {
+  if (!setupOrchestrationInspection) {
+    throw new Error('Setup orchestration Inspection is missing.');
+  }
+  return {
+    inspection: setupOrchestrationInspection,
+    schema: inspectionSchema,
+    sectionStates: [
+      {
+        sectionId: inspectionSectionId,
+        revision: 0,
+      },
+    ],
+    responses: [],
+    findings: [],
+    evidence: [],
+    signatures: [],
+    finalSnapshot: null,
+  };
+}
 
 function nextSetupMaintenanceAt(): string {
   const instants = [
@@ -894,6 +921,9 @@ type BrowserHarnessWindow = Window & {
   __portfolioHoldAssetMutation?: boolean;
   __portfolioHoldMeterMutation?: boolean;
   __portfolioHoldMaintenanceMutation?: boolean;
+  __portfolioHoldInspectionOrchestration?: boolean;
+  __portfolioFailNextInspectionCreateAfterCommit?: boolean;
+  __portfolioFailNextInspectionOrchestrationAfterCommit?: boolean;
   __portfolioFailNextMaintenanceIssueCreateAfterCommit?: boolean;
   __portfolioFailNextMaintenanceWorkOrderCreateAfterCommit?: boolean;
   __portfolioFailNextServiceEventCreateAfterCommit?: boolean;
@@ -911,6 +941,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioPendingAssetMutation?: boolean;
   __portfolioPendingMeterMutation?: boolean;
   __portfolioPendingMaintenanceMutation?: boolean;
+  __portfolioPendingInspectionOrchestration?: boolean;
   __portfolioReleaseUnitCreate?: () => boolean;
   __portfolioReleaseSpaceCreate?: () => boolean;
   __portfolioReleaseTenancyMutation?: () => boolean;
@@ -918,6 +949,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioReleaseAssetMutation?: () => boolean;
   __portfolioReleaseMeterMutation?: () => boolean;
   __portfolioReleaseMaintenanceMutation?: () => boolean;
+  __portfolioReleaseInspectionOrchestration?: () => boolean;
 };
 
 const browserHarnessWindow = window as BrowserHarnessWindow;
@@ -943,6 +975,9 @@ let heldMeterMutation:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 let heldMaintenanceMutation:
+  | { readonly response: Response; readonly resolve: (response: Response) => void }
+  | null = null;
+let heldInspectionOrchestration:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 
@@ -1023,6 +1058,19 @@ function maybeHoldMaintenanceMutation(response: Response): Promise<Response> {
   });
 }
 
+function maybeHoldInspectionOrchestration(
+  response: Response,
+): Promise<Response> {
+  if (!browserHarnessWindow.__portfolioHoldInspectionOrchestration) {
+    return Promise.resolve(response);
+  }
+
+  browserHarnessWindow.__portfolioPendingInspectionOrchestration = true;
+  return new Promise<Response>((resolve) => {
+    heldInspectionOrchestration = { response, resolve };
+  });
+}
+
 browserHarnessWindow.__portfolioReleaseUnitCreate = () => {
   if (!heldUnitCreate) return false;
   const held = heldUnitCreate;
@@ -1090,6 +1138,16 @@ browserHarnessWindow.__portfolioReleaseMaintenanceMutation = () => {
   heldMaintenanceMutation = null;
   browserHarnessWindow.__portfolioHoldMaintenanceMutation = false;
   browserHarnessWindow.__portfolioPendingMaintenanceMutation = false;
+  held.resolve(held.response);
+  return true;
+};
+
+browserHarnessWindow.__portfolioReleaseInspectionOrchestration = () => {
+  if (!heldInspectionOrchestration) return false;
+  const held = heldInspectionOrchestration;
+  heldInspectionOrchestration = null;
+  browserHarnessWindow.__portfolioHoldInspectionOrchestration = false;
+  browserHarnessWindow.__portfolioPendingInspectionOrchestration = false;
   held.resolve(held.response);
   return true;
 };
@@ -1743,13 +1801,179 @@ globalThis.fetch = async (
 
   if (
     setupUnit &&
-    path === '/units/' + setupUnitId + '/inspections'
+    path === '/units/' + setupUnitId + '/inspections' &&
+    (!init?.method || init.method === 'GET')
   ) {
-    return json({ items: [setupMaintenanceInspectionRecord()] });
+    return json({
+      items: [
+        setupMaintenanceInspectionRecord(),
+        ...(setupOrchestrationInspection
+          ? [setupOrchestrationInspection]
+          : []),
+      ],
+    });
+  }
+
+  if (
+    setupUnit &&
+    path === '/units/' + setupUnitId + '/inspections' &&
+    init?.method === 'POST'
+  ) {
+    requireInspectionAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      code: string;
+      inspectionType: InspectionResponseDto['inspectionType'];
+      tenancyId?: string | null;
+      schemaVersionId: string;
+      assignedToUserId?: string;
+      scheduledFor?: string | null;
+    };
+    if (
+      body.inspectionType !== inspectionSchema.inspectionType ||
+      body.schemaVersionId !== inspectionSchemaVersionId ||
+      (body.tenancyId != null && body.tenancyId !== setupTenancyId) ||
+      body.assignedToUserId !== inspectionUserId
+    ) {
+      throw new Error(
+        'Setup Inspection create targeted invalid orchestration context.',
+      );
+    }
+    setupOrchestrationInspection = {
+      id: setupOrchestrationInspectionId,
+      code: body.code,
+      inspectionType: body.inspectionType,
+      unitId: setupUnitId,
+      tenancyId: body.tenancyId ?? null,
+      schemaVersionId: body.schemaVersionId,
+      assignedToUserId: body.assignedToUserId,
+      createdByUserId: inspectionUserId,
+      scheduledFor: body.scheduledFor ?? null,
+      status: 'draft',
+      startedAt: null,
+      lockedAt: null,
+      finalizedAt: null,
+      cancelledAt: null,
+      version: 1,
+      contentRevision: 0,
+    };
+
+    if (browserHarnessWindow.__portfolioFailNextInspectionCreateAfterCommit) {
+      browserHarnessWindow.__portfolioFailNextInspectionCreateAfterCommit =
+        false;
+      return apiError(
+        503,
+        'INSPECTION_CREATE_TEST_ACK_LOST',
+        'Intentional Inspection create acknowledgement loss.',
+      );
+    }
+
+    return json(setupOrchestrationInspection, 201);
   }
 
   if (path === '/inspections/' + setupMaintenanceInspectionId) {
     return json(setupMaintenanceInspectionBundle());
+  }
+
+  if (
+    setupOrchestrationInspection &&
+    path === '/inspections/' + setupOrchestrationInspection.id
+  ) {
+    return json(setupOrchestrationInspectionBundle());
+  }
+
+  if (
+    setupOrchestrationInspection &&
+    path ===
+      '/inspections/' +
+        setupOrchestrationInspection.id +
+        '/orchestration' &&
+    init?.method === 'POST'
+  ) {
+    requireInspectionAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      assignedToUserId: string;
+      scheduledFor: string | null;
+    };
+    if (body.expectedVersion !== setupOrchestrationInspection.version) {
+      return apiError(
+        409,
+        'INSPECTION_VERSION_CONFLICT',
+        'Inspection version conflict.',
+      );
+    }
+    if (setupOrchestrationInspection.status !== 'draft') {
+      return apiError(
+        422,
+        'INSPECTION_ORCHESTRATION_LOCKED',
+        'Inspection orchestration is frozen after start.',
+      );
+    }
+    if (
+      body.assignedToUserId !== inspectionUserId &&
+      body.assignedToUserId !== setupOrchestrationOtherStaffId
+    ) {
+      return apiError(
+        422,
+        'INSPECTION_ASSIGNEE_INVALID',
+        'Assigned staff is invalid.',
+      );
+    }
+
+    setupOrchestrationInspection = {
+      ...setupOrchestrationInspection,
+      assignedToUserId: body.assignedToUserId,
+      scheduledFor: body.scheduledFor,
+      version: setupOrchestrationInspection.version + 1,
+    };
+
+    if (
+      browserHarnessWindow.__portfolioFailNextInspectionOrchestrationAfterCommit
+    ) {
+      browserHarnessWindow.__portfolioFailNextInspectionOrchestrationAfterCommit =
+        false;
+      return apiError(
+        503,
+        'INSPECTION_ORCHESTRATION_TEST_ACK_LOST',
+        'Intentional Inspection orchestration acknowledgement loss.',
+      );
+    }
+
+    return maybeHoldInspectionOrchestration(
+      json(setupOrchestrationInspection),
+    );
+  }
+
+  if (
+    setupOrchestrationInspection &&
+    path === '/inspections/' + setupOrchestrationInspection.id + '/start' &&
+    init?.method === 'POST'
+  ) {
+    requireInspectionAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+    };
+    if (body.expectedVersion !== setupOrchestrationInspection.version) {
+      return apiError(
+        409,
+        'INSPECTION_VERSION_CONFLICT',
+        'Inspection version conflict.',
+      );
+    }
+    if (setupOrchestrationInspection.status !== 'draft') {
+      return apiError(
+        422,
+        'INSPECTION_INVALID_TRANSITION',
+        'Inspection cannot start.',
+      );
+    }
+    setupOrchestrationInspection = {
+      ...setupOrchestrationInspection,
+      status: 'in_progress',
+      startedAt: '2027-10-02T08:00:00.000Z',
+      version: setupOrchestrationInspection.version + 1,
+    };
+    return json(setupOrchestrationInspection);
   }
 
   if (setupUnit && path === '/units/' + setupUnitId + '/assets') {
@@ -3335,6 +3559,53 @@ globalThis.fetch = async (
       },
       currentOperations: operations,
       unitAttributedCostsByCurrency: [],
+    });
+  }
+
+  if (path === '/inspection-schemas') {
+    return json({ items: [inspectionSchema] });
+  }
+
+  if (path === '/inspection-staff') {
+    return json({
+      items: [
+        {
+          userId: inspectionUserId,
+          displayName: 'Browser Inspector',
+          email: 'inspector@portfolio.test',
+          role: 'inspector',
+        },
+        {
+          userId: setupOrchestrationOtherStaffId,
+          displayName: 'Browser Manager',
+          email: 'manager@portfolio.test',
+          role: 'manager',
+        },
+      ],
+    });
+  }
+
+  if (path === '/inspections/assigned-to-me') {
+    return json({
+      items: [
+        {
+          inspection: inspectionRecord(),
+          propertyId,
+          unitCode: unit.code,
+          unitNumber: unit.unitNumber,
+        },
+        ...(setupOrchestrationInspection?.assignedToUserId ===
+        inspectionUserId
+          ? [
+              {
+                inspection: setupOrchestrationInspection,
+                propertyId: setupPropertyId,
+                unitCode: setupUnit?.code ?? 'UNIT-SETUP-BRW',
+                unitNumber: setupUnit?.unitNumber ?? '1B',
+              },
+            ]
+          : []),
+      ],
     });
   }
 
