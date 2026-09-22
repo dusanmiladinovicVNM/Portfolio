@@ -25,6 +25,29 @@ function env(key: string) {
 }
 
 describe('web security configuration', () => {
+  it('rejects plaintext remote Supabase auth transport', () => {
+    const configured = {
+      ...env('sb_publishable_test'),
+      VITE_SUPABASE_URL: 'http://example.supabase.co',
+    } as ImportMetaEnv;
+
+    expect(() => readWebConfig(configured)).toThrow(
+      /must use HTTPS outside local development/,
+    );
+  });
+
+  it('allows localhost HTTP for local Supabase development', () => {
+    const configured = {
+      ...env('sb_publishable_test'),
+      VITE_SUPABASE_URL: 'http://localhost:54321',
+      VITE_API_BASE_URL: '/functions/v1/api',
+    } as ImportMetaEnv;
+
+    expect(readWebConfig(configured).supabaseUrl).toBe(
+      'http://localhost:54321',
+    );
+  });
+
   it('accepts a browser-safe publishable key', () => {
     expect(readWebConfig(env('sb_publishable_test')).supabaseAnonKey).toBe(
       'sb_publishable_test',
