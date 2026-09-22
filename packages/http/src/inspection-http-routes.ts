@@ -7,6 +7,7 @@ import {
   createInspectionSchemaVersionCommand,
   getInspectionBundleQuery,
   finalizeInspectionCommand,
+  generateInspectionFinalReportCommand,
   getInspectionSchemaVersionQuery,
   listInspectionSchemaVersionsQuery,
   listInspectionsByUnitQuery,
@@ -26,6 +27,7 @@ import {
   type InspectionRepository,
   type OwnershipRepository,
   type PartyRepository,
+  type PdfPort,
   type PortfolioRepository,
   type StaffDirectoryRepository,
   type TenancyRepository,
@@ -60,6 +62,7 @@ import {
   toInspectionResponse,
   toInspectionSchemaVersionResponse,
   toInspectionSignatureResponse,
+  toDocumentVersionResponse,
 } from './response-mappers.js';
 
 export interface InspectionHttpDependencies {
@@ -73,6 +76,7 @@ export interface InspectionHttpDependencies {
   readonly staffDirectoryRepository: StaffDirectoryRepository;
   readonly idGenerator: IdGenerator;
   readonly clock: ClockPort;
+  readonly pdfPort: PdfPort;
 }
 
 export async function handleInspectionHttp(
@@ -542,6 +546,28 @@ export async function handleInspectionHttp(
         snapshot: toInspectionFinalSnapshotResponse(result.snapshot),
       },
     });
+  }
+
+  const finalReportMatch =
+    /^\/inspections\/([^/]+)\/final-report$/.exec(path);
+  if (method === 'POST' && finalReportMatch) {
+    const parsedId = entityIdSchema.safeParse(finalReportMatch[1]);
+    if (!parsedId.success) return validationFailure();
+
+    const version = await generateInspectionFinalReportCommand(
+      {
+        inspectionRepository: deps.inspectionRepository,
+        documentRepository: deps.documentRepository,
+        fileStorage: deps.fileStorage,
+        pdfPort: deps.pdfPort,
+        idGenerator: deps.idGenerator,
+        clock: deps.clock,
+      },
+      actor,
+      asInspectionId(parsedId.data),
+    );
+
+    return json({ data: toDocumentVersionResponse(version) });
   }
 
   return null;
