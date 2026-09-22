@@ -282,6 +282,7 @@ export function InspectionFindingsEvidence({
       description: parsed.data.description ?? null,
     };
     let writeAcknowledged = false;
+    let writeAmbiguous = false;
     try {
       let created: InspectionFindingResponse;
       try {
@@ -293,6 +294,7 @@ export function InspectionFindingsEvidence({
         writeAcknowledged = true;
       } catch (cause) {
         if (!isAmbiguousWriteFailure(cause)) throw cause;
+        writeAmbiguous = true;
         const canonical = await readCanonical();
         applyCanonical(canonical);
         throw new Error(
@@ -321,7 +323,9 @@ export function InspectionFindingsEvidence({
         setError(
           writeAcknowledged
             ? `Finding write was acknowledged by the server, but follow-up verification failed: ${errorMessage(cause, 'canonical verification failed')}. Do not retry until the canonical Finding list has been checked.`
-            : errorMessage(cause, 'Finding could not be recorded.'),
+            : writeAmbiguous
+              ? `Finding outcome is unconfirmed: ${errorMessage(cause, 'canonical reread also failed')}. Findings have no idempotency key; do not retry until canonical Inspection state has been checked.`
+              : errorMessage(cause, 'Finding could not be recorded.'),
         );
       }
     } finally {
@@ -568,6 +572,7 @@ export function InspectionFindingsEvidence({
     );
 
     let writeAcknowledged = false;
+    let writeAmbiguous = false;
     try {
       let attached: InspectionEvidenceResponse;
       try {
@@ -579,6 +584,7 @@ export function InspectionFindingsEvidence({
         writeAcknowledged = true;
       } catch (cause) {
         if (!isAmbiguousWriteFailure(cause)) throw cause;
+        writeAmbiguous = true;
         const canonical = await readCanonical();
         const recovered = findRecoveredInspectionEvidence(
           canonical,
@@ -626,7 +632,9 @@ export function InspectionFindingsEvidence({
         setError(
           writeAcknowledged
             ? `Evidence relation was acknowledged by the server, but follow-up verification failed: ${errorMessage(cause, 'canonical verification failed')}. Do not upload the binary again; reload canonical Inspection state before retrying the relation.`
-            : errorMessage(cause, 'Evidence could not be attached.'),
+            : writeAmbiguous
+              ? `Evidence-link outcome is unconfirmed: ${errorMessage(cause, 'canonical reread also failed')}. The binary remains stored; do not upload it again. Check canonical Inspection state before retrying the relation.`
+              : errorMessage(cause, 'Evidence could not be attached.'),
         );
       }
     } finally {
