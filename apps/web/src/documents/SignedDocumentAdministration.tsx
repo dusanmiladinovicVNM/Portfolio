@@ -243,7 +243,13 @@ export function SignedDocumentAdministration({
       }
     } catch (cause) {
       if (guard.isMounted()) {
-        setError(actionError(cause, 'Document could not be created.'));
+        setCatalogRevision((revision) => revision + 1);
+        setError(
+          actionError(
+            cause,
+            'Document creation outcome could not be confirmed. The canonical Document catalog was reloaded.',
+          ),
+        );
       }
     } finally {
       finish();
@@ -303,13 +309,13 @@ export function SignedDocumentAdministration({
       }
     } catch (cause) {
       if (guard.isMounted()) {
-        if (
-          cause instanceof PortfolioApiError &&
-          cause.code === 'DOCUMENT_VERSION_CONFLICT'
-        ) {
-          reloadDocument(documentAtStart.id);
-        }
-        setError(actionError(cause, 'Document version could not be uploaded.'));
+        reloadDocument(documentAtStart.id);
+        setError(
+          actionError(
+            cause,
+            'Document upload outcome could not be confirmed. Canonical Document and Version state was reloaded.',
+          ),
+        );
       }
     } finally {
       finish();
@@ -338,13 +344,13 @@ export function SignedDocumentAdministration({
       }
     } catch (cause) {
       if (guard.isMounted()) {
-        if (
-          cause instanceof PortfolioApiError &&
-          cause.code === 'DOCUMENT_VERSION_CONFLICT'
-        ) {
-          setVersionRevision((revision) => revision + 1);
-        }
-        setError(actionError(cause, 'Document version could not be finalized.'));
+        setVersionRevision((revision) => revision + 1);
+        setError(
+          actionError(
+            cause,
+            'Document finalization outcome could not be confirmed. Canonical Version state was reloaded.',
+          ),
+        );
       }
     } finally {
       finish();
@@ -390,13 +396,13 @@ export function SignedDocumentAdministration({
       }
     } catch (cause) {
       if (guard.isMounted()) {
-        if (
-          cause instanceof PortfolioApiError &&
-          cause.code === 'DOCUMENT_SIGNED_ORIGINAL_ALREADY_EXISTS'
-        ) {
-          onCanonicalWrite();
-        }
-        setError(actionError(cause, 'Signed original could not be linked.'));
+        onCanonicalWrite();
+        setError(
+          actionError(
+            cause,
+            'Signed-original link outcome could not be confirmed. Canonical legal-document links were reloaded.',
+          ),
+        );
       }
     } finally {
       finish();
