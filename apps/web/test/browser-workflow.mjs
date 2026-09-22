@@ -1774,15 +1774,6 @@ try {
       "//button[normalize-space()='Create replacement Asset']",
   );
 
-  assertEqual(
-    await currentUrl(sessionId),
-    baseUrl +
-      '/properties/' + setupPropertyId +
-      '/units/' + setupUnitId +
-      '?tab=assets&assetId=' + setupReplacementAssetId +
-      '&asOf=2025-06-30',
-    'Replacement successor deep-link',
-  );
   await waitForElement(
     sessionId,
     'xpath',
@@ -1792,6 +1783,15 @@ try {
     sessionId,
     'xpath',
     "//section[contains(@class,'asset-admin-panel')]//h2[normalize-space()='AST-REPLACEMENT-BRW · Setup Washer Replacement']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=assets&assetId=' + setupReplacementAssetId +
+      '&asOf=2025-06-30',
+    'Replacement successor deep-link',
   );
   await waitForElement(
     sessionId,
