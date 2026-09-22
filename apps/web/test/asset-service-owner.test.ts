@@ -195,6 +195,52 @@ describe('Asset service ownership guards', () => {
         providerReference: 'CLAIM-77',
       }),
     ).toThrow(/lifecycle transition/);
+
+    const approved: WarrantyClaimResponse = {
+      ...submitted,
+      status: 'approved',
+      resolvedAt: '2026-09-22T10:40:00.000Z',
+      version: 3,
+    };
+    expect(() =>
+      assertWarrantyClaimTransition(submitted, approved, {
+        status: 'approved',
+      }),
+    ).not.toThrow();
+
+    expect(() =>
+      assertWarrantyClaimTransition(
+        submitted,
+        {
+          ...approved,
+          submittedAt: '2026-09-22T10:31:00.000Z',
+        },
+        { status: 'approved' },
+      ),
+    ).toThrow(/lifecycle history/);
+
+    const closed: WarrantyClaimResponse = {
+      ...approved,
+      status: 'closed',
+      closedAt: '2026-09-22T10:50:00.000Z',
+      version: 4,
+    };
+    expect(() =>
+      assertWarrantyClaimTransition(approved, closed, {
+        status: 'closed',
+      }),
+    ).not.toThrow();
+
+    expect(() =>
+      assertWarrantyClaimTransition(
+        approved,
+        {
+          ...closed,
+          resolvedAt: '2026-09-22T10:41:00.000Z',
+        },
+        { status: 'closed' },
+      ),
+    ).toThrow(/lifecycle history/);
   });
 
   it('requires exact ServicePlan CAS transition semantics', () => {
