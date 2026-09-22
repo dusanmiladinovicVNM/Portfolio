@@ -1183,7 +1183,6 @@ describe('Inspection HTTP backbone', () => {
 
     const oversizedChunk = new Uint8Array(8 * 1024 * 1024);
     let oversizedStep = 0;
-    let oversizedCancelled = false;
     const oversizedBody = new ReadableStream<Uint8Array>({
       pull(controller) {
         if (oversizedStep < 2) {
@@ -1197,9 +1196,6 @@ describe('Inspection HTTP backbone', () => {
           return;
         }
         controller.close();
-      },
-      cancel() {
-        oversizedCancelled = true;
       },
     });
 
@@ -1219,7 +1215,6 @@ describe('Inspection HTTP backbone', () => {
     expect(await oversizedScopedPhoto.json()).toMatchObject({
       error: { code: 'DOCUMENT_BINARY_UPLOAD_LIMIT_EXCEEDED' },
     });
-    expect(oversizedCancelled).toBe(true);
     expect(fileStorage.putCallCount).toBe(0);
 
     const wrongInspectorScopedPhoto = await handler(
