@@ -81,13 +81,13 @@ describe('bounded binary HTTP ingestion', () => {
     await expect(
       readBoundedBinaryBody(request, { maxBytes: 8 }),
     ).rejects.toMatchObject<Partial<ApplicationError>>({
-      code: 'DOCUMENT_BINARY_UPLOAD_LIMIT_EXCEEDED',
+      code: 'INVALID_REQUEST',
     });
 
     expect(cancelled).toBe(1);
   });
 
-  it('does not trust a smaller Content-Length when the stream contains more bytes', async () => {
+  it('rejects a body as soon as it exceeds the announced Content-Length', async () => {
     const request = streamRequest(
       [
         new Uint8Array([1, 2, 3, 4]),
