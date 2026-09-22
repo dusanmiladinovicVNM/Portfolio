@@ -320,3 +320,24 @@ export function inspectionFindingsPath(inspectionId: string): string {
 export function inspectionEvidencePath(inspectionId: string): string {
   return `${inspectionPath(inspectionId)}/evidence`;
 }
+
+
+export function inspectionLockPath(inspectionId: string): string {
+  return `${inspectionPath(inspectionId)}/lock`;
+}
+
+export function inspectionUnlockPath(inspectionId: string): string {
+  return `${inspectionPath(inspectionId)}/unlock`;
+}
+
+export function inspectionSignaturesPath(inspectionId: string): string {
+  return `${inspectionPath(inspectionId)}/signatures`;
+}
+
+export function inspectionFinalizePath(inspectionId: string): string {
+  return `${inspectionPath(inspectionId)}/finalize`;
+}
+
+export function inspectionFinalReportPath(inspectionId: string): string {
+  return `${inspectionPath(inspectionId)}/final-report`;
+}
