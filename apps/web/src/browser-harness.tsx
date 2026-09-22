@@ -4,6 +4,9 @@ import type {
   CreateSpaceRequest,
   CreateTenancyRequest,
   CreateUnitRequest,
+  DocumentLinkResponse,
+  DocumentResponse,
+  DocumentVersionResponse,
   LeaseAgreementResponse,
   LeaseAmendmentResponse,
   PartyResponse,
@@ -73,6 +76,18 @@ const setupTermIds = [
   'b1000000-0000-4000-8000-000000000021',
   'b1000000-0000-4000-8000-000000000022',
 ] as const;
+const setupDocumentIds = [
+  'b1000000-0000-4000-8000-000000000023',
+  'b1000000-0000-4000-8000-000000000024',
+] as const;
+const setupDocumentVersionIds = [
+  'b1000000-0000-4000-8000-000000000025',
+  'b1000000-0000-4000-8000-000000000026',
+] as const;
+const setupDocumentLinkIds = [
+  'b1000000-0000-4000-8000-000000000027',
+  'b1000000-0000-4000-8000-000000000028',
+] as const;
 
 let setupProperty: PropertyResponse | null = null;
 let setupUnit: UnitResponse | null = null;
@@ -87,6 +102,12 @@ let setupAgreementSequence = 0;
 let setupAgreementPartySequence = 0;
 let setupAmendmentSequence = 0;
 let setupTermSequence = 0;
+let setupDocuments: DocumentResponse[] = [];
+let setupDocumentVersions: DocumentVersionResponse[] = [];
+let setupDocumentLinks: DocumentLinkResponse[] = [];
+let setupDocumentSequence = 0;
+let setupDocumentVersionSequence = 0;
+let setupDocumentLinkSequence = 0;
 
 const operations = {
   openMaintenanceIssueCount: 0,
