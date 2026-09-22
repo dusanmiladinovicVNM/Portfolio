@@ -2982,8 +2982,8 @@ try {
 
   const orchestrationInspectionUrl =
     baseUrl +
-    '/properties/' + setupPropertyId +
-    '/units/' + setupUnitId +
+    '/properties/' + setupRecoveryPropertyId +
+    '/units/' + setupRecoveryUnitId +
     '?tab=inspections&inspectionId=' +
     setupOrchestrationInspectionId +
     '&sectionId=' + inspectionSectionId +
