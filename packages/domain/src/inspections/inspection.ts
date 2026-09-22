@@ -148,6 +148,29 @@ export function createInspection(input: CreateInspectionInput): Inspection {
   };
 }
 
+export function updateInspectionOrchestration(
+  inspection: Inspection,
+  input: {
+    readonly assignedToUserId: UserId;
+    readonly scheduledFor: string | null;
+  },
+): Inspection {
+  if (inspection.status !== 'draft') {
+    throw new DomainError(
+      'INSPECTION_ORCHESTRATION_LOCKED',
+      'Assignment and schedule can only change while the inspection is draft.',
+    );
+  }
+
+  return {
+    ...inspection,
+    assignedToUserId: input.assignedToUserId,
+    scheduledFor:
+      input.scheduledFor === null ? null : asDateOnly(input.scheduledFor),
+    version: inspection.version + 1,
+  };
+}
+
 export function startInspection(
   inspection: Inspection,
   startedAtValue: string,
