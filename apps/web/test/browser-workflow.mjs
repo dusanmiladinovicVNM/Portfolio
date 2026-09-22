@@ -3333,7 +3333,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[contains(normalize-space(),'Finding was committed and recovered from canonical Inspection state.')]",
+    "//*[contains(normalize-space(),'Finding acknowledgement was lost. Canonical Inspection state was reloaded')]",
   );
   await waitForElement(
     sessionId,

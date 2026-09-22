@@ -138,23 +138,6 @@ export function assertCreatedInspectionFinding(
   }
 }
 
-export function findRecoveredInspectionFinding(
-  bundle: InspectionBundleResponse,
-  preExistingIds: ReadonlySet<string>,
-  expected: InspectionFindingRegistration,
-): InspectionFindingResponse | null {
-  const candidates = bundle.findings.filter((finding) => {
-    if (preExistingIds.has(finding.id)) return false;
-    try {
-      assertCreatedInspectionFinding(expected, finding);
-      return true;
-    } catch {
-      return false;
-    }
-  });
-  return candidates.length === 1 ? candidates[0]! : null;
-}
-
 export function assertAttachedInspectionEvidence(
   expected: InspectionEvidenceRegistration,
   evidence: InspectionEvidenceResponse,

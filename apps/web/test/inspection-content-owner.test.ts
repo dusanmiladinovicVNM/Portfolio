@@ -10,7 +10,6 @@ import {
   assertInspectionBundleOwner,
   findRecoveredEvidenceDocument,
   findRecoveredInspectionEvidence,
-  findRecoveredInspectionFinding,
   findRecoveredUploadedDocumentVersion,
 } from '../src/dossier/inspection-content-owner.js';
 
@@ -133,30 +132,15 @@ describe('Inspection content ownership and recovery', () => {
     ).toThrow(/another schema section/);
   });
 
-  it('recovers a lost Finding acknowledgement only from exactly one new matching row', () => {
-    const old = finding('a2000000-0000-4000-8000-000000000010');
-    const recovered = finding('a2000000-0000-4000-8000-000000000011');
-    const expected = {
-      inspectionId,
-      sectionId,
-      itemId,
-      severity: 'major' as const,
-      title: 'Window scratch',
-      description: 'Visible on handover.',
-    };
-    const bundle = { ...baseBundle(), findings: [old, recovered] };
-
-    expect(
-      findRecoveredInspectionFinding(bundle, new Set([old.id]), expected)?.id,
-    ).toBe(recovered.id);
-
-    expect(
-      findRecoveredInspectionFinding(
-        { ...bundle, findings: [old, recovered, finding('a2000000-0000-4000-8000-000000000012')] },
-        new Set([old.id]),
-        expected,
-      ),
-    ).toBeNull();
+  it('validates returned Finding registration without inventing a uniqueness key', () => {
+    const bundle = baseBundle();
+    const created = finding('a2000000-0000-4000-8000-000000000011');
+    expect(() =>
+      assertInspectionBundleOwner(inspectionId, unitId, {
+        ...bundle,
+        findings: [created],
+      }),
+    ).not.toThrow();
   });
 
   it('recovers an Evidence link by exact DocumentVersion and scope without accepting an old duplicate', () => {

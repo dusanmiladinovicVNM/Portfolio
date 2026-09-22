@@ -45,7 +45,6 @@ import {
   assertInspectionBundleOwner,
   findRecoveredEvidenceDocument,
   findRecoveredInspectionEvidence,
-  findRecoveredInspectionFinding,
   findRecoveredUploadedDocumentVersion,
   type InspectionEvidenceRegistration,
   type InspectionFindingRegistration,
@@ -273,8 +272,6 @@ export function InspectionFindingsEvidence({
       title: parsed.data.title,
       description: parsed.data.description ?? null,
     };
-    const preExistingIds = new Set(bundle.findings.map((finding) => finding.id));
-
     try {
       let created: InspectionFindingResponse;
       try {
@@ -286,25 +283,10 @@ export function InspectionFindingsEvidence({
       } catch (cause) {
         if (!isAmbiguousWriteFailure(cause)) throw cause;
         const canonical = await readCanonical();
-        const recovered = findRecoveredInspectionFinding(
-          canonical,
-          preExistingIds,
-          expected,
-        );
-        if (!recovered) {
-          applyCanonical(canonical);
-          throw new Error(
-            'Finding outcome is ambiguous and canonical state does not prove exactly one matching new Finding. Do not retry until the Inspection has been checked.',
-          );
-        }
         applyCanonical(canonical);
-        if (mountedRef.current) {
-          formElement.reset();
-          setSuccess(
-            'Finding was committed and recovered from canonical Inspection state.',
-          );
-        }
-        return;
+        throw new Error(
+          'Finding acknowledgement was lost. Canonical Inspection state was reloaded, but Findings have no idempotency key that can prove which concurrent writer created a matching row. Do not retry until the Finding list has been checked.',
+        );
       }
 
       assertCreatedInspectionFinding(expected, created);
