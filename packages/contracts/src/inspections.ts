@@ -286,6 +286,10 @@ export type SaveInspectionSectionRequest = z.infer<
 >;
 
 
+export const inspectionSchemaVersionListResponseSchema = z.object({
+  items: z.array(inspectionSchemaVersionResponseSchema),
+});
+
 export const inspectionListResponseSchema = z.object({
   items: z.array(inspectionResponseSchema),
 });
@@ -330,6 +334,9 @@ export const saveInspectionSectionResponseSchema = z.object({
   clearedItemIds: z.array(entityIdSchema),
 });
 
+export type InspectionSchemaVersionListResponse = z.infer<
+  typeof inspectionSchemaVersionListResponseSchema
+>;
 export type InspectionListResponse = z.infer<
   typeof inspectionListResponseSchema
 >;
