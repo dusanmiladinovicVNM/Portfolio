@@ -20,6 +20,7 @@ import {
   documentVersionsPath,
   documentVersionUploadPath,
   documentsPath,
+  inspectionBinaryUploadPath,
   inspectionEvidencePath,
   inspectionFindingsPath,
   inspectionPath,
@@ -63,10 +64,19 @@ interface InspectionFindingsEvidenceProps {
   ) => void;
 }
 
-type PendingAction = 'finding' | 'document' | 'upload' | 'attach' | null;
+type PendingAction = 'finding' | 'scoped-upload' | 'document' | 'upload' | 'attach' | null;
 type EvidenceScope = 'inspection' | 'section' | 'item';
 
+interface StableUpload {
+  readonly key: string;
+  readonly fingerprint: string;
+}
+
 const MAX_EVIDENCE_UPLOAD_BYTES = 16 * 1024 * 1024;
+
+function fileFingerprint(file: File): string {
+  return [file.name, file.type || 'application/octet-stream', file.size].join('|');
+}
 
 function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`;
@@ -95,6 +105,7 @@ export function InspectionFindingsEvidence({
   onCanonicalBundle,
 }: InspectionFindingsEvidenceProps) {
   const mountedRef = useRef(true);
+  const scopedUploadRef = useRef<StableUpload | null>(null);
   const [documents, setDocuments] =
     useState<readonly DocumentResponse[] | null>(null);
   const [documentsError, setDocumentsError] = useState<string | null>(null);
@@ -326,6 +337,105 @@ export function InspectionFindingsEvidence({
             : writeAmbiguous
               ? `Finding outcome is unconfirmed: ${errorMessage(cause, 'canonical reread also failed')}. Findings have no idempotency key; do not retry until canonical Inspection state has been checked.`
               : errorMessage(cause, 'Finding could not be recorded.'),
+        );
+      }
+    } finally {
+      finish();
+    }
+  }
+
+  async function uploadScopedEvidence(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (rejectContentWriteBlocked()) return;
+
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const fileValue = form.get('file');
+    const purpose = requiredString(form, 'purpose');
+    if (
+      !(fileValue instanceof File) ||
+      fileValue.size === 0 ||
+      (purpose !== 'photo' && purpose !== 'attachment')
+    ) {
+      setError('Choose a non-empty evidence file and a valid evidence kind.');
+      return;
+    }
+    if (fileValue.size > MAX_EVIDENCE_UPLOAD_BYTES) {
+      setError(
+        'Inspection evidence files are currently limited to 16 MiB until bounded streaming upload is implemented.',
+      );
+      return;
+    }
+    if (!begin('scoped-upload')) return;
+
+    const fingerprint = fileFingerprint(fileValue);
+    const existing = scopedUploadRef.current;
+    const stable =
+      existing?.fingerprint === fingerprint
+        ? existing
+        : { key: crypto.randomUUID(), fingerprint };
+    scopedUploadRef.current = stable;
+    const path = inspectionBinaryUploadPath(
+      inspection.id,
+      purpose,
+      stable.key,
+      fileValue.name,
+    );
+
+    try {
+      let uploaded: DocumentVersionResponse;
+      try {
+        uploaded = await api.postBinary(
+          path,
+          fileValue,
+          documentVersionResponseSchema,
+        );
+      } catch (cause) {
+        if (!isAmbiguousWriteFailure(cause)) {
+          scopedUploadRef.current = null;
+          throw cause;
+        }
+        uploaded = await api.postBinary(
+          path,
+          fileValue,
+          documentVersionResponseSchema,
+        );
+      }
+
+      const expectedMimeType = (
+        fileValue.type || 'application/octet-stream'
+      ).toLowerCase();
+      if (
+        uploaded.id !== stable.key ||
+        uploaded.versionNumber !== 1 ||
+        uploaded.fileName !== fileValue.name.trim() ||
+        uploaded.mimeType !== expectedMimeType ||
+        uploaded.byteSize !== fileValue.size
+      ) {
+        throw new Error(
+          'Inspection-scoped upload returned a different binary identity.',
+        );
+      }
+
+      scopedUploadRef.current = null;
+      if (mountedRef.current) {
+        formElement.reset();
+        setSelectedDocumentId(uploaded.documentId);
+        setSelectedVersionId(uploaded.id);
+        setCatalogRevision((revision) => revision + 1);
+        setVersionRevision((revision) => revision + 1);
+        setSuccess(
+          'Inspection-scoped evidence binary stored. Attach this exact version below.',
+        );
+      }
+    } catch (cause) {
+      if (mountedRef.current) {
+        const ambiguous = isAmbiguousWriteFailure(cause);
+        if (!ambiguous) scopedUploadRef.current = null;
+        setError(
+          ambiguous
+            ? `Evidence upload outcome is still ambiguous: ${errorMessage(cause, 'request failed')}. Re-select the same file and retry; the stable upload key will be reused.`
+            : errorMessage(cause, 'Inspection-scoped evidence upload failed.'),
         );
       }
     } finally {
@@ -770,16 +880,46 @@ export function InspectionFindingsEvidence({
           <div className="tenancy-form-heading">
             <strong>Evidence binary workflow</strong>
             <span>
-              Create/recover Document → upload/recover version → attach exact version
+              Field upload or reuse Document → attach exact version
             </span>
           </div>
           <p className="muted">
-            Storage provider IDs never become Inspection identity. A successfully
-            stored version remains selectable after a failed evidence link, so
-            retrying the relation never requires another upload.
+            Storage provider IDs never become Inspection identity. Field inspectors
+            use the Inspection-scoped upload; admin/manager may also reuse the wider
+            Document catalog. A stored version remains selectable after a failed link.
           </p>
 
           <div className="inspection-evidence-steps">
+            <form
+              className="inspection-evidence-step setup-form"
+              data-inspection-content-form="evidence-scoped-upload"
+              onSubmit={uploadScopedEvidence}
+            >
+              <div className="tenancy-form-heading">
+                <strong>Field · Upload Inspection evidence</strong>
+                <span>Scoped to this Inspection · no global Document write</span>
+              </div>
+              <label>
+                Kind
+                <select disabled={blocked} defaultValue="photo" name="purpose">
+                  <option value="photo">Photo</option>
+                  <option value="attachment">Attachment</option>
+                </select>
+              </label>
+              <label>
+                Evidence file
+                <input disabled={blocked} name="file" required type="file" />
+              </label>
+              <p className="setup-hint">
+                Uses a stable upload key and exact DocumentVersion identity.
+              </p>
+              <button className="button-primary" disabled={blocked} type="submit">
+                {pendingAction === 'scoped-upload'
+                  ? 'Uploading…'
+                  : 'Upload Inspection evidence'}
+              </button>
+            </form>
+
             <form
               className="inspection-evidence-step setup-form"
               data-inspection-content-form="evidence-document"
