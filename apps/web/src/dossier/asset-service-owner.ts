@@ -145,29 +145,43 @@ export function assertWarrantyClaimTransition(
   ) {
     throw new Error('Submitted WarrantyClaim has invalid lifecycle timestamps.');
   }
+
   if (
-    (expected.status === 'approved' || expected.status === 'rejected') &&
-    (next.submittedAt === null ||
+    expected.status === 'approved' || expected.status === 'rejected'
+  ) {
+    if (
+      next.providerReference !== current.providerReference ||
+      next.submittedAt !== current.submittedAt ||
       next.resolvedAt === null ||
       next.closedAt !== null ||
-      next.cancelledAt !== null)
-  ) {
-    throw new Error('Resolved WarrantyClaim has invalid lifecycle timestamps.');
+      next.cancelledAt !== null
+    ) {
+      throw new Error('Resolved WarrantyClaim has invalid lifecycle history.');
+    }
   }
-  if (
-    expected.status === 'closed' &&
-    (next.submittedAt === null ||
-      next.resolvedAt === null ||
+
+  if (expected.status === 'closed') {
+    if (
+      next.providerReference !== current.providerReference ||
+      next.submittedAt !== current.submittedAt ||
+      next.resolvedAt !== current.resolvedAt ||
       next.closedAt === null ||
-      next.cancelledAt !== null)
-  ) {
-    throw new Error('Closed WarrantyClaim has invalid lifecycle timestamps.');
+      next.cancelledAt !== null
+    ) {
+      throw new Error('Closed WarrantyClaim has invalid lifecycle history.');
+    }
   }
-  if (
-    expected.status === 'cancelled' &&
-    next.cancelledAt === null
-  ) {
-    throw new Error('Cancelled WarrantyClaim is missing cancellation time.');
+
+  if (expected.status === 'cancelled') {
+    if (
+      next.providerReference !== current.providerReference ||
+      next.submittedAt !== current.submittedAt ||
+      next.resolvedAt !== current.resolvedAt ||
+      next.closedAt !== current.closedAt ||
+      next.cancelledAt === null
+    ) {
+      throw new Error('Cancelled WarrantyClaim has invalid lifecycle history.');
+    }
   }
 }
 
