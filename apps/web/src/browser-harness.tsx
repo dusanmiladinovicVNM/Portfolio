@@ -256,6 +256,25 @@ function nextSetupMaintenanceAt(): string {
   return value;
 }
 
+function setupMaintenanceEntry(
+  workOrderIdValue: string,
+): MaintenanceWorkOrderEntryResponse | null {
+  return (
+    setupMaintenanceWorkOrders.find(
+      (entry) => entry.workOrder.id === workOrderIdValue,
+    ) ?? null
+  );
+}
+
+function replaceSetupWorkOrder(workOrder: MaintenanceWorkOrderResponse): void {
+  setupMaintenanceWorkOrders = setupMaintenanceWorkOrders.map((entry) =>
+    entry.workOrder.id === workOrder.id
+      ? { ...entry, workOrder }
+      : entry,
+  );
+}
+
+
 function nextSetupMeterRecordedAt(): string {
   const instants = [
     '2027-10-01T12:00:00.000Z',
@@ -1729,6 +1748,17 @@ globalThis.fetch = async (
     });
   }
 
+  if (
+    setupUnit &&
+    path === '/units/' + setupUnitId + '/inspections'
+  ) {
+    return json({ items: [setupMaintenanceInspectionRecord()] });
+  }
+
+  if (path === '/inspections/' + setupMaintenanceInspectionId) {
+    return json(setupMaintenanceInspectionBundle());
+  }
+
   if (setupUnit && path === '/units/' + setupUnitId + '/assets') {
     return json({
       items: setupAssets.filter((asset) => asset.unitId === setupUnitId),
@@ -2138,6 +2168,557 @@ globalThis.fetch = async (
 
   if (setupAsset && path === '/assets/' + setupAsset.id) {
     return json(setupAsset);
+  }
+
+  if (
+    setupUnit &&
+    path === '/units/' + setupUnitId + '/maintenance-issues'
+  ) {
+    return json({
+      items: setupMaintenanceIssues.filter(
+        (issue) => issue.unitId === setupUnitId,
+      ),
+    });
+  }
+
+  if (path === '/maintenance-issues' && init?.method === 'POST') {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      code: string;
+      propertyId: string;
+      unitId?: string | null;
+      spaceId?: string | null;
+      assetId?: string | null;
+      inspectionFindingId?: string | null;
+      title: string;
+      description?: string | null;
+      priority: MaintenanceIssueResponse['priority'];
+      reportedAt?: string;
+    };
+    if (
+      body.propertyId !== setupPropertyId ||
+      body.unitId !== setupUnitId ||
+      (body.spaceId != null && body.spaceId !== setupSpaceId)
+    ) {
+      throw new Error('Setup Maintenance Issue has invalid Unit scope.');
+    }
+    if (
+      body.assetId != null &&
+      !setupAssets.some(
+        (asset) =>
+          asset.id === body.assetId &&
+          asset.propertyId === setupPropertyId &&
+          asset.unitId === setupUnitId &&
+          asset.spaceId === (body.spaceId ?? null),
+      )
+    ) {
+      return apiError(
+        422,
+        'MAINTENANCE_ASSET_SCOPE_MISMATCH',
+        'Maintenance Issue Asset scope does not match current setup placement.',
+      );
+    }
+    if (
+      body.inspectionFindingId != null &&
+      body.inspectionFindingId !== setupInspectionFindingId
+    ) {
+      return apiError(
+        404,
+        'INSPECTION_FINDING_NOT_FOUND',
+        'Inspection Finding not found.',
+      );
+    }
+    if (
+      body.inspectionFindingId != null &&
+      setupMaintenanceIssues.some(
+        (issue) =>
+          issue.inspectionFindingId === body.inspectionFindingId,
+      )
+    ) {
+      return apiError(
+        409,
+        'MAINTENANCE_FINDING_ALREADY_LINKED',
+        'Inspection Finding already originated a Maintenance Issue.',
+      );
+    }
+
+    const recordedAt = nextSetupMaintenanceAt();
+    const created: MaintenanceIssueResponse = {
+      id: setupMaintenanceIssueId,
+      code: body.code,
+      propertyId: setupPropertyId,
+      unitId: setupUnitId,
+      spaceId: body.spaceId ?? null,
+      assetId: body.assetId ?? null,
+      inspectionFindingId: body.inspectionFindingId ?? null,
+      title: body.title,
+      description: body.description ?? null,
+      priority: body.priority,
+      status: 'open',
+      reportedAt: body.reportedAt ?? recordedAt,
+      resolvedAt: null,
+      cancelledAt: null,
+      version: 1,
+      recordedAt,
+      recordedByUserId: inspectionUserId,
+    };
+    setupMaintenanceIssues.push(created);
+    return json(created, 201);
+  }
+
+  const setupMaintenanceIssue = setupMaintenanceIssues.find((issue) =>
+    path.startsWith('/maintenance-issues/' + issue.id),
+  );
+
+  if (
+    setupMaintenanceIssue &&
+    path === '/maintenance-issues/' + setupMaintenanceIssue.id &&
+    init?.method === 'PATCH'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      title?: string;
+      description?: string | null;
+      priority?: MaintenanceIssueResponse['priority'];
+    };
+    if (body.expectedVersion !== setupMaintenanceIssue.version) {
+      return apiError(
+        409,
+        'MAINTENANCE_ISSUE_VERSION_CONFLICT',
+        'Maintenance Issue version conflict.',
+      );
+    }
+    const updated: MaintenanceIssueResponse = {
+      ...setupMaintenanceIssue,
+      title: body.title ?? setupMaintenanceIssue.title,
+      description:
+        body.description === undefined
+          ? setupMaintenanceIssue.description
+          : body.description,
+      priority: body.priority ?? setupMaintenanceIssue.priority,
+      version: setupMaintenanceIssue.version + 1,
+    };
+    setupMaintenanceIssues = setupMaintenanceIssues.map((issue) =>
+      issue.id === updated.id ? updated : issue,
+    );
+    return json(updated);
+  }
+
+  if (
+    setupMaintenanceIssue &&
+    path ===
+      '/maintenance-issues/' + setupMaintenanceIssue.id + '/work-orders'
+  ) {
+    if (init?.method === 'POST') {
+      requirePortfolioAuth(init);
+      const body = JSON.parse(String(init.body)) as {
+        code: string;
+        title: string;
+        description?: string | null;
+      };
+      if (setupMaintenanceIssue.status !== 'open') {
+        return apiError(
+          422,
+          'MAINTENANCE_ISSUE_TERMINAL',
+          'WorkOrders require an open Issue.',
+        );
+      }
+      const order: MaintenanceWorkOrderResponse = {
+        id: setupMaintenanceWorkOrderId,
+        issueId: setupMaintenanceIssue.id,
+        code: body.code,
+        title: body.title,
+        description: body.description ?? null,
+        assignee: null,
+        status: 'draft',
+        assignedAt: null,
+        startedAt: null,
+        completedAt: null,
+        cancelledAt: null,
+        version: 1,
+        createdAt: nextSetupMaintenanceAt(),
+        createdByUserId: inspectionUserId,
+      };
+      setupMaintenanceWorkOrders.push({
+        workOrder: order,
+        serviceEventIds: [],
+      });
+      return json(order, 201);
+    }
+    return json({
+      items: setupMaintenanceWorkOrders.filter(
+        (entry) => entry.workOrder.issueId === setupMaintenanceIssue.id,
+      ),
+    });
+  }
+
+  if (
+    setupMaintenanceIssue &&
+    path === '/maintenance-issues/' + setupMaintenanceIssue.id + '/status' &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      action: 'resolve' | 'cancel';
+    };
+    if (body.expectedVersion !== setupMaintenanceIssue.version) {
+      return apiError(
+        409,
+        'MAINTENANCE_ISSUE_VERSION_CONFLICT',
+        'Maintenance Issue version conflict.',
+      );
+    }
+    const orders = setupMaintenanceWorkOrders.filter(
+      (entry) => entry.workOrder.issueId === setupMaintenanceIssue.id,
+    );
+    if (
+      body.action === 'resolve' &&
+      (!orders.some((entry) => entry.workOrder.status === 'completed') ||
+        !orders.every((entry) =>
+          ['completed', 'cancelled'].includes(entry.workOrder.status),
+        ))
+    ) {
+      return apiError(
+        422,
+        'MAINTENANCE_ISSUE_OPEN_WORK_ORDERS',
+        'Issue cannot resolve yet.',
+      );
+    }
+    if (
+      body.action === 'cancel' &&
+      !orders.every((entry) => entry.workOrder.status === 'cancelled')
+    ) {
+      return apiError(
+        422,
+        'MAINTENANCE_ISSUE_NON_CANCELLED_WORK_ORDERS',
+        'Issue cannot cancel yet.',
+      );
+    }
+    const terminalAt = nextSetupMaintenanceAt();
+    const updated: MaintenanceIssueResponse = {
+      ...setupMaintenanceIssue,
+      status: body.action === 'resolve' ? 'resolved' : 'cancelled',
+      resolvedAt:
+        body.action === 'resolve' ? terminalAt : null,
+      cancelledAt:
+        body.action === 'cancel' ? terminalAt : null,
+      version: setupMaintenanceIssue.version + 1,
+    };
+    setupMaintenanceIssues = setupMaintenanceIssues.map((issue) =>
+      issue.id === updated.id ? updated : issue,
+    );
+    return json(updated);
+  }
+
+  if (
+    setupMaintenanceIssue &&
+    path === '/maintenance-issues/' + setupMaintenanceIssue.id
+  ) {
+    return json(setupMaintenanceIssue);
+  }
+
+  const setupMaintenanceEntryForPath =
+    setupMaintenanceWorkOrders.find((entry) =>
+      path.startsWith(
+        '/maintenance-work-orders/' + entry.workOrder.id,
+      ),
+    );
+
+  if (
+    setupMaintenanceEntryForPath &&
+    path ===
+      '/maintenance-work-orders/' +
+        setupMaintenanceEntryForPath.workOrder.id &&
+    init?.method === 'PATCH'
+  ) {
+    requirePortfolioAuth(init);
+    const current = setupMaintenanceEntryForPath.workOrder;
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      title?: string;
+      description?: string | null;
+    };
+    if (body.expectedVersion !== current.version) {
+      return apiError(
+        409,
+        'MAINTENANCE_WORK_ORDER_VERSION_CONFLICT',
+        'Maintenance WorkOrder version conflict.',
+      );
+    }
+    const updated: MaintenanceWorkOrderResponse = {
+      ...current,
+      title: body.title ?? current.title,
+      description:
+        body.description === undefined
+          ? current.description
+          : body.description,
+      version: current.version + 1,
+    };
+    replaceSetupWorkOrder(updated);
+    return json(updated);
+  }
+
+  if (
+    setupMaintenanceEntryForPath &&
+    path ===
+      '/maintenance-work-orders/' +
+        setupMaintenanceEntryForPath.workOrder.id +
+        '/assign' &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    const current = setupMaintenanceEntryForPath.workOrder;
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      assignee:
+        | { kind: 'party'; partyId: string }
+        | { kind: 'user'; userId: string };
+    };
+    if (body.expectedVersion !== current.version) {
+      return apiError(
+        409,
+        'MAINTENANCE_WORK_ORDER_VERSION_CONFLICT',
+        'Maintenance WorkOrder version conflict.',
+      );
+    }
+    if (
+      body.assignee.kind !== 'party' ||
+      ![...parties, ...(setupParty ? [setupParty] : [])].some(
+        (party) =>
+          party.id === body.assignee.kind &&
+          party.status === 'active',
+      )
+    ) {
+      // Deliberately checked again below with the actual Party id.
+    }
+    if (
+      body.assignee.kind !== 'party' ||
+      ![...parties, ...(setupParty ? [setupParty] : [])].some(
+        (party) =>
+          party.id ===
+            (body.assignee.kind === 'party'
+              ? body.assignee.partyId
+              : '') &&
+          party.status === 'active',
+      )
+    ) {
+      return apiError(
+        422,
+        'MAINTENANCE_ASSIGNEE_INACTIVE',
+        'Maintenance assignee must be an active Party.',
+      );
+    }
+    const updated: MaintenanceWorkOrderResponse = {
+      ...current,
+      assignee: body.assignee,
+      status: 'assigned',
+      assignedAt: nextSetupMaintenanceAt(),
+      version: current.version + 1,
+    };
+    replaceSetupWorkOrder(updated);
+    return maybeHoldMaintenanceMutation(json(updated));
+  }
+
+  if (
+    setupMaintenanceEntryForPath &&
+    path ===
+      '/maintenance-work-orders/' +
+        setupMaintenanceEntryForPath.workOrder.id +
+        '/status' &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    const current = setupMaintenanceEntryForPath.workOrder;
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      action: 'start' | 'complete' | 'cancel';
+    };
+    if (body.expectedVersion !== current.version) {
+      return apiError(
+        409,
+        'MAINTENANCE_WORK_ORDER_VERSION_CONFLICT',
+        'Maintenance WorkOrder version conflict.',
+      );
+    }
+    const now = nextSetupMaintenanceAt();
+    let updated: MaintenanceWorkOrderResponse;
+    if (body.action === 'start') {
+      if (current.status !== 'assigned') {
+        return apiError(
+          422,
+          'MAINTENANCE_WORK_ORDER_INVALID_TRANSITION',
+          'Only assigned WorkOrder can start.',
+        );
+      }
+      updated = {
+        ...current,
+        status: 'in_progress',
+        startedAt: now,
+        version: current.version + 1,
+      };
+    } else if (body.action === 'complete') {
+      if (current.status !== 'in_progress') {
+        return apiError(
+          422,
+          'MAINTENANCE_WORK_ORDER_INVALID_TRANSITION',
+          'Only in-progress WorkOrder can complete.',
+        );
+      }
+      const linkedEvents = setupMaintenanceEntryForPath.serviceEventIds
+        .map((id) => setupServiceEvents.find((event) => event.id === id))
+        .filter((event): event is ServiceEventResponse => event !== undefined);
+      if (
+        linkedEvents.some(
+          (event) => Date.parse(event.performedAt) > Date.parse(now),
+        )
+      ) {
+        return apiError(
+          422,
+          'MAINTENANCE_WORK_ORDER_COMPLETION_BEFORE_SERVICE',
+          'Completion predates linked service work.',
+        );
+      }
+      updated = {
+        ...current,
+        status: 'completed',
+        completedAt: now,
+        version: current.version + 1,
+      };
+    } else {
+      if (setupMaintenanceEntryForPath.serviceEventIds.length > 0) {
+        return apiError(
+          422,
+          'MAINTENANCE_WORK_ORDER_HAS_SERVICE_EVENTS',
+          'Linked ServiceEvents prevent cancellation.',
+        );
+      }
+      updated = {
+        ...current,
+        status: 'cancelled',
+        cancelledAt: now,
+        version: current.version + 1,
+      };
+    }
+    replaceSetupWorkOrder(updated);
+    return json(updated);
+  }
+
+  if (
+    setupMaintenanceEntryForPath &&
+    path ===
+      '/maintenance-work-orders/' +
+        setupMaintenanceEntryForPath.workOrder.id +
+        '/service-events' &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      serviceEventId: string;
+    };
+    const event = setupServiceEvents.find(
+      (candidate) => candidate.id === body.serviceEventId,
+    );
+    if (!event) {
+      return apiError(
+        404,
+        'SERVICE_EVENT_NOT_FOUND',
+        'ServiceEvent not found.',
+      );
+    }
+    const issue = setupMaintenanceIssues.find(
+      (candidate) =>
+        candidate.id === setupMaintenanceEntryForPath.workOrder.issueId,
+    );
+    if (!issue || issue.assetId !== event.assetId) {
+      return apiError(
+        422,
+        'MAINTENANCE_SERVICE_EVENT_ASSET_MISMATCH',
+        'ServiceEvent Asset mismatch.',
+      );
+    }
+    if (
+      setupMaintenanceWorkOrders.some((entry) =>
+        entry.serviceEventIds.includes(event.id),
+      )
+    ) {
+      return apiError(
+        409,
+        'MAINTENANCE_SERVICE_EVENT_ALREADY_LINKED',
+        'ServiceEvent already linked.',
+      );
+    }
+    const linkedAt = nextSetupMaintenanceAt();
+    setupMaintenanceWorkOrders = setupMaintenanceWorkOrders.map((entry) =>
+      entry.workOrder.id === setupMaintenanceEntryForPath.workOrder.id
+        ? {
+            ...entry,
+            serviceEventIds: [...entry.serviceEventIds, event.id],
+          }
+        : entry,
+    );
+    const response = {
+      workOrderId: setupMaintenanceEntryForPath.workOrder.id,
+      serviceEventId: event.id,
+      linkedAt,
+      linkedByUserId: inspectionUserId,
+    };
+    if (browserHarnessWindow.__portfolioFailNextServiceEventLink) {
+      browserHarnessWindow.__portfolioFailNextServiceEventLink = false;
+      return apiError(
+        503,
+        'MAINTENANCE_SERVICE_LINK_TEST_ACK_LOST',
+        'Intentional Maintenance link acknowledgement loss.',
+      );
+    }
+    return json(response, 201);
+  }
+
+  if (
+    setupMaintenanceEntryForPath &&
+    path ===
+      '/maintenance-work-orders/' +
+        setupMaintenanceEntryForPath.workOrder.id
+  ) {
+    return json(setupMaintenanceEntryForPath);
+  }
+
+  if (
+    setupAsset &&
+    path === '/assets/' + setupAsset.id + '/service-events'
+  ) {
+    if (init?.method === 'POST') {
+      requirePortfolioAuth(init);
+      const body = JSON.parse(String(init.body)) as {
+        eventType: ServiceEventResponse['eventType'];
+        performedAt: string;
+        providerPartyId?: string | null;
+        description: string;
+        reference?: string | null;
+      };
+      const created: ServiceEventResponse = {
+        id: setupServiceEventId,
+        assetId: setupAsset.id,
+        servicePlanId: null,
+        warrantyClaimId: null,
+        eventType: body.eventType,
+        performedAt: body.performedAt,
+        providerPartyId: body.providerPartyId ?? null,
+        description: body.description,
+        reference: body.reference ?? null,
+        parts: [],
+        recordedAt: nextSetupMaintenanceAt(),
+        recordedByUserId: inspectionUserId,
+      };
+      setupServiceEvents.push(created);
+      return json(created, 201);
+    }
+    return json({
+      items: setupServiceEvents.filter(
+        (event) => event.assetId === setupAsset.id,
+      ),
+    });
   }
 
   if (setupUnit && path === '/units/' + setupUnitId + '/tenancies') {
@@ -2601,6 +3182,12 @@ globalThis.fetch = async (
       active: true,
     };
     return maybeHoldSpaceCreate(json(setupSpace, 201));
+  }
+
+  if (path === '/parties' && (!init?.method || init.method === 'GET')) {
+    return json({
+      items: [...parties, ...(setupParty ? [setupParty] : [])],
+    });
   }
 
   if (path === '/parties' && init?.method === 'POST') {
