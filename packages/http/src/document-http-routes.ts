@@ -1,5 +1,4 @@
 import {
-  ApplicationError,
   createDocumentCommand,
   DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
   finalizeDocumentVersionCommand,
@@ -38,6 +37,7 @@ import {
   asTenancyId,
   asUnitId,
 } from '@portfolio/domain';
+import { readBoundedBinaryBody } from './bounded-binary-body.js';
 import {
   json,
   requestJson,
@@ -273,13 +273,10 @@ export async function handleDocumentHttp(
 
       if (!fileName || !mimeType) return validationFailure();
 
-      const content = new Uint8Array(await request.arrayBuffer());
-      if (content.byteLength > DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY.maxBytes) {
-        throw new ApplicationError(
-          'DOCUMENT_BINARY_UPLOAD_LIMIT_EXCEEDED',
-          `Buffered Document upload supports files up to ${DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY.maxBytes} bytes until streaming upload is implemented.`,
-        );
-      }
+      const content = await readBoundedBinaryBody(
+        request,
+        DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
+      );
 
       const version = await uploadDocumentVersionCommand(
         {
