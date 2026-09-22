@@ -20,6 +20,7 @@ const setupPropertyId = 'b1000000-0000-4000-8000-000000000001';
 const setupUnitId = 'b1000000-0000-4000-8000-000000000002';
 const setupTenancyId = 'b1000000-0000-4000-8000-000000000007';
 const setupSignedAgreementId = 'b1000000-0000-4000-8000-000000000010';
+const setupSignedAmendmentId = 'b1000000-0000-4000-8000-000000000019';
 const setupReplacementAgreementId = 'b1000000-0000-4000-8000-000000000011';
 const setupAmendmentDocumentId = 'b1000000-0000-4000-8000-000000000023';
 const setupAgreementDocumentId = 'b1000000-0000-4000-8000-000000000024';
@@ -1034,6 +1035,113 @@ try {
     sessionId,
     'xpath',
     "//a[contains(@class,'amendment-card')][.//strong[normalize-space()='AMD-SETUP-BRW']][.//dd[normalize-space()='Signed']]",
+  );
+
+  const amendmentDocumentsSection =
+    "//section[.//p[normalize-space()='Step 5 · Amendment Documents']]";
+  const amendmentDocumentCreateForm =
+    amendmentDocumentsSection +
+    "//form[@data-signed-document-form='create']";
+  const amendmentDocumentUploadForm =
+    amendmentDocumentsSection +
+    "//form[@data-signed-document-form='upload']";
+
+  await waitForElement(
+    sessionId,
+    'xpath',
+    amendmentDocumentCreateForm,
+  );
+  await typeXpath(
+    sessionId,
+    amendmentDocumentCreateForm + "//input[@name='code']",
+    'DOC-AMD-SETUP-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    amendmentDocumentCreateForm + "//input[@name='title']",
+    'Signed amendment browser original',
+  );
+  await clickXpath(
+    sessionId,
+    amendmentDocumentCreateForm +
+      "//button[normalize-space()='Create Document']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    amendmentDocumentsSection +
+      "//select[@aria-label='Signed original Document']" +
+      "/option[@value='" + setupAmendmentDocumentId + "']",
+  );
+  await selectOptionXpath(
+    sessionId,
+    amendmentDocumentsSection +
+      "//select[@aria-label='Signed original Document']",
+    setupAmendmentDocumentId,
+  );
+  await setFileXpath(
+    sessionId,
+    amendmentDocumentUploadForm + "//input[@name='file']",
+    amendmentSignedFilePath,
+  );
+  await clickXpath(
+    sessionId,
+    amendmentDocumentUploadForm +
+      "//button[normalize-space()='Upload version']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    amendmentDocumentsSection +
+      "//select[@aria-label='Signed original Document version']" +
+      "/option[@value='" + setupAmendmentDocumentVersionId + "']",
+  );
+  await selectOptionXpath(
+    sessionId,
+    amendmentDocumentsSection +
+      "//select[@aria-label='Signed original Document version']",
+    setupAmendmentDocumentVersionId,
+  );
+  await clickXpath(
+    sessionId,
+    amendmentDocumentsSection +
+      "//button[normalize-space()='Finalize version']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    amendmentDocumentsSection +
+      "//select[@aria-label='Signed original Document version']" +
+      "/option[@value='" + setupAmendmentDocumentVersionId +
+      "' and contains(normalize-space(),'final')]",
+  );
+  await clickXpath(
+    sessionId,
+    amendmentDocumentsSection +
+      "//button[normalize-space()='Link signed original to AMD-SETUP-BRW']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    amendmentDocumentsSection +
+      "//*[normalize-space()='portfolio-amendment-signed-original.pdf']",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    1,
+    'Amendment signed-original upload count',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      amendmentDocumentsSection +
+        "//form[@data-signed-document-form='create']",
+    ),
+    false,
+    'Amendment signed-original workflow closes after canonical link reread',
   );
 
   await navigateWithPopState(
