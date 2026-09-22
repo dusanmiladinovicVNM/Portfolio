@@ -989,6 +989,7 @@ function MeterAdministration({
             Boundary type
             <select
               disabled={writeGate.pending}
+              name="boundaryType"
               onChange={(event) =>
                 setBoundaryType(
                   event.currentTarget.value as MeterReadingBoundaryType,
