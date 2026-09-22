@@ -229,7 +229,7 @@ export function SignedDocumentAdministration({
         parsed.data,
         documentResponseSchema,
       );
-      assertCreatedDocument(created);
+      assertCreatedDocument(parsed.data, created);
       if (guard.isMounted()) {
         formElement.reset();
         setSelectedDocumentId(created.id);
@@ -273,7 +273,17 @@ export function SignedDocumentAdministration({
         fileValue,
         documentVersionResponseSchema,
       );
-      assertUploadedDocumentVersion(documentAtStart, uploaded);
+      assertUploadedDocumentVersion(
+        documentAtStart,
+        {
+          fileName: fileValue.name.trim(),
+          mimeType: (fileValue.type || 'application/octet-stream')
+            .trim()
+            .toLowerCase(),
+          byteSize: fileValue.size,
+        },
+        uploaded,
+      );
       if (guard.isMounted()) {
         formElement.reset();
         setSelectedVersionId(uploaded.id);
@@ -460,6 +470,7 @@ export function SignedDocumentAdministration({
                 aria-label="Signed original Document"
                 disabled={pending}
                 onChange={(event) => {
+                  if (guard.isInFlight()) return;
                   setSelectedDocumentId(event.currentTarget.value || null);
                   setSelectedVersionId(null);
                   setError(null);
@@ -558,6 +569,7 @@ export function SignedDocumentAdministration({
                 aria-label="Signed original Document version"
                 disabled={pending}
                 onChange={(event) => {
+                  if (guard.isInFlight()) return;
                   setSelectedVersionId(event.currentTarget.value || null);
                   setError(null);
                   setSuccess(null);
