@@ -3389,7 +3389,10 @@ globalThis.fetch = async (
         description: body.description,
         reference: body.reference ?? null,
         parts: [],
-        recordedAt: nextSetupMaintenanceAt(),
+        recordedAt:
+          body.servicePlanId != null || body.warrantyClaimId != null
+            ? '2027-09-15T09:30:00.000Z'
+            : nextSetupMaintenanceAt(),
         recordedByUserId: inspectionUserId,
       };
       setupServiceEvents.push(created);
