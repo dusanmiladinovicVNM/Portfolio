@@ -2092,6 +2092,10 @@ try {
     issueCreateForm + "//select[not(@name='assetId') and not(@name='spaceId') and not(@name='inspectionFindingId')]",
     'high',
   );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextMaintenanceIssueCreateAfterCommit = true; return true;',
+  );
   await clickXpath(
     sessionId,
     issueCreateForm + "//button[normalize-space()='Create Issue']",
@@ -2161,6 +2165,10 @@ try {
     sessionId,
     workOrderCreateForm + "//textarea[@name='description']",
     'Diagnose and repair leak',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextMaintenanceWorkOrderCreateAfterCommit = true; return true;',
   );
   await clickXpath(
     sessionId,
@@ -2292,12 +2300,39 @@ try {
   );
   await executeScript(
     sessionId,
-    'window.__portfolioFailNextServiceEventLink = true; return true;',
+    'window.__portfolioFailNextServiceEventCreateAfterCommit = true; return true;',
   );
   await clickXpath(
     sessionId,
     serviceForm +
       "//button[normalize-space()='Record + link ServiceEvent']",
+  );
+
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'maintenance-service-card')][.//strong[normalize-space()='Repair']][.//p[normalize-space()='Replaced leaking inlet hose']][.//small[normalize-space()='Unlinked']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[@data-maintenance-form='link-service']//option[@value='" + setupServiceEventId + "']",
+  );
+
+  const existingLinkForm =
+    "//form[@data-maintenance-form='link-service']";
+  await selectOptionXpath(
+    sessionId,
+    existingLinkForm + "//select[@name='serviceEventId']",
+    setupServiceEventId,
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextServiceEventLink = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    existingLinkForm + "//button[normalize-space()='Link ServiceEvent']",
   );
 
   await waitForElement(
