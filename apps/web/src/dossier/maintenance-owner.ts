@@ -4,6 +4,7 @@ import type {
   MaintenanceWorkOrderEntryResponse,
   MaintenanceWorkOrderResponse,
   ServiceEventResponse,
+  MaintenanceWorkOrderServiceEventLinkResponse,
 } from '@portfolio/contracts';
 
 export function assertUnitMaintenanceIssuesOwner(
@@ -310,5 +311,46 @@ export function assertMaintenanceWorkOrderTransition(
   }
   if (action === 'cancel' && response.cancelledAt === null) {
     throw new Error('Cancelled WorkOrder response is missing cancelledAt.');
+  }
+}
+
+
+export function assertCreatedServiceEvent(
+  assetId: string,
+  expected: {
+    readonly eventType: ServiceEventResponse['eventType'];
+    readonly performedAt: string;
+    readonly description: string;
+    readonly reference: string | null;
+    readonly providerPartyId: string | null;
+  },
+  event: ServiceEventResponse,
+): void {
+  if (
+    event.assetId !== assetId ||
+    event.eventType !== expected.eventType ||
+    event.performedAt !== expected.performedAt ||
+    event.description !== expected.description ||
+    event.reference !== expected.reference ||
+    event.providerPartyId !== expected.providerPartyId
+  ) {
+    throw new Error(
+      'Created ServiceEvent does not match submitted Asset service evidence.',
+    );
+  }
+}
+
+export function assertMaintenanceServiceEventLink(
+  workOrderId: string,
+  serviceEventId: string,
+  link: MaintenanceWorkOrderServiceEventLinkResponse,
+): void {
+  if (
+    link.workOrderId !== workOrderId ||
+    link.serviceEventId !== serviceEventId
+  ) {
+    throw new Error(
+      'Maintenance ServiceEvent link does not match WorkOrder/Event target.',
+    );
   }
 }
