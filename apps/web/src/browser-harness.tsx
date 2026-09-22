@@ -256,16 +256,6 @@ function nextSetupMaintenanceAt(): string {
   return value;
 }
 
-function setupMaintenanceEntry(
-  workOrderIdValue: string,
-): MaintenanceWorkOrderEntryResponse | null {
-  return (
-    setupMaintenanceWorkOrders.find(
-      (entry) => entry.workOrder.id === workOrderIdValue,
-    ) ?? null
-  );
-}
-
 function replaceSetupWorkOrder(workOrder: MaintenanceWorkOrderResponse): void {
   setupMaintenanceWorkOrders = setupMaintenanceWorkOrders.map((entry) =>
     entry.workOrder.id === workOrder.id
@@ -701,7 +691,7 @@ function inspectionBundle() {
       },
     ],
     responses: inspectionResponses,
-    findings: [setupInspectionFinding],
+    findings: [],
     evidence: [],
     signatures: [],
     finalSnapshot: null,
