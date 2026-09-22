@@ -139,14 +139,20 @@ export function documentPath(documentId: string): string {
   return `/documents/${encodeURIComponent(documentId)}`;
 }
 
-export function documentVersionsPath(
+export function documentVersionsPath(documentId: string): string {
+  return `${documentPath(documentId)}/versions`;
+}
+
+export function documentVersionUploadPath(
   documentId: string,
-  expectedDocumentRevision?: number,
+  fileName: string,
+  expectedDocumentRevision: number,
 ): string {
-  const base = `${documentPath(documentId)}/versions`;
-  return expectedDocumentRevision === undefined
-    ? base
-    : `${base}?expectedDocumentRevision=${encodeURIComponent(String(expectedDocumentRevision))}`;
+  const search = new URLSearchParams({
+    fileName,
+    expectedDocumentRevision: String(expectedDocumentRevision),
+  });
+  return `${documentVersionsPath(documentId)}?${search.toString()}`;
 }
 
 export function documentLinksPath(documentId: string): string {
