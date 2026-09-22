@@ -212,7 +212,9 @@ describe('GoogleDriveFileStorage', () => {
         mimeType: 'image/jpeg',
         content,
       }),
-    ).rejects.toThrowError(/different content/);
+    ).rejects.toThrowError(
+      /canonical database reconciliation is required/,
+    );
   });
 
   it('requires complete provider identity metadata after create', async () => {
