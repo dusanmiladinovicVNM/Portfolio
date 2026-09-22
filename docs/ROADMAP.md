@@ -182,9 +182,12 @@ Cost is a financial projection/fact, not a substitute for its source business en
 
 Offline persistence is explicitly not part of the MVP field workflow.
 
-## MVP write surfaces (IN PROGRESS)
+## MVP write surfaces (DONE)
 
-The online MVP must be usable without manual SQL or ad-hoc API calls.
+The online MVP launch workflows are now usable without manual SQL or ad-hoc API calls.
+PRs #27–#38 completed the browser write surfaces, with #38 closing the final
+operational gap for Asset Warranty, WarrantyClaim, ServicePlan and standalone
+ServiceEvent administration.
 
 Sequence:
 
@@ -217,8 +220,13 @@ Sequence:
    - lock/finalize
    - immutable final report
 
-Before release, run an MVP usability sweep that forbids manual SQL/API intervention
-for the agreed launch workflows.
+The PR #38 MVP usability sweep verified the agreed launch workflows through the
+browser E2E path: core setup, leasing and signed documents, Asset lifecycle plus
+warranty/service history, Meters, Maintenance/Service, and Inspection orchestration
+through immutable final report.
+
+This completes the **write-surface** gate only. The MVP is not release-ready until
+the production hardening and release gates below are complete.
 
 ## Production hardening + MVP release
 
