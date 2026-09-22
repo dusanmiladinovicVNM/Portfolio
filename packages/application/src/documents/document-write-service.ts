@@ -288,7 +288,10 @@ export async function uploadDocumentVersionRecord(
     } catch (reconciliationError) {
       if (
         reconciliationError instanceof ApplicationError &&
-        reconciliationError.code === 'DOCUMENT_STORAGE_RECONCILIATION_REQUIRED'
+        [
+          'DOCUMENT_STORAGE_RECONCILIATION_REQUIRED',
+          'DOCUMENT_STORAGE_COMPENSATION_FAILED',
+        ].includes(reconciliationError.code)
       ) {
         throw reconciliationError;
       }
