@@ -217,6 +217,7 @@ export function InspectionFinalizationPanel({
     if (inspection.status !== 'in_progress' || !begin('lock')) return;
     const before = inspection;
     let acknowledged = false;
+    let ambiguous = false;
 
     try {
       try {
@@ -229,6 +230,7 @@ export function InspectionFinalizationPanel({
         assertInspectionLockTransition(before, locked);
       } catch (cause) {
         if (!isAmbiguousWriteFailure(cause)) throw cause;
+        ambiguous = true;
         const canonical = await readCanonical();
         assertInspectionLockTransition(before, canonical.inspection);
         applyCanonical(canonical);
@@ -249,7 +251,9 @@ export function InspectionFinalizationPanel({
         setError(
           acknowledged
             ? `Inspection lock was acknowledged, but canonical verification failed: ${errorMessage(cause, 'verification failed')}. Reload before retrying.`
-            : errorMessage(cause, 'Inspection could not be locked.'),
+            : ambiguous
+              ? `Inspection lock outcome is unconfirmed: ${errorMessage(cause, 'canonical reread failed')}. Do not retry until canonical Inspection state has been checked.`
+              : errorMessage(cause, 'Inspection could not be locked.'),
         );
       }
     } finally {
@@ -365,6 +369,7 @@ export function InspectionFinalizationPanel({
     };
     const preExistingIds = new Set(bundle.signatures.map((item) => item.id));
     let acknowledged = false;
+    let ambiguous = false;
 
     try {
       let created: InspectionSignatureResponse;
@@ -377,6 +382,7 @@ export function InspectionFinalizationPanel({
         acknowledged = true;
       } catch (cause) {
         if (!isAmbiguousWriteFailure(cause)) throw cause;
+        ambiguous = true;
         const canonical = await readCanonical();
         const recovered = findRecoveredInspectionSignature(
           canonical,
@@ -415,7 +421,9 @@ export function InspectionFinalizationPanel({
         setError(
           acknowledged
             ? `Signature was acknowledged, but canonical verification failed: ${errorMessage(cause, 'verification failed')}. Do not upload another binary; reload first.`
-            : errorMessage(cause, 'Signature could not be captured.'),
+            : ambiguous
+              ? `Signature outcome is unconfirmed: ${errorMessage(cause, 'canonical reread failed')}. Keep the existing signature binary and check canonical Inspection state before retrying the relation.`
+              : errorMessage(cause, 'Signature could not be captured.'),
         );
       }
     } finally {
@@ -439,6 +447,7 @@ export function InspectionFinalizationPanel({
 
     const before = inspection;
     let acknowledged = false;
+    let ambiguous = false;
     try {
       try {
         const unlocked = await api.post(
@@ -450,6 +459,7 @@ export function InspectionFinalizationPanel({
         assertInspectionUnlockTransition(before, unlocked);
       } catch (cause) {
         if (!isAmbiguousWriteFailure(cause)) throw cause;
+        ambiguous = true;
       }
 
       const canonical = await readCanonical();
@@ -471,7 +481,9 @@ export function InspectionFinalizationPanel({
         setError(
           acknowledged
             ? `Unlock was acknowledged, but canonical verification failed: ${errorMessage(cause, 'verification failed')}. Reload before retrying.`
-            : errorMessage(cause, 'Inspection could not be unlocked.'),
+            : ambiguous
+              ? `Unlock outcome is unconfirmed: ${errorMessage(cause, 'canonical reread failed')}. Do not retry until canonical Inspection state and signature invalidation have been checked.`
+              : errorMessage(cause, 'Inspection could not be unlocked.'),
         );
       }
     } finally {
@@ -490,6 +502,7 @@ export function InspectionFinalizationPanel({
 
     const before = inspection;
     let acknowledged = false;
+    let ambiguous = false;
     try {
       try {
         const finalized = await api.post(
@@ -510,6 +523,7 @@ export function InspectionFinalizationPanel({
         }
       } catch (cause) {
         if (!isAmbiguousWriteFailure(cause)) throw cause;
+        ambiguous = true;
       }
 
       const canonical = await readCanonical();
@@ -527,7 +541,9 @@ export function InspectionFinalizationPanel({
         setError(
           acknowledged
             ? `Finalization was acknowledged, but canonical verification failed: ${errorMessage(cause, 'verification failed')}. Do not retry until canonical state has been checked.`
-            : errorMessage(cause, 'Inspection could not be finalized.'),
+            : ambiguous
+              ? `Finalization outcome is unconfirmed: ${errorMessage(cause, 'canonical reread failed')}. Do not retry until the immutable final snapshot has been checked.`
+              : errorMessage(cause, 'Inspection could not be finalized.'),
         );
       }
     } finally {
