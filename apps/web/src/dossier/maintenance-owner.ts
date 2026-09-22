@@ -157,6 +157,8 @@ export function assertMaintenanceIssueUpdate(
     response.description !== expected.description ||
     response.priority !== expected.priority ||
     response.status !== current.status ||
+    response.resolvedAt !== current.resolvedAt ||
+    response.cancelledAt !== current.cancelledAt ||
     response.version !== current.version + 1
   ) {
     throw new Error(
@@ -257,6 +259,10 @@ export function assertMaintenanceWorkOrderUpdate(
       current.assignee?.kind === 'user' &&
       response.assignee.userId !== current.assignee.userId) ||
     response.status !== current.status ||
+    response.assignedAt !== current.assignedAt ||
+    response.startedAt !== current.startedAt ||
+    response.completedAt !== current.completedAt ||
+    response.cancelledAt !== current.cancelledAt ||
     response.version !== current.version + 1
   ) {
     throw new Error(
@@ -374,7 +380,10 @@ export function assertCreatedServiceEvent(
     event.performedAt !== expected.performedAt ||
     event.description !== expected.description ||
     event.reference !== expected.reference ||
-    event.providerPartyId !== expected.providerPartyId
+    event.providerPartyId !== expected.providerPartyId ||
+    event.servicePlanId !== null ||
+    event.warrantyClaimId !== null ||
+    event.parts.length !== 0
   ) {
     throw new Error(
       'Created ServiceEvent does not match submitted Asset service evidence.',
