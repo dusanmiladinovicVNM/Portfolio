@@ -109,10 +109,16 @@ function errorStatus(code: string): number {
     code === 'DOCUMENT_STORAGE_READ_FAILED' ||
     code === 'DOCUMENT_BINARY_INTEGRITY_MISMATCH' ||
     code === 'DOCUMENT_BINARY_MISSING' ||
-    code === 'DOCUMENT_STORAGE_REFERENCE_MISSING'
+    code === 'DOCUMENT_STORAGE_REFERENCE_MISSING' ||
+    code === 'DOCUMENT_STORAGE_VERIFICATION_FAILED'
   ) return 502;
   if (code === 'DOCUMENT_BINARY_UPLOAD_LIMIT_EXCEEDED') return 413;
-  if (code === 'DOCUMENT_BINARY_DELIVERY_LIMIT_EXCEEDED') return 503;
+  if (
+    code === 'DOCUMENT_BINARY_DELIVERY_LIMIT_EXCEEDED' ||
+    code === 'DOCUMENT_STORAGE_RECONCILIATION_REQUIRED' ||
+    code === 'DOCUMENT_STORAGE_COMPENSATION_FAILED' ||
+    code === 'INSPECTION_BINARY_RECONCILIATION_REQUIRED'
+  ) return 503;
   if (code.endsWith('_NOT_FOUND')) return 404;
   if (
     code.endsWith('_ALREADY_EXISTS') ||
