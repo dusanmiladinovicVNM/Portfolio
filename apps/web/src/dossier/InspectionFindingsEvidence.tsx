@@ -248,6 +248,12 @@ export function InspectionFindingsEvidence({
 
   async function createFinding(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (blockedByDirtySection) {
+      setError(
+        'Save or discard the current section before recording Findings or Evidence.',
+      );
+      return;
+    }
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const rawItemId = requiredString(form, 'itemId');
@@ -316,6 +322,12 @@ export function InspectionFindingsEvidence({
 
   async function createEvidenceDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (blockedByDirtySection) {
+      setError(
+        'Save or discard the current section before recording Findings or Evidence.',
+      );
+      return;
+    }
     if (documents === null) {
       setError(
         'Wait for the canonical Document catalog before creating Evidence.',

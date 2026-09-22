@@ -3200,21 +3200,6 @@ try {
 
   const findingForm =
     "//form[@data-inspection-content-form='finding']";
-  await selectOptionXpath(
-    sessionId,
-    findingForm + "//select[@name='itemId']",
-    inspectionNotesItemId,
-  );
-  await typeXpath(
-    sessionId,
-    findingForm + "//input[@name='title']",
-    'Blocked dirty Finding',
-  );
-  await typeXpath(
-    sessionId,
-    findingForm + "//textarea[@name='description']",
-    'Must not be persisted while the section has local edits.',
-  );
   assertEqual(
     await elementDisabledXpath(
       sessionId,
@@ -3227,28 +3212,14 @@ try {
     sessionId,
     "document.querySelector('form[data-inspection-content-form=\"finding\"]').requestSubmit(); return true;",
   );
-  await new Promise((resolve) => setTimeout(resolve, 150));
-  assertEqual(
-    await elementExistsXpath(
-      sessionId,
-      "//ul[contains(@class,'inspection-content-list')]//*[contains(normalize-space(),'Blocked dirty Finding')]",
-    ),
-    false,
-    'Programmatic Finding submit cannot bypass dirty-section guard',
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Save or discard the current section before recording Findings or Evidence.')]",
   );
 
   const evidenceDocumentForm =
     "//form[@data-inspection-content-form='evidence-document']";
-  await typeXpath(
-    sessionId,
-    evidenceDocumentForm + "//input[@name='code']",
-    'EVID-DIRTY-BRW',
-  );
-  await typeXpath(
-    sessionId,
-    evidenceDocumentForm + "//input[@name='title']",
-    'Blocked dirty evidence',
-  );
   assertEqual(
     await elementDisabledXpath(
       sessionId,
@@ -3261,14 +3232,10 @@ try {
     sessionId,
     "document.querySelector('form[data-inspection-content-form=\"evidence-document\"]').requestSubmit(); return true;",
   );
-  await new Promise((resolve) => setTimeout(resolve, 150));
-  assertEqual(
-    await elementExistsXpath(
-      sessionId,
-      "//select[@aria-label='Inspection evidence Document']/option[contains(normalize-space(),'EVID-DIRTY-BRW')]",
-    ),
-    false,
-    'Programmatic Evidence submit cannot bypass dirty-section guard',
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Save or discard the current section before recording Findings or Evidence.')]",
   );
 
   await clickAndDismissConfirm(

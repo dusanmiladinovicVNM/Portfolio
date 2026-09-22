@@ -496,7 +496,7 @@ export function UnitInspections({
   const inFlightStartsRef = useRef<Set<string>>(new Set());
   const [saveError, setSaveError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
-  const [inspectionWritePending, setOrchestrationPending] = useState(false);
+  const [inspectionWritePending, setInspectionWritePending] = useState(false);
   const inspectionWritePendingRef = useRef(false);
   const activeInspectionIdRef = useRef(inspectionId);
   activeInspectionIdRef.current = inspectionId;
@@ -700,13 +700,13 @@ export function UnitInspections({
       }
       inspectionWritePendingRef.current = true;
       setNavigationBlocker(() => false);
-      setOrchestrationPending(true);
+      setInspectionWritePending(true);
       return true;
     },
     finish: () => {
       inspectionWritePendingRef.current = false;
       setNavigationBlocker(null);
-      setOrchestrationPending(false);
+      setInspectionWritePending(false);
     },
   };
 
