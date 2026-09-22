@@ -170,6 +170,7 @@ function CreateIssueForm({
   spaces,
   assets,
   findings,
+  existingIssues,
   linkedFindingIds,
   writeGate,
   onCreated,
@@ -181,6 +182,7 @@ function CreateIssueForm({
   readonly spaces: readonly SpaceResponse[];
   readonly assets: readonly AssetResponse[];
   readonly findings: readonly FindingOption[];
+  readonly existingIssues: readonly MaintenanceIssueResponse[];
   readonly linkedFindingIds: ReadonlySet<string>;
   readonly writeGate: MaintenanceWriteGate;
   readonly onCreated: (issue: MaintenanceIssueResponse) => void;
@@ -225,11 +227,9 @@ function CreateIssueForm({
       title: requiredString(form, 'title'),
       description: nullableString(form, 'description'),
       priority,
-    };
-    const parsed = createMaintenanceIssueRequestSchema.safeParse({
-      ...expected,
       ...(reportedAt ? { reportedAt } : {}),
-    });
+    };
+    const parsed = createMaintenanceIssueRequestSchema.safeParse(expected);
     if (!parsed.success) {
       setError(contractErrorMessage());
       return;
@@ -258,11 +258,39 @@ function CreateIssueForm({
       }
     } catch (cause) {
       if (local.isMounted()) {
+        const knownIds = new Set(existingIssues.map((issue) => issue.id));
+        try {
+          const canonical = await api.get(
+            unitMaintenanceIssuesPath(unitId),
+            maintenanceIssueListResponseSchema,
+          );
+          assertUnitMaintenanceIssuesOwner(unitId, canonical.items);
+          const recovered = canonical.items.find((candidate) => {
+            if (knownIds.has(candidate.id)) return false;
+            try {
+              assertCreatedMaintenanceIssue(expected, candidate);
+              return true;
+            } catch {
+              return false;
+            }
+          });
+          if (recovered && local.isMounted()) {
+            formElement.reset();
+            setAssetId('');
+            setSpaceId('');
+            setPriority('normal');
+            writeGate.finish();
+            onCreated(recovered);
+            return;
+          }
+        } catch {
+          // Fall through to canonical refresh + explicit ambiguous outcome UX.
+        }
         onReconcile();
         setError(
           maintenanceError(
             cause,
-            'Issue creation outcome could not be confirmed. Canonical Unit Maintenance state was reloaded.',
+            'Issue creation outcome could not be confirmed. Canonical Unit Maintenance state was reloaded; do not retry until the Issue list is checked.',
           ),
         );
       }
@@ -537,10 +565,41 @@ function IssueAdministration({
       }
     } catch (cause) {
       if (local.isMounted()) {
+        const knownIds = new Set(
+          workOrders.map((entry) => entry.workOrder.id),
+        );
+        try {
+          const canonical = await api.get(
+            maintenanceIssueWorkOrdersPath(issue.id),
+            maintenanceWorkOrderEntryListResponseSchema,
+          );
+          assertMaintenanceWorkOrdersOwner(issue.id, canonical.items);
+          const recovered = canonical.items.find((entry) => {
+            if (knownIds.has(entry.workOrder.id)) return false;
+            try {
+              assertCreatedMaintenanceWorkOrder(
+                issue.id,
+                expected,
+                entry.workOrder,
+              );
+              return true;
+            } catch {
+              return false;
+            }
+          });
+          if (recovered && local.isMounted()) {
+            formElement.reset();
+            writeGate.finish();
+            onWorkOrderCreated(recovered.workOrder);
+            return;
+          }
+        } catch {
+          // Fall through to canonical refresh + explicit ambiguous outcome UX.
+        }
         setError(
           maintenanceError(
             cause,
-            'WorkOrder creation outcome could not be confirmed. Canonical WorkOrders were reloaded.',
+            'WorkOrder creation outcome could not be confirmed. Canonical WorkOrders were reloaded; do not retry until the WorkOrder list is checked.',
           ),
         );
         onCanonicalWrite();
@@ -1646,10 +1705,11 @@ export function UnitMaintenance({
           <p className="form-error" role="alert">{loadError}</p>
         ) : null}
 
-        {spaces && assets && findings ? (
+        {spaces && assets && findings && issues ? (
           <CreateIssueForm
             api={api}
             assets={assets}
+            existingIssues={issues}
             findings={findings}
             linkedFindingIds={linkedFindingIds}
             onCreated={(created) => {
