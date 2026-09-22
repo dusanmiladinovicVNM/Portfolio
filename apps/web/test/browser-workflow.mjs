@@ -34,6 +34,9 @@ const setupAmendmentDocumentVersionId = 'b1000000-0000-4000-8000-000000000025';
 const setupAgreementDocumentVersionId = 'b1000000-0000-4000-8000-000000000026';
 const setupAssetId = 'b1000000-0000-4000-8000-000000000029';
 const setupReplacementAssetId = 'b1000000-0000-4000-8000-000000000030';
+const setupMeterId = 'b1000000-0000-4000-8000-000000000038';
+const setupMeterMoveInReadingId = 'b1000000-0000-4000-8000-000000000039';
+const setupMeterMoveOutReadingId = 'b1000000-0000-4000-8000-000000000040';
 
 const amendmentSignedFilePath = join(
   tmpdir(),
@@ -1553,6 +1556,297 @@ try {
     await currentUrl(sessionId),
     setupTenancyUrl,
     'Tenancy lifecycle stays on setup Unit owner',
+  );
+
+  await clickXpath(sessionId, "//a[normalize-space()='Meters']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[@data-meter-form='create']",
+  );
+
+  const meterCreateForm = "//form[@data-meter-form='create']";
+  await typeXpath(
+    sessionId,
+    meterCreateForm + "//input[@name='code']",
+    'MTR-SETUP-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    meterCreateForm + "//input[@name='serialNumber']",
+    'SN-MTR-SETUP-001',
+  );
+  await typeXpath(
+    sessionId,
+    meterCreateForm + "//input[@name='label']",
+    'Main electricity meter',
+  );
+  await selectOptionXpath(
+    sessionId,
+    meterCreateForm + "//select[@name='spaceId']",
+    setupSpaceId,
+  );
+  await setInputValueXpath(
+    sessionId,
+    meterCreateForm + "//input[@name='installedDate']",
+    '2026-09-01',
+  );
+  await setInputValueXpath(
+    sessionId,
+    meterCreateForm + "//input[@name='installedTime']",
+    '08:00',
+  );
+  await clickXpath(
+    sessionId,
+    meterCreateForm + "//button[normalize-space()='Create Meter']",
+  );
+
+  const createdMeterUrl =
+    baseUrl +
+    '/properties/' + setupPropertyId +
+    '/units/' + setupUnitId +
+    '?tab=meters&meterId=' + setupMeterId +
+    '&asOf=2025-06-30';
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'meter-card')][.//span[normalize-space()='MTR-SETUP-BRW']][.//h3[normalize-space()='Main electricity meter']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'meter-admin-panel')]//h2[normalize-space()='MTR-SETUP-BRW · Main electricity meter']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    createdMeterUrl,
+    'Created Meter deep-link',
+  );
+
+  const meterLabelForm = "//form[@data-meter-form='label']";
+  await clearXpath(
+    sessionId,
+    meterLabelForm + "//input[@name='label']",
+  );
+  await typeXpath(
+    sessionId,
+    meterLabelForm + "//input[@name='label']",
+    'Main electricity register',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioHoldMeterMutation = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    meterLabelForm + "//button[normalize-space()='Save label']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    'return window.__portfolioPendingMeterMutation === true;',
+    'held Meter label mutation',
+  );
+  await clickXpath(sessionId, "//a[normalize-space()='Assets']");
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assertEqual(
+    await currentUrl(sessionId),
+    createdMeterUrl,
+    'Pending Meter write blocks tab navigation',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioReleaseMeterMutation();',
+    ),
+    true,
+    'Release held Meter label mutation',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'meter-admin-panel')]//h2[normalize-space()='MTR-SETUP-BRW · Main electricity register']",
+  );
+
+  const meterReadingForm = "//form[@data-meter-form='reading']";
+  await typeXpath(
+    sessionId,
+    meterReadingForm + "//input[@name='value']",
+    '100',
+  );
+  await setInputValueXpath(
+    sessionId,
+    meterReadingForm + "//input[@name='readDate']",
+    '2026-10-01',
+  );
+  await setInputValueXpath(
+    sessionId,
+    meterReadingForm + "//input[@name='readTime']",
+    '08:00',
+  );
+  await typeXpath(
+    sessionId,
+    meterReadingForm + "//input[@name='note']",
+    'Move in reading',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextMeterReadingAfterCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    meterReadingForm + "//button[normalize-space()='Record Reading']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'meter-reading-card')][.//span[normalize-space()='2026-10-01T08:00:00.000Z']][.//h4[normalize-space()='100 kwh']][.//p[normalize-space()='Move in reading']]",
+  );
+
+  const meterBoundaryForm = "//form[@data-meter-form='boundary']";
+  await waitForElement(
+    sessionId,
+    'xpath',
+    meterBoundaryForm +
+      "//select[@name='readingId']/option[@value='" +
+      setupMeterMoveInReadingId +
+      "']",
+  );
+  await selectOptionXpath(
+    sessionId,
+    meterBoundaryForm + "//select[@name='readingId']",
+    setupMeterMoveInReadingId,
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    meterBoundaryForm +
+      "//select[@name='tenancyId']/option[@value='" +
+      setupTenancyId +
+      "']",
+  );
+  await selectOptionXpath(
+    sessionId,
+    meterBoundaryForm + "//select[@name='tenancyId']",
+    setupTenancyId,
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextMeterBoundaryAfterCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    meterBoundaryForm + "//button[normalize-space()='Link boundary']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'meter-reading-card')][.//span[normalize-space()='2026-10-01T08:00:00.000Z']]//li[normalize-space()='Move in · TEN-SETUP-BRW']",
+  );
+
+  await typeXpath(
+    sessionId,
+    meterReadingForm + "//input[@name='value']",
+    '140',
+  );
+  await setInputValueXpath(
+    sessionId,
+    meterReadingForm + "//input[@name='readDate']",
+    '2027-09-30',
+  );
+  await setInputValueXpath(
+    sessionId,
+    meterReadingForm + "//input[@name='readTime']",
+    '08:00',
+  );
+  await typeXpath(
+    sessionId,
+    meterReadingForm + "//input[@name='note']",
+    'Move out reading',
+  );
+  await clickXpath(
+    sessionId,
+    meterReadingForm + "//button[normalize-space()='Record Reading']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'meter-reading-card')][.//span[normalize-space()='2027-09-30T08:00:00.000Z']][.//h4[normalize-space()='140 kwh']][.//p[normalize-space()='Move out reading']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//table//tr[.//td[normalize-space()='100.000000']][.//td[normalize-space()='140.000000']][.//td[normalize-space()='40 kwh']][.//td[normalize-space()='Continuous']]",
+  );
+
+  await selectOptionXpath(
+    sessionId,
+    meterBoundaryForm + "//select[@name='readingId']",
+    setupMeterMoveOutReadingId,
+  );
+  await selectOptionXpath(
+    sessionId,
+    meterBoundaryForm + "//select[not(@name='readingId') and not(@name='tenancyId')]",
+    'move_out',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    meterBoundaryForm +
+      "//select[@name='tenancyId']/option[@value='" +
+      setupTenancyId +
+      "']",
+  );
+  await selectOptionXpath(
+    sessionId,
+    meterBoundaryForm + "//select[@name='tenancyId']",
+    setupTenancyId,
+  );
+  await clickXpath(
+    sessionId,
+    meterBoundaryForm + "//button[normalize-space()='Link boundary']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'meter-reading-card')][.//span[normalize-space()='2027-09-30T08:00:00.000Z']]//li[normalize-space()='Move out · TEN-SETUP-BRW']",
+  );
+
+  const meterRetireForm = "//form[@data-meter-form='retire']";
+  await setInputValueXpath(
+    sessionId,
+    meterRetireForm + "//input[@name='retiredDate']",
+    '2027-10-01',
+  );
+  await setInputValueXpath(
+    sessionId,
+    meterRetireForm + "//input[@name='retiredTime']",
+    '10:00',
+  );
+  await typeXpath(
+    sessionId,
+    meterRetireForm + "//input[@name='retirementReason']",
+    'Meter replaced after tenancy',
+  );
+  await clickXpath(
+    sessionId,
+    meterRetireForm + "//button[normalize-space()='Retire Meter']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'meter-admin-panel')]//span[contains(@class,'status-chip') and normalize-space()='retired']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'meter-admin-panel')]//dd[normalize-space()='Meter replaced after tenancy']",
+  );
+
+  await clickXpath(sessionId, "//a[normalize-space()='Tenancies']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//span[contains(@class,'status-chip') and normalize-space()='ended']",
   );
 
   await typeXpath(
