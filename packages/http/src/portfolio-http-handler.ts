@@ -17,6 +17,7 @@ import {
   type MeterRepository,
   type OwnershipRepository,
   type PartyRepository,
+  type PdfPort,
   type PortfolioRepository,
   type ReportingRepository,
   type StaffDirectoryRepository,
@@ -64,6 +65,7 @@ export interface PortfolioHttpDependencies {
   readonly unitTimelineRepository: UnitTimelineRepository;
   readonly staffDirectoryRepository: StaffDirectoryRepository;
   readonly fileStorage: FileStoragePort;
+  readonly pdfPort: PdfPort;
   readonly clock: ClockPort;
   readonly userAccessRepository: UserAccessRepository;
   readonly idGenerator: IdGenerator;
@@ -139,7 +141,8 @@ function errorStatus(code: string): number {
     code === 'ACCESS_ITEM_NOT_AVAILABLE' ||
     code === 'ACCESS_ITEM_RETIRED' ||
     code === 'ACCESS_ITEM_ALREADY_RETIRED' ||
-    code === 'METER_ALREADY_RETIRED'
+    code === 'METER_ALREADY_RETIRED' ||
+    code === 'INSPECTION_FINAL_REPORT_RECONCILIATION_REQUIRED'
   ) {
     return 409;
   }
