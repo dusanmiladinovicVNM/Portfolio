@@ -238,6 +238,14 @@ export function AssetServiceAdministration({
   }, [api, assetId, revision]);
 
   function refresh(): void {
+    // Create commands here are append-only and do not have an idempotency key.
+    // Hide the mutable workspace immediately so an ambiguous acknowledgement
+    // cannot be retried before canonical lists have been re-read.
+    setWarranties(null);
+    setPlans(null);
+    setEvents(null);
+    setParties(null);
+    setClaimsByWarranty(new Map());
     setRevision((value) => value + 1);
   }
 
