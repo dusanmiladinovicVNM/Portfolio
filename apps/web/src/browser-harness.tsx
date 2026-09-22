@@ -661,7 +661,7 @@ const inspectionSchema = {
   inspectionType: 'move_in',
   title: 'Browser move-in inspection',
   status: 'published',
-  requiredSignatureRoles: ['tenant', 'landlord'],
+  requiredSignatureRoles: ['tenant', 'landlord'] as const,
   sections: [
     {
       id: inspectionSectionId,
