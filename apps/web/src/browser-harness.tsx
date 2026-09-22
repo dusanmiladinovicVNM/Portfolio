@@ -586,6 +586,7 @@ function apiPath(input: RequestInfo | URL): URL {
 
 type BrowserHarnessWindow = Window & {
   __portfolioBinaryReads?: number;
+  __portfolioDocumentUploadCount?: number;
   __portfolioHoldUnitCreate?: boolean;
   __portfolioHoldSpaceCreate?: boolean;
   __portfolioHoldTenancyMutation?: boolean;
@@ -603,6 +604,7 @@ type BrowserHarnessWindow = Window & {
 
 const browserHarnessWindow = window as BrowserHarnessWindow;
 browserHarnessWindow.__portfolioBinaryReads = 0;
+browserHarnessWindow.__portfolioDocumentUploadCount = 0;
 
 let heldUnitCreate:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
@@ -808,6 +810,8 @@ globalThis.fetch = async (
         finalizedAt: null,
       };
       setupDocumentVersions.push(version);
+      browserHarnessWindow.__portfolioDocumentUploadCount =
+        (browserHarnessWindow.__portfolioDocumentUploadCount ?? 0) + 1;
       setupDocuments = setupDocuments.map((candidate) =>
         candidate.id === document.id
           ? {
