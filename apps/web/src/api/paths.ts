@@ -203,6 +203,38 @@ export function assetLocationHistoryPath(assetId: string): string {
   return `${assetPath(assetId)}/location-history`;
 }
 
+export function assetWarrantiesPath(assetId: string): string {
+  return `${assetPath(assetId)}/warranties`;
+}
+
+export function warrantyClaimsPath(warrantyId: string): string {
+  return `/warranties/${encodeURIComponent(warrantyId)}/claims`;
+}
+
+export function warrantyClaimSubmitPath(claimId: string): string {
+  return `/warranty-claims/${encodeURIComponent(claimId)}/submit`;
+}
+
+export function warrantyClaimResolvePath(claimId: string): string {
+  return `/warranty-claims/${encodeURIComponent(claimId)}/resolve`;
+}
+
+export function warrantyClaimClosePath(claimId: string): string {
+  return `/warranty-claims/${encodeURIComponent(claimId)}/close`;
+}
+
+export function warrantyClaimCancelPath(claimId: string): string {
+  return `/warranty-claims/${encodeURIComponent(claimId)}/cancel`;
+}
+
+export function assetServicePlansPath(assetId: string): string {
+  return `${assetPath(assetId)}/service-plans`;
+}
+
+export function servicePlanStatusPath(planId: string): string {
+  return `/service-plans/${encodeURIComponent(planId)}/status`;
+}
+
 export function metersPath(): string {
   return '/meters';
 }
