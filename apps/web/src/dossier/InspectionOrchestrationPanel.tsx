@@ -112,6 +112,8 @@ export function InspectionOrchestrationPanel({
       >['items'] | null
     >(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [assignedWorkError, setAssignedWorkError] =
+    useState<string | null>(null);
   const [writeError, setWriteError] = useState<string | null>(null);
   const [writeSuccess, setWriteSuccess] = useState<string | null>(null);
   const [inspectionType, setInspectionType] =
@@ -123,7 +125,6 @@ export function InspectionOrchestrationPanel({
     setSchemas(null);
     setStaff(null);
     setTenancies(null);
-    setAssignedWork(null);
     setLoadError(null);
 
     void Promise.all([
@@ -142,13 +143,8 @@ export function InspectionOrchestrationPanel({
         tenancyListResponseSchema,
         { signal: controller.signal },
       ),
-      api.get(
-        assignedInspectionsPath(),
-        assignedInspectionWorkListResponseSchema,
-        { signal: controller.signal },
-      ),
     ])
-      .then(([schemaResponse, staffResponse, tenancyResponse, workResponse]) => {
+      .then(([schemaResponse, staffResponse, tenancyResponse]) => {
         if (controller.signal.aborted) return;
         assertInspectionStaffList(staffResponse.items);
         if (
@@ -160,11 +156,9 @@ export function InspectionOrchestrationPanel({
             'Inspection orchestration received a Tenancy from another Unit.',
           );
         }
-        assertAssignedInspectionWorkList(workResponse.items);
         setSchemas(schemaResponse.items);
         setStaff(staffResponse.items);
         setTenancies(tenancyResponse.items);
-        setAssignedWork(workResponse.items);
       })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
@@ -172,6 +166,35 @@ export function InspectionOrchestrationPanel({
           inspectionError(
             cause,
             'Inspection orchestration context could not be loaded.',
+          ),
+        );
+      });
+
+    return () => controller.abort();
+  }, [api, unitId]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setAssignedWork(null);
+    setAssignedWorkError(null);
+
+    void api
+      .get(
+        assignedInspectionsPath(),
+        assignedInspectionWorkListResponseSchema,
+        { signal: controller.signal },
+      )
+      .then((workResponse) => {
+        if (controller.signal.aborted) return;
+        assertAssignedInspectionWorkList(workResponse.items);
+        setAssignedWork(workResponse.items);
+      })
+      .catch((cause: unknown) => {
+        if (controller.signal.aborted) return;
+        setAssignedWorkError(
+          inspectionError(
+            cause,
+            'Assigned Inspection work could not be loaded.',
           ),
         );
       });
@@ -590,7 +613,12 @@ export function InspectionOrchestrationPanel({
           </span>
         </div>
 
-        {assignedWork === null && !loadError ? (
+        {assignedWorkError ? (
+          <p className="form-error" role="alert">
+            {assignedWorkError}
+          </p>
+        ) : null}
+        {assignedWork === null && !assignedWorkError ? (
           <p className="muted" aria-live="polite">
             Loading assigned work…
           </p>
