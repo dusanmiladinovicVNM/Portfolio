@@ -65,9 +65,11 @@ class FailingDocumentRepository implements DocumentRepository {
 
 class TrackingStorage implements FileStorageWritePort {
   readonly removed: StorageObjectReference[] = [];
+  putCalls = 0;
   constructor(private readonly removeFails = false) {}
 
   async put(input: { objectKey: string; content: Uint8Array }) {
+    this.putCalls += 1;
     return {
       provider: 'test',
       objectId: 'stored-object',
@@ -147,6 +149,34 @@ class AmbiguousCommitDocumentRepository extends FailingDocumentRepository {
 }
 
 describe('Document application workflow', () => {
+  it('rejects an oversized internal binary write before storage is touched', async () => {
+    const repository = new FailingDocumentRepository();
+    const storage = new TrackingStorage();
+
+    await expect(
+      uploadDocumentVersionCommand(
+        {
+          documentRepository: repository,
+          fileStorage: storage,
+          idGenerator: new FixedId(),
+        },
+        actor,
+        {
+          documentId: repository.document.id,
+          fileName: 'oversized.pdf',
+          mimeType: 'application/pdf',
+          content: new Uint8Array(
+            DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY.maxBytes + 1,
+          ),
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'DOCUMENT_BINARY_UPLOAD_LIMIT_EXCEEDED',
+    });
+
+    expect(storage.putCalls).toBe(0);
+  });
+
   it('removes the uploaded object when database registration fails', async () => {
     const repository = new FailingDocumentRepository();
     const storage = new TrackingStorage();
