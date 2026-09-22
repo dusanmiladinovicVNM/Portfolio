@@ -261,6 +261,7 @@ export function UnitDossier({
               assetId={assetId}
               navigate={navigate}
               propertyId={propertyId}
+              setNavigationBlocker={setNavigationBlocker}
               unitId={unitId}
             />
           ) : null}
