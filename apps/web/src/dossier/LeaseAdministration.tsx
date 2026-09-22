@@ -587,8 +587,10 @@ export function LeaseAdministration({
   const mountedRef = useRef(true);
   const activeTenancyIdRef = useRef(tenancy.id);
   const activeAgreementIdRef = useRef(agreement?.id);
+  const activeAmendmentIdRef = useRef(amendment?.id);
   activeTenancyIdRef.current = tenancy.id;
   activeAgreementIdRef.current = agreement?.id;
+  activeAmendmentIdRef.current = amendment?.id;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -660,6 +662,7 @@ export function LeaseAdministration({
     if (!beginWrite()) return;
 
     const targetTenancyId = tenancy.id;
+    const agreementSelectionAtStart = activeAgreementIdRef.current;
     const form = new FormData(event.currentTarget);
     const tenancyParties = form
       .getAll('tenancyParty')
@@ -726,7 +729,11 @@ export function LeaseAdministration({
         );
       }
 
-      if (canonicalRefreshIfActive(targetTenancyId)) {
+      const parentStillActive = canonicalRefreshIfActive(targetTenancyId);
+      if (
+        parentStillActive &&
+        activeAgreementIdRef.current === agreementSelectionAtStart
+      ) {
         navigate(
           unitRoute(propertyId, unitId, asOf, 'contracts', {
             tenancyId: targetTenancyId,
@@ -776,7 +783,7 @@ export function LeaseAdministration({
         target.version,
         updated,
       );
-      canonicalRefreshIfActive(targetTenancyId, target.id);
+      canonicalRefreshIfActive(targetTenancyId);
     } catch (cause) {
       if (
         mountedRef.current &&
@@ -815,7 +822,7 @@ export function LeaseAdministration({
         target.version,
         updated,
       );
-      canonicalRefreshIfActive(targetTenancyId, target.id);
+      canonicalRefreshIfActive(targetTenancyId);
     } catch (cause) {
       if (
         mountedRef.current &&
@@ -837,6 +844,7 @@ export function LeaseAdministration({
     if (!beginWrite()) return;
 
     const targetTenancyId = tenancy.id;
+    const amendmentSelectionAtStart = activeAmendmentIdRef.current;
     const form = new FormData(event.currentTarget);
     const parsed = createLeaseAmendmentRequestSchema.safeParse({
       code: requiredString(form, 'code'),
@@ -867,8 +875,13 @@ export function LeaseAdministration({
         );
       }
 
+      const parentStillActive = canonicalRefreshIfActive(
+        targetTenancyId,
+        targetAgreement.id,
+      );
       if (
-        canonicalRefreshIfActive(targetTenancyId, targetAgreement.id)
+        parentStillActive &&
+        activeAmendmentIdRef.current === amendmentSelectionAtStart
       ) {
         navigate(
           unitRoute(propertyId, unitId, asOf, 'contracts', {
@@ -930,7 +943,8 @@ export function LeaseAdministration({
       if (
         mountedRef.current &&
         activeTenancyIdRef.current === targetTenancyId &&
-        activeAgreementIdRef.current === targetAgreement.id
+        activeAgreementIdRef.current === targetAgreement.id &&
+        activeAmendmentIdRef.current === targetAmendment.id
       ) {
         setError(writeError(cause, 'Amendment could not be signed.'));
       }
@@ -972,7 +986,8 @@ export function LeaseAdministration({
       if (
         mountedRef.current &&
         activeTenancyIdRef.current === targetTenancyId &&
-        activeAgreementIdRef.current === targetAgreement.id
+        activeAgreementIdRef.current === targetAgreement.id &&
+        activeAmendmentIdRef.current === targetAmendment.id
       ) {
         setError(writeError(cause, 'Amendment could not be cancelled.'));
       }
