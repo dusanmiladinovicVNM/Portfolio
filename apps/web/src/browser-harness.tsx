@@ -24,6 +24,7 @@ import type {
   InspectionEvidenceResponse,
   InspectionFindingResponse,
   InspectionResponseDto,
+  InspectionSignatureResponse,
   PartyResponse,
   PropertyResponse,
   SpaceResponse,
@@ -69,7 +70,22 @@ const inspectionEvidenceIds = [
   'a1000000-0000-4000-8000-000000000011',
   'a1000000-0000-4000-8000-000000000012',
   'a1000000-0000-4000-8000-000000000013',
+  'a1000000-0000-4000-8000-000000000014',
+  'a1000000-0000-4000-8000-000000000015',
+  'a1000000-0000-4000-8000-000000000016',
 ] as const;
+const inspectionSignatureIds = [
+  'a1000000-0000-4000-8000-000000000017',
+  'a1000000-0000-4000-8000-000000000018',
+  'a1000000-0000-4000-8000-000000000019',
+  'a1000000-0000-4000-8000-000000000020',
+] as const;
+const inspectionFinalSnapshotId =
+  'a1000000-0000-4000-8000-000000000021';
+const inspectionFinalReportVersionId =
+  'a1000000-0000-4000-8000-000000000022';
+const inspectionFinalReportDocumentId =
+  'a1000000-0000-4000-8000-000000000023';
 const setupPropertyId = 'b1000000-0000-4000-8000-000000000001';
 const setupUnitId = 'b1000000-0000-4000-8000-000000000002';
 const setupSpaceId = 'b1000000-0000-4000-8000-000000000003';
@@ -608,7 +624,7 @@ const amendmentDocumentReference: LeaseAmendmentDocumentReferenceResponse = {
   },
 };
 
-let inspectionStatus: 'draft' | 'in_progress' = 'draft';
+let inspectionStatus: 'draft' | 'in_progress' | 'locked' | 'finalized' = 'draft';
 let inspectionVersion = 1;
 let inspectionContentRevision = 0;
 let inspectionSectionRevision = 0;
@@ -624,8 +640,19 @@ let inspectionResponses: Array<{
 }> = [];
 let inspectionFindings: InspectionFindingResponse[] = [];
 let inspectionEvidence: InspectionEvidenceResponse[] = [];
+let inspectionSignatures: InspectionSignatureResponse[] = [];
+let inspectionFinalSnapshot: {
+  id: string;
+  inspectionId: string;
+  snapshotVersion: 1;
+  inspectionVersion: number;
+  contentRevision: number;
+  createdByUserId: string;
+  createdAt: string;
+} | null = null;
 let inspectionFindingSequence = 0;
 let inspectionEvidenceSequence = 0;
+let inspectionSignatureSequence = 0;
 
 const inspectionSchema = {
   id: inspectionSchemaVersionId,
@@ -634,7 +661,7 @@ const inspectionSchema = {
   inspectionType: 'move_in',
   title: 'Browser move-in inspection',
   status: 'published',
-  requiredSignatureRoles: [],
+  requiredSignatureRoles: ['tenant', 'landlord'],
   sections: [
     {
       id: inspectionSectionId,
@@ -696,11 +723,17 @@ function inspectionRecord() {
     scheduledFor: '2025-06-30',
     status: inspectionStatus,
     startedAt:
-      inspectionStatus === 'in_progress'
-        ? '2025-06-30T08:00:00.000Z'
+      inspectionStatus === 'draft'
+        ? null
+        : '2025-06-30T08:00:00.000Z',
+    lockedAt:
+      inspectionStatus === 'locked' || inspectionStatus === 'finalized'
+        ? '2025-06-30T09:00:00.000Z'
         : null,
-    lockedAt: null,
-    finalizedAt: null,
+    finalizedAt:
+      inspectionStatus === 'finalized'
+        ? '2025-06-30T10:00:00.000Z'
+        : null,
     cancelledAt: null,
     version: inspectionVersion,
     contentRevision: inspectionContentRevision,
@@ -771,8 +804,8 @@ function inspectionBundle() {
     responses: inspectionResponses,
     findings: inspectionFindings,
     evidence: inspectionEvidence,
-    signatures: [],
-    finalSnapshot: null,
+    signatures: inspectionSignatures,
+    finalSnapshot: inspectionFinalSnapshot,
   };
 }
 
@@ -974,9 +1007,14 @@ type BrowserHarnessWindow = Window & {
   __portfolioHoldMaintenanceMutation?: boolean;
   __portfolioHoldInspectionOrchestration?: boolean;
   __portfolioHoldInspectionEvidence?: boolean;
+  __portfolioHoldInspectionLifecycle?: boolean;
   __portfolioFailNextInspectionCreateAfterCommit?: boolean;
   __portfolioFailNextInspectionFindingAfterCommit?: boolean;
   __portfolioFailNextInspectionEvidenceAfterCommit?: boolean;
+  __portfolioFailNextInspectionBinaryAfterCommit?: boolean;
+  __portfolioFailNextInspectionSignatureAfterCommit?: boolean;
+  __portfolioFailNextInspectionFinalizeAfterCommit?: boolean;
+  __portfolioFailNextInspectionReportAfterCommit?: boolean;
   __portfolioFailNextInspectionOrchestrationAfterCommit?: boolean;
   __portfolioFailNextMaintenanceIssueCreateAfterCommit?: boolean;
   __portfolioFailNextMaintenanceWorkOrderCreateAfterCommit?: boolean;
@@ -997,6 +1035,8 @@ type BrowserHarnessWindow = Window & {
   __portfolioPendingMaintenanceMutation?: boolean;
   __portfolioPendingInspectionOrchestration?: boolean;
   __portfolioPendingInspectionEvidence?: boolean;
+  __portfolioPendingInspectionLifecycle?: boolean;
+  __portfolioFinalReportRenderCount?: number;
   __portfolioReleaseUnitCreate?: () => boolean;
   __portfolioReleaseSpaceCreate?: () => boolean;
   __portfolioReleaseTenancyMutation?: () => boolean;
@@ -1006,11 +1046,13 @@ type BrowserHarnessWindow = Window & {
   __portfolioReleaseMaintenanceMutation?: () => boolean;
   __portfolioReleaseInspectionOrchestration?: () => boolean;
   __portfolioReleaseInspectionEvidence?: () => boolean;
+  __portfolioReleaseInspectionLifecycle?: () => boolean;
 };
 
 const browserHarnessWindow = window as BrowserHarnessWindow;
 browserHarnessWindow.__portfolioBinaryReads = 0;
 browserHarnessWindow.__portfolioDocumentUploadCount = 0;
+browserHarnessWindow.__portfolioFinalReportRenderCount = 0;
 
 let heldUnitCreate:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
@@ -1037,6 +1079,9 @@ let heldInspectionOrchestration:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 let heldInspectionEvidence:
+  | { readonly response: Response; readonly resolve: (response: Response) => void }
+  | null = null;
+let heldInspectionLifecycle:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 
@@ -1141,6 +1186,17 @@ function maybeHoldInspectionEvidence(response: Response): Promise<Response> {
   });
 }
 
+function maybeHoldInspectionLifecycle(response: Response): Promise<Response> {
+  if (!browserHarnessWindow.__portfolioHoldInspectionLifecycle) {
+    return Promise.resolve(response);
+  }
+
+  browserHarnessWindow.__portfolioPendingInspectionLifecycle = true;
+  return new Promise<Response>((resolve) => {
+    heldInspectionLifecycle = { response, resolve };
+  });
+}
+
 browserHarnessWindow.__portfolioReleaseUnitCreate = () => {
   if (!heldUnitCreate) return false;
   const held = heldUnitCreate;
@@ -1228,6 +1284,16 @@ browserHarnessWindow.__portfolioReleaseInspectionEvidence = () => {
   heldInspectionEvidence = null;
   browserHarnessWindow.__portfolioHoldInspectionEvidence = false;
   browserHarnessWindow.__portfolioPendingInspectionEvidence = false;
+  held.resolve(held.response);
+  return true;
+};
+
+browserHarnessWindow.__portfolioReleaseInspectionLifecycle = () => {
+  if (!heldInspectionLifecycle) return false;
+  const held = heldInspectionLifecycle;
+  heldInspectionLifecycle = null;
+  browserHarnessWindow.__portfolioHoldInspectionLifecycle = false;
+  browserHarnessWindow.__portfolioPendingInspectionLifecycle = false;
   held.resolve(held.response);
   return true;
 };
