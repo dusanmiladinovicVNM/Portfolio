@@ -3528,13 +3528,21 @@ try {
     'Inspection conflict keeps working URL context',
   );
 
-  // Return the local draft to the canonical value so lifecycle writes start
-  // only from a clean field section.
-  await setInputValueXpath(sessionId, notesInput, 'Window scratch');
+  // Resolve the intentional CAS conflict through the actual UX path.
+  // Merely typing the canonical value would leave the field touched/dirty.
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Reload server version and discard local edits']",
+  );
   await waitForElement(
     sessionId,
     'xpath',
     "//*[contains(normalize-space(),'Section matches canonical server state')]",
+  );
+  assertEqual(
+    await elementValueXpath(sessionId, notesInput),
+    'Window scratch',
+    'Conflict reload restores canonical Inspection answer',
   );
 
   await executeScript(
