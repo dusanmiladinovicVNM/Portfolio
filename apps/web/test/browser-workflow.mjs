@@ -1618,13 +1618,15 @@ try {
     'xpath',
     "//a[contains(@class,'asset-card')][.//span[normalize-space()='AST-SETUP-BRW']][.//h3[normalize-space()='Setup Washer']]",
   );
+  const createdAssetUrl =
+    baseUrl +
+    '/properties/' + setupPropertyId +
+    '/units/' + setupUnitId +
+    '?tab=assets&assetId=' + setupAssetId +
+    '&asOf=2025-06-30';
   assertEqual(
     await currentUrl(sessionId),
-    baseUrl +
-      '/properties/' + setupPropertyId +
-      '/units/' + setupUnitId +
-      '?tab=assets&assetId=' + setupAssetId +
-      '&asOf=2025-06-30',
+    createdAssetUrl,
     'Created Asset deep-link',
   );
   await waitForElement(
@@ -1649,9 +1651,33 @@ try {
     assetMetadataForm + "//input[@name='model']",
     'W2',
   );
+  await executeScript(
+    sessionId,
+    'window.__portfolioHoldAssetMutation = true; return true;',
+  );
   await clickXpath(
     sessionId,
     assetMetadataForm + "//button[normalize-space()='Save metadata']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    'return window.__portfolioPendingAssetMutation === true;',
+    'held Asset metadata mutation',
+  );
+  await clickXpath(sessionId, "//a[normalize-space()='Spaces']");
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assertEqual(
+    await currentUrl(sessionId),
+    createdAssetUrl,
+    'Pending Asset write blocks tab navigation',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioReleaseAssetMutation();',
+    ),
+    true,
+    'Release held Asset metadata mutation',
   );
   await waitForElement(
     sessionId,
