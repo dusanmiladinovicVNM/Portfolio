@@ -237,11 +237,6 @@ export const finalizeInspectionRequestSchema = z.object({
   expectedVersion: z.number().int().positive(),
 });
 
-export const finalizeInspectionResponseSchema = z.object({
-  inspection: inspectionResponseSchema,
-  snapshot: inspectionFinalSnapshotResponseSchema,
-});
-
 export const inspectionEvidenceResponseSchema = z.object({
   id: entityIdSchema,
   inspectionId: entityIdSchema,
@@ -275,6 +270,11 @@ export const inspectionFinalSnapshotResponseSchema = z.object({
   contentRevision: z.number().int().nonnegative(),
   createdByUserId: entityIdSchema,
   createdAt: instantSchema,
+});
+
+export const finalizeInspectionResponseSchema = z.object({
+  inspection: inspectionResponseSchema,
+  snapshot: inspectionFinalSnapshotResponseSchema,
 });
 
 export type InspectionEvidenceResponse = z.infer<
