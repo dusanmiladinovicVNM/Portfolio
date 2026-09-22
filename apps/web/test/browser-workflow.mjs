@@ -18,6 +18,7 @@ const inspectionId = 'a1000000-0000-4000-8000-000000000001';
 const inspectionSectionId = 'a1000000-0000-4000-8000-000000000003';
 const setupPropertyId = 'b1000000-0000-4000-8000-000000000001';
 const setupUnitId = 'b1000000-0000-4000-8000-000000000002';
+const setupSpaceId = 'b1000000-0000-4000-8000-000000000003';
 const setupTenancyId = 'b1000000-0000-4000-8000-000000000007';
 const setupSignedAgreementId = 'b1000000-0000-4000-8000-000000000010';
 const setupSignedAmendmentId = 'b1000000-0000-4000-8000-000000000019';
@@ -26,6 +27,8 @@ const setupAmendmentDocumentId = 'b1000000-0000-4000-8000-000000000023';
 const setupAgreementDocumentId = 'b1000000-0000-4000-8000-000000000024';
 const setupAmendmentDocumentVersionId = 'b1000000-0000-4000-8000-000000000025';
 const setupAgreementDocumentVersionId = 'b1000000-0000-4000-8000-000000000026';
+const setupAssetId = 'b1000000-0000-4000-8000-000000000029';
+const setupReplacementAssetId = 'b1000000-0000-4000-8000-000000000030';
 
 const amendmentSignedFilePath = join(
   tmpdir(),
@@ -1569,6 +1572,218 @@ try {
     sessionId,
     'xpath',
     "//article[.//span[normalize-space()='TEN-CANCEL-BRW']]//span[contains(@class,'status-chip') and normalize-space()='cancelled']",
+  );
+
+  await clickXpath(sessionId, "//a[normalize-space()='Assets']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[@data-asset-form='create']",
+  );
+
+  const assetCreateForm = "//form[@data-asset-form='create']";
+  await typeXpath(
+    sessionId,
+    assetCreateForm + "//input[@name='code']",
+    'AST-SETUP-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    assetCreateForm + "//input[@name='name']",
+    'Setup Washer',
+  );
+  await typeXpath(
+    sessionId,
+    assetCreateForm + "//input[@name='manufacturer']",
+    'Bosch',
+  );
+  await typeXpath(
+    sessionId,
+    assetCreateForm + "//input[@name='model']",
+    'W1',
+  );
+  await typeXpath(
+    sessionId,
+    assetCreateForm +
+      "//div[contains(@class,'asset-identifier-row')]//input[@placeholder='Serial / inventory tag']",
+    'SN-SETUP-001',
+  );
+  await clickXpath(
+    sessionId,
+    assetCreateForm + "//button[normalize-space()='Create Asset']",
+  );
+
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'asset-card')][.//span[normalize-space()='AST-SETUP-BRW']][.//h3[normalize-space()='Setup Washer']]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=assets&assetId=' + setupAssetId +
+      '&asOf=2025-06-30',
+    'Created Asset deep-link',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'asset-admin-panel')]//h2[normalize-space()='AST-SETUP-BRW · Setup Washer']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Asset created']][.//span[contains(normalize-space(),'current')]]",
+  );
+
+  const assetMetadataForm = "//form[@data-asset-form='metadata']";
+  await typeXpath(
+    sessionId,
+    assetMetadataForm + "//input[@name='name']",
+    'Setup Washer 8 kg',
+  );
+  await typeXpath(
+    sessionId,
+    assetMetadataForm + "//input[@name='model']",
+    'W2',
+  );
+  await clickXpath(
+    sessionId,
+    assetMetadataForm + "//button[normalize-space()='Save metadata']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'asset-admin-panel')]//h2[normalize-space()='AST-SETUP-BRW · Setup Washer 8 kg']",
+  );
+
+  await clickXpath(
+    sessionId,
+    "//section[contains(@class,'asset-admin-panel')]//button[normalize-space()='Mark inactive']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'asset-admin-panel')]//span[contains(@class,'status-chip') and normalize-space()='inactive']",
+  );
+  await clickXpath(
+    sessionId,
+    "//section[contains(@class,'asset-admin-panel')]//button[normalize-space()='Reactivate']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'asset-admin-panel')]//span[contains(@class,'status-chip') and normalize-space()='active']",
+  );
+
+  const assetMoveForm = "//form[@data-asset-form='move']";
+  await waitForElement(
+    sessionId,
+    'xpath',
+    assetMoveForm +
+      "//select[@name='spaceId']/option[@value='" + setupSpaceId + "']",
+  );
+  await selectOptionXpath(
+    sessionId,
+    assetMoveForm + "//select[@name='spaceId']",
+    setupSpaceId,
+  );
+  await typeXpath(
+    sessionId,
+    assetMoveForm + "//input[@name='reason']",
+    'Moved into bedroom',
+  );
+  await clickXpath(
+    sessionId,
+    assetMoveForm + "//button[normalize-space()='Move Asset']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'asset-card')][.//span[normalize-space()='AST-SETUP-BRW']][.//dd[normalize-space()='Setup Bedroom']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Asset created']][.//span[contains(normalize-space(),'2027-10-01T09:00:00.000Z')]]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Moved']][.//span[contains(normalize-space(),'current')]][.//dd[normalize-space()='Moved into bedroom']]",
+  );
+
+  const assetReplacementForm = "//form[@data-asset-form='replace']";
+  await typeXpath(
+    sessionId,
+    assetReplacementForm + "//input[@name='code']",
+    'AST-REPLACEMENT-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    assetReplacementForm + "//input[@name='name']",
+    'Setup Washer Replacement',
+  );
+  await typeXpath(
+    sessionId,
+    assetReplacementForm + "//input[@name='manufacturer']",
+    'Siemens',
+  );
+  await typeXpath(
+    sessionId,
+    assetReplacementForm + "//input[@name='model']",
+    'S1',
+  );
+  await typeXpath(
+    sessionId,
+    assetReplacementForm +
+      "//div[contains(@class,'asset-identifier-row')]//input[@placeholder='Serial / inventory tag']",
+    'SN-SETUP-002',
+  );
+  await clickXpath(
+    sessionId,
+    assetReplacementForm +
+      "//button[normalize-space()='Create replacement Asset']",
+  );
+
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=assets&assetId=' + setupReplacementAssetId +
+      '&asOf=2025-06-30',
+    'Replacement successor deep-link',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'asset-card')][.//span[normalize-space()='AST-REPLACEMENT-BRW']][.//h3[normalize-space()='Setup Washer Replacement']][.//dd[normalize-space()='Setup Bedroom']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'asset-admin-panel')]//h2[normalize-space()='AST-REPLACEMENT-BRW · Setup Washer Replacement']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Replacement created']][.//span[contains(normalize-space(),'current')]]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'asset-admin-panel')]//dl[contains(@class,'detail-list')]//dd[normalize-space()='" + setupAssetId + "']",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//a[contains(@class,'asset-card')][.//span[normalize-space()='AST-SETUP-BRW']]",
+    ),
+    false,
+    'Replaced predecessor leaves the current Unit registry',
   );
 
   await clickXpath(sessionId, "//a[normalize-space()='Spaces']");
