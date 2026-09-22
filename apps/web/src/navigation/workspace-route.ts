@@ -41,6 +41,7 @@ export type WorkspaceRoute =
       readonly amendmentId?: string;
       readonly inspectionId?: string;
       readonly inspectionSectionId?: string;
+      readonly assetId?: string;
     };
 
 export function workspaceRouteOwnerKey(route: WorkspaceRoute): string {
@@ -115,6 +116,7 @@ export interface UnitRouteSelection {
   readonly amendmentId?: string;
   readonly inspectionId?: string;
   readonly inspectionSectionId?: string;
+  readonly assetId?: string;
 }
 
 export function unitRoute(
@@ -138,6 +140,8 @@ export function unitRoute(
     tab === 'inspections' && inspectionId
       ? selection.inspectionSectionId
       : undefined;
+  const assetId =
+    tab === 'assets' ? selection.assetId : undefined;
 
   return {
     kind: 'unit',
@@ -150,6 +154,7 @@ export function unitRoute(
     ...(amendmentId ? { amendmentId } : {}),
     ...(inspectionId ? { inspectionId } : {}),
     ...(inspectionSectionId ? { inspectionSectionId } : {}),
+    ...(assetId ? { assetId } : {}),
   };
 }
 
@@ -193,6 +198,10 @@ export function parseWorkspaceLocation(
         tab === 'inspections' && inspectionId
           ? readEntityId(search.get('sectionId') ?? undefined)
           : null;
+      const assetId =
+        tab === 'assets'
+          ? readEntityId(search.get('assetId') ?? undefined)
+          : null;
 
       return unitRoute(propertyId, unitId, asOf, tab, {
         ...(tenancyId ? { tenancyId } : {}),
@@ -200,6 +209,7 @@ export function parseWorkspaceLocation(
         ...(amendmentId ? { amendmentId } : {}),
         ...(inspectionId ? { inspectionId } : {}),
         ...(inspectionSectionId ? { inspectionSectionId } : {}),
+        ...(assetId ? { assetId } : {}),
       });
     }
   }
@@ -235,6 +245,9 @@ export function workspaceRouteHref(route: WorkspaceRoute): string {
       if (route.inspectionSectionId) {
         search.set('sectionId', route.inspectionSectionId);
       }
+    }
+    if (route.tab === 'assets' && route.assetId) {
+      search.set('assetId', route.assetId);
     }
   }
   search.set('asOf', route.asOf);
