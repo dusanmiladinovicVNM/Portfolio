@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process';
+import { rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const vitePort = 4174;
@@ -19,6 +21,19 @@ const setupUnitId = 'b1000000-0000-4000-8000-000000000002';
 const setupTenancyId = 'b1000000-0000-4000-8000-000000000007';
 const setupSignedAgreementId = 'b1000000-0000-4000-8000-000000000010';
 const setupReplacementAgreementId = 'b1000000-0000-4000-8000-000000000011';
+const setupAmendmentDocumentId = 'b1000000-0000-4000-8000-000000000023';
+const setupAgreementDocumentId = 'b1000000-0000-4000-8000-000000000024';
+const setupAmendmentDocumentVersionId = 'b1000000-0000-4000-8000-000000000025';
+const setupAgreementDocumentVersionId = 'b1000000-0000-4000-8000-000000000026';
+
+const amendmentSignedFilePath = join(
+  tmpdir(),
+  'portfolio-amendment-signed-original.pdf',
+);
+const agreementSignedFilePath = join(
+  tmpdir(),
+  'portfolio-agreement-signed-original.pdf',
+);
 
 const logs = [];
 
@@ -134,6 +149,14 @@ async function typeXpath(sessionId, xpath, value) {
   await webdriver(`/session/${sessionId}/element/${id}/value`, {
     method: 'POST',
     body: { text: value, value: [...value] },
+  });
+}
+
+async function setFileXpath(sessionId, xpath, filePath) {
+  const id = await waitForElement(sessionId, 'xpath', xpath);
+  await webdriver(`/session/${sessionId}/element/${id}/value`, {
+    method: 'POST',
+    body: { text: filePath, value: [...filePath] },
   });
 }
 
@@ -350,6 +373,17 @@ capture(driver, 'chromedriver');
 let sessionId;
 
 try {
+  await Promise.all([
+    writeFile(
+      amendmentSignedFilePath,
+      new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52, 10, 65, 77, 68]),
+    ),
+    writeFile(
+      agreementSignedFilePath,
+      new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52, 10, 65, 71, 82]),
+    ),
+  ]);
+
   await Promise.all([
     waitForHttp(`${baseUrl}/browser-harness.html?asOf=2025-06-30`),
     waitForHttp(`${driverUrl}/status`),
@@ -1696,6 +1730,10 @@ try {
   }
   process.exitCode = 1;
 } finally {
+  await Promise.all([
+    rm(amendmentSignedFilePath, { force: true }),
+    rm(agreementSignedFilePath, { force: true }),
+  ]);
   if (sessionId) {
     try {
       await webdriver(`/session/${sessionId}`, { method: 'DELETE' });
