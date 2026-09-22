@@ -205,6 +205,10 @@ function AgreementCreateForm({
   useEffect(() => {
     if (hasInitial && agreementType === 'initial') {
       setAgreementType('replacement');
+      return;
+    }
+    if (!hasInitial && agreementType !== 'initial') {
+      setAgreementType('initial');
     }
   }, [agreementType, hasInitial]);
 
