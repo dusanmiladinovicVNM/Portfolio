@@ -3134,6 +3134,61 @@ try {
   await waitForElement(sessionId, 'xpath', notesInput);
   await typeXpath(sessionId, notesInput, 'Window scratch');
 
+  const dirtyCreateForm =
+    "//form[@data-inspection-form='create']";
+  await typeXpath(
+    sessionId,
+    dirtyCreateForm + "//input[@name='code']",
+    'INS-DIRTY-BRW',
+  );
+  await selectOptionXpath(
+    sessionId,
+    dirtyCreateForm + "//select[@name='schemaVersionId']",
+    inspectionSchemaVersionId,
+  );
+  await selectOptionXpath(
+    sessionId,
+    dirtyCreateForm + "//select[@name='assignedToUserId']",
+    inspectionUserId,
+  );
+
+  const dirtyCreateButton =
+    dirtyCreateForm + "//button[normalize-space()='Create Inspection']";
+  assertEqual(
+    await elementDisabledXpath(sessionId, dirtyCreateButton),
+    true,
+    'Dirty field section disables Create Inspection',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Save or discard the current section before creating another Inspection.')]",
+  );
+
+  await executeScript(
+    sessionId,
+    'document.querySelector("form[data-inspection-form=\"create\"]").requestSubmit(); return true;',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'Programmatic create submit cannot replace dirty Inspection owner',
+  );
+  assertEqual(
+    await elementValueXpath(sessionId, notesInput),
+    'Window scratch',
+    'Dirty Inspection answer survives blocked Create Inspection',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//a[contains(@class,'inspection-card')][.//strong[normalize-space()='INS-DIRTY-BRW']]",
+    ),
+    false,
+    'Blocked dirty create does not create another Inspection',
+  );
+
   await clickAndDismissConfirm(
     sessionId,
     "//a[normalize-space()='Timeline']",
