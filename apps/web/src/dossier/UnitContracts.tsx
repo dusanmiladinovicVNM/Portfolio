@@ -12,7 +12,7 @@ import {
   type TenancyResponse,
   type TenancyTermVersionResponse,
 } from '@portfolio/contracts';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   agreementAmendmentsPath,
   agreementDocumentsPath,
@@ -349,6 +349,8 @@ export function UnitContracts({
   const [termsState, setTermsState] = useState<TermsState>({ kind: 'idle' });
   const [contractRevision, setContractRevision] = useState(0);
   const [documentRevision, setDocumentRevision] = useState(0);
+  const agreementDocumentsOwnerRef = useRef<string | null>(null);
+  const amendmentDocumentsOwnerRef = useRef<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -492,10 +494,18 @@ export function UnitContracts({
   }, [api, contractRevision, selectedAgreement]);
 
   useEffect(() => {
-    setAgreementDocuments(null);
     setAgreementDocumentsError(null);
 
-    if (!selectedAgreement) return;
+    if (!selectedAgreement) {
+      agreementDocumentsOwnerRef.current = null;
+      setAgreementDocuments(null);
+      return;
+    }
+
+    if (agreementDocumentsOwnerRef.current !== selectedAgreement.id) {
+      agreementDocumentsOwnerRef.current = selectedAgreement.id;
+      setAgreementDocuments(null);
+    }
 
     const controller = new AbortController();
     void api
@@ -527,9 +537,18 @@ export function UnitContracts({
     selectedAmendment === null;
 
   useEffect(() => {
-    setAmendmentDocuments(null);
     setAmendmentDocumentsError(null);
-    if (!selectedAmendment) return;
+
+    if (!selectedAmendment) {
+      amendmentDocumentsOwnerRef.current = null;
+      setAmendmentDocuments(null);
+      return;
+    }
+
+    if (amendmentDocumentsOwnerRef.current !== selectedAmendment.id) {
+      amendmentDocumentsOwnerRef.current = selectedAmendment.id;
+      setAmendmentDocuments(null);
+    }
 
     const controller = new AbortController();
     void api
