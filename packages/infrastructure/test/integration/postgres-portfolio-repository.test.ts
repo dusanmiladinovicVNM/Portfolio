@@ -453,10 +453,42 @@ describe('PostgreSQL infrastructure', () => {
           or has_table_privilege(roles.role_name, c.oid, 'insert')
           or has_table_privilege(roles.role_name, c.oid, 'update')
           or has_table_privilege(roles.role_name, c.oid, 'delete')
+          or has_table_privilege(roles.role_name, c.oid, 'truncate')
+          or has_table_privilege(roles.role_name, c.oid, 'references')
+          or has_table_privilege(roles.role_name, c.oid, 'trigger')
         )
       order by roles.role_name, c.relname
     `;
     expect(directRelationPrivileges).toEqual([]);
+
+    const directSequencePrivileges = await sql<{
+      role_name: string;
+      relname: string;
+    }[]>`
+      select roles.role_name, c.relname
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      cross join (values ('anon'), ('authenticated')) roles(role_name)
+      where n.nspname = 'public'
+        and c.relkind = 'S'
+        and (
+          has_sequence_privilege(roles.role_name, c.oid, 'usage')
+          or has_sequence_privilege(roles.role_name, c.oid, 'select')
+          or has_sequence_privilege(roles.role_name, c.oid, 'update')
+        )
+      order by roles.role_name, c.relname
+    `;
+    expect(directSequencePrivileges).toEqual([]);
+
+    const securityDefinerFunctions = await sql<{ routine: string }[]>`
+      select p.oid::regprocedure::text as routine
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public'
+        and p.prosecdef
+      order by routine
+    `;
+    expect(securityDefinerFunctions).toEqual([]);
 
     const directFunctionPrivileges = await sql<{
       role_name: string;
