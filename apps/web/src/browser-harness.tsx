@@ -147,6 +147,10 @@ const setupOrchestrationInspectionId =
   'b1000000-0000-4000-8000-000000000049';
 const setupOrchestrationOtherStaffId =
   'b1000000-0000-4000-8000-000000000050';
+const orchestrationPropertyId =
+  'd2000000-0000-4000-8000-000000000001';
+const orchestrationUnitId =
+  'd2000000-0000-4000-8000-000000000002';
 
 const setupDestinationUnit: UnitResponse = {
   id: setupDestinationUnitId,
@@ -205,6 +209,33 @@ const setupRecoverySpace: SpaceResponse = {
   areaM2: 30,
   sortOrder: 1,
   active: true,
+};
+
+const orchestrationProperty: PropertyResponse = {
+  id: orchestrationPropertyId,
+  code: 'PROP-ORCH-BRW',
+  name: 'Inspection Orchestration Property',
+  propertyType: 'apartment_building',
+  street: 'Orchestration Street',
+  houseNumber: '35',
+  postalCode: '8000',
+  city: 'Zurich',
+  countryCode: 'CH',
+  yearBuilt: 2026,
+  status: 'active',
+};
+
+const orchestrationUnit: UnitResponse = {
+  id: orchestrationUnitId,
+  propertyId: orchestrationPropertyId,
+  code: 'UNIT-ORCH-BRW',
+  unitNumber: '35A',
+  unitType: 'apartment',
+  floor: '3',
+  areaM2: 75,
+  rooms: 3,
+  status: 'active',
+  notes: '',
 };
 
 let setupProperty: PropertyResponse | null = null;
@@ -1799,12 +1830,29 @@ globalThis.fetch = async (
     });
   }
 
-  if (path === '/units/' + setupRecoveryUnitId + '/tenancies') {
+
+  if (path === '/properties/' + orchestrationPropertyId) {
+    return json(orchestrationProperty);
+  }
+
+  if (path === '/properties/' + orchestrationPropertyId + '/units') {
+    return json({ items: [orchestrationUnit] });
+  }
+
+  if (path === '/units/' + orchestrationUnitId) {
+    return json(orchestrationUnit);
+  }
+
+  if (path === '/units/' + orchestrationUnitId + '/spaces') {
+    return json({ items: [] });
+  }
+
+  if (path === '/units/' + orchestrationUnitId + '/tenancies') {
     return json({ items: [] });
   }
 
   if (
-    path === '/units/' + setupRecoveryUnitId + '/inspections' &&
+    path === '/units/' + orchestrationUnitId + '/inspections' &&
     (!init?.method || init.method === 'GET')
   ) {
     return json({
@@ -1815,7 +1863,7 @@ globalThis.fetch = async (
   }
 
   if (
-    path === '/units/' + setupRecoveryUnitId + '/inspections' &&
+    path === '/units/' + orchestrationUnitId + '/inspections' &&
     init?.method === 'POST'
   ) {
     requireInspectionAuth(init);
@@ -1834,14 +1882,14 @@ globalThis.fetch = async (
       body.assignedToUserId !== inspectionUserId
     ) {
       throw new Error(
-        'Recovery Inspection create targeted invalid orchestration context.',
+        'Orchestration Inspection create targeted invalid context.',
       );
     }
     setupOrchestrationInspection = {
       id: setupOrchestrationInspectionId,
       code: body.code,
       inspectionType: body.inspectionType,
-      unitId: setupRecoveryUnitId,
+      unitId: orchestrationUnitId,
       tenancyId: null,
       schemaVersionId: body.schemaVersionId,
       assignedToUserId: body.assignedToUserId,
@@ -1868,6 +1916,7 @@ globalThis.fetch = async (
 
     return json(setupOrchestrationInspection, 201);
   }
+
 
   if (
     setupUnit &&
@@ -3605,9 +3654,9 @@ globalThis.fetch = async (
           ? [
               {
                 inspection: setupOrchestrationInspection,
-                propertyId: setupRecoveryPropertyId,
-                unitCode: setupRecoveryUnit.code,
-                unitNumber: setupRecoveryUnit.unitNumber,
+                propertyId: orchestrationPropertyId,
+                unitCode: orchestrationUnit.code,
+                unitNumber: orchestrationUnit.unitNumber,
               },
             ]
           : []),
