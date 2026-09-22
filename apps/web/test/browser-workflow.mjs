@@ -17,6 +17,7 @@ const amendmentId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const inspectionId = 'a1000000-0000-4000-8000-000000000001';
 const inspectionSchemaVersionId = 'a1000000-0000-4000-8000-000000000002';
 const inspectionSectionId = 'a1000000-0000-4000-8000-000000000003';
+const inspectionNotesItemId = 'a1000000-0000-4000-8000-000000000005';
 const inspectionUserId = 'a1000000-0000-4000-8000-000000000006';
 const setupPropertyId = 'b1000000-0000-4000-8000-000000000001';
 const setupUnitId = 'b1000000-0000-4000-8000-000000000002';
@@ -56,6 +57,10 @@ const amendmentSignedFilePath = join(
 const agreementSignedFilePath = join(
   tmpdir(),
   'portfolio-agreement-signed-original.pdf',
+);
+const inspectionEvidencePhotoPath = join(
+  tmpdir(),
+  'portfolio-inspection-window-photo.jpg',
 );
 
 const logs = [];
@@ -418,6 +423,10 @@ try {
     writeFile(
       agreementSignedFilePath,
       new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52, 10, 65, 71, 82]),
+    ),
+    writeFile(
+      inspectionEvidencePhotoPath,
+      new Uint8Array([255, 216, 255, 224, 0, 16, 74, 70, 73, 70, 255, 217]),
     ),
   ]);
 
@@ -3189,6 +3198,79 @@ try {
     'Blocked dirty create does not create another Inspection',
   );
 
+  const findingForm =
+    "//form[@data-inspection-content-form='finding']";
+  await selectOptionXpath(
+    sessionId,
+    findingForm + "//select[@name='itemId']",
+    inspectionNotesItemId,
+  );
+  await typeXpath(
+    sessionId,
+    findingForm + "//input[@name='title']",
+    'Blocked dirty Finding',
+  );
+  await typeXpath(
+    sessionId,
+    findingForm + "//textarea[@name='description']",
+    'Must not be persisted while the section has local edits.',
+  );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      findingForm + "//button[normalize-space()='Record Finding']",
+    ),
+    true,
+    'Dirty section disables Finding write',
+  );
+  await executeScript(
+    sessionId,
+    "document.querySelector('form[data-inspection-content-form=\"finding\"]').requestSubmit(); return true;",
+  );
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//ul[contains(@class,'inspection-content-list')]//*[contains(normalize-space(),'Blocked dirty Finding')]",
+    ),
+    false,
+    'Programmatic Finding submit cannot bypass dirty-section guard',
+  );
+
+  const evidenceDocumentForm =
+    "//form[@data-inspection-content-form='evidence-document']";
+  await typeXpath(
+    sessionId,
+    evidenceDocumentForm + "//input[@name='code']",
+    'EVID-DIRTY-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    evidenceDocumentForm + "//input[@name='title']",
+    'Blocked dirty evidence',
+  );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      evidenceDocumentForm + "//button[normalize-space()='Create Document']",
+    ),
+    true,
+    'Dirty section disables Evidence Document write',
+  );
+  await executeScript(
+    sessionId,
+    "document.querySelector('form[data-inspection-content-form=\"evidence-document\"]').requestSubmit(); return true;",
+  );
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//select[@aria-label='Inspection evidence Document']/option[contains(normalize-space(),'EVID-DIRTY-BRW')]",
+    ),
+    false,
+    'Programmatic Evidence submit cannot bypass dirty-section guard',
+  );
+
   await clickAndDismissConfirm(
     sessionId,
     "//a[normalize-space()='Timeline']",
@@ -3218,6 +3300,190 @@ try {
     sessionId,
     'xpath',
     "//a[contains(@class,'inspection-section-link')][.//small[normalize-space()='revision 1']]",
+  );
+
+  await selectOptionXpath(
+    sessionId,
+    findingForm + "//select[@name='itemId']",
+    inspectionNotesItemId,
+  );
+  await selectOptionXpath(
+    sessionId,
+    findingForm + "//select[@name='severity']",
+    'major',
+  );
+  await setInputValueXpath(
+    sessionId,
+    findingForm + "//input[@name='title']",
+    'Recovered window Finding',
+  );
+  await setInputValueXpath(
+    sessionId,
+    findingForm + "//textarea[@name='description']",
+    'Canonical Finding after a lost acknowledgement.',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextInspectionFindingAfterCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    findingForm + "//button[normalize-space()='Record Finding']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Finding was committed and recovered from canonical Inspection state.')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//ul[contains(@class,'inspection-content-list')]//strong[contains(normalize-space(),'Recovered window Finding')]",
+  );
+
+  await setInputValueXpath(
+    sessionId,
+    evidenceDocumentForm + "//input[@name='code']",
+    'EVID-BRW-001',
+  );
+  await setInputValueXpath(
+    sessionId,
+    evidenceDocumentForm + "//input[@name='title']",
+    'Window scratch photo',
+  );
+  await clickXpath(
+    sessionId,
+    evidenceDocumentForm + "//button[normalize-space()='Create Document']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Evidence Document EVID-BRW-001 created.')]",
+  );
+
+  const evidenceUploadForm =
+    "//form[@data-inspection-content-form='evidence-upload']";
+  const evidenceFileInput =
+    evidenceUploadForm + "//input[@name='file' and not(@disabled)]";
+  await waitForElement(sessionId, 'xpath', evidenceFileInput);
+  const uploadsBeforeEvidence = await executeScript(
+    sessionId,
+    'return window.__portfolioDocumentUploadCount || 0;',
+  );
+  await setFileXpath(
+    sessionId,
+    evidenceFileInput,
+    inspectionEvidencePhotoPath,
+  );
+  await clickXpath(
+    sessionId,
+    evidenceUploadForm + "//button[normalize-space()='Upload version']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Version v1 stored. Attach this exact immutable binary')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    uploadsBeforeEvidence + 1,
+    'Inspection Evidence binary uploaded exactly once',
+  );
+
+  const evidenceAttachForm =
+    "//form[@data-inspection-content-form='evidence-attach']";
+  await waitForElement(
+    sessionId,
+    'xpath',
+    evidenceAttachForm +
+      "//button[normalize-space()='Attach exact version' and not(@disabled)]",
+  );
+  await setInputValueXpath(
+    sessionId,
+    evidenceAttachForm + "//textarea[@name='caption']",
+    'Window scratch photo',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioHoldInspectionEvidence = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    evidenceAttachForm + "//button[normalize-space()='Attach exact version']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    'return window.__portfolioPendingInspectionEvidence === true;',
+    'held Inspection Evidence relation',
+  );
+  await clickXpath(sessionId, "//a[normalize-space()='Timeline']");
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'Pending Inspection Evidence relation blocks dossier navigation',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioReleaseInspectionEvidence();',
+    ),
+    true,
+    'Release held Inspection Evidence relation',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//ul[contains(@class,'inspection-content-list')]//span[normalize-space()='Window scratch photo']",
+  );
+
+  const uploadsAfterFirstEvidence = await executeScript(
+    sessionId,
+    'return window.__portfolioDocumentUploadCount || 0;',
+  );
+  await selectOptionXpath(
+    sessionId,
+    evidenceAttachForm + "//select[@name='kind']",
+    'attachment',
+  );
+  await selectOptionXpath(
+    sessionId,
+    evidenceAttachForm + "//select[@name='scope']",
+    'inspection',
+  );
+  await setInputValueXpath(
+    sessionId,
+    evidenceAttachForm + "//textarea[@name='caption']",
+    'Lost acknowledgement relation',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextInspectionEvidenceAfterCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    evidenceAttachForm + "//button[normalize-space()='Attach exact version']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Evidence relation was committed and recovered.')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//ul[contains(@class,'inspection-content-list')]//span[normalize-space()='Lost acknowledgement relation']",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    uploadsAfterFirstEvidence,
+    'Lost Evidence-link acknowledgement never re-uploads the stored binary',
   );
 
   await typeXpath(sessionId, notesInput, 'conflict-edit');
@@ -3254,6 +3520,7 @@ try {
   await Promise.all([
     rm(amendmentSignedFilePath, { force: true }),
     rm(agreementSignedFilePath, { force: true }),
+    rm(inspectionEvidencePhotoPath, { force: true }),
   ]);
   if (sessionId) {
     try {
