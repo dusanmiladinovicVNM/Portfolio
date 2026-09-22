@@ -817,7 +817,7 @@ export function UnitInspections({
     event.preventDefault();
     if (!routeBundle || !selectedSection || !patch) return;
 
-    const targetInspectionId = bundle.inspection.id;
+    const targetInspectionId = routeBundle.inspection.id;
     const targetSectionId = selectedSection.id;
     const targetKey = inspectionSectionOperationKey(
       targetInspectionId,
@@ -1097,7 +1097,7 @@ export function UnitInspections({
                 >
                   <strong>{section.title}</strong>
                   <small>
-                    revision {sectionRevision(bundle, section.id)}
+                    revision {sectionRevision(routeBundle, section.id)}
                   </small>
                 </WorkspaceLink>
               ))}
