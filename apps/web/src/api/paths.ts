@@ -131,6 +131,32 @@ export function amendmentDocumentsPath(amendmentId: string): string {
   return `/amendments/${encodeURIComponent(amendmentId)}/documents`;
 }
 
+export function documentsPath(): string {
+  return '/documents';
+}
+
+export function documentPath(documentId: string): string {
+  return `/documents/${encodeURIComponent(documentId)}`;
+}
+
+export function documentVersionsPath(
+  documentId: string,
+  expectedDocumentRevision?: number,
+): string {
+  const base = `${documentPath(documentId)}/versions`;
+  return expectedDocumentRevision === undefined
+    ? base
+    : `${base}?expectedDocumentRevision=${encodeURIComponent(String(expectedDocumentRevision))}`;
+}
+
+export function documentLinksPath(documentId: string): string {
+  return `${documentPath(documentId)}/links`;
+}
+
+export function documentVersionFinalizePath(versionId: string): string {
+  return `/document-versions/${encodeURIComponent(versionId)}/finalize`;
+}
+
 export function documentVersionContentPath(versionId: string): string {
   return `/document-versions/${encodeURIComponent(versionId)}/content`;
 }
