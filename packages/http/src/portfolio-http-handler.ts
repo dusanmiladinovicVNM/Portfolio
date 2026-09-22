@@ -109,6 +109,7 @@ function errorStatus(code: string): number {
     code === 'DOCUMENT_BINARY_MISSING' ||
     code === 'DOCUMENT_STORAGE_REFERENCE_MISSING'
   ) return 502;
+  if (code === 'DOCUMENT_BINARY_UPLOAD_LIMIT_EXCEEDED') return 413;
   if (code === 'DOCUMENT_BINARY_DELIVERY_LIMIT_EXCEEDED') return 503;
   if (code.endsWith('_NOT_FOUND')) return 404;
   if (

@@ -1,4 +1,5 @@
 import {
+  ApplicationError,
   createDocumentCommand,
   DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
   finalizeDocumentVersionCommand,
@@ -255,10 +256,31 @@ export async function handleDocumentHttp(
       const url = new URL(request.url);
       const fileName = url.searchParams.get('fileName')?.trim();
       const mimeType = request.headers.get('content-type')?.split(';')[0]?.trim();
+      const expectedRevisionValue =
+        url.searchParams.get('expectedDocumentRevision')?.trim();
+      let expectedDocumentRevision: number | undefined;
+
+      if (expectedRevisionValue !== undefined) {
+        const parsedExpectedRevision = Number(expectedRevisionValue);
+        if (
+          !Number.isInteger(parsedExpectedRevision) ||
+          parsedExpectedRevision <= 0
+        ) {
+          return validationFailure();
+        }
+        expectedDocumentRevision = parsedExpectedRevision;
+      }
 
       if (!fileName || !mimeType) return validationFailure();
 
       const content = new Uint8Array(await request.arrayBuffer());
+      if (content.byteLength > DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY.maxBytes) {
+        throw new ApplicationError(
+          'DOCUMENT_BINARY_UPLOAD_LIMIT_EXCEEDED',
+          `Buffered Document upload supports files up to ${DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY.maxBytes} bytes until streaming upload is implemented.`,
+        );
+      }
+
       const version = await uploadDocumentVersionCommand(
         {
           documentRepository: deps.documentRepository,
@@ -271,6 +293,9 @@ export async function handleDocumentHttp(
           fileName,
           mimeType,
           content,
+          ...(expectedDocumentRevision === undefined
+            ? {}
+            : { expectedDocumentRevision }),
         },
       );
 

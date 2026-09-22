@@ -131,6 +131,38 @@ export function amendmentDocumentsPath(amendmentId: string): string {
   return `/amendments/${encodeURIComponent(amendmentId)}/documents`;
 }
 
+export function documentsPath(): string {
+  return '/documents';
+}
+
+export function documentPath(documentId: string): string {
+  return `/documents/${encodeURIComponent(documentId)}`;
+}
+
+export function documentVersionsPath(documentId: string): string {
+  return `${documentPath(documentId)}/versions`;
+}
+
+export function documentVersionUploadPath(
+  documentId: string,
+  fileName: string,
+  expectedDocumentRevision: number,
+): string {
+  const search = new URLSearchParams({
+    fileName,
+    expectedDocumentRevision: String(expectedDocumentRevision),
+  });
+  return `${documentVersionsPath(documentId)}?${search.toString()}`;
+}
+
+export function documentLinksPath(documentId: string): string {
+  return `${documentPath(documentId)}/links`;
+}
+
+export function documentVersionFinalizePath(versionId: string): string {
+  return `/document-versions/${encodeURIComponent(versionId)}/finalize`;
+}
+
 export function documentVersionContentPath(versionId: string): string {
   return `/document-versions/${encodeURIComponent(versionId)}/content`;
 }

@@ -154,6 +154,48 @@ describe('Portfolio API client', () => {
   });
 
 
+  it('uploads authenticated binary content without JSON encoding', async () => {
+    const requests: Request[] = [];
+    const fetchImpl = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        requests.push(request);
+        return new Response(
+          JSON.stringify({ data: 'stored' }),
+          {
+            status: 201,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        );
+      },
+    );
+
+    const api = createPortfolioApi({
+      baseUrl: 'https://portfolio.test/api',
+      getAccessToken: () => 'token-123',
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+
+    const blob = new Blob([new Uint8Array([1, 2, 3])], {
+      type: 'application/pdf',
+    });
+
+    await expect(
+      api.postBinary(
+        '/documents/doc/versions?fileName=lease.pdf&expectedDocumentRevision=1',
+        blob,
+        stringSchema,
+      ),
+    ).resolves.toBe('stored');
+
+    expect(requests).toHaveLength(1);
+    const request = requests[0]!;
+    expect(request.method).toBe('POST');
+    expect(request.headers.get('authorization')).toBe('Bearer token-123');
+    expect(request.headers.get('content-type')).toBe('application/pdf');
+    expect([...new Uint8Array(await request.arrayBuffer())]).toEqual([1, 2, 3]);
+  });
+
   it('sends authenticated JSON POST and PATCH requests through the same error boundary', async () => {
     const requests: Request[] = [];
     const fetchImpl = vi.fn(

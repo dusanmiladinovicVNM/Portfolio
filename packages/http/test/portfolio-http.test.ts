@@ -2587,7 +2587,7 @@ describe('Portfolio HTTP boundary', () => {
 
     const uploaded = await handler(
       new Request(
-        `https://portfolio.test/documents/${document.id}/versions?fileName=lease.pdf`,
+        `https://portfolio.test/documents/${document.id}/versions?fileName=lease.pdf&expectedDocumentRevision=1`,
         {
           method: 'POST',
           headers: { 'content-type': 'application/pdf' },
@@ -2605,6 +2605,38 @@ describe('Portfolio HTTP boundary', () => {
     expect(version).toMatchObject({
       versionNumber: 1,
       status: 'stored',
+    });
+
+    const staleUpload = await handler(
+      new Request(
+        `https://portfolio.test/documents/${document.id}/versions?fileName=stale.pdf&expectedDocumentRevision=1`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/pdf' },
+          body: new Uint8Array([9]),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(staleUpload.status).toBe(409);
+    expect(await staleUpload.json()).toMatchObject({
+      error: { code: 'DOCUMENT_VERSION_CONFLICT' },
+    });
+
+    const oversizedUpload = await handler(
+      new Request(
+        `https://portfolio.test/documents/${document.id}/versions?fileName=oversized.pdf&expectedDocumentRevision=2`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/pdf' },
+          body: new Uint8Array(16 * 1024 * 1024 + 1),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(oversizedUpload.status).toBe(413);
+    expect(await oversizedUpload.json()).toMatchObject({
+      error: { code: 'DOCUMENT_BINARY_UPLOAD_LIMIT_EXCEEDED' },
     });
 
     const storedContent = await handler(

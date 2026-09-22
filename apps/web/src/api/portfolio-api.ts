@@ -40,6 +40,12 @@ export interface PortfolioApi {
     schema: ResponseSchema<T>,
     options?: PortfolioApiRequestOptions,
   ): Promise<T>;
+  postBinary<T>(
+    path: string,
+    body: Blob,
+    schema: ResponseSchema<T>,
+    options?: PortfolioApiRequestOptions,
+  ): Promise<T>;
   patch<T>(
     path: string,
     body: unknown,
@@ -193,6 +199,26 @@ export function createPortfolioApi(options: PortfolioApiOptions): PortfolioApi {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
+        ...requestSignal(requestOptions),
+      });
+      return parseDataResponse(response, schema);
+    },
+
+    async postBinary<T>(
+      path: string,
+      body: Blob,
+      schema: ResponseSchema<T>,
+      requestOptions?: PortfolioApiRequestOptions,
+    ): Promise<T> {
+      const accessToken = requireAccessToken(options);
+      const response = await fetchImpl(joinPath(options.baseUrl, path), {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': body.type || 'application/octet-stream',
+        },
+        body,
         ...requestSignal(requestOptions),
       });
       return parseDataResponse(response, schema);

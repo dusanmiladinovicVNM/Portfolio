@@ -12,7 +12,7 @@ import {
   type TenancyResponse,
   type TenancyTermVersionResponse,
 } from '@portfolio/contracts';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   agreementAmendmentsPath,
   agreementDocumentsPath,
@@ -32,6 +32,11 @@ import {
 } from '../navigation/workspace-route.js';
 import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
 import { DocumentBinaryActions } from '../documents/DocumentBinaryActions.js';
+import { SignedDocumentAdministration } from '../documents/SignedDocumentAdministration.js';
+import {
+  assertAgreementDocumentReferencesOwner,
+  assertAmendmentDocumentReferencesOwner,
+} from '../documents/signed-document-owner.js';
 import {
   formatDetailKey,
   formatExactMoney,
@@ -347,6 +352,9 @@ export function UnitContracts({
     useState<string | null>(null);
   const [termsState, setTermsState] = useState<TermsState>({ kind: 'idle' });
   const [contractRevision, setContractRevision] = useState(0);
+  const [documentRevision, setDocumentRevision] = useState(0);
+  const agreementDocumentsOwnerRef = useRef<string | null>(null);
+  const amendmentDocumentsOwnerRef = useRef<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -462,10 +470,6 @@ export function UnitContracts({
   useEffect(() => {
     setAmendments(null);
     setAmendmentError(null);
-    setAgreementDocuments(null);
-    setAgreementDocumentsError(null);
-    setAmendmentDocuments(null);
-    setAmendmentDocumentsError(null);
 
     if (!selectedAgreement) return;
 
@@ -490,13 +494,37 @@ export function UnitContracts({
         );
       });
 
+    return () => controller.abort();
+  }, [api, contractRevision, selectedAgreement]);
+
+  useEffect(() => {
+    setAgreementDocumentsError(null);
+
+    if (!selectedAgreement) {
+      agreementDocumentsOwnerRef.current = null;
+      setAgreementDocuments(null);
+      return;
+    }
+
+    if (agreementDocumentsOwnerRef.current !== selectedAgreement.id) {
+      agreementDocumentsOwnerRef.current = selectedAgreement.id;
+      setAgreementDocuments(null);
+    }
+
+    const controller = new AbortController();
     void api
       .get(
         agreementDocumentsPath(selectedAgreement.id),
         leaseAgreementDocumentListResponseSchema,
         { signal: controller.signal },
       )
-      .then((response) => setAgreementDocuments(response.items))
+      .then((response) => {
+        assertAgreementDocumentReferencesOwner(
+          selectedAgreement.id,
+          response.items,
+        );
+        setAgreementDocuments(response.items);
+      })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
         setAgreementDocumentsError(
@@ -507,7 +535,7 @@ export function UnitContracts({
       });
 
     return () => controller.abort();
-  }, [api, contractRevision, selectedAgreement]);
+  }, [api, documentRevision, selectedAgreement]);
 
   const selectedAmendment = useMemo(
     () => amendments?.find((item) => item.id === amendmentId) ?? null,
@@ -519,9 +547,18 @@ export function UnitContracts({
     selectedAmendment === null;
 
   useEffect(() => {
-    setAmendmentDocuments(null);
     setAmendmentDocumentsError(null);
-    if (!selectedAmendment) return;
+
+    if (!selectedAmendment) {
+      amendmentDocumentsOwnerRef.current = null;
+      setAmendmentDocuments(null);
+      return;
+    }
+
+    if (amendmentDocumentsOwnerRef.current !== selectedAmendment.id) {
+      amendmentDocumentsOwnerRef.current = selectedAmendment.id;
+      setAmendmentDocuments(null);
+    }
 
     const controller = new AbortController();
     void api
@@ -530,7 +567,13 @@ export function UnitContracts({
         leaseAmendmentDocumentListResponseSchema,
         { signal: controller.signal },
       )
-      .then((response) => setAmendmentDocuments(response.items))
+      .then((response) => {
+        assertAmendmentDocumentReferencesOwner(
+          selectedAmendment.id,
+          response.items,
+        );
+        setAmendmentDocuments(response.items);
+      })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
         setAmendmentDocumentsError(
@@ -541,7 +584,7 @@ export function UnitContracts({
       });
 
     return () => controller.abort();
-  }, [api, contractRevision, selectedAmendment]);
+  }, [api, documentRevision, selectedAmendment]);
 
   return (
     <div className="contract-stack">
@@ -764,6 +807,27 @@ export function UnitContracts({
               items={agreementDocuments}
               label="Agreement legal record"
             />
+            {agreementDocuments !== null &&
+            agreementDocumentsError === null &&
+            ['signed', 'superseded', 'terminated'].includes(
+              selectedAgreement.status,
+            ) &&
+            !agreementDocuments.some(
+              (reference) => reference.link.relation === 'signed_original',
+            ) ? (
+              <SignedDocumentAdministration
+                api={api}
+                key={`signed-document:agreement:${selectedAgreement.id}`}
+                onCanonicalWrite={() =>
+                  setDocumentRevision((revision) => revision + 1)
+                }
+                target={{
+                  targetType: 'lease_agreement',
+                  targetId: selectedAgreement.id,
+                  code: selectedAgreement.code,
+                }}
+              />
+            ) : null}
           </section>
 
           <section className="panel">
@@ -818,6 +882,25 @@ export function UnitContracts({
             items={amendmentDocuments}
             label="Amendment legal record"
           />
+          {amendmentDocuments !== null &&
+          amendmentDocumentsError === null &&
+          selectedAmendment.status === 'signed' &&
+          !amendmentDocuments.some(
+            (reference) => reference.link.relation === 'signed_original',
+          ) ? (
+            <SignedDocumentAdministration
+              api={api}
+              key={`signed-document:amendment:${selectedAmendment.id}`}
+              onCanonicalWrite={() =>
+                setDocumentRevision((revision) => revision + 1)
+              }
+              target={{
+                targetType: 'lease_amendment',
+                targetId: selectedAmendment.id,
+                code: selectedAmendment.code,
+              }}
+            />
+          ) : null}
         </section>
       ) : null}
     </div>

@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process';
+import { rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const vitePort = 4174;
@@ -18,7 +20,21 @@ const setupPropertyId = 'b1000000-0000-4000-8000-000000000001';
 const setupUnitId = 'b1000000-0000-4000-8000-000000000002';
 const setupTenancyId = 'b1000000-0000-4000-8000-000000000007';
 const setupSignedAgreementId = 'b1000000-0000-4000-8000-000000000010';
+const setupSignedAmendmentId = 'b1000000-0000-4000-8000-000000000019';
 const setupReplacementAgreementId = 'b1000000-0000-4000-8000-000000000011';
+const setupAmendmentDocumentId = 'b1000000-0000-4000-8000-000000000023';
+const setupAgreementDocumentId = 'b1000000-0000-4000-8000-000000000024';
+const setupAmendmentDocumentVersionId = 'b1000000-0000-4000-8000-000000000025';
+const setupAgreementDocumentVersionId = 'b1000000-0000-4000-8000-000000000026';
+
+const amendmentSignedFilePath = join(
+  tmpdir(),
+  'portfolio-amendment-signed-original.pdf',
+);
+const agreementSignedFilePath = join(
+  tmpdir(),
+  'portfolio-agreement-signed-original.pdf',
+);
 
 const logs = [];
 
@@ -134,6 +150,14 @@ async function typeXpath(sessionId, xpath, value) {
   await webdriver(`/session/${sessionId}/element/${id}/value`, {
     method: 'POST',
     body: { text: value, value: [...value] },
+  });
+}
+
+async function setFileXpath(sessionId, xpath, filePath) {
+  const id = await waitForElement(sessionId, 'xpath', xpath);
+  await webdriver(`/session/${sessionId}/element/${id}/value`, {
+    method: 'POST',
+    body: { text: filePath, value: [...filePath] },
   });
 }
 
@@ -350,6 +374,17 @@ capture(driver, 'chromedriver');
 let sessionId;
 
 try {
+  await Promise.all([
+    writeFile(
+      amendmentSignedFilePath,
+      new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52, 10, 65, 77, 68]),
+    ),
+    writeFile(
+      agreementSignedFilePath,
+      new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52, 10, 65, 71, 82]),
+    ),
+  ]);
+
   await Promise.all([
     waitForHttp(`${baseUrl}/browser-harness.html?asOf=2025-06-30`),
     waitForHttp(`${driverUrl}/status`),
@@ -1002,6 +1037,113 @@ try {
     "//a[contains(@class,'amendment-card')][.//strong[normalize-space()='AMD-SETUP-BRW']][.//dd[normalize-space()='Signed']]",
   );
 
+  const amendmentDocumentsSection =
+    "//section[.//p[normalize-space()='Step 5 · Amendment Documents']]";
+  const amendmentDocumentCreateForm =
+    amendmentDocumentsSection +
+    "//form[@data-signed-document-form='create']";
+  const amendmentDocumentUploadForm =
+    amendmentDocumentsSection +
+    "//form[@data-signed-document-form='upload']";
+
+  await waitForElement(
+    sessionId,
+    'xpath',
+    amendmentDocumentCreateForm,
+  );
+  await typeXpath(
+    sessionId,
+    amendmentDocumentCreateForm + "//input[@name='code']",
+    'DOC-AMD-SETUP-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    amendmentDocumentCreateForm + "//input[@name='title']",
+    'Signed amendment browser original',
+  );
+  await clickXpath(
+    sessionId,
+    amendmentDocumentCreateForm +
+      "//button[normalize-space()='Create Document']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    amendmentDocumentsSection +
+      "//select[@aria-label='Signed original Document']" +
+      "/option[@value='" + setupAmendmentDocumentId + "']",
+  );
+  await selectOptionXpath(
+    sessionId,
+    amendmentDocumentsSection +
+      "//select[@aria-label='Signed original Document']",
+    setupAmendmentDocumentId,
+  );
+  await setFileXpath(
+    sessionId,
+    amendmentDocumentUploadForm + "//input[@name='file']",
+    amendmentSignedFilePath,
+  );
+  await clickXpath(
+    sessionId,
+    amendmentDocumentUploadForm +
+      "//button[normalize-space()='Upload version']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    amendmentDocumentsSection +
+      "//select[@aria-label='Signed original Document version']" +
+      "/option[@value='" + setupAmendmentDocumentVersionId + "']",
+  );
+  await selectOptionXpath(
+    sessionId,
+    amendmentDocumentsSection +
+      "//select[@aria-label='Signed original Document version']",
+    setupAmendmentDocumentVersionId,
+  );
+  await clickXpath(
+    sessionId,
+    amendmentDocumentsSection +
+      "//button[normalize-space()='Finalize version']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    amendmentDocumentsSection +
+      "//select[@aria-label='Signed original Document version']" +
+      "/option[@value='" + setupAmendmentDocumentVersionId +
+      "' and contains(normalize-space(),'final')]",
+  );
+  await clickXpath(
+    sessionId,
+    amendmentDocumentsSection +
+      "//button[normalize-space()='Link signed original to AMD-SETUP-BRW']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    amendmentDocumentsSection +
+      "//*[normalize-space()='portfolio-amendment-signed-original.pdf']",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    1,
+    'Amendment signed-original upload count',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      amendmentDocumentsSection +
+        "//form[@data-signed-document-form='create']",
+    ),
+    false,
+    'Amendment signed-original workflow closes after canonical link reread',
+  );
+
   await navigateWithPopState(
     sessionId,
     '/properties/' + setupPropertyId +
@@ -1151,6 +1293,197 @@ try {
     false,
     'No stale draft Agreement sign form survives successful replacement sign',
   );
+
+  const agreementDocumentsSection =
+    "//section[.//p[normalize-space()='Step 3 · Agreement Documents']]";
+  const agreementDocumentCreateForm =
+    agreementDocumentsSection +
+    "//form[@data-signed-document-form='create']";
+  const agreementDocumentUploadForm =
+    agreementDocumentsSection +
+    "//form[@data-signed-document-form='upload']";
+
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementDocumentCreateForm,
+  );
+  await typeXpath(
+    sessionId,
+    agreementDocumentCreateForm + "//input[@name='code']",
+    'DOC-AGR-RECOVER-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    agreementDocumentCreateForm + "//input[@name='title']",
+    'Replacement signed lease recovery',
+  );
+  await clickXpath(
+    sessionId,
+    agreementDocumentCreateForm +
+      "//button[normalize-space()='Create Document']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementDocumentsSection +
+      "//select[@aria-label='Signed original Document']" +
+      "/option[@value='" + setupAgreementDocumentId + "']",
+  );
+  await selectOptionXpath(
+    sessionId,
+    agreementDocumentsSection +
+      "//select[@aria-label='Signed original Document']",
+    setupAgreementDocumentId,
+  );
+  await setFileXpath(
+    sessionId,
+    agreementDocumentUploadForm + "//input[@name='file']",
+    agreementSignedFilePath,
+  );
+  await clickXpath(
+    sessionId,
+    agreementDocumentUploadForm +
+      "//button[normalize-space()='Upload version']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementDocumentsSection +
+      "//select[@aria-label='Signed original Document version']" +
+      "/option[@value='" + setupAgreementDocumentVersionId + "']",
+  );
+  await selectOptionXpath(
+    sessionId,
+    agreementDocumentsSection +
+      "//select[@aria-label='Signed original Document version']",
+    setupAgreementDocumentVersionId,
+  );
+  await clickXpath(
+    sessionId,
+    agreementDocumentsSection +
+      "//button[normalize-space()='Finalize version']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementDocumentsSection +
+      "//select[@aria-label='Signed original Document version']" +
+      "/option[@value='" + setupAgreementDocumentVersionId +
+      "' and contains(normalize-space(),'final')]",
+  );
+
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextSignedOriginalLink = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    agreementDocumentsSection +
+      "//button[normalize-space()='Link signed original to AGR-REPLACEMENT-BRW']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementDocumentsSection +
+      "//*[normalize-space()='Intentional browser-harness link failure.']",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    2,
+    'Agreement failed-link upload count before recovery',
+  );
+
+  const setupTenanciesRecoveryPath =
+    '/properties/' + setupPropertyId +
+    '/units/' + setupUnitId +
+    '?tab=tenancies&asOf=2027-02-01';
+  await navigateWithPopState(sessionId, setupTenanciesRecoveryPath);
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//span[contains(@class,'status-chip') and normalize-space()='active']",
+  );
+
+  const replacementContractRecoveryPath =
+    '/properties/' + setupPropertyId +
+    '/units/' + setupUnitId +
+    '?tab=contracts&tenancyId=' + setupTenancyId +
+    '&agreementId=' + setupReplacementAgreementId +
+    '&asOf=2027-02-01';
+  await navigateWithPopState(sessionId, replacementContractRecoveryPath);
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementDocumentCreateForm,
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementDocumentsSection +
+      "//select[@aria-label='Signed original Document']" +
+      "/option[@value='" + setupAgreementDocumentId + "']",
+  );
+  await selectOptionXpath(
+    sessionId,
+    agreementDocumentsSection +
+      "//select[@aria-label='Signed original Document']",
+    setupAgreementDocumentId,
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementDocumentsSection +
+      "//select[@aria-label='Signed original Document version']" +
+      "/option[@value='" + setupAgreementDocumentVersionId +
+      "' and contains(normalize-space(),'final')]",
+  );
+  await selectOptionXpath(
+    sessionId,
+    agreementDocumentsSection +
+      "//select[@aria-label='Signed original Document version']",
+    setupAgreementDocumentVersionId,
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    2,
+    'Recovery remount does not re-upload finalized Agreement binary',
+  );
+  await clickXpath(
+    sessionId,
+    agreementDocumentsSection +
+      "//button[normalize-space()='Link signed original to AGR-REPLACEMENT-BRW']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementDocumentsSection +
+      "//*[normalize-space()='portfolio-agreement-signed-original.pdf']",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    2,
+    'Successful recovery link reuses existing final DocumentVersion',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      agreementDocumentsSection +
+        "//form[@data-signed-document-form='create']",
+    ),
+    false,
+    'Agreement signed-original workflow closes after recovery link',
+  );
+
 
   await navigateWithPopState(
     sessionId,
@@ -1696,6 +2029,10 @@ try {
   }
   process.exitCode = 1;
 } finally {
+  await Promise.all([
+    rm(amendmentSignedFilePath, { force: true }),
+    rm(agreementSignedFilePath, { force: true }),
+  ]);
   if (sessionId) {
     try {
       await webdriver(`/session/${sessionId}`, { method: 'DELETE' });
