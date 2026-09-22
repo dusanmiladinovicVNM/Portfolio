@@ -636,6 +636,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioHoldTenancyMutation?: boolean;
   __portfolioHoldContractMutation?: boolean;
   __portfolioHoldAssetMutation?: boolean;
+  __portfolioFailNextAssetReplacementAfterCommit?: boolean;
   __portfolioFailNextSignedOriginalLink?: boolean;
   __portfolioPendingUnitCreate?: boolean;
   __portfolioPendingSpaceCreate?: boolean;
@@ -1377,6 +1378,16 @@ globalThis.fetch = async (
       asset.id === predecessor.id ? predecessor : asset,
     );
     setupAssets.push(successor);
+
+    if (browserHarnessWindow.__portfolioFailNextAssetReplacementAfterCommit) {
+      browserHarnessWindow.__portfolioFailNextAssetReplacementAfterCommit = false;
+      return apiError(
+        503,
+        'ASSET_REPLACEMENT_TEST_ACK_LOST',
+        'Intentional browser-harness replacement acknowledgement loss.',
+      );
+    }
+
     return json(
       {
         replacedAsset: predecessor,
