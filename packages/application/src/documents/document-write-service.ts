@@ -210,16 +210,63 @@ export async function uploadDocumentVersionRecord(
       if (persisted) {
         const persistedStorage =
           await deps.documentRepository.getStorageReference(versionId);
-        if (
-          persistedStorage &&
-          storageReferenceMatches(persistedStorage, storage) &&
+        const sameVersionRegistration =
+          persistedStorage !== null &&
           persisted.documentId === added.version.documentId &&
           persisted.versionNumber === added.version.versionNumber &&
           persisted.fileName === added.version.fileName &&
           persisted.mimeType === added.version.mimeType &&
-          storageMatchesVersion(stored, persisted)
-        ) {
-          return persisted;
+          storageMatchesVersion(stored, persisted);
+
+        if (sameVersionRegistration && persistedStorage) {
+          if (storageReferenceMatches(persistedStorage, storage)) {
+            return persisted;
+          }
+
+          if (stored.disposition === 'created') {
+            let canonicalMetadata: StorageObjectMetadata | null;
+            try {
+              canonicalMetadata = await deps.fileStorage.stat(
+                persistedStorage,
+              );
+            } catch {
+              throw new ApplicationError(
+                'DOCUMENT_STORAGE_RECONCILIATION_REQUIRED',
+                'A concurrent DocumentVersion winner exists but its canonical storage object could not be verified. The losing upload was preserved for reconciliation.',
+              );
+            }
+
+            if (!canonicalMetadata) {
+              throw new ApplicationError(
+                'DOCUMENT_STORAGE_RECONCILIATION_REQUIRED',
+                'A concurrent DocumentVersion winner exists but its canonical storage object is missing. The losing upload was preserved for reconciliation.',
+              );
+            }
+
+            try {
+              assertStorageObjectMatchesVersion(
+                canonicalMetadata,
+                persistedStorage,
+                persisted,
+              );
+            } catch {
+              throw new ApplicationError(
+                'DOCUMENT_STORAGE_RECONCILIATION_REQUIRED',
+                'A concurrent DocumentVersion winner exists but canonical storage does not match it. The losing upload was preserved for reconciliation.',
+              );
+            }
+
+            try {
+              await deps.fileStorage.remove(storage);
+            } catch {
+              throw new ApplicationError(
+                'DOCUMENT_STORAGE_COMPENSATION_FAILED',
+                'A concurrent DocumentVersion winner was verified but the losing newly created storage object could not be removed.',
+              );
+            }
+
+            return persisted;
+          }
         }
 
         throw new ApplicationError(
