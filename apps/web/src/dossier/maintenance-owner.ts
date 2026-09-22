@@ -174,6 +174,9 @@ export function assertMaintenanceIssueTerminal(
   }
   const expectedStatus = action === 'resolve' ? 'resolved' : 'cancelled';
   if (
+    response.title !== current.title ||
+    response.description !== current.description ||
+    response.priority !== current.priority ||
     response.status !== expectedStatus ||
     response.version !== current.version + 1 ||
     (action === 'resolve'
@@ -270,10 +273,15 @@ export function assertMaintenanceWorkOrderAssignment(
     );
   }
   if (
+    response.title !== current.title ||
+    response.description !== current.description ||
     response.assignee?.kind !== 'party' ||
     response.assignee.partyId !== partyId ||
     response.status !== 'assigned' ||
     response.assignedAt === null ||
+    response.startedAt !== current.startedAt ||
+    response.completedAt !== current.completedAt ||
+    response.cancelledAt !== current.cancelledAt ||
     response.version !== current.version + 1
   ) {
     throw new Error(
@@ -298,19 +306,50 @@ export function assertMaintenanceWorkOrderTransition(
       : action === 'complete'
         ? 'completed'
         : 'cancelled';
-  if (response.status !== status || response.version !== current.version + 1) {
+  const sameAssignee =
+    response.assignee?.kind === current.assignee?.kind &&
+    (response.assignee?.kind === 'party' &&
+    current.assignee?.kind === 'party'
+      ? response.assignee.partyId === current.assignee.partyId
+      : response.assignee?.kind === 'user' &&
+          current.assignee?.kind === 'user'
+        ? response.assignee.userId === current.assignee.userId
+        : response.assignee === null && current.assignee === null);
+  if (
+    response.title !== current.title ||
+    response.description !== current.description ||
+    !sameAssignee ||
+    response.assignedAt !== current.assignedAt ||
+    response.status !== status ||
+    response.version !== current.version + 1
+  ) {
     throw new Error(
       'Maintenance WorkOrder transition response has the wrong lifecycle state.',
     );
   }
-  if (action === 'start' && response.startedAt === null) {
-    throw new Error('Started WorkOrder response is missing startedAt.');
+  if (
+    action === 'start' &&
+    (response.startedAt === null ||
+      response.completedAt !== current.completedAt ||
+      response.cancelledAt !== current.cancelledAt)
+  ) {
+    throw new Error('Started WorkOrder response has invalid lifecycle timestamps.');
   }
-  if (action === 'complete' && response.completedAt === null) {
-    throw new Error('Completed WorkOrder response is missing completedAt.');
+  if (
+    action === 'complete' &&
+    (response.startedAt !== current.startedAt ||
+      response.completedAt === null ||
+      response.cancelledAt !== current.cancelledAt)
+  ) {
+    throw new Error('Completed WorkOrder response has invalid lifecycle timestamps.');
   }
-  if (action === 'cancel' && response.cancelledAt === null) {
-    throw new Error('Cancelled WorkOrder response is missing cancelledAt.');
+  if (
+    action === 'cancel' &&
+    (response.startedAt !== current.startedAt ||
+      response.completedAt !== current.completedAt ||
+      response.cancelledAt === null)
+  ) {
+    throw new Error('Cancelled WorkOrder response has invalid lifecycle timestamps.');
   }
 }
 
