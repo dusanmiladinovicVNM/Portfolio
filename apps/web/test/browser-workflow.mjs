@@ -808,9 +808,62 @@ try {
     agreementSignForm + "//input[@name='serviceCharge']",
     '150.00',
   );
+  await executeScript(
+    sessionId,
+    'window.__portfolioHoldContractMutation = true; return true;',
+  );
   await clickXpath(
     sessionId,
     agreementSignForm + "//button[normalize-space()='Sign Agreement']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    'return window.__portfolioPendingContractMutation === true;',
+    'held Agreement sign',
+  );
+
+  const existingContractPath =
+    '/properties/' + propertyId +
+    '/units/' + unitId +
+    '?tab=contracts&tenancyId=' + tenancyId +
+    '&agreementId=' + agreementId +
+    '&asOf=2025-06-30';
+  await navigateWithPopState(sessionId, existingContractPath);
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'agreement-card')][.//span[normalize-space()='AGR-BRW']]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioReleaseContractMutation();',
+    ),
+    true,
+    'Release held Agreement sign',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl + existingContractPath,
+    'Late Agreement completion keeps new Unit owner',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//a[contains(@class,'agreement-card')][.//span[normalize-space()='AGR-SETUP-BRW']]",
+    ),
+    false,
+    'Late Agreement completion cannot mutate the new Unit Contract workspace',
+  );
+
+  await navigateWithPopState(
+    sessionId,
+    '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=contracts&tenancyId=' + setupTenancyId +
+      '&agreementId=' + setupSignedAgreementId +
+      '&asOf=2025-06-30',
   );
   await waitForElement(
     sessionId,
