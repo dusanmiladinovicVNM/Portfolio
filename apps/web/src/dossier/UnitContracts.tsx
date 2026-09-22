@@ -381,7 +381,6 @@ export function UnitContracts({
   useEffect(() => {
     setAgreements(null);
     setAgreementError(null);
-    setTermsState({ kind: 'idle' });
 
     if (!selectedTenancy) return;
 
@@ -403,6 +402,16 @@ export function UnitContracts({
           cause instanceof Error ? cause.message : 'Agreements could not be loaded.',
         );
       });
+
+    return () => controller.abort();
+  }, [api, contractRevision, selectedTenancy]);
+
+  useEffect(() => {
+    setTermsState({ kind: 'idle' });
+
+    if (!selectedTenancy) return;
+
+    const controller = new AbortController();
 
     setTermsState({ kind: 'loading' });
     void api
