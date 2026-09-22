@@ -128,7 +128,19 @@ export class MemoryFileStorage implements FileStoragePort {
 
   async put(input: FileStoragePutInput): Promise<StoredFile> {
     const existing = this.objects.get(input.objectKey);
-    if (existing) return { ...existing, disposition: 'reused' };
+    if (existing) {
+      const existingContent = this.contents.get(input.objectKey);
+      if (
+        !existingContent ||
+        existingContent.byteLength !== input.content.byteLength ||
+        existingContent.some((byte, index) => byte !== input.content[index])
+      ) {
+        throw new Error(
+          'In-memory object key already exists with different content.',
+        );
+      }
+      return { ...existing, disposition: 'reused' };
+    }
 
     const stored: StoredFile = {
       provider: 'memory',
