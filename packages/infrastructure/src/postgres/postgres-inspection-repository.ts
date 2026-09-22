@@ -658,6 +658,7 @@ export class PostgresInspectionRepository implements InspectionRepository {
         updated_at = now()
       where id = ${inspection.id}
         and version = ${expectedVersion}
+        and status = 'draft'
       returning id
     `);
 
