@@ -34,6 +34,7 @@ import {
   type PortfolioRepository,
   type StaffDirectoryRepository,
   type TenancyRepository,
+  type Sha256Port,
 } from '@portfolio/application';
 import {
   addInspectionSignatureRequestSchema,
@@ -81,6 +82,7 @@ export interface InspectionHttpDependencies {
   readonly idGenerator: IdGenerator;
   readonly clock: ClockPort;
   readonly pdfPort: PdfPort;
+  readonly sha256: Sha256Port;
 }
 
 export async function handleInspectionHttp(
@@ -449,6 +451,7 @@ export async function handleInspectionHttp(
         fileStorage: deps.fileStorage,
         idGenerator: deps.idGenerator,
         clock: deps.clock,
+        sha256: deps.sha256,
       },
       actor,
       asInspectionId(parsedId.data),
