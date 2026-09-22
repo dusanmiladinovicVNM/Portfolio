@@ -187,6 +187,14 @@ and explicitly use `credentials: 'omit'`.
 
 Ambient browser cookies are not an authentication input to Portfolio API requests.
 
+To prevent configuration-driven token exfiltration, `VITE_API_BASE_URL` must be
+either:
+
+- a root-relative path; or
+- an absolute URL with the same origin as `VITE_SUPABASE_URL`.
+
+A cross-origin API target is rejected before the web application boots.
+
 The server verifies the access token and uses only its verified subject to resolve the
 internal Actor.
 
