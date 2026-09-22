@@ -32,7 +32,10 @@ import {
   unitInspectionsPath,
   unitTenanciesPath,
 } from '../api/paths.js';
-import type { PortfolioApi } from '../api/portfolio-api.js';
+import {
+  isAmbiguousWriteFailure,
+  type PortfolioApi,
+} from '../api/portfolio-api.js';
 import {
   contractErrorMessage,
   requiredString,
@@ -292,10 +295,12 @@ export function InspectionOrchestrationPanel({
       setWorkRevision((revision) => revision + 1);
       setWriteSuccess('Inspection created from canonical orchestration data.');
     } catch (cause) {
-      const recovered = await reconcileCreate(
-        preExistingIds,
-        expected,
-      );
+      const recovered = isAmbiguousWriteFailure(cause)
+        ? await reconcileCreate(
+            preExistingIds,
+            expected,
+          )
+        : false;
       if (!recovered) {
         onCanonicalReload();
         setWriteError(
@@ -365,29 +370,31 @@ export function InspectionOrchestrationPanel({
       setWriteSuccess('Inspection assignment/schedule updated.');
     } catch (cause) {
       let recovered = false;
-      try {
-        const canonical = await api.get(
-          inspectionPath(target.id),
-          inspectionBundleResponseSchema,
-        );
-        if (
-          canonical.inspection.id === target.id &&
-          canonical.inspection.unitId === target.unitId &&
-          isRecoveredInspectionOrchestration(
-            target,
-            expected,
-            canonical.inspection,
-          )
-        ) {
-          recovered = true;
-          onUpdated(canonical.inspection);
-          setWorkRevision((revision) => revision + 1);
-          setWriteSuccess(
-            'Inspection orchestration was committed and recovered.',
+      if (isAmbiguousWriteFailure(cause)) {
+        try {
+          const canonical = await api.get(
+            inspectionPath(target.id),
+            inspectionBundleResponseSchema,
           );
+          if (
+            canonical.inspection.id === target.id &&
+            canonical.inspection.unitId === target.unitId &&
+            isRecoveredInspectionOrchestration(
+              target,
+              expected,
+              canonical.inspection,
+            )
+          ) {
+            recovered = true;
+            onUpdated(canonical.inspection);
+            setWorkRevision((revision) => revision + 1);
+            setWriteSuccess(
+              'Inspection orchestration was committed and recovered.',
+            );
+          }
+        } catch {
+          // Fall through to canonical reload/error below.
         }
-      } catch {
-        // Fall through to canonical reload/error below.
       }
 
       if (!recovered) {
