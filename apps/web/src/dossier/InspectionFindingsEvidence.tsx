@@ -334,6 +334,12 @@ export function InspectionFindingsEvidence({
 
   async function createEvidenceDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (documents === null) {
+      setError(
+        'Wait for the canonical Document catalog before creating Evidence.',
+      );
+      return;
+    }
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const parsed = createDocumentRequestSchema.safeParse({
@@ -776,7 +782,11 @@ export function InspectionFindingsEvidence({
                   <option value="inspection">Inspection document</option>
                 </select>
               </label>
-              <button className="button-primary" disabled={blocked} type="submit">
+              <button
+                className="button-primary"
+                disabled={blocked || documents === null}
+                type="submit"
+              >
                 {pendingAction === 'document' ? 'Creating…' : 'Create Document'}
               </button>
             </form>
