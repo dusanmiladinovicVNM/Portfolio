@@ -169,7 +169,7 @@ selected tables.
 
 ## Browser credential boundary
 
-The web application may contain only a Supabase browser-safe anon/publishable key.
+The web application may contain only a Supabase browser-safe anon/publishable key. The Supabase project URL must use HTTPS outside localhost development.
 
 Startup rejects:
 
