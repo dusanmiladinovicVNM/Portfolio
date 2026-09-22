@@ -881,7 +881,7 @@ function IssueAdministration({
         setError(
           maintenanceError(
             cause,
-            'ServiceEvent could not be recorded.',
+            'ServiceEvent creation outcome could not be confirmed. Canonical Asset service history was reloaded; if the event appears below, link it instead of recording it again.',
           ),
         );
         onCanonicalWrite();
