@@ -928,6 +928,7 @@ export function UnitInspections({
           api={api}
           asOf={asOf}
           inspections={routeInspections}
+          createBlockedByDirtySection={hasUnsavedChanges}
           navigate={navigate}
           onCanonicalReload={() => {
             setListRevision((revision) => revision + 1);
