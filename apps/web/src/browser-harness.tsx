@@ -49,6 +49,8 @@ const landlordAgreementPartyId = '66666666-6666-4666-8666-666666666666';
 const tenantAgreementPartyId = '77777777-7777-4777-8777-777777777777';
 const landlordPartyId = '88888888-8888-4888-8888-888888888888';
 const tenantPartyId = '99999999-9999-4999-8999-999999999999';
+const historicalServiceProviderPartyId =
+  'e1000000-0000-4000-8000-000000000001';
 const termId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const amendmentId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const agreementDocumentId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
@@ -856,6 +858,16 @@ const parties = [
     firstName: 'Browser',
     middleName: null,
     lastName: 'Tenant',
+  },
+  {
+    id: historicalServiceProviderPartyId,
+    code: 'PTY-HIST-SERVICE-BRW',
+    displayName: 'Historic Service GmbH',
+    status: 'inactive',
+    contactPoints: [],
+    addresses: [],
+    partyType: 'company',
+    legalName: 'Historic Service GmbH',
   },
 ];
 
