@@ -479,6 +479,8 @@ export function UnitInspections({
 }: UnitInspectionsProps) {
   const [inspections, setInspections] =
     useState<readonly InspectionResponseDto[] | null>(null);
+  const [inspectionsOwnerUnitId, setInspectionsOwnerUnitId] =
+    useState<string | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [listRevision, setListRevision] = useState(0);
   const [bundleRevision, setBundleRevision] = useState(0);
@@ -502,6 +504,7 @@ export function UnitInspections({
   useEffect(() => {
     const controller = new AbortController();
     setInspections(null);
+    setInspectionsOwnerUnitId(null);
     setListError(null);
 
     void api
@@ -511,6 +514,7 @@ export function UnitInspections({
       .then((response) => {
         if (controller.signal.aborted) return;
         assertUnitInspectionListOwner(unitId, response.items);
+        setInspectionsOwnerUnitId(unitId);
         setInspections(response.items);
       })
       .catch((cause: unknown) => {
@@ -569,23 +573,34 @@ export function UnitInspections({
     };
   }, [api, bundleRevision, inspectionId, unitId]);
 
+  const routeInspections =
+    inspectionsOwnerUnitId === unitId ? inspections : null;
+
+  const routeBundle =
+    routeBundle !== null &&
+    bundle.inspection.unitId === unitId &&
+    bundle.inspection.id === inspectionId
+      ? bundle
+      : null;
+
   const selectedListInspection = useMemo(
     () =>
-      inspections?.find((inspection) => inspection.id === inspectionId) ??
-      null,
-    [inspectionId, inspections],
+      routeInspections?.find(
+        (inspection) => inspection.id === inspectionId,
+      ) ?? null,
+    [inspectionId, routeInspections],
   );
 
   const selectedSection = useMemo(() => {
-    if (!bundle) return null;
+    if (!routeBundle) return null;
     return (
-      bundle.schema.sections.find(
+      routeBundle.schema.sections.find(
         (section) => section.id === inspectionSectionId,
       ) ??
-      bundle.schema.sections[0] ??
+      routeBundle.schema.sections[0] ??
       null
     );
-  }, [bundle, inspectionSectionId]);
+  }, [inspectionSectionId, routeBundle]);
 
   const activeSectionIdRef = useRef<string | undefined>(selectedSection?.id);
   activeSectionIdRef.current = selectedSection?.id;
@@ -596,12 +611,12 @@ export function UnitInspections({
       : null;
 
   const draftResetKey =
-    bundle && selectedSection
-      ? inspectionDraftResetKey(bundle, selectedSection.id)
+    routeBundle && selectedSection
+      ? inspectionDraftResetKey(routeBundle, selectedSection.id)
       : null;
 
   useEffect(() => {
-    if (!bundle || !inspectionId || !selectedSection) return;
+    if (!routeBundle || !inspectionId || !selectedSection) return;
     if (inspectionSectionId === selectedSection.id) return;
 
     navigate(
@@ -613,7 +628,7 @@ export function UnitInspections({
     );
   }, [
     asOf,
-    bundle,
+    routeBundle,
     inspectionId,
     inspectionSectionId,
     navigate,
@@ -623,12 +638,12 @@ export function UnitInspections({
   ]);
 
   useEffect(() => {
-    if (!bundle || !selectedSection || draftResetKey === null) {
+    if (!routeBundle || !selectedSection || draftResetKey === null) {
       setDraft({});
       setTouched({});
       return;
     }
-    setDraft(createDraft(selectedSection, bundle.responses));
+    setDraft(createDraft(selectedSection, routeBundle.responses));
     setTouched({});
     setSaveError(null);
     setConflict(false);
@@ -636,26 +651,26 @@ export function UnitInspections({
 
   const localValues = useMemo(
     () =>
-      bundle && selectedSection
-        ? valuesByFieldKey(bundle, selectedSection, draft)
+      routeBundle && selectedSection
+        ? valuesByFieldKey(routeBundle, selectedSection, draft)
         : new Map<string, InspectionAnswerValue>(),
-    [bundle, draft, selectedSection],
+    [draft, routeBundle, selectedSection],
   );
 
   const currentRevision = selectedSectionRevision ?? 0;
 
   const patch =
-    bundle && selectedSection
+    routeBundle && selectedSection
       ? buildInspectionSectionPatch(
           selectedSection,
-          bundle.responses,
+          routeBundle.responses,
           draft,
           touched,
           currentRevision,
         )
       : null;
 
-  const currentInspectionId = bundle?.inspection.id;
+  const currentInspectionId = routeBundle?.inspection.id;
   const currentSectionId = selectedSection?.id;
   const currentSectionOperationKey =
     currentInspectionId !== undefined && currentSectionId !== undefined
@@ -675,7 +690,7 @@ export function UnitInspections({
     currentInspectionId !== undefined &&
     currentSectionId !== undefined &&
     canEditInspectionSection(
-      bundle.inspection.status,
+      routeBundle.inspection.status,
       inFlightSectionSaves,
       currentInspectionId,
       currentSectionId,
@@ -747,9 +762,9 @@ export function UnitInspections({
   }
 
   async function startInspection() {
-    if (!bundle) return;
+    if (!routeBundle) return;
 
-    const targetInspectionId = bundle.inspection.id;
+    const targetInspectionId = routeBundle.inspection.id;
     if (
       orchestrationPendingRef.current ||
       inFlightStartsRef.current.has(targetInspectionId)
@@ -757,7 +772,7 @@ export function UnitInspections({
       return;
     }
 
-    const expectedVersion = bundle.inspection.version;
+    const expectedVersion = routeBundle.inspection.version;
     inFlightStartsRef.current.add(targetInspectionId);
     setInFlightStarts((current) =>
       withInspectionOperationStarted(current, targetInspectionId),
@@ -800,7 +815,7 @@ export function UnitInspections({
 
   async function saveSection(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!bundle || !selectedSection || !patch) return;
+    if (!routeBundle || !selectedSection || !patch) return;
 
     const targetInspectionId = bundle.inspection.id;
     const targetSectionId = selectedSection.id;
@@ -906,11 +921,11 @@ export function UnitInspections({
 
   return (
     <div className="inspection-workspace">
-      {inspections ? (
+      {routeInspections ? (
         <InspectionOrchestrationPanel
           api={api}
           asOf={asOf}
-          inspections={inspections}
+          inspections={routeInspections}
           navigate={navigate}
           onCanonicalReload={() => {
             setListRevision((revision) => revision + 1);
@@ -945,10 +960,11 @@ export function UnitInspections({
           }}
           propertyId={propertyId}
           selectedInspection={
-            bundle?.inspection ?? selectedListInspection
+            routeBundle?.inspection ?? selectedListInspection
           }
           unitId={unitId}
           writeGate={orchestrationWriteGate}
+          key={unitId}
         />
       ) : null}
 
@@ -964,16 +980,16 @@ export function UnitInspections({
         </div>
 
         {listError ? <p className="form-error" role="alert">{listError}</p> : null}
-        {!listError && inspections === null ? (
+        {!listError && routeInspections === null ? (
           <p className="muted" aria-live="polite">Loading Inspections…</p>
         ) : null}
-        {inspections?.length === 0 ? (
+        {routeInspections?.length === 0 ? (
           <p className="muted">No Inspections are assigned to this Unit.</p>
         ) : null}
 
-        {inspections && inspections.length > 0 ? (
+        {routeInspections && routeInspections.length > 0 ? (
           <div className="inspection-list">
-            {inspections.map((inspection) => (
+            {routeInspections.map((inspection) => (
               <WorkspaceLink
                 ariaCurrent={inspection.id === inspectionId ? 'page' : undefined}
                 className={`inspection-card ${
@@ -1012,29 +1028,29 @@ export function UnitInspections({
         </section>
       ) : null}
 
-      {inspectionId && !bundleError && bundle === null ? (
+      {inspectionId && !bundleError && routeBundle === null ? (
         <section className="panel state-panel" aria-live="polite">
           <h2>Loading Inspection…</h2>
         </section>
       ) : null}
 
-      {bundle ? (
+      {routeBundle ? (
         <section className="panel inspection-editor">
           <div className="inspection-editor-header">
             <div>
               <p className="eyebrow">
-                {formatDetailKey(bundle.inspection.inspectionType)}
+                {formatDetailKey(routeBundle.inspection.inspectionType)}
               </p>
-              <h2>{bundle.inspection.code}</h2>
+              <h2>{routeBundle.inspection.code}</h2>
               <p className="muted">
-                {bundle.schema.title} · lifecycle v{bundle.inspection.version} ·
-                content r{bundle.inspection.contentRevision}
+                {routeBundle.schema.title} · lifecycle v{routeBundle.inspection.version} ·
+                content r{routeBundle.inspection.contentRevision}
               </p>
             </div>
-            <span className="status-chip">{bundle.inspection.status}</span>
+            <span className="status-chip">{routeBundle.inspection.status}</span>
           </div>
 
-          {bundle.inspection.status === 'draft' ? (
+          {routeBundle.inspection.status === 'draft' ? (
             <div className="inspection-start-callout">
               <div>
                 <strong>Ready to begin field work</strong>
@@ -1056,7 +1072,7 @@ export function UnitInspections({
               aria-label="Inspection sections"
               className="inspection-sections"
             >
-              {bundle.schema.sections.map((section) => (
+              {routeBundle.schema.sections.map((section) => (
                 <WorkspaceLink
                   ariaCurrent={
                     selectedSection?.id === section.id ? 'page' : undefined
@@ -1074,7 +1090,7 @@ export function UnitInspections({
                     asOf,
                     'inspections',
                     {
-                      inspectionId: bundle.inspection.id,
+                      inspectionId: routeBundle.inspection.id,
                       inspectionSectionId: section.id,
                     },
                   )}
