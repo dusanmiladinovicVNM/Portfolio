@@ -1115,6 +1115,16 @@ describe('Inspection HTTP backbone', () => {
         fileName: 'scoped-photo.jpg',
       }).toString();
 
+    const wrongInspectorScopedPhoto = await handler(
+      new Request(scopedPhotoUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'image/jpeg' },
+        body: new Uint8Array([1, 2, 3, 4]),
+      }),
+      otherInspectorIdentity,
+    );
+    expect(wrongInspectorScopedPhoto.status).toBe(403);
+
     const scopedPhoto = await handler(
       new Request(scopedPhotoUrl, {
         method: 'POST',
