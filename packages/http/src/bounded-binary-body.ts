@@ -64,7 +64,18 @@ export async function readBoundedBinaryBody(
     throw new Error('Bounded binary body policy requires a positive maxBytes.');
   }
 
-  const announcedLength = parseAnnouncedLength(request, policy.maxBytes);
+  let announcedLength: number | null;
+  try {
+    announcedLength = parseAnnouncedLength(request, policy.maxBytes);
+  } catch (error) {
+    if (request.body) {
+      try {
+        await request.body.cancel('binary upload rejected by request metadata');
+      } catch {}
+    }
+    throw error;
+  }
+
   if (!request.body) {
     if (announcedLength !== null && announcedLength !== 0) {
       throw new ApplicationError(
