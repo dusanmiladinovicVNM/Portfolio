@@ -56,6 +56,9 @@ const setupUnitId = 'b1000000-0000-4000-8000-000000000002';
 const setupSpaceId = 'b1000000-0000-4000-8000-000000000003';
 const setupDestinationUnitId = 'c1000000-0000-4000-8000-000000000001';
 const setupDestinationSpaceId = 'c1000000-0000-4000-8000-000000000002';
+const setupRecoveryPropertyId = 'c2000000-0000-4000-8000-000000000001';
+const setupRecoveryUnitId = 'c2000000-0000-4000-8000-000000000002';
+const setupRecoverySpaceId = 'c2000000-0000-4000-8000-000000000003';
 const setupPartyId = 'b1000000-0000-4000-8000-000000000004';
 const setupPartyEmailId = 'b1000000-0000-4000-8000-000000000005';
 const setupPartyAddressId = 'b1000000-0000-4000-8000-000000000006';
@@ -131,6 +134,42 @@ const setupDestinationSpace: SpaceResponse = {
   name: 'Destination Living Room',
   spaceType: 'living_room',
   areaM2: 25,
+  sortOrder: 1,
+  active: true,
+};
+
+const setupRecoveryProperty: PropertyResponse = {
+  id: setupRecoveryPropertyId,
+  code: 'PROP-RECOVERY-BRW',
+  name: 'Recovery Property',
+  propertyType: 'residential',
+  street: 'Canonical Street',
+  houseNumber: '2',
+  postalCode: '8000',
+  city: 'Zurich',
+  countryCode: 'CH',
+  yearBuilt: 2015,
+  status: 'active',
+};
+const setupRecoveryUnit: UnitResponse = {
+  id: setupRecoveryUnitId,
+  propertyId: setupRecoveryPropertyId,
+  code: 'UNIT-RECOVERY-BRW',
+  unitNumber: '9C',
+  unitType: 'apartment',
+  floor: '9',
+  areaM2: 80,
+  rooms: 3.5,
+  status: 'active',
+  notes: '',
+};
+const setupRecoverySpace: SpaceResponse = {
+  id: setupRecoverySpaceId,
+  unitId: setupRecoveryUnitId,
+  code: 'RECOVERY-ROOM-BRW',
+  name: 'Recovery Room',
+  spaceType: 'living_room',
+  areaM2: 30,
   sortOrder: 1,
   active: true,
 };
@@ -664,6 +703,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioHoldContractMutation?: boolean;
   __portfolioHoldAssetMutation?: boolean;
   __portfolioFailNextAssetMoveAfterCommit?: boolean;
+  __portfolioConcurrentAssetMoveAcrossProperty?: boolean;
   __portfolioFailNextAssetReplacementAfterCommit?: boolean;
   __portfolioFailNextSignedOriginalLink?: boolean;
   __portfolioPendingUnitCreate?: boolean;
@@ -1076,6 +1116,14 @@ globalThis.fetch = async (
     });
   }
 
+  if (path === '/properties/' + setupRecoveryPropertyId) {
+    return json(setupRecoveryProperty);
+  }
+
+  if (path === '/properties/' + setupRecoveryPropertyId + '/units') {
+    return json({ items: [setupRecoveryUnit] });
+  }
+
   if (path === '/units' && init?.method === 'POST') {
     requirePortfolioAuth(init);
     const body = JSON.parse(String(init.body)) as CreateUnitRequest;
@@ -1118,6 +1166,20 @@ globalThis.fetch = async (
       items: setupAssets.filter(
         (asset) => asset.unitId === setupDestinationUnitId,
       ),
+    });
+  }
+
+  if (path === '/units/' + setupRecoveryUnitId) {
+    return json(setupRecoveryUnit);
+  }
+
+  if (path === '/units/' + setupRecoveryUnitId + '/spaces') {
+    return json({ items: [setupRecoverySpace] });
+  }
+
+  if (path === '/units/' + setupRecoveryUnitId + '/assets') {
+    return json({
+      items: setupAssets.filter((asset) => asset.unitId === setupRecoveryUnitId),
     });
   }
 
@@ -1276,6 +1338,49 @@ globalThis.fetch = async (
       spaceId?: string | null;
       reason?: string | null;
     };
+
+    if (browserHarnessWindow.__portfolioConcurrentAssetMoveAcrossProperty) {
+      browserHarnessWindow.__portfolioConcurrentAssetMoveAcrossProperty = false;
+      const movedAt = nextSetupAssetInstant();
+      setupAssetLocations = setupAssetLocations.map((location) =>
+        location.assetId === setupAsset.id && location.validTo === null
+          ? { ...location, validTo: movedAt }
+          : location,
+      );
+      const recoveryLocationId =
+        setupAssetLocationIds[setupAssetLocationSequence++];
+      if (!recoveryLocationId) {
+        throw new Error('Setup Asset recovery location id pool exhausted.');
+      }
+      setupAssetLocations.push({
+        id: recoveryLocationId,
+        assetId: setupAsset.id,
+        propertyId: setupRecoveryPropertyId,
+        unitId: setupRecoveryUnitId,
+        spaceId: setupRecoverySpaceId,
+        validFrom: movedAt,
+        validTo: null,
+        changeType: 'moved',
+        changedByUserId: inspectionUserId,
+        reason: 'Concurrent cross-Property move',
+      });
+      const concurrentlyMoved: AssetResponse = {
+        ...setupAsset,
+        propertyId: setupRecoveryPropertyId,
+        unitId: setupRecoveryUnitId,
+        spaceId: setupRecoverySpaceId,
+        version: setupAsset.version + 1,
+      };
+      setupAssets = setupAssets.map((asset) =>
+        asset.id === concurrentlyMoved.id ? concurrentlyMoved : asset,
+      );
+      return apiError(
+        409,
+        'ASSET_VERSION_CONFLICT',
+        'Asset has changed since the caller last read it.',
+      );
+    }
+
     if (body.expectedVersion !== setupAsset.version) {
       return apiError(
         409,
