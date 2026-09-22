@@ -38,9 +38,6 @@ interface ResolvedDriveFile {
   readonly sha256: string;
 }
 
-interface ResolvedObjectKey extends ResolvedDriveFile {
-  readonly hadDuplicates: boolean;
-}
 
 const PROVIDER = 'google-drive';
 
@@ -312,51 +309,13 @@ export class GoogleDriveFileStorage implements FileStoragePort {
       expected,
     );
 
-    // appProperties are searchable metadata, not a uniqueness constraint.
-    // Re-list after create so concurrent same-key uploads converge on one
-    // deterministic canonical file when they contain the same exact bytes.
-    const reconciled = await this.resolveObjectKey(
-      token,
-      objectKey,
-      expected,
-    );
-
-    if (!reconciled) {
-      // A just-created file may not yet be visible through list/search.
-      // The create response itself was fully verified, so it remains safe.
-      return {
-        provider: PROVIDER,
-        objectId: createdFile.id,
-        objectKey,
-        byteSize: createdFile.byteSize,
-        sha256: createdFile.sha256,
-        disposition: 'created',
-      };
-    }
-
-    if (
-      reconciled.id !== createdFile.id &&
-      !reconciled.hadDuplicates
-    ) {
-      // The created file was not visible in the reconciliation list while a
-      // concurrent canonical winner was. Remove our redundant object if it
-      // still exists. When duplicates were observed, resolveObjectKey already
-      // removed every non-canonical object.
-      await this.deleteById(token, createdFile.id);
-    }
-
     return {
       provider: PROVIDER,
-      objectId: reconciled.id,
+      objectId: createdFile.id,
       objectKey,
-      byteSize: reconciled.byteSize,
-      sha256: reconciled.sha256,
-      // Any duplicate observation is treated as reused so application-level
-      // compensation cannot delete an object another concurrent request won.
-      disposition:
-        reconciled.id === createdFile.id && !reconciled.hadDuplicates
-          ? 'created'
-          : 'reused',
+      byteSize: createdFile.byteSize,
+      sha256: createdFile.sha256,
+      disposition: 'created',
     };
   }
 
@@ -523,24 +482,15 @@ export class GoogleDriveFileStorage implements FileStoragePort {
       readonly byteSize: number;
       readonly sha256: string;
     },
-  ): Promise<ResolvedObjectKey | null> {
+  ): Promise<ResolvedDriveFile | null> {
     const files = await this.listByObjectKey(token, objectKey);
     if (files.length === 0) return null;
-
-    const resolved = files
-      .map((file) => resolveDriveFile(file, objectKey, expected))
-      .sort((left, right) => left.id.localeCompare(right.id));
-
-    const canonical = resolved[0]!;
-    if (resolved.length > 1) {
-      for (const duplicate of resolved.slice(1)) {
-        await this.deleteById(token, duplicate.id);
-      }
+    if (files.length > 1) {
+      throw new Error(
+        'Google Drive contains multiple files for the same Portfolio object key; canonical database reconciliation is required.',
+      );
     }
 
-    return {
-      ...canonical,
-      hadDuplicates: resolved.length > 1,
-    };
+    return resolveDriveFile(files[0]!, objectKey, expected);
   }
 }
