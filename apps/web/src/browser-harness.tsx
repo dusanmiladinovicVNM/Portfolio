@@ -635,15 +635,18 @@ type BrowserHarnessWindow = Window & {
   __portfolioHoldSpaceCreate?: boolean;
   __portfolioHoldTenancyMutation?: boolean;
   __portfolioHoldContractMutation?: boolean;
+  __portfolioHoldAssetMutation?: boolean;
   __portfolioFailNextSignedOriginalLink?: boolean;
   __portfolioPendingUnitCreate?: boolean;
   __portfolioPendingSpaceCreate?: boolean;
   __portfolioPendingTenancyMutation?: boolean;
   __portfolioPendingContractMutation?: boolean;
+  __portfolioPendingAssetMutation?: boolean;
   __portfolioReleaseUnitCreate?: () => boolean;
   __portfolioReleaseSpaceCreate?: () => boolean;
   __portfolioReleaseTenancyMutation?: () => boolean;
   __portfolioReleaseContractMutation?: () => boolean;
+  __portfolioReleaseAssetMutation?: () => boolean;
 };
 
 const browserHarnessWindow = window as BrowserHarnessWindow;
@@ -660,6 +663,9 @@ let heldTenancyMutation:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 let heldContractMutation:
+  | { readonly response: Response; readonly resolve: (response: Response) => void }
+  | null = null;
+let heldAssetMutation:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 
@@ -707,6 +713,17 @@ function maybeHoldContractMutation(response: Response): Promise<Response> {
   });
 }
 
+function maybeHoldAssetMutation(response: Response): Promise<Response> {
+  if (!browserHarnessWindow.__portfolioHoldAssetMutation) {
+    return Promise.resolve(response);
+  }
+
+  browserHarnessWindow.__portfolioPendingAssetMutation = true;
+  return new Promise<Response>((resolve) => {
+    heldAssetMutation = { response, resolve };
+  });
+}
+
 browserHarnessWindow.__portfolioReleaseUnitCreate = () => {
   if (!heldUnitCreate) return false;
   const held = heldUnitCreate;
@@ -744,6 +761,16 @@ browserHarnessWindow.__portfolioReleaseContractMutation = () => {
   heldContractAgreementRead = null;
   browserHarnessWindow.__portfolioHoldContractMutation = false;
   browserHarnessWindow.__portfolioPendingContractMutation = false;
+  held.resolve(held.response);
+  return true;
+};
+
+browserHarnessWindow.__portfolioReleaseAssetMutation = () => {
+  if (!heldAssetMutation) return false;
+  const held = heldAssetMutation;
+  heldAssetMutation = null;
+  browserHarnessWindow.__portfolioHoldAssetMutation = false;
+  browserHarnessWindow.__portfolioPendingAssetMutation = false;
   held.resolve(held.response);
   return true;
 };
@@ -1158,7 +1185,7 @@ globalThis.fetch = async (
     setupAssets = setupAssets.map((asset) =>
       asset.id === updated.id ? updated : asset,
     );
-    return json(updated);
+    return maybeHoldAssetMutation(json(updated));
   }
 
   if (
