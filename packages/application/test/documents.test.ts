@@ -265,6 +265,32 @@ describe('Document application workflow', () => {
     ]);
   });
 
+  it('surfaces cleanup failure after a concurrent canonical winner was verified', async () => {
+    const repository = new ConcurrentWinnerDocumentRepository();
+    const storage = new TrackingStorage(true);
+
+    await expect(
+      uploadDocumentVersionCommand(
+        {
+          documentRepository: repository,
+          fileStorage: storage,
+          idGenerator: new FixedId(),
+        },
+        actor,
+        {
+          documentId: repository.document.id,
+          fileName: 'lease.pdf',
+          mimeType: 'application/pdf',
+          content: new Uint8Array([1, 2, 3]),
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'DOCUMENT_STORAGE_COMPENSATION_FAILED',
+    });
+
+    expect(storage.removed).toHaveLength(1);
+  });
+
   it('preserves the losing upload when the concurrent canonical storage cannot be verified', async () => {
     const repository = new ConcurrentWinnerDocumentRepository();
 
