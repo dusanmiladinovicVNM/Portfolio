@@ -87,6 +87,8 @@ export async function readBoundedBinaryBody(
   }
 
   const reader = request.body.getReader();
+  const exactBuffer =
+    announcedLength === null ? null : new Uint8Array(announcedLength);
   const chunks: Uint8Array[] = [];
   let total = 0;
 
@@ -96,17 +98,35 @@ export async function readBoundedBinaryBody(
       if (done) break;
       if (!value || value.byteLength === 0) continue;
 
-      total += value.byteLength;
-      if (total > policy.maxBytes) {
+      const nextTotal = total + value.byteLength;
+      if (nextTotal > policy.maxBytes) {
         try {
           await reader.cancel('binary upload limit exceeded');
         } catch {}
         throw uploadLimitExceeded(policy.maxBytes);
       }
 
-      const chunk = new Uint8Array(value.byteLength);
-      chunk.set(value);
-      chunks.push(chunk);
+      if (
+        announcedLength !== null &&
+        nextTotal > announcedLength
+      ) {
+        try {
+          await reader.cancel('content-length mismatch');
+        } catch {}
+        throw new ApplicationError(
+          'INVALID_REQUEST',
+          'Request body length does not match Content-Length.',
+        );
+      }
+
+      if (exactBuffer) {
+        exactBuffer.set(value, total);
+      } else {
+        const chunk = new Uint8Array(value.byteLength);
+        chunk.set(value);
+        chunks.push(chunk);
+      }
+      total = nextTotal;
     }
   } finally {
     reader.releaseLock();
@@ -119,5 +139,5 @@ export async function readBoundedBinaryBody(
     );
   }
 
-  return concatBytes(chunks, total);
+  return exactBuffer ?? concatBytes(chunks, total);
 }
