@@ -366,6 +366,7 @@ function buildHandler(
     staffDirectoryRepository: new InMemoryStaffDirectoryRepository(),
     fileStorage: overrides.fileStorage ?? new MemoryFileStorage(),
     pdfPort: unusedPdfPort,
+    sha256: testSha256,
     clock,
     userAccessRepository: new InMemoryAccessRepository(),
     idGenerator: new FixedIds(ids),
