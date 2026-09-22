@@ -217,6 +217,16 @@ function buildHandler() {
   const inspectionRepository = new InMemoryInspectionRepository();
   const documentRepository = new InMemoryDocumentRepository();
   const fileStorage = new MemoryFileStorage();
+  let pdfRenderCount = 0;
+  const pdfPort: PdfPort = {
+    async renderInspectionFinalReport(snapshot) {
+      pdfRenderCount += 1;
+      return {
+        fileName: `${snapshot.inspectionId}-final.pdf`,
+        content: new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52]),
+      };
+    },
+  };
   const staffDirectoryRepository = new InMemoryStaffDirectoryRepository();
   staffDirectoryRepository.users.set(
     asUserId('dddddddd-dddd-4ddd-8ddd-dddddddddddd'),
@@ -248,6 +258,7 @@ function buildHandler() {
     inspectionRepository,
     staffDirectoryRepository,
     fileStorage,
+    pdfPort,
     clock: new FixedClock('2026-09-18T20:00:00.000Z'),
     userAccessRepository: new AccessRepository(),
     idGenerator: new FixedIds([
@@ -276,6 +287,7 @@ function buildHandler() {
     portfolioRepository,
     documentRepository,
     fileStorage,
+    getPdfRenderCount: () => pdfRenderCount,
   };
 }
 
@@ -919,7 +931,8 @@ describe('Inspection HTTP backbone', () => {
   });
 
   it('enforces evidence/signature permissions and returns final snapshot over HTTP', async () => {
-    const { handler, documentRepository, fileStorage } = buildHandler();
+    const { handler, documentRepository, fileStorage, getPdfRenderCount } =
+      buildHandler();
 
     for (const [versionId, documentId, fileName] of [
       [
@@ -1254,6 +1267,53 @@ describe('Inspection HTTP backbone', () => {
           { signerRole: 'witness', invalidationReason: 'Correction' },
           { signerRole: 'witness', invalidatedAt: null },
           { signerRole: 'agent', invalidatedAt: null },
+        ],
+      },
+    });
+
+    const firstReport = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/final-report`,
+        { method: 'POST' },
+      ),
+      adminIdentity,
+    );
+    expect(firstReport.status).toBe(200);
+    const firstReportVersion = (await firstReport.clone().json()).data as {
+      id: string;
+      status: string;
+      mimeType: string;
+    };
+    expect(firstReportVersion).toMatchObject({
+      status: 'final',
+      mimeType: 'application/pdf',
+    });
+
+    const secondReport = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/final-report`,
+        { method: 'POST' },
+      ),
+      adminIdentity,
+    );
+    expect(secondReport.status).toBe(200);
+    expect((await secondReport.json()).data.id).toBe(firstReportVersion.id);
+    expect(getPdfRenderCount()).toBe(1);
+
+    const afterReport = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      adminIdentity,
+    );
+    expect(await afterReport.json()).toMatchObject({
+      data: {
+        evidence: [
+          { kind: 'photo' },
+          {
+            kind: 'final_report',
+            documentVersionId: firstReportVersion.id,
+            sectionId: null,
+            itemId: null,
+          },
         ],
       },
     });
