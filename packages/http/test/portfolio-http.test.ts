@@ -2537,6 +2537,7 @@ describe('Portfolio HTTP boundary', () => {
         inspectionRepository: new InMemoryInspectionRepository(),
         staffDirectoryRepository: new InMemoryStaffDirectoryRepository(),
         fileStorage: new MemoryFileStorage(),
+        pdfPort: unusedPdfPort,
         clock: new FixedClock(),
         userAccessRepository: new InMemoryAccessRepository(),
         idGenerator: new FixedIds(['6a644eaa-dae0-4c4a-9ae4-6e5a93ceef3f']),
