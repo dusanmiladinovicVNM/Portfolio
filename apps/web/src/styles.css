@@ -1468,3 +1468,38 @@ input:focus-visible {
 .priority-urgent {
   font-weight: 800;
 }
+
+
+.inspection-orchestration-panel {
+  display: grid;
+  gap: 16px;
+}
+.inspection-orchestration-form {
+  align-content: start;
+}
+.inspection-assigned-work-panel {
+  display: grid;
+  gap: 14px;
+}
+.inspection-assigned-work-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+.inspection-assigned-work-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  text-align: left;
+  border: 1px solid #ded8cd;
+  border-radius: 12px;
+  background: #fff;
+}
+.inspection-assigned-work-card:hover:not(:disabled) {
+  border-color: #a6a095;
+  box-shadow: 0 8px 24px rgb(60 56 48 / 8%);
+}
+.inspection-assigned-work-card span,
+.inspection-assigned-work-card small {
+  color: #69645c;
+}
