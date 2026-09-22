@@ -128,6 +128,21 @@ export const assetLocationHistoryResponseSchema = z.object({
   reason: z.string().nullable(),
 });
 
+export const assetLocationHistoryListResponseSchema = z.object({
+  items: z.array(assetLocationHistoryResponseSchema),
+});
+
+export const assetReplacementLinksResponseSchema = z.object({
+  predecessor: assetReplacementResponseSchema.nullable(),
+  successor: assetReplacementResponseSchema.nullable(),
+});
+
+export const replaceAssetResponseSchema = z.object({
+  replacedAsset: assetResponseSchema,
+  replacementAsset: assetResponseSchema,
+  replacement: assetReplacementResponseSchema,
+});
+
 export const assetConditionAssessmentResponseSchema = z.object({
   id: entityIdSchema,
   assetId: entityIdSchema,
@@ -168,6 +183,13 @@ export type RecordTenancyAssetInventoryRequest = z.infer<typeof recordTenancyAss
 export type AssetResponse = z.infer<typeof assetResponseSchema>;
 export type AssetListResponse = z.infer<typeof assetListResponseSchema>;
 export type AssetReplacementResponse = z.infer<typeof assetReplacementResponseSchema>;
+export type AssetReplacementLinksResponse = z.infer<
+  typeof assetReplacementLinksResponseSchema
+>;
+export type ReplaceAssetResponse = z.infer<typeof replaceAssetResponseSchema>;
 export type AssetLocationHistoryResponse = z.infer<typeof assetLocationHistoryResponseSchema>;
+export type AssetLocationHistoryListResponse = z.infer<
+  typeof assetLocationHistoryListResponseSchema
+>;
 export type AssetConditionAssessmentResponse = z.infer<typeof assetConditionAssessmentResponseSchema>;
 export type TenancyAssetAssignmentResponse = z.infer<typeof tenancyAssetAssignmentResponseSchema>;

@@ -18,6 +18,7 @@ const agreementId = '44444444-4444-4444-8444-444444444444';
 const amendmentId = '55555555-5555-4555-8555-555555555555';
 const inspectionId = '66666666-6666-4666-8666-666666666666';
 const inspectionSectionId = '77777777-7777-4777-8777-777777777777';
+const assetId = '88888888-8888-4888-8888-888888888888';
 
 describe('workspace URL navigation', () => {
   it('preserves dashboard asOf through Property and Unit drill-down', () => {
@@ -209,6 +210,49 @@ describe('workspace URL navigation', () => {
       kind: 'parties',
       asOf: '2025-06-30',
     });
+  });
+
+  it('deep-links one Asset only inside the Assets dossier tab', () => {
+    const selected = unitRoute(
+      propertyId,
+      unitId,
+      '2025-06-30',
+      'assets',
+      { assetId },
+    );
+
+    expect(workspaceRouteHref(selected)).toBe(
+      `/properties/${propertyId}/units/${unitId}?tab=assets&assetId=${assetId}&asOf=2025-06-30`,
+    );
+
+    expect(
+      parseWorkspaceLocation(
+        `/properties/${propertyId}/units/${unitId}`,
+        `?tab=assets&assetId=${assetId}&asOf=2025-06-30`,
+        '2026-09-21',
+      ),
+    ).toEqual({
+      kind: 'unit',
+      propertyId,
+      unitId,
+      tab: 'assets',
+      assetId,
+      asOf: '2025-06-30',
+    });
+
+    expect(
+      workspaceRouteHref(
+        unitRoute(
+          propertyId,
+          unitId,
+          '2025-06-30',
+          'overview',
+          { assetId },
+        ),
+      ),
+    ).toBe(
+      `/properties/${propertyId}/units/${unitId}?tab=overview&asOf=2025-06-30`,
+    );
   });
 
   it('round-trips the Unit Spaces setup tab', () => {
