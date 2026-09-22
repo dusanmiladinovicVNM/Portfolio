@@ -4,6 +4,9 @@ import type {
   CreateSpaceRequest,
   CreateTenancyRequest,
   CreateUnitRequest,
+  AssetLocationHistoryResponse,
+  AssetReplacementResponse,
+  AssetResponse,
   DocumentLinkResponse,
   DocumentResponse,
   DocumentVersionResponse,
@@ -90,6 +93,21 @@ const setupDocumentLinkIds = [
   'b1000000-0000-4000-8000-000000000027',
   'b1000000-0000-4000-8000-000000000028',
 ] as const;
+const setupAssetIds = [
+  'b1000000-0000-4000-8000-000000000029',
+  'b1000000-0000-4000-8000-000000000030',
+] as const;
+const setupAssetIdentifierIds = [
+  'b1000000-0000-4000-8000-000000000031',
+  'b1000000-0000-4000-8000-000000000032',
+] as const;
+const setupAssetLocationIds = [
+  'b1000000-0000-4000-8000-000000000033',
+  'b1000000-0000-4000-8000-000000000034',
+  'b1000000-0000-4000-8000-000000000035',
+] as const;
+const setupAssetReplacementId =
+  'b1000000-0000-4000-8000-000000000036';
 
 let setupProperty: PropertyResponse | null = null;
 let setupUnit: UnitResponse | null = null;
@@ -110,6 +128,24 @@ let setupDocumentLinks: DocumentLinkResponse[] = [];
 let setupDocumentSequence = 0;
 let setupDocumentVersionSequence = 0;
 let setupDocumentLinkSequence = 0;
+let setupAssets: AssetResponse[] = [];
+let setupAssetLocations: AssetLocationHistoryResponse[] = [];
+let setupAssetReplacement: AssetReplacementResponse | null = null;
+let setupAssetSequence = 0;
+let setupAssetIdentifierSequence = 0;
+let setupAssetLocationSequence = 0;
+let setupAssetMutationSequence = 0;
+
+function nextSetupAssetInstant(): string {
+  const instants = [
+    '2027-10-01T08:00:00.000Z',
+    '2027-10-01T09:00:00.000Z',
+    '2027-10-01T10:00:00.000Z',
+  ];
+  const value = instants[setupAssetMutationSequence++];
+  if (!value) throw new Error('Setup Asset mutation clock exhausted.');
+  return value;
+}
 
 const operations = {
   openMaintenanceIssueCount: 0,
