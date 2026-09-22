@@ -1,8 +1,10 @@
 import {
   addInspectionSignatureCommand,
+  ApplicationError,
   attachInspectionEvidenceCommand,
   cancelInspectionCommand,
   createInspectionCommand,
+  DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
   createInspectionFindingCommand,
   createInspectionSchemaVersionCommand,
   getInspectionBundleQuery,
@@ -19,6 +21,7 @@ import {
   startInspectionCommand,
   unlockInspectionCommand,
   updateInspectionOrchestrationCommand,
+  uploadInspectionBinaryCommand,
   type Actor,
   type ClockPort,
   type IdGenerator,
@@ -41,6 +44,7 @@ import {
   entityIdSchema,
   expectedInspectionVersionRequestSchema,
   finalizeInspectionRequestSchema,
+  inspectionBinaryPurposeSchema,
   saveInspectionSectionRequestSchema,
   unlockInspectionRequestSchema,
   updateInspectionOrchestrationRequestSchema,
@@ -463,6 +467,59 @@ export async function handleInspectionHttp(
       },
     );
     return json({ data: toInspectionEvidenceResponse(evidence) }, 201);
+  }
+
+  const binaryMatch = /^\/inspections\/([^/]+)\/binaries$/.exec(path);
+  if (method === 'POST' && binaryMatch) {
+    const parsedId = entityIdSchema.safeParse(binaryMatch[1]);
+    const url = new URL(request.url);
+    const purpose = inspectionBinaryPurposeSchema.safeParse(
+      url.searchParams.get('purpose'),
+    );
+    const uploadKey = entityIdSchema.safeParse(
+      url.searchParams.get('uploadKey'),
+    );
+    const fileName = url.searchParams.get('fileName')?.trim();
+    const mimeType = request.headers.get('content-type')?.split(';')[0]?.trim();
+
+    if (
+      !parsedId.success ||
+      !purpose.success ||
+      !uploadKey.success ||
+      !fileName ||
+      !mimeType
+    ) {
+      return validationFailure();
+    }
+
+    const content = new Uint8Array(await request.arrayBuffer());
+    if (content.byteLength > DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY.maxBytes) {
+      throw new ApplicationError(
+        'DOCUMENT_BINARY_UPLOAD_LIMIT_EXCEEDED',
+        `Buffered Inspection upload supports files up to ${DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY.maxBytes} bytes until streaming upload is implemented.`,
+      );
+    }
+
+    const version = await uploadInspectionBinaryCommand(
+      {
+        inspectionRepository: deps.inspectionRepository,
+        documentRepository: deps.documentRepository,
+        fileStorage: deps.fileStorage,
+        idGenerator: deps.idGenerator,
+        clock: deps.clock,
+      },
+      actor,
+      asInspectionId(parsedId.data),
+      {
+        purpose: purpose.data,
+        uploadKey: uploadKey.data,
+        fileName,
+        mimeType,
+        content,
+      },
+    );
+
+    return json({ data: toDocumentVersionResponse(version) }, 201);
   }
 
   const signatureMatch = /^\/inspections\/([^/]+)\/signatures$/.exec(path);
