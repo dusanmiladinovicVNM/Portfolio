@@ -34,6 +34,10 @@ import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.j
 import { DocumentBinaryActions } from '../documents/DocumentBinaryActions.js';
 import { SignedDocumentAdministration } from '../documents/SignedDocumentAdministration.js';
 import {
+  assertAgreementDocumentReferencesOwner,
+  assertAmendmentDocumentReferencesOwner,
+} from '../documents/signed-document-owner.js';
+import {
   formatDetailKey,
   formatExactMoney,
 } from '../presentation/format.js';
@@ -514,7 +518,13 @@ export function UnitContracts({
         leaseAgreementDocumentListResponseSchema,
         { signal: controller.signal },
       )
-      .then((response) => setAgreementDocuments(response.items))
+      .then((response) => {
+        assertAgreementDocumentReferencesOwner(
+          selectedAgreement.id,
+          response.items,
+        );
+        setAgreementDocuments(response.items);
+      })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
         setAgreementDocumentsError(
@@ -557,7 +567,13 @@ export function UnitContracts({
         leaseAmendmentDocumentListResponseSchema,
         { signal: controller.signal },
       )
-      .then((response) => setAmendmentDocuments(response.items))
+      .then((response) => {
+        assertAmendmentDocumentReferencesOwner(
+          selectedAmendment.id,
+          response.items,
+        );
+        setAmendmentDocuments(response.items);
+      })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
         setAmendmentDocumentsError(
