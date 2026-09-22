@@ -41,14 +41,14 @@ function streamRequest(
 }
 
 describe('bounded binary HTTP ingestion', () => {
-  it('rejects an announced oversized upload before reading its body', async () => {
-    let pulls = 0;
+  it('rejects an announced oversized upload and cancels its body without consuming it', async () => {
+    let cancelled = 0;
     const request = streamRequest(
       [new Uint8Array([1, 2, 3])],
       {
         contentLength: '17',
-        onPull: () => {
-          pulls += 1;
+        onCancel: () => {
+          cancelled += 1;
         },
       },
     );
@@ -59,7 +59,7 @@ describe('bounded binary HTTP ingestion', () => {
       code: 'DOCUMENT_BINARY_UPLOAD_LIMIT_EXCEEDED',
     });
 
-    expect(pulls).toBe(0);
+    expect(cancelled).toBe(1);
   });
 
   it('cancels a chunked body as soon as the actual bytes cross the limit', async () => {
