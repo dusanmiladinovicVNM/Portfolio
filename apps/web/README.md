@@ -30,10 +30,13 @@ Rules:
 ## Configuration
 
 - `VITE_SUPABASE_URL` — Supabase project URL.
-- `VITE_SUPABASE_ANON_KEY` — public browser key used for authentication.
+- `VITE_SUPABASE_ANON_KEY` — browser-safe anon/publishable key used for authentication.
 - `VITE_API_BASE_URL` — optional Portfolio API prefix; defaults to `/functions/v1/api`.
+  It must be root-relative or use the same origin as `VITE_SUPABASE_URL`.
 
-No service-role/database secret belongs in the web bundle.
+The web bootstrap rejects Supabase secret/service-role keys and cross-origin API
+targets before any Portfolio bearer request can be made. No service-role/database
+secret belongs in the web bundle.
 
 ## Current slice
 
