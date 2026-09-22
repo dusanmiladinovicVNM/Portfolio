@@ -6,6 +6,7 @@ import {
   type LeaseRepository,
   type OwnershipRepository,
   type PartyRepository,
+  type PdfPort,
   type PortfolioRepository,
   type TenancyRepository,
   type UserAccessRepository,
