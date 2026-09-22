@@ -106,6 +106,21 @@ export const maintenanceWorkOrderEntryResponseSchema = z.object({
   serviceEventIds: z.array(entityIdSchema),
 });
 
+export const maintenanceIssueListResponseSchema = z.object({
+  items: z.array(maintenanceIssueResponseSchema),
+});
+
+export const maintenanceWorkOrderEntryListResponseSchema = z.object({
+  items: z.array(maintenanceWorkOrderEntryResponseSchema),
+});
+
+export const maintenanceWorkOrderServiceEventLinkResponseSchema = z.object({
+  workOrderId: entityIdSchema,
+  serviceEventId: entityIdSchema,
+  linkedAt: instantSchema,
+  linkedByUserId: entityIdSchema,
+});
+
 export type CreateMaintenanceIssueRequest = z.infer<
   typeof createMaintenanceIssueRequestSchema
 >;
@@ -135,4 +150,13 @@ export type MaintenanceWorkOrderResponse = z.infer<
 >;
 export type MaintenanceWorkOrderEntryResponse = z.infer<
   typeof maintenanceWorkOrderEntryResponseSchema
+>;
+export type MaintenanceIssueListResponse = z.infer<
+  typeof maintenanceIssueListResponseSchema
+>;
+export type MaintenanceWorkOrderEntryListResponse = z.infer<
+  typeof maintenanceWorkOrderEntryListResponseSchema
+>;
+export type MaintenanceWorkOrderServiceEventLinkResponse = z.infer<
+  typeof maintenanceWorkOrderServiceEventLinkResponseSchema
 >;
