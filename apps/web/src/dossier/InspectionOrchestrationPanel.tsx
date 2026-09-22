@@ -43,6 +43,7 @@ import {
 import { unitRoute } from '../navigation/workspace-route.js';
 import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
 import { formatDetailKey } from '../presentation/format.js';
+import type { InspectionWriteGate } from './inspection-write-gate.js';
 import {
   assertAssignedInspectionWorkList,
   assertCreatedInspection,
@@ -53,12 +54,6 @@ import {
   isRecoveredInspectionOrchestration,
 } from './inspection-orchestration-owner.js';
 
-export interface InspectionOrchestrationWriteGate {
-  readonly pending: boolean;
-  readonly tryStart: () => boolean;
-  readonly finish: () => void;
-}
-
 interface InspectionOrchestrationPanelProps {
   readonly api: PortfolioApi;
   readonly propertyId: string;
@@ -68,7 +63,7 @@ interface InspectionOrchestrationPanelProps {
   readonly selectedInspection: InspectionResponseDto | null;
   readonly createBlockedByDirtySection: boolean;
   readonly navigate: NavigateWorkspace;
-  readonly writeGate: InspectionOrchestrationWriteGate;
+  readonly writeGate: InspectionWriteGate;
   readonly onCreated: (inspection: InspectionResponseDto) => void;
   readonly onUpdated: (inspection: InspectionResponseDto) => void;
   readonly onCanonicalReload: () => void;

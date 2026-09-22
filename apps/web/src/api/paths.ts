@@ -311,3 +311,12 @@ export function inspectionSectionPath(
 ): string {
   return `${inspectionPath(inspectionId)}/sections/${encodeURIComponent(sectionId)}`;
 }
+
+
+export function inspectionFindingsPath(inspectionId: string): string {
+  return `${inspectionPath(inspectionId)}/findings`;
+}
+
+export function inspectionEvidencePath(inspectionId: string): string {
+  return `${inspectionPath(inspectionId)}/evidence`;
+}

@@ -21,6 +21,7 @@ import type {
   MaintenanceWorkOrderEntryResponse,
   MaintenanceWorkOrderResponse,
   ServiceEventResponse,
+  InspectionEvidenceResponse,
   InspectionFindingResponse,
   InspectionResponseDto,
   PartyResponse,
@@ -60,6 +61,15 @@ const inspectionNotesItemId = 'a1000000-0000-4000-8000-000000000005';
 const inspectionUserId = 'a1000000-0000-4000-8000-000000000006';
 const inspectionConditionResponseId = 'a1000000-0000-4000-8000-000000000007';
 const inspectionNotesResponseId = 'a1000000-0000-4000-8000-000000000008';
+const inspectionFindingIds = [
+  'a1000000-0000-4000-8000-000000000009',
+  'a1000000-0000-4000-8000-000000000010',
+] as const;
+const inspectionEvidenceIds = [
+  'a1000000-0000-4000-8000-000000000011',
+  'a1000000-0000-4000-8000-000000000012',
+  'a1000000-0000-4000-8000-000000000013',
+] as const;
 const setupPropertyId = 'b1000000-0000-4000-8000-000000000001';
 const setupUnitId = 'b1000000-0000-4000-8000-000000000002';
 const setupSpaceId = 'b1000000-0000-4000-8000-000000000003';
@@ -98,10 +108,16 @@ const setupTermIds = [
 const setupDocumentIds = [
   'b1000000-0000-4000-8000-000000000023',
   'b1000000-0000-4000-8000-000000000024',
+  'b1000000-0000-4000-8000-000000000051',
+  'b1000000-0000-4000-8000-000000000052',
+  'b1000000-0000-4000-8000-000000000053',
 ] as const;
 const setupDocumentVersionIds = [
   'b1000000-0000-4000-8000-000000000025',
   'b1000000-0000-4000-8000-000000000026',
+  'b1000000-0000-4000-8000-000000000054',
+  'b1000000-0000-4000-8000-000000000055',
+  'b1000000-0000-4000-8000-000000000056',
 ] as const;
 const setupDocumentLinkIds = [
   'b1000000-0000-4000-8000-000000000027',
@@ -606,6 +622,10 @@ let inspectionResponses: Array<{
   updatedByUserId: string;
   updatedAt: string;
 }> = [];
+let inspectionFindings: InspectionFindingResponse[] = [];
+let inspectionEvidence: InspectionEvidenceResponse[] = [];
+let inspectionFindingSequence = 0;
+let inspectionEvidenceSequence = 0;
 
 const inspectionSchema = {
   id: inspectionSchemaVersionId,
@@ -749,8 +769,8 @@ function inspectionBundle() {
       },
     ],
     responses: inspectionResponses,
-    findings: [],
-    evidence: [],
+    findings: inspectionFindings,
+    evidence: inspectionEvidence,
     signatures: [],
     finalSnapshot: null,
   };
@@ -953,7 +973,10 @@ type BrowserHarnessWindow = Window & {
   __portfolioHoldMeterMutation?: boolean;
   __portfolioHoldMaintenanceMutation?: boolean;
   __portfolioHoldInspectionOrchestration?: boolean;
+  __portfolioHoldInspectionEvidence?: boolean;
   __portfolioFailNextInspectionCreateAfterCommit?: boolean;
+  __portfolioFailNextInspectionFindingAfterCommit?: boolean;
+  __portfolioFailNextInspectionEvidenceAfterCommit?: boolean;
   __portfolioFailNextInspectionOrchestrationAfterCommit?: boolean;
   __portfolioFailNextMaintenanceIssueCreateAfterCommit?: boolean;
   __portfolioFailNextMaintenanceWorkOrderCreateAfterCommit?: boolean;
@@ -973,6 +996,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioPendingMeterMutation?: boolean;
   __portfolioPendingMaintenanceMutation?: boolean;
   __portfolioPendingInspectionOrchestration?: boolean;
+  __portfolioPendingInspectionEvidence?: boolean;
   __portfolioReleaseUnitCreate?: () => boolean;
   __portfolioReleaseSpaceCreate?: () => boolean;
   __portfolioReleaseTenancyMutation?: () => boolean;
@@ -981,6 +1005,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioReleaseMeterMutation?: () => boolean;
   __portfolioReleaseMaintenanceMutation?: () => boolean;
   __portfolioReleaseInspectionOrchestration?: () => boolean;
+  __portfolioReleaseInspectionEvidence?: () => boolean;
 };
 
 const browserHarnessWindow = window as BrowserHarnessWindow;
@@ -1009,6 +1034,9 @@ let heldMaintenanceMutation:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 let heldInspectionOrchestration:
+  | { readonly response: Response; readonly resolve: (response: Response) => void }
+  | null = null;
+let heldInspectionEvidence:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 
@@ -1102,6 +1130,17 @@ function maybeHoldInspectionOrchestration(
   });
 }
 
+function maybeHoldInspectionEvidence(response: Response): Promise<Response> {
+  if (!browserHarnessWindow.__portfolioHoldInspectionEvidence) {
+    return Promise.resolve(response);
+  }
+
+  browserHarnessWindow.__portfolioPendingInspectionEvidence = true;
+  return new Promise<Response>((resolve) => {
+    heldInspectionEvidence = { response, resolve };
+  });
+}
+
 browserHarnessWindow.__portfolioReleaseUnitCreate = () => {
   if (!heldUnitCreate) return false;
   const held = heldUnitCreate;
@@ -1179,6 +1218,16 @@ browserHarnessWindow.__portfolioReleaseInspectionOrchestration = () => {
   heldInspectionOrchestration = null;
   browserHarnessWindow.__portfolioHoldInspectionOrchestration = false;
   browserHarnessWindow.__portfolioPendingInspectionOrchestration = false;
+  held.resolve(held.response);
+  return true;
+};
+
+browserHarnessWindow.__portfolioReleaseInspectionEvidence = () => {
+  if (!heldInspectionEvidence) return false;
+  const held = heldInspectionEvidence;
+  heldInspectionEvidence = null;
+  browserHarnessWindow.__portfolioHoldInspectionEvidence = false;
+  browserHarnessWindow.__portfolioPendingInspectionEvidence = false;
   held.resolve(held.response);
   return true;
 };
@@ -3768,6 +3817,133 @@ globalThis.fetch = async (
       responses: persisted,
       clearedItemIds: body.clear,
     });
+  }
+
+  if (
+    path === `/inspections/${inspectionId}/findings` &&
+    init?.method === 'POST'
+  ) {
+    requireInspectionAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      sectionId: string;
+      itemId?: string | null;
+      severity: InspectionFindingResponse['severity'];
+      title: string;
+      description?: string | null;
+    };
+    if (
+      body.sectionId !== inspectionSectionId ||
+      (body.itemId != null &&
+        body.itemId !== inspectionConditionItemId &&
+        body.itemId !== inspectionNotesItemId)
+    ) {
+      return apiError(
+        422,
+        'INSPECTION_FINDING_SCOPE_INVALID',
+        'Finding scope does not belong to the Inspection schema.',
+      );
+    }
+
+    const id = inspectionFindingIds[inspectionFindingSequence++];
+    if (!id) throw new Error('Inspection Finding id pool exhausted.');
+    const created: InspectionFindingResponse = {
+      id,
+      inspectionId,
+      sectionId: body.sectionId,
+      itemId: body.itemId ?? null,
+      severity: body.severity,
+      title: body.title.trim(),
+      description: body.description?.trim() || null,
+      createdByUserId: inspectionUserId,
+      createdAt: '2025-06-30T08:15:00.000Z',
+    };
+    inspectionFindings = [...inspectionFindings, created];
+    inspectionContentRevision += 1;
+
+    if (browserHarnessWindow.__portfolioFailNextInspectionFindingAfterCommit) {
+      browserHarnessWindow.__portfolioFailNextInspectionFindingAfterCommit =
+        false;
+      return apiError(
+        503,
+        'INSPECTION_FINDING_TEST_ACK_LOST',
+        'Intentional Finding acknowledgement loss.',
+      );
+    }
+    return json(created, 201);
+  }
+
+  if (
+    path === `/inspections/${inspectionId}/evidence` &&
+    init?.method === 'POST'
+  ) {
+    requireInspectionAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      documentVersionId: string;
+      kind: 'photo' | 'attachment';
+      sectionId?: string;
+      itemId?: string;
+      caption?: string | null;
+    };
+    if (
+      !setupDocumentVersions.some(
+        (version) => version.id === body.documentVersionId,
+      )
+    ) {
+      return apiError(
+        422,
+        'INSPECTION_EVIDENCE_DOCUMENT_VERSION_INVALID',
+        'Evidence version is not canonical.',
+      );
+    }
+    if (
+      body.sectionId !== undefined &&
+      body.sectionId !== inspectionSectionId
+    ) {
+      return apiError(
+        422,
+        'INSPECTION_EVIDENCE_SCOPE_INVALID',
+        'Evidence section belongs to another schema.',
+      );
+    }
+    if (
+      body.itemId !== undefined &&
+      (body.sectionId !== inspectionSectionId ||
+        (body.itemId !== inspectionConditionItemId &&
+          body.itemId !== inspectionNotesItemId))
+    ) {
+      return apiError(
+        422,
+        'INSPECTION_EVIDENCE_SCOPE_INVALID',
+        'Evidence item belongs to another section.',
+      );
+    }
+
+    const id = inspectionEvidenceIds[inspectionEvidenceSequence++];
+    if (!id) throw new Error('Inspection Evidence id pool exhausted.');
+    const created: InspectionEvidenceResponse = {
+      id,
+      inspectionId,
+      sectionId: body.sectionId ?? null,
+      itemId: body.itemId ?? null,
+      documentVersionId: body.documentVersionId,
+      kind: body.kind,
+      caption: body.caption?.trim() || null,
+      createdByUserId: inspectionUserId,
+      createdAt: '2025-06-30T08:20:00.000Z',
+    };
+    inspectionEvidence = [...inspectionEvidence, created];
+    inspectionContentRevision += 1;
+
+    if (browserHarnessWindow.__portfolioFailNextInspectionEvidenceAfterCommit) {
+      browserHarnessWindow.__portfolioFailNextInspectionEvidenceAfterCommit =
+        false;
+      return apiError(
+        503,
+        'INSPECTION_EVIDENCE_TEST_ACK_LOST',
+        'Intentional Evidence acknowledgement loss.',
+      );
+    }
+    return maybeHoldInspectionEvidence(json(created, 201));
   }
 
   if (path === `/units/${unitId}/tenancies`) {
