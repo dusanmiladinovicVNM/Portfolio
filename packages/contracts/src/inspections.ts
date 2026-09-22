@@ -301,6 +301,17 @@ export const inspectionStaffListResponseSchema = z.object({
   items: z.array(inspectionStaffResponseSchema),
 });
 
+export const assignedInspectionWorkItemResponseSchema = z.object({
+  inspection: inspectionResponseSchema,
+  propertyId: entityIdSchema,
+  unitCode: z.string(),
+  unitNumber: z.string(),
+});
+
+export const assignedInspectionWorkListResponseSchema = z.object({
+  items: z.array(assignedInspectionWorkItemResponseSchema),
+});
+
 export const inspectionBundleResponseSchema = z.object({
   inspection: inspectionResponseSchema,
   schema: inspectionSchemaVersionResponseSchema,
@@ -327,6 +338,12 @@ export type InspectionStaffResponse = z.infer<
 >;
 export type InspectionStaffListResponse = z.infer<
   typeof inspectionStaffListResponseSchema
+>;
+export type AssignedInspectionWorkItemResponse = z.infer<
+  typeof assignedInspectionWorkItemResponseSchema
+>;
+export type AssignedInspectionWorkListResponse = z.infer<
+  typeof assignedInspectionWorkListResponseSchema
 >;
 export type InspectionBundleResponse = z.infer<
   typeof inspectionBundleResponseSchema
