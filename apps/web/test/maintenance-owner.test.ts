@@ -162,6 +162,7 @@ describe('Maintenance browser owner guards', () => {
           title: 'Leaking washer',
           description: 'Water under machine',
           priority: 'high',
+          reportedAt: '2026-09-22T08:00:00.000Z',
         },
         issue(),
       ),
@@ -211,6 +212,19 @@ describe('Maintenance browser owner guards', () => {
         }),
       ),
     ).not.toThrow();
+
+    expect(() =>
+      assertMaintenanceIssueTerminal(
+        issue(),
+        'resolve',
+        issue({
+          title: 'Silently rewritten title',
+          status: 'resolved',
+          resolvedAt: '2026-09-22T10:00:00.000Z',
+          version: 2,
+        }),
+      ),
+    ).toThrow('terminal response');
   });
 
   it('binds WorkOrder create/update/assignment/lifecycle responses', () => {
@@ -261,6 +275,20 @@ describe('Maintenance browser owner guards', () => {
         },
       ),
     ).not.toThrow();
+
+    expect(() =>
+      assertMaintenanceWorkOrderTransition(
+        assigned,
+        'start',
+        {
+          ...assigned,
+          assignee: null,
+          status: 'in_progress',
+          startedAt: '2026-09-22T08:30:00.000Z',
+          version: 3,
+        },
+      ),
+    ).toThrow('wrong lifecycle state');
   });
 
   it('keeps ServiceEvent evidence owned by exact Asset and WorkOrder link', () => {
