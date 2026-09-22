@@ -2077,9 +2077,18 @@ try {
     warrantyCreateForm + "//textarea[@name='terms']",
     'Parts and labour coverage',
   );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextWarrantyCreateAfterCommit = true; return true;',
+  );
   await clickXpath(
     sessionId,
     warrantyCreateForm + "//button[normalize-space()='Record Warranty']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Warranty creation outcome is unconfirmed.')]",
   );
   await waitForElement(
     sessionId,
