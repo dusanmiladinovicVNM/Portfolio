@@ -49,7 +49,10 @@ import {
 import { useCreateSubmissionGuard } from '../admin/use-create-submission-guard.js';
 import { WorkspaceLink } from '../navigation/WorkspaceLink.js';
 import { unitRoute } from '../navigation/workspace-route.js';
-import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
+import type {
+  NavigateWorkspace,
+  SetNavigationBlocker,
+} from '../navigation/use-workspace-navigation.js';
 import { formatDetailKey } from '../presentation/format.js';
 import {
   assertAssetDestinationSpacesOwner,
@@ -71,6 +74,13 @@ interface UnitAssetsProps {
   readonly asOf: string;
   readonly assetId?: string | undefined;
   readonly navigate: NavigateWorkspace;
+  readonly setNavigationBlocker: SetNavigationBlocker;
+}
+
+interface AssetWriteGate {
+  readonly pending: boolean;
+  readonly tryStart: () => boolean;
+  readonly finish: () => void;
 }
 
 interface IdentifierRow {
@@ -256,6 +266,7 @@ function CreateAssetForm({
   readonly unitId: string;
   readonly spaces: readonly SpaceResponse[];
   readonly onCreated: (asset: AssetResponse) => void;
+  readonly writeGate: AssetWriteGate;
 }) {
   const submission = useCreateSubmissionGuard();
   const [submitting, setSubmitting] = useState(false);
@@ -272,6 +283,10 @@ function CreateAssetForm({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!submission.tryStart()) return;
+    if (!writeGate.tryStart()) {
+      submission.finish();
+      return;
+    }
 
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
@@ -329,6 +344,7 @@ function CreateAssetForm({
             label: '',
           },
         ]);
+        writeGate.finish();
         onCreated(created);
       }
     } catch (cause) {
@@ -337,6 +353,7 @@ function CreateAssetForm({
       }
     } finally {
       submission.finish();
+      writeGate.finish();
       if (submission.isMounted()) setSubmitting(false);
     }
   }
@@ -350,23 +367,27 @@ function CreateAssetForm({
       <div className="setup-form-grid">
         <label>
           Code
-          <input disabled={submitting} name="code" required />
+          <input disabled={submitting || writeGate.pending} name="code" required />
         </label>
         <label>
           Name
-          <input disabled={submitting} name="name" required />
+          <input disabled={submitting || writeGate.pending} name="name" required />
         </label>
         <label>
           Manufacturer
-          <input disabled={submitting} name="manufacturer" />
+          <input disabled={submitting || writeGate.pending} name="manufacturer" />
         </label>
         <label>
           Model
-          <input disabled={submitting} name="model" />
+          <input disabled={submitting || writeGate.pending} name="model" />
         </label>
         <label>
           Initial Space
-          <select defaultValue="" disabled={submitting} name="spaceId">
+          <select
+            defaultValue=""
+            disabled={submitting || writeGate.pending}
+            name="spaceId"
+          >
             <option value="">Unit level</option>
             {spaces.map((space) => (
               <option key={space.id} value={space.id}>
@@ -378,7 +399,7 @@ function CreateAssetForm({
       </div>
 
       <IdentifierEditor
-        disabled={submitting}
+        disabled={submitting || writeGate.pending}
         onChange={setRows}
         rows={rows}
       />
@@ -393,7 +414,11 @@ function CreateAssetForm({
         <span className="setup-hint">
           Creation also appends the first authoritative location interval.
         </span>
-        <button className="button-primary" disabled={submitting} type="submit">
+        <button
+          className="button-primary"
+          disabled={submitting || writeGate.pending}
+          type="submit"
+        >
           {submitting ? 'Creating…' : 'Create Asset'}
         </button>
       </div>
@@ -450,6 +475,7 @@ function AssetAdministration({
   readonly units: readonly UnitResponse[];
   readonly navigate: NavigateWorkspace;
   readonly onCanonicalWrite: () => void;
+  readonly writeGate: AssetWriteGate;
 }) {
   const guard = useCreateSubmissionGuard();
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
@@ -541,6 +567,10 @@ function AssetAdministration({
 
   function begin(action: Exclude<PendingAction, null>): boolean {
     if (!guard.tryStart()) return false;
+    if (!writeGate.tryStart()) {
+      guard.finish();
+      return false;
+    }
     setPendingAction(action);
     setError(null);
     return true;
@@ -548,6 +578,7 @@ function AssetAdministration({
 
   function finish() {
     guard.finish();
+    writeGate.finish();
     if (guard.isMounted()) setPendingAction(null);
   }
 
@@ -637,6 +668,7 @@ function AssetAdministration({
       if (!guard.isMounted()) return;
 
       if (response.unitId !== unitId) {
+        writeGate.finish();
         navigate(
           unitRoute(
             propertyId,
@@ -719,6 +751,7 @@ function AssetAdministration({
         );
       }
       onCanonicalWrite();
+      writeGate.finish();
       navigate(
         unitRoute(
           propertyId,
@@ -998,12 +1031,35 @@ export function UnitAssets({
   asOf,
   assetId,
   navigate,
+  setNavigationBlocker,
 }: UnitAssetsProps) {
   const [assets, setAssets] = useState<readonly AssetResponse[] | null>(null);
   const [units, setUnits] = useState<readonly UnitResponse[] | null>(null);
   const [spaces, setSpaces] = useState<readonly SpaceResponse[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [assetRevision, setAssetRevision] = useState(0);
+  const [writePending, setWritePending] = useState(false);
+  const writeSubmission = useCreateSubmissionGuard();
+
+  const writeGate: AssetWriteGate = {
+    pending: writePending,
+    tryStart: () => {
+      if (!writeSubmission.tryStart()) return false;
+      setNavigationBlocker(() => false);
+      setWritePending(true);
+      return true;
+    },
+    finish: () => {
+      writeSubmission.finish();
+      setNavigationBlocker(null);
+      if (writeSubmission.isMounted()) setWritePending(false);
+    },
+  };
+
+  useEffect(
+    () => () => setNavigationBlocker(null),
+    [setNavigationBlocker],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1079,6 +1135,7 @@ export function UnitAssets({
             propertyId={propertyId}
             spaces={spaces}
             unitId={unitId}
+            writeGate={writeGate}
           />
         ) : null}
       </section>
@@ -1177,6 +1234,7 @@ export function UnitAssets({
           propertyId={propertyId}
           unitId={unitId}
           units={units}
+          writeGate={writeGate}
         />
       ) : null}
     </div>
