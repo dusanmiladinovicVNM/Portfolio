@@ -10,9 +10,11 @@ import {
   type InspectionSchemaVersion,
   type InspectionSignature,
   type InspectionSchemaVersionId,
+  type PropertyId,
   type UnitId,
 } from '@portfolio/domain';
 import { requireCapability, type Actor } from '../security/access.js';
+import type { PortfolioRepository } from '../portfolio/portfolio-repository.js';
 import type {
   InspectionRepository,
   StaffDirectoryEntry,
@@ -59,12 +61,38 @@ export async function listInspectionsByUnitQuery(
     : inspections;
 }
 
+export interface AssignedInspectionWorkItem {
+  readonly inspection: Inspection;
+  readonly propertyId: PropertyId;
+  readonly unitCode: string;
+  readonly unitNumber: string;
+}
+
 export async function listAssignedInspectionsQuery(
-  repository: InspectionRepository,
+  inspectionRepository: InspectionRepository,
+  portfolioRepository: PortfolioRepository,
   actor: Actor,
-): Promise<readonly Inspection[]> {
+): Promise<readonly AssignedInspectionWorkItem[]> {
   requireCapability(actor, 'inspections:read');
-  return repository.listAssignedTo(actor.userId);
+  const inspections = await inspectionRepository.listAssignedTo(actor.userId);
+
+  return Promise.all(
+    inspections.map(async (inspection) => {
+      const unit = await portfolioRepository.getUnitById(inspection.unitId);
+      if (!unit) {
+        throw new DomainError(
+          'UNIT_NOT_FOUND',
+          'Assigned Inspection references a missing Unit.',
+        );
+      }
+      return {
+        inspection,
+        propertyId: unit.propertyId,
+        unitCode: unit.code,
+        unitNumber: unit.unitNumber,
+      };
+    }),
+  );
 }
 
 export async function listAssignableInspectionStaffQuery(
