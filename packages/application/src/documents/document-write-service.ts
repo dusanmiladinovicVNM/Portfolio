@@ -14,6 +14,7 @@ import {
 import { ApplicationError } from '../shared/application-error.js';
 import type { ClockPort } from '../shared/clock.js';
 import type { IdGenerator } from '../shared/id-generator.js';
+import { DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY } from './document-binary-policy.js';
 import type { DocumentRepository } from './document-repository.js';
 import type {
   FileStorageWritePort,
@@ -144,6 +145,16 @@ export async function uploadDocumentVersionRecord(
   deps: UploadDocumentVersionRecordDependencies,
   input: UploadDocumentVersionRecordInput,
 ): Promise<DocumentVersion> {
+  if (
+    input.content.byteLength >
+    DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY.maxBytes
+  ) {
+    throw new ApplicationError(
+      'DOCUMENT_BINARY_UPLOAD_LIMIT_EXCEEDED',
+      `Buffered Document binary writes support up to ${DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY.maxBytes} bytes.`,
+    );
+  }
+
   const document = await requireDocument(
     deps.documentRepository,
     input.documentId,
