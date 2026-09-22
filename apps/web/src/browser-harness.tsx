@@ -1799,24 +1799,23 @@ globalThis.fetch = async (
     });
   }
 
+  if (path === '/units/' + setupRecoveryUnitId + '/tenancies') {
+    return json({ items: [] });
+  }
+
   if (
-    setupUnit &&
-    path === '/units/' + setupUnitId + '/inspections' &&
+    path === '/units/' + setupRecoveryUnitId + '/inspections' &&
     (!init?.method || init.method === 'GET')
   ) {
     return json({
-      items: [
-        setupMaintenanceInspectionRecord(),
-        ...(setupOrchestrationInspection
-          ? [setupOrchestrationInspection]
-          : []),
-      ],
+      items: setupOrchestrationInspection
+        ? [setupOrchestrationInspection]
+        : [],
     });
   }
 
   if (
-    setupUnit &&
-    path === '/units/' + setupUnitId + '/inspections' &&
+    path === '/units/' + setupRecoveryUnitId + '/inspections' &&
     init?.method === 'POST'
   ) {
     requireInspectionAuth(init);
@@ -1831,19 +1830,19 @@ globalThis.fetch = async (
     if (
       body.inspectionType !== inspectionSchema.inspectionType ||
       body.schemaVersionId !== inspectionSchemaVersionId ||
-      (body.tenancyId != null && body.tenancyId !== setupTenancyId) ||
+      body.tenancyId != null ||
       body.assignedToUserId !== inspectionUserId
     ) {
       throw new Error(
-        'Setup Inspection create targeted invalid orchestration context.',
+        'Recovery Inspection create targeted invalid orchestration context.',
       );
     }
     setupOrchestrationInspection = {
       id: setupOrchestrationInspectionId,
       code: body.code,
       inspectionType: body.inspectionType,
-      unitId: setupUnitId,
-      tenancyId: body.tenancyId ?? null,
+      unitId: setupRecoveryUnitId,
+      tenancyId: null,
       schemaVersionId: body.schemaVersionId,
       assignedToUserId: body.assignedToUserId,
       createdByUserId: inspectionUserId,
@@ -1868,6 +1867,13 @@ globalThis.fetch = async (
     }
 
     return json(setupOrchestrationInspection, 201);
+  }
+
+  if (
+    setupUnit &&
+    path === '/units/' + setupUnitId + '/inspections'
+  ) {
+    return json({ items: [setupMaintenanceInspectionRecord()] });
   }
 
   if (path === '/inspections/' + setupMaintenanceInspectionId) {
@@ -3599,9 +3605,9 @@ globalThis.fetch = async (
           ? [
               {
                 inspection: setupOrchestrationInspection,
-                propertyId: setupPropertyId,
-                unitCode: setupUnit?.code ?? 'UNIT-SETUP-BRW',
-                unitNumber: setupUnit?.unitNumber ?? '1B',
+                propertyId: setupRecoveryPropertyId,
+                unitCode: setupRecoveryUnit.code,
+                unitNumber: setupRecoveryUnit.unitNumber,
               },
             ]
           : []),
