@@ -8,6 +8,7 @@ const driverUrl = `http://127.0.0.1:${driverPort}`;
 const propertyId = '11111111-1111-4111-8111-111111111111';
 const unitId = '22222222-2222-4222-8222-222222222222';
 const tenancyId = '33333333-3333-4333-8333-333333333333';
+const landlordPartyId = '88888888-8888-4888-8888-888888888888';
 const tenantPartyId = '99999999-9999-4999-8999-999999999999';
 const agreementId = '55555555-5555-4555-8555-555555555555';
 const amendmentId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
