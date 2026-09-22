@@ -12,6 +12,7 @@ import { requireCapability, type Actor } from '../security/access.js';
 import type { ClockPort } from '../shared/clock.js';
 import type { IdGenerator } from '../shared/id-generator.js';
 import type { Sha256Port } from '../shared/sha256-port.js';
+import { assertBufferedDocumentBinaryWriteSize } from '../documents/document-binary-policy.js';
 import type { DocumentRepository } from '../documents/document-repository.js';
 import type { FileStorageWritePort } from '../documents/file-storage-port.js';
 import {
@@ -205,6 +206,8 @@ export async function uploadInspectionBinaryCommand(
       'uploadKey, fileName, mimeType and non-empty content are required.',
     );
   }
+
+  assertBufferedDocumentBinaryWriteSize(input.content.byteLength);
 
   const expectedVersionId = asDocumentVersionId(input.uploadKey);
   const incomingSha256 = await deps.sha256.digest(input.content);
