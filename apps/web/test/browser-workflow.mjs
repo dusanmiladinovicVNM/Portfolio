@@ -12,6 +12,8 @@ const unitId = '22222222-2222-4222-8222-222222222222';
 const tenancyId = '33333333-3333-4333-8333-333333333333';
 const landlordPartyId = '88888888-8888-4888-8888-888888888888';
 const tenantPartyId = '99999999-9999-4999-8999-999999999999';
+const historicalServiceProviderPartyId =
+  'e1000000-0000-4000-8000-000000000001';
 const agreementId = '55555555-5555-4555-8555-555555555555';
 const amendmentId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const inspectionId = 'a1000000-0000-4000-8000-000000000001';
@@ -2053,7 +2055,7 @@ try {
   await selectOptionXpath(
     sessionId,
     warrantyCreateForm + "//select[@name='providerPartyId']",
-    setupPartyId,
+    historicalServiceProviderPartyId,
   );
   await typeXpath(
     sessionId,
@@ -2164,6 +2166,17 @@ try {
     planCreateForm + "//input[@name='intervalMonths']",
     '12',
   );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      planCreateForm +
+        "//select[@name='providerPartyId']/option[@value='" +
+        historicalServiceProviderPartyId +
+        "']",
+    ),
+    false,
+    'Inactive historical provider is not eligible for future ServicePlan policy',
+  );
   await selectOptionXpath(
     sessionId,
     planCreateForm + "//select[@name='providerPartyId']",
@@ -2257,7 +2270,7 @@ try {
   await selectOptionXpath(
     sessionId,
     serviceEventCreateForm + "//select[@name='providerPartyId']",
-    setupPartyId,
+    historicalServiceProviderPartyId,
   );
   await typeXpath(
     sessionId,
