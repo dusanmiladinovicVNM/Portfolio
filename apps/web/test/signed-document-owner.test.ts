@@ -64,13 +64,24 @@ function link(
 
 describe('signed Document owner guards', () => {
   it('accepts only the canonical initial Document state after create', () => {
-    expect(() => assertCreatedDocument(document())).not.toThrow();
+    const expected = {
+      code: 'DOC-1',
+      title: 'Lease',
+      category: 'legal' as const,
+    };
+    expect(() => assertCreatedDocument(expected, document())).not.toThrow();
     expect(() =>
-      assertCreatedDocument(document({ revision: 2 })),
+      assertCreatedDocument(expected, document({ revision: 2 })),
     ).toThrow('initial canonical lifecycle');
     expect(() =>
-      assertCreatedDocument(document({ latestVersionNumber: 1 })),
+      assertCreatedDocument(expected, document({ latestVersionNumber: 1 })),
     ).toThrow('initial canonical lifecycle');
+    expect(() =>
+      assertCreatedDocument(
+        expected,
+        document({ code: 'DOC-OTHER' }),
+      ),
+    ).toThrow('submitted legal Document');
   });
 
   it('rejects cross-Document version lists', () => {
@@ -87,12 +98,25 @@ describe('signed Document owner guards', () => {
 
   it('binds upload response to the Document and expected next version', () => {
     expect(() =>
-      assertUploadedDocumentVersion(document(), version()),
+      assertUploadedDocumentVersion(
+        document(),
+        {
+          fileName: 'lease.pdf',
+          mimeType: 'application/pdf',
+          byteSize: 3,
+        },
+        version(),
+      ),
     ).not.toThrow();
 
     expect(() =>
       assertUploadedDocumentVersion(
         document(),
+        {
+          fileName: 'lease.pdf',
+          mimeType: 'application/pdf',
+          byteSize: 3,
+        },
         version({ documentId: otherDocumentId }),
       ),
     ).toThrow('another Document');
@@ -100,6 +124,11 @@ describe('signed Document owner guards', () => {
     expect(() =>
       assertUploadedDocumentVersion(
         document(),
+        {
+          fileName: 'lease.pdf',
+          mimeType: 'application/pdf',
+          byteSize: 3,
+        },
         version({ versionNumber: 2 }),
       ),
     ).toThrow('expected next version');
@@ -107,12 +136,29 @@ describe('signed Document owner guards', () => {
     expect(() =>
       assertUploadedDocumentVersion(
         document(),
+        {
+          fileName: 'lease.pdf',
+          mimeType: 'application/pdf',
+          byteSize: 3,
+        },
         version({
           status: 'final',
           finalizedAt: '2026-09-22T08:00:00.000Z',
         }),
       ),
     ).toThrow('canonical stored state');
+
+    expect(() =>
+      assertUploadedDocumentVersion(
+        document(),
+        {
+          fileName: 'other.pdf',
+          mimeType: 'application/pdf',
+          byteSize: 3,
+        },
+        version(),
+      ),
+    ).toThrow('submitted binary metadata');
   });
 
   it('binds finalization response to the exact Version identity', () => {
