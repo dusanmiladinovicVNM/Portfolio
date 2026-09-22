@@ -58,6 +58,15 @@ export function assertAssetDestinationSpacesOwner(
   }
 }
 
+export function assertAssetReadOwner(
+  assetId: string,
+  asset: AssetResponse,
+): void {
+  if (asset.id !== assetId) {
+    throw new Error('Canonical Asset read returned another Asset identity.');
+  }
+}
+
 export function assertUnitAssetsOwner(
   unitId: string,
   assets: readonly AssetResponse[],
