@@ -519,6 +519,54 @@ function setupTermSnapshot(
   };
 }
 
+function documentCatalog(): DocumentResponse[] {
+  return [
+    agreementDocumentReference.document,
+    amendmentDocumentReference.document,
+    ...setupDocuments,
+  ];
+}
+
+function versionsForDocument(documentIdValue: string): DocumentVersionResponse[] {
+  if (documentIdValue === agreementDocumentId) {
+    return [agreementDocumentReference.linkedVersion];
+  }
+  if (documentIdValue === amendmentDocumentId) {
+    return [amendmentDocumentReference.linkedVersion];
+  }
+  return setupDocumentVersions.filter(
+    (version) => version.documentId === documentIdValue,
+  );
+}
+
+function setupDocumentReferences(
+  targetType: 'lease_agreement' | 'lease_amendment',
+  targetId: string,
+) {
+  return setupDocumentLinks
+    .filter(
+      (link) =>
+        link.targetType === targetType &&
+        link.targetId === targetId,
+    )
+    .map((link) => {
+      const document = setupDocuments.find(
+        (candidate) => candidate.id === link.documentId,
+      );
+      if (!document) throw new Error('Setup DocumentLink has no Document.');
+      const linkedVersion =
+        link.documentVersionId === null
+          ? null
+          : setupDocumentVersions.find(
+              (candidate) => candidate.id === link.documentVersionId,
+            ) ?? null;
+      if (link.documentVersionId !== null && linkedVersion === null) {
+        throw new Error('Setup DocumentLink has no linked version.');
+      }
+      return { document, link, linkedVersion };
+    });
+}
+
 function apiPath(input: RequestInfo | URL): URL {
   const raw =
     input instanceof Request
@@ -542,6 +590,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioHoldSpaceCreate?: boolean;
   __portfolioHoldTenancyMutation?: boolean;
   __portfolioHoldContractMutation?: boolean;
+  __portfolioFailNextSignedOriginalLink?: boolean;
   __portfolioPendingUnitCreate?: boolean;
   __portfolioPendingSpaceCreate?: boolean;
   __portfolioPendingTenancyMutation?: boolean;
@@ -659,6 +708,247 @@ globalThis.fetch = async (
 ): Promise<Response> => {
   const url = apiPath(input);
   const path = url.pathname;
+
+  if (path === '/documents') {
+    if (init?.method === 'POST') {
+      requirePortfolioAuth(init);
+      const body = JSON.parse(String(init.body)) as {
+        code: string;
+        title: string;
+        category: DocumentResponse['category'];
+      };
+      if (
+        documentCatalog().some(
+          (candidate) => candidate.code.toLowerCase() === body.code.toLowerCase(),
+        )
+      ) {
+        return apiError(
+          409,
+          'DOCUMENT_CODE_ALREADY_EXISTS',
+          'Document code already exists.',
+        );
+      }
+      const id = setupDocumentIds[setupDocumentSequence++];
+      if (!id) throw new Error('Setup Document id pool exhausted.');
+      const created: DocumentResponse = {
+        id,
+        code: body.code,
+        title: body.title,
+        category: body.category,
+        status: 'active',
+        latestVersionNumber: 0,
+        revision: 1,
+      };
+      setupDocuments.push(created);
+      return json(created, 201);
+    }
+    return json({ items: documentCatalog() });
+  }
+
+  const setupDocumentVersionMatch =
+    /^\/documents\/([^/]+)\/versions$/.exec(path);
+  if (setupDocumentVersionMatch) {
+    const documentIdValue = setupDocumentVersionMatch[1]!;
+    if (init?.method === 'POST') {
+      requirePortfolioAuth(init);
+      const document = setupDocuments.find(
+        (candidate) => candidate.id === documentIdValue,
+      );
+      if (!document) {
+        return apiError(404, 'DOCUMENT_NOT_FOUND', 'Document not found.');
+      }
+
+      const expectedRevision = Number(
+        url.searchParams.get('expectedDocumentRevision'),
+      );
+      if (expectedRevision !== document.revision) {
+        return apiError(
+          409,
+          'DOCUMENT_VERSION_CONFLICT',
+          'Document changed before the new version upload started.',
+        );
+      }
+
+      const fileName = url.searchParams.get('fileName')?.trim();
+      const mimeType =
+        new Headers(init.headers).get('content-type')?.split(';')[0]?.trim();
+      if (!fileName || !mimeType) {
+        return apiError(400, 'VALIDATION_ERROR', 'Invalid upload.');
+      }
+
+      let bytes: Uint8Array;
+      if (init.body instanceof Blob) {
+        bytes = new Uint8Array(await init.body.arrayBuffer());
+      } else if (init.body instanceof ArrayBuffer) {
+        bytes = new Uint8Array(init.body);
+      } else if (ArrayBuffer.isView(init.body)) {
+        bytes = new Uint8Array(
+          init.body.buffer,
+          init.body.byteOffset,
+          init.body.byteLength,
+        );
+      } else {
+        throw new Error('Unexpected setup Document binary body.');
+      }
+      if (bytes.byteLength === 0) {
+        return apiError(422, 'DOCUMENT_INVALID_UPLOAD', 'Upload is empty.');
+      }
+
+      const id = setupDocumentVersionIds[setupDocumentVersionSequence++];
+      if (!id) throw new Error('Setup DocumentVersion id pool exhausted.');
+      const version: DocumentVersionResponse = {
+        id,
+        documentId: document.id,
+        versionNumber: document.latestVersionNumber + 1,
+        fileName,
+        mimeType,
+        byteSize: bytes.byteLength,
+        sha256: (setupDocumentVersionSequence % 2 === 0 ? 'e' : 'f').repeat(64),
+        status: 'stored',
+        finalizedAt: null,
+      };
+      setupDocumentVersions.push(version);
+      setupDocuments = setupDocuments.map((candidate) =>
+        candidate.id === document.id
+          ? {
+              ...candidate,
+              latestVersionNumber: version.versionNumber,
+              revision: candidate.revision + 1,
+            }
+          : candidate,
+      );
+      return json(version, 201);
+    }
+
+    return json({ items: versionsForDocument(documentIdValue) });
+  }
+
+  const setupFinalizeMatch =
+    /^\/document-versions\/([^/]+)\/finalize$/.exec(path);
+  if (setupFinalizeMatch && init?.method === 'POST') {
+    requirePortfolioAuth(init);
+    const versionIdValue = setupFinalizeMatch[1]!;
+    const version = setupDocumentVersions.find(
+      (candidate) => candidate.id === versionIdValue,
+    );
+    if (!version) {
+      return apiError(
+        404,
+        'DOCUMENT_VERSION_NOT_FOUND',
+        'Document version not found.',
+      );
+    }
+    if (version.status !== 'stored') {
+      return apiError(
+        409,
+        'DOCUMENT_VERSION_CONFLICT',
+        'Document version changed before it could be finalized.',
+      );
+    }
+    const finalized: DocumentVersionResponse = {
+      ...version,
+      status: 'final',
+      finalizedAt: '2027-06-20T12:00:00.000Z',
+    };
+    setupDocumentVersions = setupDocumentVersions.map((candidate) =>
+      candidate.id === finalized.id ? finalized : candidate,
+    );
+    return json(finalized);
+  }
+
+  const setupDocumentLinksMatch =
+    /^\/documents\/([^/]+)\/links$/.exec(path);
+  if (setupDocumentLinksMatch && init?.method === 'POST') {
+    requirePortfolioAuth(init);
+    const documentIdValue = setupDocumentLinksMatch[1]!;
+    const document = setupDocuments.find(
+      (candidate) => candidate.id === documentIdValue,
+    );
+    if (!document) {
+      return apiError(404, 'DOCUMENT_NOT_FOUND', 'Document not found.');
+    }
+    const body = JSON.parse(String(init.body)) as {
+      documentVersionId?: string | null;
+      relation: DocumentLinkResponse['relation'];
+      targetType: DocumentLinkResponse['targetType'];
+      targetId: string;
+    };
+
+    if (
+      body.relation === 'signed_original' &&
+      browserHarnessWindow.__portfolioFailNextSignedOriginalLink
+    ) {
+      browserHarnessWindow.__portfolioFailNextSignedOriginalLink = false;
+      return apiError(
+        503,
+        'SIGNED_DOCUMENT_LINK_TEST_FAILURE',
+        'Intentional browser-harness link failure.',
+      );
+    }
+
+    const linkedVersion =
+      body.documentVersionId == null
+        ? null
+        : setupDocumentVersions.find(
+            (candidate) => candidate.id === body.documentVersionId,
+          ) ?? null;
+    if (
+      body.relation === 'signed_original' &&
+      linkedVersion?.status !== 'final'
+    ) {
+      return apiError(
+        422,
+        'DOCUMENT_SIGNED_ORIGINAL_VERSION_NOT_FINAL',
+        'signed_original requires a finalized immutable document version.',
+      );
+    }
+
+    if (
+      body.relation === 'signed_original' &&
+      setupDocumentLinks.some(
+        (candidate) =>
+          candidate.relation === 'signed_original' &&
+          candidate.targetType === body.targetType &&
+          candidate.targetId === body.targetId,
+      )
+    ) {
+      return apiError(
+        409,
+        'DOCUMENT_SIGNED_ORIGINAL_ALREADY_EXISTS',
+        'This legal record already has a signed original document.',
+      );
+    }
+
+    const id = setupDocumentLinkIds[setupDocumentLinkSequence++];
+    if (!id) throw new Error('Setup DocumentLink id pool exhausted.');
+    const link: DocumentLinkResponse = {
+      id,
+      documentId: document.id,
+      documentVersionId: body.documentVersionId ?? null,
+      relation: body.relation,
+      targetType: body.targetType,
+      targetId: body.targetId,
+    };
+    setupDocumentLinks.push(link);
+    return json(link, 201);
+  }
+
+  const setupBinaryMatch =
+    /^\/document-versions\/([^/]+)\/content$/.exec(path);
+  if (setupBinaryMatch) {
+    const version = setupDocumentVersions.find(
+      (candidate) => candidate.id === setupBinaryMatch[1],
+    );
+    if (version) {
+      requirePortfolioAuth(init);
+      browserHarnessWindow.__portfolioBinaryReads =
+        (browserHarnessWindow.__portfolioBinaryReads ?? 0) + 1;
+      return new Response(new Uint8Array([7, 8, 9]), {
+        status: 200,
+        headers: { 'content-type': version.mimeType },
+      });
+    }
+  }
 
   if (path === '/properties' && init?.method === 'POST') {
     requirePortfolioAuth(init);
@@ -1135,14 +1425,18 @@ globalThis.fetch = async (
     setupAgreement &&
     path === '/agreements/' + setupAgreement.id + '/documents'
   ) {
-    return json({ items: [] });
+    return json({
+      items: setupDocumentReferences('lease_agreement', setupAgreement.id),
+    });
   }
 
   if (
     setupAmendment &&
     path === '/amendments/' + setupAmendment.id + '/documents'
   ) {
-    return json({ items: [] });
+    return json({
+      items: setupDocumentReferences('lease_amendment', setupAmendment.id),
+    });
   }
 
   if (path === '/units/' + unitId + '/spaces') {
