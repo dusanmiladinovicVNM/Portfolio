@@ -162,7 +162,7 @@ function CreateMeterForm({
     readonly spaceId: string | null;
     readonly label: string;
     readonly installedAt: string;
-  }) => Promise<void>;
+  }) => Promise<boolean>;
 }) {
   const localSubmission = useCreateSubmissionGuard();
   const [utilityType, setUtilityType] =
@@ -230,7 +230,7 @@ function CreateMeterForm({
       }
     } catch (cause) {
       if (localSubmission.isMounted()) {
-        await onReconcile({
+        const recovered = await onReconcile({
           code: parsed.data.code,
           serialNumber: parsed.data.serialNumber,
           utilityType: parsed.data.utilityType,
@@ -240,12 +240,14 @@ function CreateMeterForm({
           label: parsed.data.label,
           installedAt: parsed.data.installedAt,
         });
-        setError(
-          meterError(
-            cause,
-            'Meter creation outcome could not be confirmed. Canonical Unit Meter state was reloaded.',
-          ),
-        );
+        if (localSubmission.isMounted() && !recovered) {
+          setError(
+            meterError(
+              cause,
+              'Meter creation outcome could not be confirmed. Canonical Unit Meter state was reloaded.',
+            ),
+          );
+        }
       }
     } finally {
       localSubmission.finish();
@@ -1220,9 +1222,12 @@ export function UnitMeters({
             meterId: committed.id,
           }),
         );
+        return true;
       }
+      return false;
     } catch {
       setListRevision((revision) => revision + 1);
+      return false;
     }
   }
 
