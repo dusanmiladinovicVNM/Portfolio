@@ -16,8 +16,18 @@ export function assertDocumentVersionListOwner(
 }
 
 export function assertCreatedDocument(
+  expected: Pick<DocumentResponse, 'code' | 'title' | 'category'>,
   document: DocumentResponse,
 ): void {
+  if (
+    document.code !== expected.code ||
+    document.title !== expected.title ||
+    document.category !== expected.category
+  ) {
+    throw new Error(
+      'Created Document response does not match the submitted legal Document.',
+    );
+  }
   if (
     document.status !== 'active' ||
     document.latestVersionNumber !== 0 ||
@@ -31,6 +41,11 @@ export function assertCreatedDocument(
 
 export function assertUploadedDocumentVersion(
   document: DocumentResponse,
+  expected: {
+    readonly fileName: string;
+    readonly mimeType: string;
+    readonly byteSize: number;
+  },
   version: DocumentVersionResponse,
 ): void {
   if (version.documentId !== document.id) {
@@ -38,6 +53,15 @@ export function assertUploadedDocumentVersion(
   }
   if (version.versionNumber !== document.latestVersionNumber + 1) {
     throw new Error('Uploaded version does not match the expected next version.');
+  }
+  if (
+    version.fileName !== expected.fileName ||
+    version.mimeType !== expected.mimeType ||
+    version.byteSize !== expected.byteSize
+  ) {
+    throw new Error(
+      'Uploaded version response does not match the submitted binary metadata.',
+    );
   }
   if (version.status !== 'stored' || version.finalizedAt !== null) {
     throw new Error('Uploaded version is not in the canonical stored state.');
