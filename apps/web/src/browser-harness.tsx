@@ -1051,6 +1051,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioFailNextAssetMoveAfterCommit?: boolean;
   __portfolioConcurrentAssetMoveAcrossProperty?: boolean;
   __portfolioFailNextAssetReplacementAfterCommit?: boolean;
+  __portfolioFailNextWarrantyCreateAfterCommit?: boolean;
   __portfolioFailNextSignedOriginalLink?: boolean;
   __portfolioPendingUnitCreate?: boolean;
   __portfolioPendingSpaceCreate?: boolean;
@@ -3136,6 +3137,15 @@ globalThis.fetch = async (
         recordedByUserId: inspectionUserId,
       };
       setupWarranties.push(created);
+      if (browserHarnessWindow.__portfolioFailNextWarrantyCreateAfterCommit) {
+        browserHarnessWindow.__portfolioFailNextWarrantyCreateAfterCommit =
+          false;
+        return apiError(
+          503,
+          'WARRANTY_CREATE_TEST_ACK_LOST',
+          'Intentional Warranty create acknowledgement loss.',
+        );
+      }
       return json(created, 201);
     }
     return json({
