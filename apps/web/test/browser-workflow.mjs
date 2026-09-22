@@ -3167,7 +3167,7 @@ try {
 
   await executeScript(
     sessionId,
-    'document.querySelector("form[data-inspection-form=\"create\"]").requestSubmit(); return true;',
+    "document.querySelector('form[data-inspection-form=\"create\"]').requestSubmit(); return true;",
   );
   await new Promise((resolve) => setTimeout(resolve, 150));
   assertEqual(
