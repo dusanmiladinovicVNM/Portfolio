@@ -201,16 +201,11 @@ function AgreementCreateForm({
   const [agreementType, setAgreementType] = useState<LeaseAgreementType>(
     hasInitial ? 'replacement' : 'initial',
   );
-
-  useEffect(() => {
-    if (hasInitial && agreementType === 'initial') {
-      setAgreementType('replacement');
-      return;
-    }
-    if (!hasInitial && agreementType !== 'initial') {
-      setAgreementType('initial');
-    }
-  }, [agreementType, hasInitial]);
+  const legalAgreementType: LeaseAgreementType = hasInitial
+    ? agreementType === 'initial'
+      ? 'replacement'
+      : agreementType
+    : 'initial';
 
   const activeParties = useMemo(
     () =>
@@ -241,7 +236,7 @@ function AgreementCreateForm({
     <form
       className="setup-form contract-admin-form"
       data-contract-form="agreement-create"
-      onSubmit={(event) => onSubmit(event, agreementType)}
+      onSubmit={(event) => onSubmit(event, legalAgreementType)}
     >
       <div className="section-heading">
         <div>
@@ -268,7 +263,7 @@ function AgreementCreateForm({
                 event.currentTarget.value as LeaseAgreementType,
               )
             }
-            value={agreementType}
+            value={legalAgreementType}
           >
             {LEASE_AGREEMENT_TYPES.map((value) => (
               <option
@@ -281,7 +276,7 @@ function AgreementCreateForm({
             ))}
           </select>
         </label>
-        {agreementType !== 'initial' ? (
+        {legalAgreementType !== 'initial' ? (
           <label>
             Predecessor
             <select disabled={pending} name="predecessorAgreementId" required>
