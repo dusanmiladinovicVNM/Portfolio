@@ -29,7 +29,7 @@ Rules:
 
 ## Configuration
 
-- `VITE_SUPABASE_URL` — Supabase project URL.
+- `VITE_SUPABASE_URL` — Supabase project URL; HTTPS is required outside localhost development.
 - `VITE_SUPABASE_ANON_KEY` — browser-safe anon/publishable key used for authentication.
 - `VITE_API_BASE_URL` — optional Portfolio API prefix; defaults to `/functions/v1/api`.
   It must be root-relative or use the same origin as `VITE_SUPABASE_URL`.
