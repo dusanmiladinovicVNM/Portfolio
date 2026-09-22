@@ -1370,3 +1370,101 @@ input:focus-visible {
 .meter-boundary-form {
   border-top: 1px solid #ded8cd;
 }
+
+
+.maintenance-issue-grid,
+.maintenance-order-grid,
+.maintenance-workflow-grid {
+  display: grid;
+  gap: 14px;
+}
+.maintenance-issue-grid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+.maintenance-issue-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #dfd9cf;
+  border-radius: 12px;
+  background: #fff;
+  color: inherit;
+  text-decoration: none;
+}
+.maintenance-issue-card:hover {
+  border-color: #a6a095;
+  box-shadow: 0 8px 24px rgb(60 56 48 / 8%);
+}
+.maintenance-issue-card-active {
+  background: #f4f6ef;
+  box-shadow: inset 0 0 0 1px #899180;
+}
+.maintenance-admin-panel {
+  display: grid;
+  gap: 22px;
+}
+.maintenance-form {
+  align-content: start;
+  padding: 18px;
+  border: 1px solid #ded8cd;
+  border-radius: 12px;
+  background: #faf8f3;
+}
+.maintenance-admin-section {
+  display: grid;
+  gap: 14px;
+  padding-top: 18px;
+  border-top: 1px solid #e1dcd3;
+}
+.maintenance-scope-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.maintenance-status-stack,
+.maintenance-lifecycle-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.maintenance-order-grid {
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+.maintenance-order-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  text-align: left;
+  border: 1px solid #ddd7cd;
+  border-radius: 10px;
+  background: #fff;
+}
+.maintenance-order-card-active {
+  background: #f4f6ef;
+  box-shadow: inset 0 0 0 1px #899180;
+}
+.maintenance-workflow-grid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+.maintenance-service-list {
+  display: grid;
+  gap: 10px;
+}
+.maintenance-service-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid #e2ddd5;
+  border-radius: 10px;
+  background: #fff;
+}
+.maintenance-service-card > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.maintenance-terminal-actions {
+  border-top: 2px solid #d6d0c5;
+}
+.priority-urgent {
+  font-weight: 800;
+}
