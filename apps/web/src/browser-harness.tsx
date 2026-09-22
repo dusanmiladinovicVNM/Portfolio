@@ -140,6 +140,8 @@ const setupMaintenanceWorkOrderId =
   'b1000000-0000-4000-8000-000000000046';
 const setupServiceEventId =
   'b1000000-0000-4000-8000-000000000047';
+const setupMaintenanceInspectionId =
+  'b1000000-0000-4000-8000-000000000048';
 
 const setupDestinationUnit: UnitResponse = {
   id: setupDestinationUnitId,
@@ -620,7 +622,7 @@ function inspectionRecord() {
 
 const setupInspectionFinding: InspectionFindingResponse = {
   id: setupInspectionFindingId,
-  inspectionId,
+  inspectionId: setupMaintenanceInspectionId,
   sectionId: inspectionSectionId,
   itemId: inspectionNotesItemId,
   severity: 'major',
@@ -629,6 +631,45 @@ const setupInspectionFinding: InspectionFindingResponse = {
   createdByUserId: inspectionUserId,
   createdAt: '2025-06-30T08:30:00.000Z',
 };
+
+function setupMaintenanceInspectionRecord() {
+  return {
+    id: setupMaintenanceInspectionId,
+    code: 'INS-MAINT-BRW',
+    inspectionType: 'move_in',
+    unitId: setupUnitId,
+    tenancyId: null,
+    schemaVersionId: inspectionSchemaVersionId,
+    assignedToUserId: inspectionUserId,
+    createdByUserId: inspectionUserId,
+    scheduledFor: '2027-10-01',
+    status: 'in_progress',
+    startedAt: '2027-10-01T08:30:00.000Z',
+    lockedAt: null,
+    finalizedAt: null,
+    cancelledAt: null,
+    version: 2,
+    contentRevision: 0,
+  };
+}
+
+function setupMaintenanceInspectionBundle() {
+  return {
+    inspection: setupMaintenanceInspectionRecord(),
+    schema: inspectionSchema,
+    sectionStates: [
+      {
+        sectionId: inspectionSectionId,
+        revision: 0,
+      },
+    ],
+    responses: [],
+    findings: [setupInspectionFinding],
+    evidence: [],
+    signatures: [],
+    finalSnapshot: null,
+  };
+}
 
 function inspectionBundle() {
   return {
