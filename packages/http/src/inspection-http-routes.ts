@@ -10,11 +10,14 @@ import {
   getInspectionSchemaVersionQuery,
   listInspectionSchemaVersionsQuery,
   listInspectionsByUnitQuery,
+  listAssignedInspectionsQuery,
+  listAssignableInspectionStaffQuery,
   lockInspectionCommand,
   publishInspectionSchemaVersionCommand,
   saveInspectionSectionCommand,
   startInspectionCommand,
   unlockInspectionCommand,
+  updateInspectionOrchestrationCommand,
   type Actor,
   type ClockPort,
   type IdGenerator,
@@ -38,6 +41,7 @@ import {
   finalizeInspectionRequestSchema,
   saveInspectionSectionRequestSchema,
   unlockInspectionRequestSchema,
+  updateInspectionOrchestrationRequestSchema,
 } from '@portfolio/contracts';
 import {
   asInspectionId,
@@ -171,6 +175,33 @@ export async function handleInspectionHttp(
     return json({ data: toInspectionSchemaVersionResponse(schema) });
   }
 
+  if (method === 'GET' && path === '/inspection-staff') {
+    const staff = await listAssignableInspectionStaffQuery(
+      deps.staffDirectoryRepository,
+      actor,
+    );
+    return json({
+      data: {
+        items: staff.map((entry) => ({
+          userId: entry.userId,
+          displayName: entry.displayName,
+          email: entry.email,
+          role: entry.role,
+        })),
+      },
+    });
+  }
+
+  if (method === 'GET' && path === '/inspections/assigned-to-me') {
+    const inspections = await listAssignedInspectionsQuery(
+      deps.inspectionRepository,
+      actor,
+    );
+    return json({
+      data: { items: inspections.map(toInspectionResponse) },
+    });
+  }
+
   const unitInspectionsMatch = /^\/units\/([^/]+)\/inspections$/.exec(path);
   if (unitInspectionsMatch) {
     const parsedUnit = entityIdSchema.safeParse(unitInspectionsMatch[1]);
@@ -226,6 +257,31 @@ export async function handleInspectionHttp(
     }
 
     return null;
+  }
+
+  const orchestrationMatch =
+    /^\/inspections\/([^/]+)\/orchestration$/.exec(path);
+  if (method === 'POST' && orchestrationMatch) {
+    const parsedId = entityIdSchema.safeParse(orchestrationMatch[1]);
+    const parsed = updateInspectionOrchestrationRequestSchema.safeParse(
+      await requestJson(request),
+    );
+    if (!parsedId.success || !parsed.success) return validationFailure();
+
+    const inspection = await updateInspectionOrchestrationCommand(
+      {
+        inspectionRepository: deps.inspectionRepository,
+        staffDirectoryRepository: deps.staffDirectoryRepository,
+      },
+      actor,
+      asInspectionId(parsedId.data),
+      parsed.data.expectedVersion,
+      {
+        assignedToUserId: asUserId(parsed.data.assignedToUserId),
+        scheduledFor: parsed.data.scheduledFor,
+      },
+    );
+    return json({ data: toInspectionResponse(inspection) });
   }
 
   const inspectionMatch = /^\/inspections\/([^/]+)$/.exec(path);
