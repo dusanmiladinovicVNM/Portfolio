@@ -19,6 +19,8 @@ const inspectionSectionId = 'a1000000-0000-4000-8000-000000000003';
 const setupPropertyId = 'b1000000-0000-4000-8000-000000000001';
 const setupUnitId = 'b1000000-0000-4000-8000-000000000002';
 const setupSpaceId = 'b1000000-0000-4000-8000-000000000003';
+const setupDestinationUnitId = 'c1000000-0000-4000-8000-000000000001';
+const setupDestinationSpaceId = 'c1000000-0000-4000-8000-000000000002';
 const setupTenancyId = 'b1000000-0000-4000-8000-000000000007';
 const setupSignedAgreementId = 'b1000000-0000-4000-8000-000000000010';
 const setupSignedAmendmentId = 'b1000000-0000-4000-8000-000000000019';
@@ -1741,6 +1743,74 @@ try {
     "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Moved']][.//span[contains(normalize-space(),'current')]][.//dd[normalize-space()='Moved into bedroom']]",
   );
 
+  await selectOptionXpath(
+    sessionId,
+    assetMoveForm + "//select[@name='unitId']",
+    setupDestinationUnitId,
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    assetMoveForm +
+      "//select[@name='spaceId']/option[@value='" +
+      setupDestinationSpaceId +
+      "']",
+  );
+  await selectOptionXpath(
+    sessionId,
+    assetMoveForm + "//select[@name='spaceId']",
+    setupDestinationSpaceId,
+  );
+  await clearXpath(
+    sessionId,
+    assetMoveForm + "//input[@name='reason']",
+  );
+  await typeXpath(
+    sessionId,
+    assetMoveForm + "//input[@name='reason']",
+    'Moved to destination Unit',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextAssetMoveAfterCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    assetMoveForm + "//button[normalize-space()='Move Asset']",
+  );
+
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//h1[normalize-space()='Unit 2B']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'asset-card')][.//span[normalize-space()='AST-SETUP-BRW']][.//dd[normalize-space()='Destination Living Room']]",
+  );
+  const destinationAssetUrl =
+    baseUrl +
+    '/properties/' + setupPropertyId +
+    '/units/' + setupDestinationUnitId +
+    '?tab=assets&assetId=' + setupAssetId +
+    '&asOf=2025-06-30';
+  assertEqual(
+    await currentUrl(sessionId),
+    destinationAssetUrl,
+    'Lost move acknowledgement reconciles to canonical destination Unit owner',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Moved']][.//span[contains(normalize-space(),'2027-10-01T09:00:00.000Z') and contains(normalize-space(),'2027-10-01T10:00:00.000Z')]][.//dd[normalize-space()='Moved into bedroom']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Moved']][.//span[contains(normalize-space(),'current')]][.//dd[normalize-space()='Moved to destination Unit']]",
+  );
+
   const assetReplacementForm = "//form[@data-asset-form='replace']";
   await typeXpath(
     sessionId,
@@ -1781,7 +1851,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//a[contains(@class,'asset-card')][.//span[normalize-space()='AST-REPLACEMENT-BRW']][.//h3[normalize-space()='Setup Washer Replacement']][.//dd[normalize-space()='Setup Bedroom']]",
+    "//a[contains(@class,'asset-card')][.//span[normalize-space()='AST-REPLACEMENT-BRW']][.//h3[normalize-space()='Setup Washer Replacement']][.//dd[normalize-space()='Destination Living Room']]",
   );
   await waitForElement(
     sessionId,
@@ -1792,7 +1862,7 @@ try {
     await currentUrl(sessionId),
     baseUrl +
       '/properties/' + setupPropertyId +
-      '/units/' + setupUnitId +
+      '/units/' + setupDestinationUnitId +
       '?tab=assets&assetId=' + setupReplacementAssetId +
       '&asOf=2025-06-30',
     'Replacement successor deep-link',
@@ -1814,6 +1884,18 @@ try {
     ),
     false,
     'Replaced predecessor leaves the current Unit registry',
+  );
+
+  await navigateWithPopState(
+    sessionId,
+    '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=assets&asOf=2025-06-30',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[@data-asset-form='create']",
   );
 
   await clickXpath(sessionId, "//a[normalize-space()='Spaces']");
