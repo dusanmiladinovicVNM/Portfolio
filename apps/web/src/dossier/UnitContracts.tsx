@@ -32,6 +32,7 @@ import {
 } from '../navigation/workspace-route.js';
 import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
 import { DocumentBinaryActions } from '../documents/DocumentBinaryActions.js';
+import { SignedDocumentAdministration } from '../documents/SignedDocumentAdministration.js';
 import {
   formatDetailKey,
   formatExactMoney,
@@ -764,6 +765,27 @@ export function UnitContracts({
               items={agreementDocuments}
               label="Agreement legal record"
             />
+            {agreementDocuments !== null &&
+            agreementDocumentsError === null &&
+            ['signed', 'superseded', 'terminated'].includes(
+              selectedAgreement.status,
+            ) &&
+            !agreementDocuments.some(
+              (reference) => reference.link.relation === 'signed_original',
+            ) ? (
+              <SignedDocumentAdministration
+                api={api}
+                key={`signed-document:agreement:${selectedAgreement.id}`}
+                onCanonicalWrite={() =>
+                  setContractRevision((revision) => revision + 1)
+                }
+                target={{
+                  targetType: 'lease_agreement',
+                  targetId: selectedAgreement.id,
+                  code: selectedAgreement.code,
+                }}
+              />
+            ) : null}
           </section>
 
           <section className="panel">
@@ -818,6 +840,25 @@ export function UnitContracts({
             items={amendmentDocuments}
             label="Amendment legal record"
           />
+          {amendmentDocuments !== null &&
+          amendmentDocumentsError === null &&
+          selectedAmendment.status === 'signed' &&
+          !amendmentDocuments.some(
+            (reference) => reference.link.relation === 'signed_original',
+          ) ? (
+            <SignedDocumentAdministration
+              api={api}
+              key={`signed-document:amendment:${selectedAmendment.id}`}
+              onCanonicalWrite={() =>
+                setContractRevision((revision) => revision + 1)
+              }
+              target={{
+                targetType: 'lease_amendment',
+                targetId: selectedAmendment.id,
+                code: selectedAmendment.code,
+              }}
+            />
+          ) : null}
         </section>
       ) : null}
     </div>
