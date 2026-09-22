@@ -23,6 +23,7 @@ import {
   PostgresUserAccessRepository,
   SystemClock,
   WebCryptoIdGenerator,
+  WebCryptoSha256,
 } from '@portfolio/infrastructure';
 
 export interface SupabaseApiConfig {
@@ -85,6 +86,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
       staffDirectoryRepository: userAccessRepository,
       fileStorage: config.fileStorage,
       pdfPort: config.pdfPort,
+      sha256: new WebCryptoSha256(),
       clock: new SystemClock(),
       userAccessRepository,
       idGenerator: new WebCryptoIdGenerator(),
