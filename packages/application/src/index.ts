@@ -1,5 +1,6 @@
 export * from './shared/application-error.js';
 export * from './shared/id-generator.js';
+export * from './shared/sha256-port.js';
 export * from './security/access.js';
 export * from './portfolio/portfolio-repository.js';
 export * from './portfolio/create-property.js';
@@ -27,6 +28,7 @@ export * from './documents/document-commands.js';
 export * from './documents/document-queries.js';
 export * from './inspections/inspection-repository.js';
 export * from './inspections/inspection-commands.js';
+export * from './inspections/inspection-binary-commands.js';
 export * from './inspections/inspection-queries.js';
 export * from './inspections/inspection-report-commands.js';
 

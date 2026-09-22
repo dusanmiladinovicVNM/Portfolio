@@ -6,6 +6,7 @@ import {
   type LeaseRepository,
   type OwnershipRepository,
   type PartyRepository,
+  type PdfPort,
   type PortfolioRepository,
   type TenancyRepository,
   type UserAccessRepository,
@@ -40,6 +41,7 @@ import {
   type UnitId,
 } from '@portfolio/domain';
 import { createPortfolioHttpHandler } from '../src/index.js';
+import { testSha256 } from './hash-test-deps.js';
 import { InMemoryAssetInventoryRepository, InMemoryAssetRepository, InMemoryAssetServiceRepository } from './asset-test-deps.js';
 import {
   FixedClock,
@@ -217,6 +219,16 @@ function buildHandler() {
   const inspectionRepository = new InMemoryInspectionRepository();
   const documentRepository = new InMemoryDocumentRepository();
   const fileStorage = new MemoryFileStorage();
+  let pdfRenderCount = 0;
+  const pdfPort: PdfPort = {
+    async renderInspectionFinalReport(snapshot) {
+      pdfRenderCount += 1;
+      return {
+        fileName: `${snapshot.inspectionId}-final.pdf`,
+        content: new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52]),
+      };
+    },
+  };
   const staffDirectoryRepository = new InMemoryStaffDirectoryRepository();
   staffDirectoryRepository.users.set(
     asUserId('dddddddd-dddd-4ddd-8ddd-dddddddddddd'),
@@ -248,6 +260,8 @@ function buildHandler() {
     inspectionRepository,
     staffDirectoryRepository,
     fileStorage,
+    pdfPort,
+    sha256: testSha256,
     clock: new FixedClock('2026-09-18T20:00:00.000Z'),
     userAccessRepository: new AccessRepository(),
     idGenerator: new FixedIds([
@@ -267,6 +281,14 @@ function buildHandler() {
       '81000000-0000-4000-8000-000000000014',
       '81000000-0000-4000-8000-000000000015',
       '81000000-0000-4000-8000-000000000016',
+      '81000000-0000-4000-8000-000000000017',
+      '81000000-0000-4000-8000-000000000018',
+      '81000000-0000-4000-8000-000000000019',
+      '81000000-0000-4000-8000-000000000020',
+      '81000000-0000-4000-8000-000000000021',
+      '81000000-0000-4000-8000-000000000022',
+      '81000000-0000-4000-8000-000000000023',
+      '81000000-0000-4000-8000-000000000024',
     ]),
   });
 
@@ -276,6 +298,7 @@ function buildHandler() {
     portfolioRepository,
     documentRepository,
     fileStorage,
+    getPdfRenderCount: () => pdfRenderCount,
   };
 }
 
@@ -919,7 +942,8 @@ describe('Inspection HTTP backbone', () => {
   });
 
   it('enforces evidence/signature permissions and returns final snapshot over HTTP', async () => {
-    const { handler, documentRepository, fileStorage } = buildHandler();
+    const { handler, documentRepository, fileStorage, getPdfRenderCount } =
+      buildHandler();
 
     for (const [versionId, documentId, fileName] of [
       [
@@ -1070,6 +1094,115 @@ describe('Inspection HTTP backbone', () => {
       inspectorIdentity,
     );
 
+    const globalDocumentDenied = await handler(
+      new Request('https://portfolio.test/documents', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'INSPECTOR-GLOBAL-DOC',
+          title: 'Must be denied',
+          category: 'photo',
+        }),
+      }),
+      inspectorIdentity,
+    );
+    expect(globalDocumentDenied.status).toBe(403);
+
+    const scopedPhotoVersionId =
+      '84000000-0000-4000-8000-000000000001';
+    const scopedPhotoUrl =
+      `https://portfolio.test/inspections/${inspection.id}/binaries?` +
+      new URLSearchParams({
+        purpose: 'photo',
+        uploadKey: scopedPhotoVersionId,
+        fileName: 'scoped-photo.jpg',
+      }).toString();
+
+    const wrongInspectorScopedPhoto = await handler(
+      new Request(scopedPhotoUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'image/jpeg' },
+        body: new Uint8Array([1, 2, 3, 4]),
+      }),
+      otherInspectorIdentity,
+    );
+    expect(wrongInspectorScopedPhoto.status).toBe(403);
+
+    const scopedPhoto = await handler(
+      new Request(scopedPhotoUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'image/jpeg' },
+        body: new Uint8Array([1, 2, 3, 4]),
+      }),
+      inspectorIdentity,
+    );
+    expect(scopedPhoto.status).toBe(201);
+    expect(await scopedPhoto.clone().json()).toMatchObject({
+      data: {
+        id: scopedPhotoVersionId,
+        versionNumber: 1,
+        fileName: 'scoped-photo.jpg',
+        mimeType: 'image/jpeg',
+        byteSize: 4,
+        status: 'stored',
+      },
+    });
+
+    const scopedPhotoRetry = await handler(
+      new Request(scopedPhotoUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'image/jpeg' },
+        body: new Uint8Array([1, 2, 3, 4]),
+      }),
+      inspectorIdentity,
+    );
+    expect(scopedPhotoRetry.status).toBe(201);
+    expect((await scopedPhotoRetry.json()).data.id).toBe(scopedPhotoVersionId);
+
+    const typedScopedPhotoVersionId = asDocumentVersionId(scopedPhotoVersionId);
+    const scopedPhotoVersionBeforeConflict =
+      documentRepository.versions.get(typedScopedPhotoVersionId);
+    expect(scopedPhotoVersionBeforeConflict).toBeDefined();
+    expect(scopedPhotoVersionBeforeConflict?.sha256).toBe(
+      await testSha256.digest(new Uint8Array([1, 2, 3, 4])),
+    );
+    const scopedPhotoStorageBeforeConflict =
+      documentRepository.storage.get(typedScopedPhotoVersionId);
+    expect(scopedPhotoStorageBeforeConflict).toBeDefined();
+    expect([
+      ...(fileStorage.contents.get(
+        scopedPhotoStorageBeforeConflict!.objectKey,
+      ) ?? []),
+    ]).toEqual([1, 2, 3, 4]);
+
+    const conflictingScopedPhotoRetry = await handler(
+      new Request(scopedPhotoUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'image/jpeg' },
+        body: new Uint8Array([4, 3, 2, 1]),
+      }),
+      inspectorIdentity,
+    );
+    expect(conflictingScopedPhotoRetry.status).toBe(409);
+    expect(await conflictingScopedPhotoRetry.json()).toMatchObject({
+      error: { code: 'INSPECTION_BINARY_VERSION_CONFLICT' },
+    });
+
+    const scopedPhotoVersionAfterConflict =
+      documentRepository.versions.get(typedScopedPhotoVersionId);
+    expect(scopedPhotoVersionAfterConflict?.sha256).toBe(
+      scopedPhotoVersionBeforeConflict?.sha256,
+    );
+    expect(
+      await documentRepository.listVersionsByDocument(
+        scopedPhotoVersionBeforeConflict!.documentId,
+      ),
+    ).toHaveLength(1);
+    expect([
+      ...(fileStorage.contents.get(
+        scopedPhotoStorageBeforeConflict!.objectKey,
+      ) ?? []),
+    ]).toEqual([1, 2, 3, 4]);
+
     const sectionId = schema.sections[0]!.id;
     const itemId = schema.sections[0]!.items[0]!.id;
     await handler(
@@ -1194,11 +1327,54 @@ describe('Inspection HTTP backbone', () => {
       inspectorIdentity,
     );
 
+    const scopedSignatureVersionId =
+      '84000000-0000-4000-8000-000000000002';
+    const scopedSignatureUrl =
+      `https://portfolio.test/inspections/${inspection.id}/binaries?` +
+      new URLSearchParams({
+        purpose: 'signature',
+        uploadKey: scopedSignatureVersionId,
+        fileName: 'witness-scoped.png',
+      }).toString();
+
+    const scopedSignature = await handler(
+      new Request(scopedSignatureUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'image/png' },
+        body: new Uint8Array([9, 8, 7, 6]),
+      }),
+      inspectorIdentity,
+    );
+    expect(scopedSignature.status).toBe(201);
+    expect(await scopedSignature.clone().json()).toMatchObject({
+      data: {
+        id: scopedSignatureVersionId,
+        versionNumber: 1,
+        fileName: 'witness-scoped.png',
+        mimeType: 'image/png',
+        byteSize: 4,
+        status: 'final',
+      },
+    });
+
+    const scopedSignatureRetry = await handler(
+      new Request(scopedSignatureUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'image/png' },
+        body: new Uint8Array([9, 8, 7, 6]),
+      }),
+      inspectorIdentity,
+    );
+    expect(scopedSignatureRetry.status).toBe(201);
+    expect((await scopedSignatureRetry.json()).data.id).toBe(
+      scopedSignatureVersionId,
+    );
+
     for (const [signerRole, signerName, signatureDocumentVersionId] of [
       [
         'witness',
         'Witness',
-        '83000000-0000-4000-8000-000000000002',
+        scopedSignatureVersionId,
       ],
       [
         'agent',
@@ -1254,6 +1430,53 @@ describe('Inspection HTTP backbone', () => {
           { signerRole: 'witness', invalidationReason: 'Correction' },
           { signerRole: 'witness', invalidatedAt: null },
           { signerRole: 'agent', invalidatedAt: null },
+        ],
+      },
+    });
+
+    const firstReport = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/final-report`,
+        { method: 'POST' },
+      ),
+      adminIdentity,
+    );
+    expect(firstReport.status).toBe(200);
+    const firstReportVersion = (await firstReport.clone().json()).data as {
+      id: string;
+      status: string;
+      mimeType: string;
+    };
+    expect(firstReportVersion).toMatchObject({
+      status: 'final',
+      mimeType: 'application/pdf',
+    });
+
+    const secondReport = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/final-report`,
+        { method: 'POST' },
+      ),
+      adminIdentity,
+    );
+    expect(secondReport.status).toBe(200);
+    expect((await secondReport.json()).data.id).toBe(firstReportVersion.id);
+    expect(getPdfRenderCount()).toBe(1);
+
+    const afterReport = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      adminIdentity,
+    );
+    expect(await afterReport.json()).toMatchObject({
+      data: {
+        evidence: [
+          { kind: 'photo' },
+          {
+            kind: 'final_report',
+            documentVersionId: firstReportVersion.id,
+            sectionId: null,
+            itemId: null,
+          },
         ],
       },
     });

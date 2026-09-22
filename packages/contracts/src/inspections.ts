@@ -221,6 +221,12 @@ export const attachInspectionEvidenceRequestSchema = z.object({
   caption: z.string().nullable().optional(),
 });
 
+export const inspectionBinaryPurposeSchema = z.enum([
+  'photo',
+  'attachment',
+  'signature',
+]);
+
 export const addInspectionSignatureRequestSchema = z.object({
   signerRole: z.enum(INSPECTION_SIGNATURE_ROLES),
   signerPartyId: entityIdSchema.nullable().optional(),
@@ -272,6 +278,14 @@ export const inspectionFinalSnapshotResponseSchema = z.object({
   createdAt: instantSchema,
 });
 
+export const finalizeInspectionResponseSchema = z.object({
+  inspection: inspectionResponseSchema,
+  snapshot: inspectionFinalSnapshotResponseSchema,
+});
+
+export type InspectionBinaryPurpose = z.infer<
+  typeof inspectionBinaryPurposeSchema
+>;
 export type InspectionEvidenceResponse = z.infer<
   typeof inspectionEvidenceResponseSchema
 >;
@@ -280,6 +294,9 @@ export type InspectionSignatureResponse = z.infer<
 >;
 export type InspectionFinalSnapshotResponse = z.infer<
   typeof inspectionFinalSnapshotResponseSchema
+>;
+export type FinalizeInspectionResponse = z.infer<
+  typeof finalizeInspectionResponseSchema
 >;
 export type SaveInspectionSectionRequest = z.infer<
   typeof saveInspectionSectionRequestSchema

@@ -17,8 +17,10 @@ import {
   type MeterRepository,
   type OwnershipRepository,
   type PartyRepository,
+  type PdfPort,
   type PortfolioRepository,
   type ReportingRepository,
+  type Sha256Port,
   type StaffDirectoryRepository,
   type TenancyRepository,
   type UnitTimelineRepository,
@@ -64,6 +66,8 @@ export interface PortfolioHttpDependencies {
   readonly unitTimelineRepository: UnitTimelineRepository;
   readonly staffDirectoryRepository: StaffDirectoryRepository;
   readonly fileStorage: FileStoragePort;
+  readonly pdfPort: PdfPort;
+  readonly sha256: Sha256Port;
   readonly clock: ClockPort;
   readonly userAccessRepository: UserAccessRepository;
   readonly idGenerator: IdGenerator;
@@ -107,10 +111,16 @@ function errorStatus(code: string): number {
     code === 'DOCUMENT_STORAGE_READ_FAILED' ||
     code === 'DOCUMENT_BINARY_INTEGRITY_MISMATCH' ||
     code === 'DOCUMENT_BINARY_MISSING' ||
-    code === 'DOCUMENT_STORAGE_REFERENCE_MISSING'
+    code === 'DOCUMENT_STORAGE_REFERENCE_MISSING' ||
+    code === 'DOCUMENT_STORAGE_VERIFICATION_FAILED'
   ) return 502;
   if (code === 'DOCUMENT_BINARY_UPLOAD_LIMIT_EXCEEDED') return 413;
-  if (code === 'DOCUMENT_BINARY_DELIVERY_LIMIT_EXCEEDED') return 503;
+  if (
+    code === 'DOCUMENT_BINARY_DELIVERY_LIMIT_EXCEEDED' ||
+    code === 'DOCUMENT_STORAGE_RECONCILIATION_REQUIRED' ||
+    code === 'DOCUMENT_STORAGE_COMPENSATION_FAILED' ||
+    code === 'INSPECTION_BINARY_RECONCILIATION_REQUIRED'
+  ) return 503;
   if (code.endsWith('_NOT_FOUND')) return 404;
   if (
     code.endsWith('_ALREADY_EXISTS') ||
@@ -139,7 +149,8 @@ function errorStatus(code: string): number {
     code === 'ACCESS_ITEM_NOT_AVAILABLE' ||
     code === 'ACCESS_ITEM_RETIRED' ||
     code === 'ACCESS_ITEM_ALREADY_RETIRED' ||
-    code === 'METER_ALREADY_RETIRED'
+    code === 'METER_ALREADY_RETIRED' ||
+    code === 'INSPECTION_FINAL_REPORT_RECONCILIATION_REQUIRED'
   ) {
     return 409;
   }
@@ -297,6 +308,8 @@ export function createPortfolioHttpHandler(
               inspectionRepository: deps.inspectionRepository,
               documentRepository: deps.documentRepository,
               fileStorage: deps.fileStorage,
+              pdfPort: deps.pdfPort,
+              sha256: deps.sha256,
               partyRepository: deps.partyRepository,
               ownershipRepository: deps.ownershipRepository,
               portfolioRepository: deps.portfolioRepository,

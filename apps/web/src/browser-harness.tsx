@@ -24,6 +24,7 @@ import type {
   InspectionEvidenceResponse,
   InspectionFindingResponse,
   InspectionResponseDto,
+  InspectionSignatureResponse,
   PartyResponse,
   PropertyResponse,
   SpaceResponse,
@@ -69,7 +70,22 @@ const inspectionEvidenceIds = [
   'a1000000-0000-4000-8000-000000000011',
   'a1000000-0000-4000-8000-000000000012',
   'a1000000-0000-4000-8000-000000000013',
+  'a1000000-0000-4000-8000-000000000014',
+  'a1000000-0000-4000-8000-000000000015',
+  'a1000000-0000-4000-8000-000000000016',
 ] as const;
+const inspectionSignatureIds = [
+  'a1000000-0000-4000-8000-000000000017',
+  'a1000000-0000-4000-8000-000000000018',
+  'a1000000-0000-4000-8000-000000000019',
+  'a1000000-0000-4000-8000-000000000020',
+] as const;
+const inspectionFinalSnapshotId =
+  'a1000000-0000-4000-8000-000000000021';
+const inspectionFinalReportVersionId =
+  'a1000000-0000-4000-8000-000000000022';
+const inspectionFinalReportDocumentId =
+  'a1000000-0000-4000-8000-000000000023';
 const setupPropertyId = 'b1000000-0000-4000-8000-000000000001';
 const setupUnitId = 'b1000000-0000-4000-8000-000000000002';
 const setupSpaceId = 'b1000000-0000-4000-8000-000000000003';
@@ -608,7 +624,7 @@ const amendmentDocumentReference: LeaseAmendmentDocumentReferenceResponse = {
   },
 };
 
-let inspectionStatus: 'draft' | 'in_progress' = 'draft';
+let inspectionStatus: 'draft' | 'in_progress' | 'locked' | 'finalized' = 'draft';
 let inspectionVersion = 1;
 let inspectionContentRevision = 0;
 let inspectionSectionRevision = 0;
@@ -624,8 +640,19 @@ let inspectionResponses: Array<{
 }> = [];
 let inspectionFindings: InspectionFindingResponse[] = [];
 let inspectionEvidence: InspectionEvidenceResponse[] = [];
+let inspectionSignatures: InspectionSignatureResponse[] = [];
+let inspectionFinalSnapshot: {
+  id: string;
+  inspectionId: string;
+  snapshotVersion: 1;
+  inspectionVersion: number;
+  contentRevision: number;
+  createdByUserId: string;
+  createdAt: string;
+} | null = null;
 let inspectionFindingSequence = 0;
 let inspectionEvidenceSequence = 0;
+let inspectionSignatureSequence = 0;
 
 const inspectionSchema = {
   id: inspectionSchemaVersionId,
@@ -634,7 +661,7 @@ const inspectionSchema = {
   inspectionType: 'move_in',
   title: 'Browser move-in inspection',
   status: 'published',
-  requiredSignatureRoles: [],
+  requiredSignatureRoles: ['tenant', 'landlord'] as const,
   sections: [
     {
       id: inspectionSectionId,
@@ -696,11 +723,17 @@ function inspectionRecord() {
     scheduledFor: '2025-06-30',
     status: inspectionStatus,
     startedAt:
-      inspectionStatus === 'in_progress'
-        ? '2025-06-30T08:00:00.000Z'
+      inspectionStatus === 'draft'
+        ? null
+        : '2025-06-30T08:00:00.000Z',
+    lockedAt:
+      inspectionStatus === 'locked' || inspectionStatus === 'finalized'
+        ? '2025-06-30T09:00:00.000Z'
         : null,
-    lockedAt: null,
-    finalizedAt: null,
+    finalizedAt:
+      inspectionStatus === 'finalized'
+        ? '2025-06-30T10:00:00.000Z'
+        : null,
     cancelledAt: null,
     version: inspectionVersion,
     contentRevision: inspectionContentRevision,
@@ -771,8 +804,8 @@ function inspectionBundle() {
     responses: inspectionResponses,
     findings: inspectionFindings,
     evidence: inspectionEvidence,
-    signatures: [],
-    finalSnapshot: null,
+    signatures: inspectionSignatures,
+    finalSnapshot: inspectionFinalSnapshot,
   };
 }
 
@@ -974,9 +1007,14 @@ type BrowserHarnessWindow = Window & {
   __portfolioHoldMaintenanceMutation?: boolean;
   __portfolioHoldInspectionOrchestration?: boolean;
   __portfolioHoldInspectionEvidence?: boolean;
+  __portfolioHoldInspectionLifecycle?: boolean;
   __portfolioFailNextInspectionCreateAfterCommit?: boolean;
   __portfolioFailNextInspectionFindingAfterCommit?: boolean;
   __portfolioFailNextInspectionEvidenceAfterCommit?: boolean;
+  __portfolioFailNextInspectionBinaryAfterCommit?: boolean;
+  __portfolioFailNextInspectionSignatureAfterCommit?: boolean;
+  __portfolioFailNextInspectionFinalizeAfterCommit?: boolean;
+  __portfolioFailNextInspectionReportAfterCommit?: boolean;
   __portfolioFailNextInspectionOrchestrationAfterCommit?: boolean;
   __portfolioFailNextMaintenanceIssueCreateAfterCommit?: boolean;
   __portfolioFailNextMaintenanceWorkOrderCreateAfterCommit?: boolean;
@@ -997,6 +1035,8 @@ type BrowserHarnessWindow = Window & {
   __portfolioPendingMaintenanceMutation?: boolean;
   __portfolioPendingInspectionOrchestration?: boolean;
   __portfolioPendingInspectionEvidence?: boolean;
+  __portfolioPendingInspectionLifecycle?: boolean;
+  __portfolioFinalReportRenderCount?: number;
   __portfolioReleaseUnitCreate?: () => boolean;
   __portfolioReleaseSpaceCreate?: () => boolean;
   __portfolioReleaseTenancyMutation?: () => boolean;
@@ -1006,11 +1046,13 @@ type BrowserHarnessWindow = Window & {
   __portfolioReleaseMaintenanceMutation?: () => boolean;
   __portfolioReleaseInspectionOrchestration?: () => boolean;
   __portfolioReleaseInspectionEvidence?: () => boolean;
+  __portfolioReleaseInspectionLifecycle?: () => boolean;
 };
 
 const browserHarnessWindow = window as BrowserHarnessWindow;
 browserHarnessWindow.__portfolioBinaryReads = 0;
 browserHarnessWindow.__portfolioDocumentUploadCount = 0;
+browserHarnessWindow.__portfolioFinalReportRenderCount = 0;
 
 let heldUnitCreate:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
@@ -1037,6 +1079,9 @@ let heldInspectionOrchestration:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 let heldInspectionEvidence:
+  | { readonly response: Response; readonly resolve: (response: Response) => void }
+  | null = null;
+let heldInspectionLifecycle:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 
@@ -1141,6 +1186,17 @@ function maybeHoldInspectionEvidence(response: Response): Promise<Response> {
   });
 }
 
+function maybeHoldInspectionLifecycle(response: Response): Promise<Response> {
+  if (!browserHarnessWindow.__portfolioHoldInspectionLifecycle) {
+    return Promise.resolve(response);
+  }
+
+  browserHarnessWindow.__portfolioPendingInspectionLifecycle = true;
+  return new Promise<Response>((resolve) => {
+    heldInspectionLifecycle = { response, resolve };
+  });
+}
+
 browserHarnessWindow.__portfolioReleaseUnitCreate = () => {
   if (!heldUnitCreate) return false;
   const held = heldUnitCreate;
@@ -1228,6 +1284,16 @@ browserHarnessWindow.__portfolioReleaseInspectionEvidence = () => {
   heldInspectionEvidence = null;
   browserHarnessWindow.__portfolioHoldInspectionEvidence = false;
   browserHarnessWindow.__portfolioPendingInspectionEvidence = false;
+  held.resolve(held.response);
+  return true;
+};
+
+browserHarnessWindow.__portfolioReleaseInspectionLifecycle = () => {
+  if (!heldInspectionLifecycle) return false;
+  const held = heldInspectionLifecycle;
+  heldInspectionLifecycle = null;
+  browserHarnessWindow.__portfolioHoldInspectionLifecycle = false;
+  browserHarnessWindow.__portfolioPendingInspectionLifecycle = false;
   held.resolve(held.response);
   return true;
 };
@@ -3741,6 +3807,412 @@ globalThis.fetch = async (
     inspectionStatus = 'in_progress';
     inspectionVersion += 1;
     return json(inspectionRecord());
+  }
+
+  if (
+    path === `/inspections/${inspectionId}/binaries` &&
+    init?.method === 'POST'
+  ) {
+    requireInspectionAuth(init);
+    const purpose = url.searchParams.get('purpose');
+    const uploadKey = url.searchParams.get('uploadKey');
+    const fileName = url.searchParams.get('fileName')?.trim();
+    const mimeType =
+      new Headers(init.headers).get('content-type')?.split(';')[0]?.trim();
+
+    if (
+      !uploadKey ||
+      !fileName ||
+      !mimeType ||
+      !['photo', 'attachment', 'signature'].includes(purpose ?? '')
+    ) {
+      return apiError(400, 'VALIDATION_ERROR', 'Invalid Inspection binary upload.');
+    }
+    if (
+      purpose === 'signature'
+        ? inspectionStatus !== 'locked'
+        : inspectionStatus !== 'in_progress'
+    ) {
+      return apiError(
+        422,
+        purpose === 'signature'
+          ? 'INSPECTION_SIGNATURE_STATE_INVALID'
+          : 'INSPECTION_CONTENT_LOCKED',
+        'Inspection binary upload is not allowed in the current lifecycle state.',
+      );
+    }
+
+    let bytes: Uint8Array;
+    if (init.body instanceof Blob) {
+      bytes = new Uint8Array(await init.body.arrayBuffer());
+    } else if (init.body instanceof ArrayBuffer) {
+      bytes = new Uint8Array(init.body);
+    } else if (ArrayBuffer.isView(init.body)) {
+      bytes = new Uint8Array(
+        init.body.buffer,
+        init.body.byteOffset,
+        init.body.byteLength,
+      );
+    } else {
+      throw new Error('Unexpected Inspection binary body.');
+    }
+    if (bytes.byteLength === 0) {
+      return apiError(422, 'INSPECTION_BINARY_INVALID_UPLOAD', 'Upload is empty.');
+    }
+
+    const existing = setupDocumentVersions.find(
+      (version) => version.id === uploadKey,
+    );
+    if (existing) {
+      if (
+        existing.fileName !== fileName ||
+        existing.mimeType !== mimeType ||
+        existing.byteSize !== bytes.byteLength
+      ) {
+        return apiError(
+          409,
+          'INSPECTION_BINARY_VERSION_CONFLICT',
+          'Inspection upload key already represents another binary.',
+        );
+      }
+      return json(existing, 201);
+    }
+
+    const document: DocumentResponse = {
+      id: uploadKey,
+      code: `INSPECTION-${inspectionId}-${purpose}-${uploadKey}`,
+      title: `INS-BRW-001 ${purpose}: ${fileName}`,
+      category:
+        purpose === 'photo'
+          ? 'photo'
+          : purpose === 'signature'
+            ? 'signature'
+            : 'inspection',
+      status: 'active',
+      latestVersionNumber: 1,
+      revision: 2,
+    };
+    const version: DocumentVersionResponse = {
+      id: uploadKey,
+      documentId: document.id,
+      versionNumber: 1,
+      fileName,
+      mimeType,
+      byteSize: bytes.byteLength,
+      sha256: '9'.repeat(64),
+      status: purpose === 'signature' ? 'final' : 'stored',
+      finalizedAt:
+        purpose === 'signature' ? '2025-06-30T09:05:00.000Z' : null,
+    };
+    setupDocuments.push(document);
+    setupDocumentVersions.push(version);
+    browserHarnessWindow.__portfolioDocumentUploadCount =
+      (browserHarnessWindow.__portfolioDocumentUploadCount ?? 0) + 1;
+
+    if (browserHarnessWindow.__portfolioFailNextInspectionBinaryAfterCommit) {
+      browserHarnessWindow.__portfolioFailNextInspectionBinaryAfterCommit = false;
+      return apiError(
+        503,
+        'INSPECTION_BINARY_TEST_ACK_LOST',
+        'Intentional Inspection binary acknowledgement loss.',
+      );
+    }
+    return json(version, 201);
+  }
+
+  if (
+    path === `/inspections/${inspectionId}/lock` &&
+    init?.method === 'POST'
+  ) {
+    requireInspectionAuth(init);
+    const body = JSON.parse(String(init.body)) as { expectedVersion: number };
+    if (
+      body.expectedVersion !== inspectionVersion ||
+      inspectionStatus !== 'in_progress'
+    ) {
+      return apiError(
+        409,
+        'INSPECTION_VERSION_CONFLICT',
+        'Inspection changed before it could be locked.',
+      );
+    }
+    const condition = inspectionResponses.find(
+      (response) => response.itemId === inspectionConditionItemId,
+    );
+    const notes = inspectionResponses.find(
+      (response) => response.itemId === inspectionNotesItemId,
+    );
+    if (
+      !condition ||
+      (condition.value === 'damaged' && !notes)
+    ) {
+      return apiError(
+        422,
+        'INSPECTION_REQUIRED_RESPONSES_MISSING',
+        'Required Inspection responses are missing.',
+      );
+    }
+    inspectionStatus = 'locked';
+    inspectionVersion += 1;
+    return maybeHoldInspectionLifecycle(json(inspectionRecord()));
+  }
+
+  if (
+    path === `/inspections/${inspectionId}/signatures` &&
+    init?.method === 'POST'
+  ) {
+    requireInspectionAuth(init);
+    if (inspectionStatus !== 'locked') {
+      return apiError(
+        422,
+        'INSPECTION_SIGNATURE_STATE_INVALID',
+        'Signatures require a locked Inspection.',
+      );
+    }
+    const body = JSON.parse(String(init.body)) as {
+      signerRole: InspectionSignatureResponse['signerRole'];
+      signerPartyId?: string | null;
+      signerName: string;
+      signatureDocumentVersionId: string;
+    };
+    const version = setupDocumentVersions.find(
+      (candidate) => candidate.id === body.signatureDocumentVersionId,
+    );
+    const document = setupDocuments.find(
+      (candidate) => candidate.id === version?.documentId,
+    );
+    if (
+      !version ||
+      version.status !== 'final' ||
+      document?.category !== 'signature'
+    ) {
+      return apiError(
+        422,
+        'INSPECTION_SIGNATURE_DOCUMENT_NOT_FINAL',
+        'Signature requires a final signature DocumentVersion.',
+      );
+    }
+    if (
+      (body.signerRole === 'tenant' && body.signerPartyId !== tenantPartyId) ||
+      (body.signerRole === 'landlord' && body.signerPartyId !== landlordPartyId)
+    ) {
+      return apiError(
+        422,
+        'INSPECTION_SIGNATURE_PARTY_MISMATCH',
+        'Signer Party does not hold the requested Inspection role.',
+      );
+    }
+    if (
+      inspectionSignatures.some(
+        (signature) =>
+          signature.signerRole === body.signerRole &&
+          signature.invalidatedAt === null,
+      )
+    ) {
+      return apiError(
+        409,
+        'INSPECTION_SIGNATURE_ROLE_ALREADY_SIGNED',
+        'This signature role already has an active signature.',
+      );
+    }
+
+    const id = inspectionSignatureIds[inspectionSignatureSequence++];
+    if (!id) throw new Error('Inspection Signature id pool exhausted.');
+    const created: InspectionSignatureResponse = {
+      id,
+      inspectionId,
+      signerRole: body.signerRole,
+      signerPartyId: body.signerPartyId ?? null,
+      signerName: body.signerName.trim(),
+      signatureDocumentVersionId: body.signatureDocumentVersionId,
+      signedByUserId: inspectionUserId,
+      signedAt: '2025-06-30T09:10:00.000Z',
+      invalidatedAt: null,
+      invalidationReason: null,
+    };
+    inspectionSignatures = [...inspectionSignatures, created];
+    inspectionContentRevision += 1;
+
+    if (browserHarnessWindow.__portfolioFailNextInspectionSignatureAfterCommit) {
+      browserHarnessWindow.__portfolioFailNextInspectionSignatureAfterCommit =
+        false;
+      return apiError(
+        503,
+        'INSPECTION_SIGNATURE_TEST_ACK_LOST',
+        'Intentional signature acknowledgement loss.',
+      );
+    }
+    return json(created, 201);
+  }
+
+  if (
+    path === `/inspections/${inspectionId}/unlock` &&
+    init?.method === 'POST'
+  ) {
+    requireInspectionAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      reason: string;
+    };
+    if (
+      inspectionStatus !== 'locked' ||
+      body.expectedVersion !== inspectionVersion ||
+      !body.reason.trim()
+    ) {
+      return apiError(
+        409,
+        'INSPECTION_VERSION_CONFLICT',
+        'Inspection changed before it could be unlocked.',
+      );
+    }
+    inspectionSignatures = inspectionSignatures.map((signature) =>
+      signature.invalidatedAt === null
+        ? {
+            ...signature,
+            invalidatedAt: '2025-06-30T09:20:00.000Z',
+            invalidationReason: body.reason.trim(),
+          }
+        : signature,
+    );
+    inspectionStatus = 'in_progress';
+    inspectionVersion += 1;
+    inspectionContentRevision += 1;
+    return json(inspectionRecord());
+  }
+
+  if (
+    path === `/inspections/${inspectionId}/finalize` &&
+    init?.method === 'POST'
+  ) {
+    requireInspectionAuth(init);
+    const body = JSON.parse(String(init.body)) as { expectedVersion: number };
+    if (
+      inspectionStatus !== 'locked' ||
+      body.expectedVersion !== inspectionVersion
+    ) {
+      return apiError(
+        409,
+        'INSPECTION_FINALIZATION_CONFLICT',
+        'Inspection changed before finalization.',
+      );
+    }
+    const activeRoles = new Set(
+      inspectionSignatures
+        .filter((signature) => signature.invalidatedAt === null)
+        .map((signature) => signature.signerRole),
+    );
+    if (
+      inspectionSchema.requiredSignatureRoles.some(
+        (role) => !activeRoles.has(role),
+      )
+    ) {
+      return apiError(
+        422,
+        'INSPECTION_REQUIRED_SIGNATURES_MISSING',
+        'Required Inspection signatures are missing.',
+      );
+    }
+
+    const sourceVersion = inspectionVersion;
+    const sourceContentRevision = inspectionContentRevision;
+    inspectionStatus = 'finalized';
+    inspectionVersion += 1;
+    inspectionFinalSnapshot = {
+      id: inspectionFinalSnapshotId,
+      inspectionId,
+      snapshotVersion: 1,
+      inspectionVersion: sourceVersion,
+      contentRevision: sourceContentRevision,
+      createdByUserId: inspectionUserId,
+      createdAt: '2025-06-30T10:00:00.000Z',
+    };
+
+    const response = json({
+      inspection: inspectionRecord(),
+      snapshot: inspectionFinalSnapshot,
+    });
+    if (browserHarnessWindow.__portfolioFailNextInspectionFinalizeAfterCommit) {
+      browserHarnessWindow.__portfolioFailNextInspectionFinalizeAfterCommit =
+        false;
+      return apiError(
+        503,
+        'INSPECTION_FINALIZE_TEST_ACK_LOST',
+        'Intentional finalization acknowledgement loss.',
+      );
+    }
+    return response;
+  }
+
+  if (
+    path === `/inspections/${inspectionId}/final-report` &&
+    init?.method === 'POST'
+  ) {
+    requireInspectionAuth(init);
+    if (inspectionStatus !== 'finalized' || !inspectionFinalSnapshot) {
+      return apiError(
+        422,
+        'INSPECTION_FINAL_REPORT_STATE_INVALID',
+        'Final report requires a finalized Inspection.',
+      );
+    }
+
+    let version = setupDocumentVersions.find(
+      (candidate) => candidate.id === inspectionFinalReportVersionId,
+    );
+    if (!version) {
+      browserHarnessWindow.__portfolioFinalReportRenderCount =
+        (browserHarnessWindow.__portfolioFinalReportRenderCount ?? 0) + 1;
+      const document: DocumentResponse = {
+        id: inspectionFinalReportDocumentId,
+        code: `INSPECTION-FINAL-${inspectionId}`,
+        title: 'INS-BRW-001 final inspection report',
+        category: 'inspection',
+        status: 'active',
+        latestVersionNumber: 1,
+        revision: 2,
+      };
+      version = {
+        id: inspectionFinalReportVersionId,
+        documentId: inspectionFinalReportDocumentId,
+        versionNumber: 1,
+        fileName: 'INS-BRW-001-final.pdf',
+        mimeType: 'application/pdf',
+        byteSize: 8,
+        sha256: '8'.repeat(64),
+        status: 'final',
+        finalizedAt: '2025-06-30T10:05:00.000Z',
+      };
+      setupDocuments.push(document);
+      setupDocumentVersions.push(version);
+
+      const evidenceId = inspectionEvidenceIds[inspectionEvidenceSequence++];
+      if (!evidenceId) throw new Error('Inspection Evidence id pool exhausted.');
+      inspectionEvidence = [
+        ...inspectionEvidence,
+        {
+          id: evidenceId,
+          inspectionId,
+          sectionId: null,
+          itemId: null,
+          documentVersionId: version.id,
+          kind: 'final_report',
+          caption: null,
+          createdByUserId: inspectionUserId,
+          createdAt: '2025-06-30T10:05:00.000Z',
+        },
+      ];
+    }
+
+    if (browserHarnessWindow.__portfolioFailNextInspectionReportAfterCommit) {
+      browserHarnessWindow.__portfolioFailNextInspectionReportAfterCommit =
+        false;
+      return apiError(
+        503,
+        'INSPECTION_REPORT_TEST_ACK_LOST',
+        'Intentional final-report acknowledgement loss.',
+      );
+    }
+    return json(version);
   }
 
   if (

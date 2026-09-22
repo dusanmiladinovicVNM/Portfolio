@@ -34,6 +34,11 @@ export interface StoredFile extends StorageObjectMetadata {
 }
 
 export interface FileStorageWritePort {
+  /**
+   * objectKey is an idempotency identity. Implementations must reuse an
+   * existing object only when its bytes match the supplied content and must
+   * reject an objectKey collision with different content.
+   */
   put(input: FileStoragePutInput): Promise<StoredFile>;
   stat(
     reference: StorageObjectReference,

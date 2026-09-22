@@ -14,6 +14,7 @@ import type {
   DocumentVersion,
   DocumentVersionId,
 } from '@portfolio/domain';
+import { testSha256 } from './hash-test-deps.js';
 
 export class InMemoryDocumentRepository implements DocumentRepository {
   readonly documents = new Map<DocumentId, Document>();
@@ -128,14 +129,26 @@ export class MemoryFileStorage implements FileStoragePort {
 
   async put(input: FileStoragePutInput): Promise<StoredFile> {
     const existing = this.objects.get(input.objectKey);
-    if (existing) return { ...existing, disposition: 'reused' };
+    if (existing) {
+      const existingContent = this.contents.get(input.objectKey);
+      if (
+        !existingContent ||
+        existingContent.byteLength !== input.content.byteLength ||
+        existingContent.some((byte, index) => byte !== input.content[index])
+      ) {
+        throw new Error(
+          'In-memory object key already exists with different content.',
+        );
+      }
+      return { ...existing, disposition: 'reused' };
+    }
 
     const stored: StoredFile = {
       provider: 'memory',
       objectId: input.objectKey,
       objectKey: input.objectKey,
       byteSize: input.content.byteLength,
-      sha256: 'a'.repeat(64),
+      sha256: await testSha256.digest(input.content),
       disposition: 'created',
     };
     this.objects.set(input.objectKey, stored);

@@ -1,6 +1,6 @@
 import { createSupabaseContext } from '@supabase/server';
 import postgres from 'postgres';
-import type { FileStoragePort } from '@portfolio/application';
+import type { FileStoragePort, PdfPort } from '@portfolio/application';
 import { createPortfolioHttpHandler } from '@portfolio/http';
 import {
   PostgresAccessItemRepository,
@@ -23,11 +23,13 @@ import {
   PostgresUserAccessRepository,
   SystemClock,
   WebCryptoIdGenerator,
+  WebCryptoSha256,
 } from '@portfolio/infrastructure';
 
 export interface SupabaseApiConfig {
   readonly databaseUrl: string;
   readonly fileStorage: FileStoragePort;
+  readonly pdfPort: PdfPort;
   readonly basePath?: string;
 }
 
@@ -83,6 +85,8 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
       unitTimelineRepository,
       staffDirectoryRepository: userAccessRepository,
       fileStorage: config.fileStorage,
+      pdfPort: config.pdfPort,
+      sha256: new WebCryptoSha256(),
       clock: new SystemClock(),
       userAccessRepository,
       idGenerator: new WebCryptoIdGenerator(),

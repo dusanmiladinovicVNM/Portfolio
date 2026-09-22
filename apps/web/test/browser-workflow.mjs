@@ -3308,6 +3308,62 @@ try {
     "//ul[contains(@class,'inspection-content-list')]//strong[contains(normalize-space(),'Recovered window Finding')]",
   );
 
+  const scopedEvidenceForm =
+    "//form[@data-inspection-content-form='evidence-scoped-upload']";
+  const evidenceAttachForm =
+    "//form[@data-inspection-content-form='evidence-attach']";
+  const scopedUploadsBefore = await executeScript(
+    sessionId,
+    'return window.__portfolioDocumentUploadCount || 0;',
+  );
+  await setFileXpath(
+    sessionId,
+    scopedEvidenceForm + "//input[@name='file']",
+    inspectionEvidencePhotoPath,
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextInspectionBinaryAfterCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    scopedEvidenceForm +
+      "//button[normalize-space()='Upload Inspection evidence']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Inspection-scoped evidence binary stored.')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    scopedUploadsBefore + 1,
+    'Ambiguous Inspection-scoped Evidence upload reuses one binary',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    evidenceAttachForm +
+      "//button[normalize-space()='Attach exact version' and not(@disabled)]",
+  );
+  await setInputValueXpath(
+    sessionId,
+    evidenceAttachForm + "//textarea[@name='caption']",
+    'Scoped field evidence',
+  );
+  await clickXpath(
+    sessionId,
+    evidenceAttachForm + "//button[normalize-space()='Attach exact version']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//ul[contains(@class,'inspection-content-list')]//span[normalize-space()='Scoped field evidence']",
+  );
+
   await setInputValueXpath(
     sessionId,
     evidenceDocumentForm + "//input[@name='code']",
@@ -3360,8 +3416,6 @@ try {
     'Inspection Evidence binary uploaded exactly once',
   );
 
-  const evidenceAttachForm =
-    "//form[@data-inspection-content-form='evidence-attach']";
   await waitForElement(
     sessionId,
     'xpath',
@@ -3474,8 +3528,311 @@ try {
     'Inspection conflict keeps working URL context',
   );
 
+  // Resolve the intentional CAS conflict through the actual UX path.
+  // Merely typing the canonical value would leave the field touched/dirty.
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Reload server version and discard local edits']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Section matches canonical server state')]",
+  );
+  assertEqual(
+    await elementValueXpath(sessionId, notesInput),
+    'Window scratch',
+    'Conflict reload restores canonical Inspection answer',
+  );
+
+  await executeScript(
+    sessionId,
+    'window.__portfolioHoldInspectionLifecycle = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Lock Inspection']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    'return window.__portfolioPendingInspectionLifecycle === true;',
+    'held Inspection lock',
+  );
+  await clickXpath(sessionId, "//a[normalize-space()='Timeline']");
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'Pending Inspection lock blocks dossier navigation',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioReleaseInspectionLifecycle();',
+    ),
+    true,
+    'Release held Inspection lock',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//span[contains(@class,'status-chip') and normalize-space()='locked']",
+  );
+
+  const signatureUploadForm =
+    "//form[@data-inspection-finalization-form='signature-upload']";
+  const signatureForm =
+    "//form[@data-inspection-finalization-form='signature']";
+  const unlockForm =
+    "//form[@data-inspection-finalization-form='unlock']";
+
+  const uploadsBeforeSignature = await executeScript(
+    sessionId,
+    'return window.__portfolioDocumentUploadCount || 0;',
+  );
+  await setFileXpath(
+    sessionId,
+    signatureUploadForm + "//input[@name='file']",
+    agreementSignedFilePath,
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextInspectionBinaryAfterCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    signatureUploadForm +
+      "//button[normalize-space()='Upload signature version']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Signature binary stored as one final Inspection-scoped DocumentVersion.')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    uploadsBeforeSignature + 1,
+    'Ambiguous signature upload reuses one Inspection-scoped binary',
+  );
+
+  await selectOptionXpath(
+    sessionId,
+    signatureForm + "//select[@name='signerRole']",
+    'tenant',
+  );
+  await selectOptionXpath(
+    sessionId,
+    signatureForm + "//select[@name='signerPartyId']",
+    tenantPartyId,
+  );
+  await setInputValueXpath(
+    sessionId,
+    signatureForm + "//input[@name='signerName']",
+    'Browser Tenant',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextInspectionSignatureAfterCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    signatureForm + "//button[normalize-space()='Record signature']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Signature relation recovered from canonical Inspection state.')]",
+  );
+
+  await setInputValueXpath(
+    sessionId,
+    unlockForm + "//textarea[@name='reason']",
+    'Correct field content after first signature',
+  );
+  await clickXpath(
+    sessionId,
+    unlockForm + "//button[normalize-space()='Unlock Inspection']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//span[contains(@class,'status-chip') and normalize-space()='in_progress']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'prior signatures were invalidated')]",
+  );
+
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Lock Inspection']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//span[contains(@class,'status-chip') and normalize-space()='locked']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Correct field content after first signature')]",
+  );
+
+  // Re-capture required tenant signature after controlled unlock.
+  await setFileXpath(
+    sessionId,
+    signatureUploadForm + "//input[@name='file']",
+    agreementSignedFilePath,
+  );
+  await clickXpath(
+    sessionId,
+    signatureUploadForm +
+      "//button[normalize-space()='Upload signature version']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Signature binary stored as one final Inspection-scoped DocumentVersion.')]",
+  );
+  await selectOptionXpath(
+    sessionId,
+    signatureForm + "//select[@name='signerRole']",
+    'tenant',
+  );
+  await selectOptionXpath(
+    sessionId,
+    signatureForm + "//select[@name='signerPartyId']",
+    tenantPartyId,
+  );
+  await setInputValueXpath(
+    sessionId,
+    signatureForm + "//input[@name='signerName']",
+    'Browser Tenant',
+  );
+  await clickXpath(
+    sessionId,
+    signatureForm + "//button[normalize-space()='Record signature']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Signature captured against the exact final DocumentVersion.')]",
+  );
+
+  // Capture the second required role against a distinct exact version.
+  await setFileXpath(
+    sessionId,
+    signatureUploadForm + "//input[@name='file']",
+    amendmentSignedFilePath,
+  );
+  await clickXpath(
+    sessionId,
+    signatureUploadForm +
+      "//button[normalize-space()='Upload signature version']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Signature binary stored as one final Inspection-scoped DocumentVersion.')]",
+  );
+  await selectOptionXpath(
+    sessionId,
+    signatureForm + "//select[@name='signerRole']",
+    'landlord',
+  );
+  await selectOptionXpath(
+    sessionId,
+    signatureForm + "//select[@name='signerPartyId']",
+    landlordPartyId,
+  );
+  await setInputValueXpath(
+    sessionId,
+    signatureForm + "//input[@name='signerName']",
+    'Browser Landlord Ltd',
+  );
+  await clickXpath(
+    sessionId,
+    signatureForm + "//button[normalize-space()='Record signature']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Signature captured against the exact final DocumentVersion.')]",
+  );
+
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//li[.//strong[normalize-space()='Tenant']]//small[normalize-space()='active signature present']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//li[.//strong[normalize-space()='Landlord']]//small[normalize-space()='active signature present']",
+  );
+
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextInspectionFinalizeAfterCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Finalize Inspection']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//span[contains(@class,'status-chip') and normalize-space()='finalized']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Finalization was recovered from the immutable canonical snapshot.')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'source lifecycle v')]",
+  );
+
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextInspectionReportAfterCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Generate / reuse final report']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Final report generated/reused from the immutable snapshot.')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioFinalReportRenderCount || 0;',
+    ),
+    1,
+    'Lost final-report acknowledgement does not render a second report',
+  );
+
+  const readsBeforeFinalReport = await executeScript(
+    sessionId,
+    'return window.__portfolioBinaryReads || 0;',
+  );
+  await clickXpath(
+    sessionId,
+    "//div[contains(@class,'inspection-finalization-card')][.//strong[normalize-space()='Final report']]//button[normalize-space()='Download']",
+  );
+  await waitForBinaryReads(sessionId, readsBeforeFinalReport + 1);
+
   process.stdout.write(
-    'Browser workflow PASS: Core setup + route-owner guards → Contracts/documents → Inspection orchestration → field workflow\n',
+    'Browser workflow PASS: Core setup + route-owner guards → Contracts/documents → Inspection field evidence → lock/sign/unlock/finalize/report\n',
   );
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.stack : error}\n`);

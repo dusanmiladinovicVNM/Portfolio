@@ -33,6 +33,8 @@ import {
   type UnitId,
 } from '@portfolio/domain';
 import { createPortfolioHttpHandler } from '../src/index.js';
+import { testSha256 } from './hash-test-deps.js';
+import { unusedPdfPort } from './pdf-test-deps.js';
 import { InMemoryAssetInventoryRepository, InMemoryAssetRepository, InMemoryAssetServiceRepository } from './asset-test-deps.js';
 import {
   FixedClock,
@@ -305,6 +307,8 @@ function buildHandler() {
     inspectionRepository: new InMemoryInspectionRepository(),
     staffDirectoryRepository: new InMemoryStaffDirectoryRepository(),
     fileStorage: new MemoryFileStorage(),
+    pdfPort: unusedPdfPort,
+    sha256: testSha256,
     clock: new FixedClock(),
     userAccessRepository: new InMemoryAccessRepository(),
     idGenerator: new FixedIds([

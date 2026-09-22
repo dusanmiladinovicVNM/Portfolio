@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
+  finalizeDocumentVersionCommand,
   getDocumentVersionContentQuery,
   uploadDocumentVersionCommand,
   type Actor,
@@ -193,6 +194,51 @@ describe('Document application workflow', () => {
       ),
     ).rejects.toMatchObject({
       code: 'DOCUMENT_STORAGE_COMPENSATION_FAILED',
+    });
+  });
+
+  it('preserves the strict finalize lifecycle for an already-final DocumentVersion', async () => {
+    const repository = new FailingDocumentRepository();
+    const versionId =
+      '50000000-0000-4000-8000-000000000009' as DocumentVersionId;
+    const version: DocumentVersion = {
+      id: versionId,
+      documentId: repository.document.id,
+      versionNumber: 1,
+      fileName: 'already-final.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 3,
+      sha256: 'a'.repeat(64),
+      status: 'final',
+      finalizedAt: '2026-09-18T19:00:00.000Z',
+    };
+    const reference: StorageObjectReference = {
+      provider: 'test',
+      objectId: 'object-9',
+      objectKey: `document-version:${versionId}`,
+    };
+
+    class FinalRepository extends FailingDocumentRepository {
+      override async getVersionById(id: DocumentVersionId) {
+        return id === version.id ? version : null;
+      }
+      override async getStorageReference(id: DocumentVersionId) {
+        return id === version.id ? reference : null;
+      }
+    }
+
+    await expect(
+      finalizeDocumentVersionCommand(
+        {
+          documentRepository: new FinalRepository(),
+          fileStorage: new TrackingStorage(),
+          clock: { now: () => '2026-09-18T20:00:00.000Z' },
+        },
+        actor,
+        versionId,
+      ),
+    ).rejects.toMatchObject({
+      code: 'DOCUMENT_VERSION_INVALID_TRANSITION',
     });
   });
 
