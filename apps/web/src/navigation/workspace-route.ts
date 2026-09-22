@@ -13,6 +13,7 @@ export const DOSSIER_TABS = [
   'timeline',
   'documents',
   'assets',
+  'meters',
 ] as const;
 export type DossierTab = (typeof DOSSIER_TABS)[number];
 
@@ -42,6 +43,7 @@ export type WorkspaceRoute =
       readonly inspectionId?: string;
       readonly inspectionSectionId?: string;
       readonly assetId?: string;
+      readonly meterId?: string;
     };
 
 export function workspaceRouteOwnerKey(route: WorkspaceRoute): string {
@@ -117,6 +119,7 @@ export interface UnitRouteSelection {
   readonly inspectionId?: string;
   readonly inspectionSectionId?: string;
   readonly assetId?: string;
+  readonly meterId?: string;
 }
 
 export function unitRoute(
@@ -142,6 +145,8 @@ export function unitRoute(
       : undefined;
   const assetId =
     tab === 'assets' ? selection.assetId : undefined;
+  const meterId =
+    tab === 'meters' ? selection.meterId : undefined;
 
   return {
     kind: 'unit',
@@ -155,6 +160,7 @@ export function unitRoute(
     ...(inspectionId ? { inspectionId } : {}),
     ...(inspectionSectionId ? { inspectionSectionId } : {}),
     ...(assetId ? { assetId } : {}),
+    ...(meterId ? { meterId } : {}),
   };
 }
 
@@ -202,6 +208,10 @@ export function parseWorkspaceLocation(
         tab === 'assets'
           ? readEntityId(search.get('assetId') ?? undefined)
           : null;
+      const meterId =
+        tab === 'meters'
+          ? readEntityId(search.get('meterId') ?? undefined)
+          : null;
 
       return unitRoute(propertyId, unitId, asOf, tab, {
         ...(tenancyId ? { tenancyId } : {}),
@@ -210,6 +220,7 @@ export function parseWorkspaceLocation(
         ...(inspectionId ? { inspectionId } : {}),
         ...(inspectionSectionId ? { inspectionSectionId } : {}),
         ...(assetId ? { assetId } : {}),
+        ...(meterId ? { meterId } : {}),
       });
     }
   }
@@ -248,6 +259,9 @@ export function workspaceRouteHref(route: WorkspaceRoute): string {
     }
     if (route.tab === 'assets' && route.assetId) {
       search.set('assetId', route.assetId);
+    }
+    if (route.tab === 'meters' && route.meterId) {
+      search.set('meterId', route.meterId);
     }
   }
   search.set('asOf', route.asOf);
