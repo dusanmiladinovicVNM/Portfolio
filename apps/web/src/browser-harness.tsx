@@ -531,9 +531,15 @@ function documentCatalog(): DocumentResponse[] {
 
 function versionsForDocument(documentIdValue: string): DocumentVersionResponse[] {
   if (documentIdValue === agreementDocumentId) {
+    if (!agreementDocumentReference.linkedVersion) {
+      throw new Error('Agreement browser Document is missing its linked version.');
+    }
     return [agreementDocumentReference.linkedVersion];
   }
   if (documentIdValue === amendmentDocumentId) {
+    if (!amendmentDocumentReference.linkedVersion) {
+      throw new Error('Amendment browser Document is missing its linked version.');
+    }
     return [amendmentDocumentReference.linkedVersion];
   }
   return setupDocumentVersions.filter(
