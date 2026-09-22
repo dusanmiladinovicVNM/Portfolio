@@ -12,6 +12,7 @@ import type {
   InspectionSchemaVersion,
   InspectionSchemaVersionId,
   UnitId,
+  UserId,
 } from '@portfolio/domain';
 
 export interface SaveInspectionSectionResult {
