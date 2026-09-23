@@ -17,7 +17,10 @@ The rehearsal proves all of the following in one run:
 6. migration files and the dump are SHA-256 checked;
 7. restored primary keys, parent relations, constraints, temporal final state,
    document hash/size and provider-neutral storage reference are verified;
-8. the restored database is read through `PostgresPortfolioRepository` and
+8. restored database security state is verified: RLS coverage, browser-role
+   relation/sequence/function/schema privileges, SECURITY DEFINER surface and
+   `unit_business_events` security-invoker mode;
+9. the restored database is read through `PostgresPortfolioRepository` and
    `PostgresDocumentRepository`.
 
 The source deletion is deliberate. It prevents a false-green rehearsal that
@@ -33,6 +36,16 @@ storage reference:
 - object key
 - byte size
 - SHA-256
+
+The custom-format dump preserves database object ACLs. Ownership is deliberately
+not restored (`--no-owner`) so recovery can target a different database owner,
+but privilege revocations such as the #39 browser-role lockdown remain part of
+the recovered database state.
+
+`pg_dump` is a database-level backup and does not recreate cluster-global
+roles. Required destination roles must exist before restore. The rehearsal
+creates the portable `anon` and `authenticated` roles before loading the
+dump; platform/provider roles remain a deployment concern.
 
 The PostgreSQL dump does **not** replicate the Google Drive binary bytes. Binary
 provider disaster recovery is a separate operational concern; this gate proves
@@ -86,7 +99,7 @@ migrations from zero
 → destroy source
 → fresh database
 → restore
-→ integrity verification
+→ business + security integrity verification
 → repository smoke read
 ~~~
 
