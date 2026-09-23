@@ -101,6 +101,59 @@ describe('HTTP observability', () => {
     });
   });
 
+  it('preserves a successful business response when the logger throws', async () => {
+    const handler = createObservedHttpHandler(
+      async () => Response.json({ id: 'created' }, { status: 201 }),
+      {
+        log() {
+          throw new Error('logging backend unavailable');
+        },
+      },
+      {
+        requestIdFactory: () => 'created-request',
+        now: () => 20,
+      },
+    );
+
+    const response = await handler(
+      new Request('https://portfolio.test/properties', { method: 'POST' }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(response.headers.get('x-request-id')).toBe('created-request');
+    await expect(response.json()).resolves.toEqual({ id: 'created' });
+  });
+
+  it('returns a correlated fail-closed 500 even when failure logging also throws', async () => {
+    const handler = createObservedHttpHandler(
+      async () => {
+        throw new Error('provider auth dependency failed');
+      },
+      {
+        log() {
+          throw new Error('logging backend unavailable');
+        },
+      },
+      {
+        requestIdFactory: () => 'double-failure-id',
+        now: () => 20,
+      },
+    );
+
+    const response = await handler(
+      new Request('https://portfolio.test/properties'),
+    );
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get('x-request-id')).toBe('double-failure-id');
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'An unexpected error occurred.',
+      },
+    });
+  });
+
   it('returns a correlated fail-closed 500 when the wrapped host throws', async () => {
     const events: OperationalLogEvent[] = [];
     const handler = createObservedHttpHandler(
