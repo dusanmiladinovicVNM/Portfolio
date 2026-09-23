@@ -4,6 +4,7 @@ import type { FileStoragePort, PdfPort } from '@portfolio/application';
 import {
   createObservedHttpHandler,
   createPortfolioHttpHandler,
+  safeOperationalLog,
   type OperationalLogger,
 } from '@portfolio/http';
 import {
@@ -36,6 +37,7 @@ export interface SupabaseApiConfig {
   readonly pdfPort: PdfPort;
   readonly basePath?: string;
   readonly serviceVersion?: string;
+  readonly readinessTimeoutMs?: number;
   readonly logger?: OperationalLogger;
 }
 
@@ -119,7 +121,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
         await sql`select 1`;
       },
       onUnexpectedError: (error, context) => {
-        logger.log({
+        safeOperationalLog(logger, {
           level: 'error',
           event: 'http.unexpected_error',
           requestId: context.requestId,
@@ -129,12 +131,15 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
         });
       },
     },
-    config.serviceVersion === undefined
-      ? { basePath: config.basePath ?? '/functions/v1/api' }
-      : {
-          basePath: config.basePath ?? '/functions/v1/api',
-          serviceVersion: config.serviceVersion,
-        },
+    {
+      basePath: config.basePath ?? '/functions/v1/api',
+      ...(config.serviceVersion === undefined
+        ? {}
+        : { serviceVersion: config.serviceVersion }),
+      ...(config.readinessTimeoutMs === undefined
+        ? {}
+        : { readinessTimeoutMs: config.readinessTimeoutMs }),
+    },
   );
 
   const authenticatedHandler = async (request: Request): Promise<Response> => {
