@@ -152,20 +152,23 @@ jobs:
           grep -Fq 'from "fs"' .artifacts/node-builtins/out.js
           grep -Fq 'import("fs/promises")' .artifacts/node-builtins/out.js
 
-      - name: Prove Buffer injection
+      - name: Prove Node global injection
         run: |
-          mkdir -p .artifacts/node-buffer
-          cat > .artifacts/node-buffer/fixture.js <<'EOF'
+          mkdir -p .artifacts/node-globals
+          cat > .artifacts/node-globals/fixture.js <<'EOF'
           const bytes = Buffer.from("ok");
-          const payload = 'Buffer.from("payload")';
-          console.log(bytes.toString("utf8"), payload);
+          const payload = 'setImmediate(() => "payload")';
+          const timer = setImmediate(() => console.log(bytes.toString("utf8"), payload));
+          clearImmediate(timer);
+          setImmediate(() => console.log(bytes.toString("utf8"), payload));
           EOF
 
-          pnpm dlx esbuild@0.28.2             .artifacts/node-buffer/fixture.js             --bundle             --format=esm             --platform=node             --target=es2022             --inject:./scripts/deployment/esbuild-node-globals.ts             --outfile=.artifacts/node-buffer/out.js
+          pnpm dlx esbuild@0.28.2             .artifacts/node-globals/fixture.js             --bundle             --format=esm             --platform=node             --target=es2022             --inject:./scripts/deployment/esbuild-node-globals.ts             --outfile=.artifacts/node-globals/out.js
 
-          grep -Fq 'node:buffer' .artifacts/node-buffer/out.js
-          grep -Fq 'Buffer.from("payload")' .artifacts/node-buffer/out.js
-          deno run .artifacts/node-buffer/out.js | grep -Fq 'ok Buffer.from("payload")'
+          grep -Fq 'node:buffer' .artifacts/node-globals/out.js
+          grep -Fq 'node:timers' .artifacts/node-globals/out.js
+          grep -Fq 'setImmediate(() => "payload")' .artifacts/node-globals/out.js
+          deno run .artifacts/node-globals/out.js | grep -Fq 'ok setImmediate(() => "payload")'
 
       - name: Build deployable Supabase Edge bundle
         env:
