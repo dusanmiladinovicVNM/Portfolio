@@ -1,0 +1,17 @@
+{
+  "imports": {
+    "@portfolio/api": "../../../apps/api/src/index.ts",
+    "@portfolio/application": "../../../packages/application/src/index.ts",
+    "@portfolio/contracts": "../../../packages/contracts/src/index.ts",
+    "@portfolio/domain": "../../../packages/domain/src/index.ts",
+    "@portfolio/http": "../../../packages/http/src/index.ts",
+    "@portfolio/infrastructure": "../../../packages/infrastructure/src/index.ts",
+    "@portfolio/google-drive": "../../../integrations/google-drive/src/index.ts",
+    "@portfolio/pdf": "../../../integrations/pdf/src/index.ts",
+    "@supabase/server": "npm:@supabase/server@1.7.0",
+    "postgres": "npm:postgres@3.4.9"
+  },
+  "compilerOptions": {
+    "strict": true
+  }
+}
