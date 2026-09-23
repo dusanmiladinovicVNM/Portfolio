@@ -137,10 +137,12 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
         );
       },
     },
-    {
-      basePath: config.basePath ?? '/functions/v1/api',
-      serviceVersion: config.serviceVersion,
-    },
+    config.serviceVersion === undefined
+      ? { basePath: config.basePath ?? '/functions/v1/api' }
+      : {
+          basePath: config.basePath ?? '/functions/v1/api',
+          serviceVersion: config.serviceVersion,
+        },
   );
 
   const authenticatedHandler = async (request: Request): Promise<Response> => {
