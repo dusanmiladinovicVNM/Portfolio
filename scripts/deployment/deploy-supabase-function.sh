@@ -48,10 +48,6 @@ pnpm dlx "supabase@${SUPABASE_CLI_VERSION}" functions deploy api \
   --project-ref "$PROJECT_REF" \
   --use-api
 
-pnpm dlx "supabase@${SUPABASE_CLI_VERSION}" secrets set \
-  "PORTFOLIO_RELEASE_SHA=$SOURCE_SHA" \
-  --project-ref "$PROJECT_REF"
-
 HEALTH_URL="https://${PROJECT_REF}.supabase.co/functions/v1/api/health/live"
 HEALTH_BODY="$(curl --fail --silent --show-error "$HEALTH_URL")"
 
