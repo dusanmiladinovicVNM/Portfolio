@@ -33,8 +33,10 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/portfolio_test
 
     steps:
-      - name: Checkout
+      - name: Checkout exact release candidate
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Use Node.js 24 LTS
         uses: actions/setup-node@v4
