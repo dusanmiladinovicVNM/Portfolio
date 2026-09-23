@@ -14,7 +14,7 @@ function env(values: Record<string, string>): EnvReader {
 
 const base = {
   SUPABASE_DB_URL: 'postgresql://example',
-  PORTFOLIO_RELEASE_SHA: 'abc123',
+  PORTFOLIO_RELEASE_SHA: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   PORTFOLIO_WEB_ORIGIN: 'https://portfolio.example.com',
   PORTFOLIO_GOOGLE_DRIVE_FOLDER_ID: 'folder-1',
   PORTFOLIO_GOOGLE_CLIENT_ID: 'client-id',
@@ -46,5 +46,17 @@ Deno.test('runtime config rejects non-HTTPS remote web origins', () => {
   }
   if (!message.includes('must use HTTPS')) {
     throw new Error(`Expected HTTPS rejection, got: ${message}`);
+  }
+});
+
+Deno.test('runtime config rejects abbreviated release SHAs', () => {
+  let message = '';
+  try {
+    readRuntimeConfig(env({ ...base, PORTFOLIO_RELEASE_SHA: 'abc123' }));
+  } catch (error) {
+    message = error instanceof Error ? error.message : String(error);
+  }
+  if (!message.includes('full 40-character git SHA')) {
+    throw new Error(`Expected full SHA rejection, got: ${message}`);
   }
 });
