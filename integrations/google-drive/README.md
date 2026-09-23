@@ -47,10 +47,13 @@ The MVP adapter is intentionally bounded-buffered at 16 MiB by default.
 - oversized writes are rejected before hashing or network I/O;
 - download metadata is checked before media fetch;
 - media bodies are consumed through a bounded reader and re-hashed;
-- multipart upload remains bounded even though it is not yet resumable/chunked.
+- writes use a Drive resumable session for the full supported size range;
+- because Portfolio already bounds content to 16 MiB, the session uploads the
+  complete binary in one PUT rather than introducing chunk/replay state.
 
-A future resumable Drive upload can improve memory/cancellation behavior without
-changing `DocumentVersion` identity or `FileStoragePort` business semantics.
+Chunked resumable transfer can still be added later for throughput or retry
+efficiency without changing `DocumentVersion` identity or `FileStoragePort`
+business semantics.
 
 ## Shared Drives
 
