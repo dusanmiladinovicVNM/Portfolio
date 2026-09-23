@@ -162,3 +162,11 @@ Before real company use, record explicit decisions for:
 - operational ownership of OAuth credential rotation and incident response.
 
 These are deployment policy decisions, not missing domain invariants.
+
+## Deno compatibility note
+
+The canonical monorepo TypeScript uses Node-ESM `.js` specifiers from `.ts` source. The Edge Function `deno.json` enables Deno `sloppy-imports` solely as a compatibility bridge so the hosted Deno runtime can consume that canonical source without maintaining a second generated copy.
+
+CI runs `deno check` against the real function entrypoint and uses a committed frozen `deno.lock`. A green CI proves Deno resolution/type compatibility for the exact source revision, but the first real `supabase functions deploy api --use-api` remains an environment-level deployment rehearsal and must be completed before production use.
+
+This bridge is deployment debt, not a domain/application convention. A later Fastify/Node host removes it naturally without changing business code.
