@@ -117,15 +117,38 @@ export function createObservedHttpHandler(
     } catch (error) {
       logger.log({
         level: 'error',
+        event: 'http.unexpected_error',
+        requestId,
+        method: request.method,
+        path: url.pathname,
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+      });
+
+      const response = Response.json(
+        {
+          error: {
+            code: 'INTERNAL_ERROR',
+            message: 'An unexpected error occurred.',
+          },
+        },
+        {
+          status: 500,
+          headers: { [REQUEST_ID_HEADER]: requestId },
+        },
+      );
+
+      logger.log({
+        level: 'error',
         event: 'http.request.failed',
         requestId,
         method: request.method,
         path: url.pathname,
         status: 500,
         durationMs: Math.max(0, now() - startedAt),
-        errorCode: 'UNHANDLED_HTTP_FAILURE',
+        errorCode: 'INTERNAL_ERROR',
       });
-      throw error;
+
+      return response;
     }
   };
 }
