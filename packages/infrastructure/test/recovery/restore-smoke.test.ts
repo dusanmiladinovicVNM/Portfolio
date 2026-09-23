@@ -1,6 +1,10 @@
 import postgres from 'postgres';
 import { afterAll, describe, expect, it } from 'vitest';
-import { asDocumentVersionId, asPropertyId } from '@portfolio/domain';
+import {
+  asDocumentVersionId,
+  asPropertyId,
+  type Property,
+} from '@portfolio/domain';
 import {
   PostgresDocumentRepository,
   PostgresPortfolioRepository,
@@ -56,5 +60,27 @@ describe('restored Portfolio database', () => {
       objectKey:
         'document-version:44444444-4444-4444-8444-444444444444',
     });
+  });
+
+  it('can continue canonical writes after restore', async () => {
+    const continuedProperty: Property = {
+      id: asPropertyId('55555555-5555-4555-8555-555555555555'),
+      code: 'RECOVERY-CONTINUE-1',
+      name: 'Post-restore continuation property',
+      propertyType: 'apartment_building',
+      street: 'Recoverystrasse',
+      houseNumber: '2',
+      postalCode: '8000',
+      city: 'Zürich',
+      countryCode: 'CH',
+      yearBuilt: 2024,
+      status: 'active',
+    };
+
+    await portfolioRepository.insertProperty(continuedProperty);
+
+    await expect(
+      portfolioRepository.getPropertyById(continuedProperty.id),
+    ).resolves.toEqual(continuedProperty);
   });
 });
