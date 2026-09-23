@@ -84,9 +84,15 @@ producers such as generated reports cannot bypass the storage write policy.
 Google Drive also enforces the ceiling before hashing or network I/O. Provider
 writes use a resumable upload session so the full 16 MiB Portfolio contract is
 within Drive's documented upload path. Because Portfolio is already
-bounded-buffered, the session sends the complete binary in one PUT; chunked
-resume/replay remains a later performance optimization rather than a requirement
-for the current correctness boundary.
+bounded-buffered, the normal path sends the complete binary in one PUT.
+
+If that PUT has an ambiguous network or 5xx outcome, the adapter does not open a
+new Drive create. It queries the same resumable session with
+`Content-Range: bytes */TOTAL`. A completed session returns the created file
+metadata; a `308` response supplies the confirmed byte prefix and only the
+remaining suffix is resent through that same session. Session disappearance or
+repeatedly ambiguous status checks fail closed for storage reconciliation rather
+than guessing provider state.
 
 For concurrent same-`DocumentVersionId` writes, PostgreSQL remains the only
 canonical winner. A losing newly-created storage object is removed only after
