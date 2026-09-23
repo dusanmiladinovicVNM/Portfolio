@@ -16,7 +16,7 @@ pnpm dlx "esbuild@${ESBUILD_VERSION}" \
   supabase/functions/api/index.ts \
   --bundle \
   --format=esm \
-  --platform=neutral \
+  --platform=node \
   --target=es2022 \
   --packages=bundle \
   --main-fields=module,main \
