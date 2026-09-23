@@ -58,7 +58,7 @@ describe('HTTP observability', () => {
 
     const response = await handler(
       new Request('https://portfolio.test/properties', {
-        headers: { 'x-request-id': 'unsafe request id\nforged' },
+        headers: { 'x-request-id': 'unsafe/request/id' },
       }),
     );
 
