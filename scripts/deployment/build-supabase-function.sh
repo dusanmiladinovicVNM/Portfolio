@@ -47,6 +47,8 @@ pnpm dlx "esbuild@${ESBUILD_VERSION}" \
   --define:__PORTFOLIO_BUILD_SHA__="\"$ACTUAL_SHA\"" \
   --outfile="$OUT_FILE"
 
+node scripts/deployment/normalize-node-builtins.mjs "$OUT_FILE"
+
 BYTES="$(wc -c < "$OUT_FILE" | tr -d ' ')"
 
 if [[ "$BYTES" -ge "$MAX_BYTES" ]]; then
