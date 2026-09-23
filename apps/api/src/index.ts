@@ -205,3 +205,5 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
     },
   };
 }
+
+export * from './canonical-inspection-pdf-renderer.js';
