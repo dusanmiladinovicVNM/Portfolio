@@ -107,6 +107,24 @@ jobs:
           git restore supabase/functions/api/cors.ts
           test -z "$(git status --porcelain --untracked-files=all)"
 
+      - name: Prove Node built-in normalization
+        run: |
+          mkdir -p .artifacts/node-builtins
+          cat > .artifacts/node-builtins/fixture.js <<'EOF'
+          import { performance } from "perf_hooks";
+          const fs = await import("fs/promises");
+          const crypto = require("crypto");
+          import path from "node:path";
+          EOF
+          node scripts/deployment/normalize-node-builtins.mjs .artifacts/node-builtins/fixture.js
+          grep -Fq 'from "node:perf_hooks"' .artifacts/node-builtins/fixture.js
+          grep -Fq 'import("node:fs/promises")' .artifacts/node-builtins/fixture.js
+          grep -Fq 'require("node:crypto")' .artifacts/node-builtins/fixture.js
+          grep -Fq 'from "node:path"' .artifacts/node-builtins/fixture.js
+          ! grep -Fq 'from "perf_hooks"' .artifacts/node-builtins/fixture.js
+          ! grep -Fq 'import("fs/promises")' .artifacts/node-builtins/fixture.js
+          ! grep -Fq 'require("crypto")' .artifacts/node-builtins/fixture.js
+
       - name: Build deployable Supabase Edge bundle
         env:
           DEPLOY_CODE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
