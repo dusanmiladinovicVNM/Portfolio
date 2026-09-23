@@ -73,7 +73,10 @@ export function createObservedHttpHandler(
     const url = new URL(request.url);
 
     try {
-      const response = await handler(request);
+      const requestHeaders = new Headers(request.headers);
+      requestHeaders.set(REQUEST_ID_HEADER, requestId);
+      const observedRequest = new Request(request, { headers: requestHeaders });
+      const response = await handler(observedRequest);
       const headers = new Headers(response.headers);
       headers.set(REQUEST_ID_HEADER, requestId);
       const observedResponse = new Response(response.body, {
