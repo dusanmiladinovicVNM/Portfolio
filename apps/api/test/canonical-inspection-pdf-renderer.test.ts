@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { InspectionFinalSnapshot } from '@portfolio/domain';
+import type { PdfPort } from '@portfolio/application';
 import { CanonicalInspectionPdfRenderer } from '../src/index.js';
+
+type InspectionFinalSnapshot = Parameters<
+  PdfPort['renderInspectionFinalReport']
+>[0];
 
 describe('CanonicalInspectionPdfRenderer', () => {
   it('emits a valid PDF envelope and preserves non-ASCII snapshot data as visible escapes', async () => {
