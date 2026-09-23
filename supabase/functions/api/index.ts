@@ -4,6 +4,7 @@ import {
   GoogleOAuthRefreshTokenProvider,
 } from '@portfolio/google-drive';
 import { createCorsHandler } from './cors.ts';
+import { SUPABASE_FUNCTION_BASE_PATH } from './host-routing.ts';
 import { readRuntimeConfig } from './runtime-config.ts';
 
 const config = readRuntimeConfig(Deno.env);
@@ -21,6 +22,7 @@ const api = createSupabaseApi({
     accessTokenProvider,
   }),
   pdfPort: new CanonicalInspectionPdfRenderer(),
+  basePath: SUPABASE_FUNCTION_BASE_PATH,
   serviceVersion: config.releaseSha,
   ...(config.readinessTimeoutMs === undefined
     ? {}
