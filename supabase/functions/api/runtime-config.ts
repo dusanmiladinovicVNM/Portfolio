@@ -45,22 +45,28 @@ function optionalPositiveInteger(env: EnvReader, name: string): number | undefin
   return value;
 }
 
+function releaseSha(env: EnvReader): string {
+  const value = required(env, 'PORTFOLIO_RELEASE_SHA').toLowerCase();
+  if (!/^[0-9a-f]{40}$/u.test(value)) {
+    throw new Error('PORTFOLIO_RELEASE_SHA must be a full 40-character git SHA.');
+  }
+  return value;
+}
+
 export function readRuntimeConfig(env: EnvReader): RuntimeConfig {
+  const readinessTimeoutMs = optionalPositiveInteger(
+    env,
+    'PORTFOLIO_READINESS_TIMEOUT_MS',
+  );
+
   return {
     databaseUrl: required(env, 'SUPABASE_DB_URL'),
-    releaseSha: required(env, 'PORTFOLIO_RELEASE_SHA'),
+    releaseSha: releaseSha(env),
     webOrigin: httpsOrigin(required(env, 'PORTFOLIO_WEB_ORIGIN')),
     googleDriveFolderId: required(env, 'PORTFOLIO_GOOGLE_DRIVE_FOLDER_ID'),
     googleClientId: required(env, 'PORTFOLIO_GOOGLE_CLIENT_ID'),
     googleClientSecret: required(env, 'PORTFOLIO_GOOGLE_CLIENT_SECRET'),
     googleRefreshToken: required(env, 'PORTFOLIO_GOOGLE_REFRESH_TOKEN'),
-    ...(optionalPositiveInteger(env, 'PORTFOLIO_READINESS_TIMEOUT_MS') === undefined
-      ? {}
-      : {
-          readinessTimeoutMs: optionalPositiveInteger(
-            env,
-            'PORTFOLIO_READINESS_TIMEOUT_MS',
-          ),
-        }),
+    ...(readinessTimeoutMs === undefined ? {} : { readinessTimeoutMs }),
   };
 }
