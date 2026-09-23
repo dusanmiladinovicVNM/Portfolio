@@ -76,10 +76,16 @@ jobs:
           RELEASE_CODE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: pnpm release:rehearse
 
-      - name: Supabase Edge Function check
+      - name: Supabase Edge Function source check
         run: |
           deno check --config supabase/functions/api/deno.json supabase/functions/api/index.ts
           deno test --config supabase/functions/api/deno.json \
             supabase/functions/api/runtime-config.test.ts \
             supabase/functions/api/cors.test.ts \
             supabase/functions/api/host-routing.test.ts
+
+      - name: Build deployable Supabase Edge bundle
+        run: pnpm supabase:function:bundle
+
+      - name: Check deployable Supabase Edge bundle
+        run: deno check supabase/functions/api/dist/index.js
