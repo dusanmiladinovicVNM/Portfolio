@@ -2557,12 +2557,17 @@ describe('Portfolio HTTP boundary', () => {
   });
 
   it('runs Document → binary version → final → domain link through HTTP', async () => {
-    const handler = buildHandler([
-      '40000000-0000-4000-8000-000000000001',
-      '40000000-0000-4000-8000-000000000002',
-      '40000000-0000-4000-8000-000000000003',
-      '40000000-0000-4000-8000-000000000004',
-    ]);
+    const fileStorage = new MemoryFileStorage();
+    const handler = buildHandler(
+      [
+        '40000000-0000-4000-8000-000000000001',
+        '40000000-0000-4000-8000-000000000002',
+        '40000000-0000-4000-8000-000000000003',
+        '40000000-0000-4000-8000-000000000004',
+      ],
+      new FixedClock(),
+      { fileStorage },
+    );
 
     const property = await handler(
       new Request('https://portfolio.test/properties', {
@@ -2591,6 +2596,22 @@ describe('Portfolio HTTP boundary', () => {
     };
     expect(document.latestVersionNumber).toBe(0);
 
+    const forbiddenUploadRequest = new Request(
+      `https://portfolio.test/documents/${document.id}/versions?fileName=forbidden.pdf&expectedDocumentRevision=1`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/pdf' },
+        body: new Uint8Array([7, 7, 7, 7]),
+      },
+    );
+    const forbiddenUpload = await handler(
+      forbiddenUploadRequest,
+      inspectorIdentity,
+    );
+    expect(forbiddenUpload.status).toBe(403);
+    expect(forbiddenUploadRequest.bodyUsed).toBe(false);
+    expect(fileStorage.putCallCount).toBe(0);
+
     const uploaded = await handler(
       new Request(
         `https://portfolio.test/documents/${document.id}/versions?fileName=lease.pdf&expectedDocumentRevision=1`,
@@ -2612,6 +2633,7 @@ describe('Portfolio HTTP boundary', () => {
       versionNumber: 1,
       status: 'stored',
     });
+    expect(fileStorage.putCallCount).toBe(1);
 
     const staleUpload = await handler(
       new Request(
@@ -2634,8 +2656,11 @@ describe('Portfolio HTTP boundary', () => {
         `https://portfolio.test/documents/${document.id}/versions?fileName=oversized.pdf&expectedDocumentRevision=2`,
         {
           method: 'POST',
-          headers: { 'content-type': 'application/pdf' },
-          body: new Uint8Array(16 * 1024 * 1024 + 1),
+          headers: {
+            'content-type': 'application/pdf',
+            'content-length': String(16 * 1024 * 1024 + 1),
+          },
+          body: new Uint8Array([9]),
         },
       ),
       adminIdentity,
@@ -2644,6 +2669,7 @@ describe('Portfolio HTTP boundary', () => {
     expect(await oversizedUpload.json()).toMatchObject({
       error: { code: 'DOCUMENT_BINARY_UPLOAD_LIMIT_EXCEEDED' },
     });
+    expect(fileStorage.putCallCount).toBe(1);
 
     const storedContent = await handler(
       new Request(

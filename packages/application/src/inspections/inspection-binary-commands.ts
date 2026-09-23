@@ -12,6 +12,7 @@ import { requireCapability, type Actor } from '../security/access.js';
 import type { ClockPort } from '../shared/clock.js';
 import type { IdGenerator } from '../shared/id-generator.js';
 import type { Sha256Port } from '../shared/sha256-port.js';
+import { assertBufferedDocumentBinaryWriteSize } from '../documents/document-binary-policy.js';
 import type { DocumentRepository } from '../documents/document-repository.js';
 import type { FileStorageWritePort } from '../documents/file-storage-port.js';
 import {
@@ -169,12 +170,11 @@ function assertExistingVersion(
   }
 }
 
-export async function uploadInspectionBinaryCommand(
-  deps: UploadInspectionBinaryDependencies,
+export async function authorizeInspectionBinaryUploadCommand(
+  deps: Pick<UploadInspectionBinaryDependencies, 'inspectionRepository'>,
   actor: Actor,
   inspectionId: InspectionId,
-  input: UploadInspectionBinaryInput,
-): Promise<DocumentVersion> {
+): Promise<Inspection> {
   requireCapability(actor, 'inspections:write');
 
   const inspection = await deps.inspectionRepository.getById(inspectionId);
@@ -182,6 +182,20 @@ export async function uploadInspectionBinaryCommand(
     throw new DomainError('INSPECTION_NOT_FOUND', 'Inspection not found.');
   }
   assertInspectionAccess(actor, inspection);
+  return inspection;
+}
+
+export async function uploadInspectionBinaryCommand(
+  deps: UploadInspectionBinaryDependencies,
+  actor: Actor,
+  inspectionId: InspectionId,
+  input: UploadInspectionBinaryInput,
+): Promise<DocumentVersion> {
+  const inspection = await authorizeInspectionBinaryUploadCommand(
+    deps,
+    actor,
+    inspectionId,
+  );
 
   if (input.purpose === 'signature') {
     if (inspection.status !== 'locked') {
@@ -205,6 +219,8 @@ export async function uploadInspectionBinaryCommand(
       'uploadKey, fileName, mimeType and non-empty content are required.',
     );
   }
+
+  assertBufferedDocumentBinaryWriteSize(input.content.byteLength);
 
   const expectedVersionId = asDocumentVersionId(input.uploadKey);
   const incomingSha256 = await deps.sha256.digest(input.content);

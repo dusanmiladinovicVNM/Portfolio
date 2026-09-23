@@ -67,8 +67,35 @@ delivery path. Streaming with incremental hashing can replace the buffered
 adapter without changing DocumentVersion identity, authorization or browser API
 boundaries.
 
-Upload ingestion is a separate pre-existing hardening debt:
-`POST /documents/:id/versions` still buffers `request.arrayBuffer()` and the
-Google Drive multipart upload path creates additional copies. Production
-hardening must introduce an upload size ceiling and/or streaming upload without
-moving that older issue into this read-delivery PR.
+Upload ingestion is now bounded by the same 16 MiB production policy.
+
+The HTTP layer no longer calls unbounded `request.arrayBuffer()`. It consumes
+the request body through a bounded reader that:
+
+- rejects an announced oversized `Content-Length` before normal body consumption;
+- counts actual bytes for chunked/missing-length bodies;
+- aborts as soon as the real byte count crosses the ceiling;
+- rejects body/`Content-Length` mismatches;
+- never invokes storage for a rejected upload.
+
+The application write service enforces the same ceiling again, so internal
+producers such as generated reports cannot bypass the storage write policy.
+
+Google Drive also enforces the ceiling before hashing or network I/O. Provider
+writes use a resumable upload session so the full 16 MiB Portfolio contract is
+within Drive's documented upload path. Because Portfolio is already
+bounded-buffered, the normal path sends the complete binary in one PUT.
+
+If that PUT has an ambiguous network or 5xx outcome, the adapter does not open a
+new Drive create. It queries the same resumable session with
+`Content-Range: bytes */TOTAL`. A completed session returns the created file
+metadata; a `308` response supplies the confirmed byte prefix and only the
+remaining suffix is resent through that same session. Session disappearance, repeatedly ambiguous status checks, or three confirmed
+no-progress cycles fail closed for storage reconciliation rather than guessing
+provider state or resending the same buffered payload indefinitely. Confirmed
+forward progress resets the no-progress budget.
+
+For concurrent same-`DocumentVersionId` writes, PostgreSQL remains the only
+canonical winner. A losing newly-created storage object is removed only after
+the persisted winner's exact storage reference, byte size and SHA-256 have been
+verified. Provider metadata search is not treated as a uniqueness constraint.

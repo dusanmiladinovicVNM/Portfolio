@@ -1,7 +1,7 @@
 import {
   addInspectionSignatureCommand,
-  ApplicationError,
   attachInspectionEvidenceCommand,
+  authorizeInspectionBinaryUploadCommand,
   cancelInspectionCommand,
   createInspectionCommand,
   DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
@@ -58,6 +58,7 @@ import {
   asUnitId,
   asUserId,
 } from '@portfolio/domain';
+import { readBoundedBinaryBody } from './bounded-binary-body.js';
 import { json, requestJson, validationFailure } from './http-utils.js';
 import {
   toInspectionEvidenceResponse,
@@ -494,13 +495,17 @@ export async function handleInspectionHttp(
       return validationFailure();
     }
 
-    const content = new Uint8Array(await request.arrayBuffer());
-    if (content.byteLength > DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY.maxBytes) {
-      throw new ApplicationError(
-        'DOCUMENT_BINARY_UPLOAD_LIMIT_EXCEEDED',
-        `Buffered Inspection upload supports files up to ${DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY.maxBytes} bytes until streaming upload is implemented.`,
-      );
-    }
+    const inspectionId = asInspectionId(parsedId.data);
+    await authorizeInspectionBinaryUploadCommand(
+      { inspectionRepository: deps.inspectionRepository },
+      actor,
+      inspectionId,
+    );
+
+    const content = await readBoundedBinaryBody(
+      request,
+      DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
+    );
 
     const version = await uploadInspectionBinaryCommand(
       {
@@ -512,7 +517,7 @@ export async function handleInspectionHttp(
         sha256: deps.sha256,
       },
       actor,
-      asInspectionId(parsedId.data),
+      inspectionId,
       {
         purpose: purpose.data,
         uploadKey: uploadKey.data,

@@ -1181,15 +1181,54 @@ describe('Inspection HTTP backbone', () => {
         fileName: 'scoped-photo.jpg',
       }).toString();
 
+    const oversizedChunk = new Uint8Array(8 * 1024 * 1024);
+    let oversizedStep = 0;
+    const oversizedBody = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (oversizedStep < 2) {
+          oversizedStep += 1;
+          controller.enqueue(oversizedChunk);
+          return;
+        }
+        if (oversizedStep === 2) {
+          oversizedStep += 1;
+          controller.enqueue(new Uint8Array([1]));
+          return;
+        }
+        controller.close();
+      },
+    });
+
+    const oversizedScopedPhoto = await handler(
+      new Request(
+        scopedPhotoUrl,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'image/jpeg' },
+          body: oversizedBody,
+          duplex: 'half',
+        } as RequestInit & { duplex: 'half' },
+      ),
+      inspectorIdentity,
+    );
+    expect(oversizedScopedPhoto.status).toBe(413);
+    expect(await oversizedScopedPhoto.json()).toMatchObject({
+      error: { code: 'DOCUMENT_BINARY_UPLOAD_LIMIT_EXCEEDED' },
+    });
+    expect(fileStorage.putCallCount).toBe(0);
+
+    const wrongInspectorRequest = new Request(scopedPhotoUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'image/jpeg' },
+      body: new Uint8Array([1, 2, 3, 4]),
+    });
     const wrongInspectorScopedPhoto = await handler(
-      new Request(scopedPhotoUrl, {
-        method: 'POST',
-        headers: { 'content-type': 'image/jpeg' },
-        body: new Uint8Array([1, 2, 3, 4]),
-      }),
+      wrongInspectorRequest,
       otherInspectorIdentity,
     );
     expect(wrongInspectorScopedPhoto.status).toBe(403);
+    expect(wrongInspectorRequest.bodyUsed).toBe(false);
+    expect(fileStorage.putCallCount).toBe(0);
 
     const scopedPhoto = await handler(
       new Request(scopedPhotoUrl, {
@@ -1210,6 +1249,7 @@ describe('Inspection HTTP backbone', () => {
         status: 'stored',
       },
     });
+    expect(fileStorage.putCallCount).toBe(1);
 
     const scopedPhotoRetry = await handler(
       new Request(scopedPhotoUrl, {

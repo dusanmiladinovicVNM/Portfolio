@@ -125,9 +125,11 @@ export class InMemoryDocumentRepository implements DocumentRepository {
 export class MemoryFileStorage implements FileStoragePort {
   readonly removed: StorageObjectReference[] = [];
   readonly objects = new Map<string, StoredFile>();
+  putCallCount = 0;
   readonly contents = new Map<string, Uint8Array>();
 
   async put(input: FileStoragePutInput): Promise<StoredFile> {
+    this.putCallCount += 1;
     const existing = this.objects.get(input.objectKey);
     if (existing) {
       const existingContent = this.contents.get(input.objectKey);

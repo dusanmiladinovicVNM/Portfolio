@@ -235,8 +235,8 @@ split so security, storage, recovery and release proof do not become one unrevie
 
 | PR | Scope | Status |
 | --- | --- | --- |
-| #39 | Authorization + security release hardening | IN PROGRESS |
-| #40 | Storage/upload production hardening | PLANNED |
+| #39 | Authorization + security release hardening | DONE |
+| #40 | Storage/upload production hardening | DONE |
 | #41 | Backup + restore + migration rehearsal | PLANNED |
 | #42 | Observability + deployment/recovery runbooks | PLANNED |
 | #43 | Full lifecycle MVP release gate | PLANNED |
