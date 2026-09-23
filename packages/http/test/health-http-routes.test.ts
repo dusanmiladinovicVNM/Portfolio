@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createHealthHttpHandler } from '../src/index.js';
 
 describe('health HTTP routes', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   it('serves liveness without invoking dependencies', async () => {
     let readinessCalls = 0;
     const handler = createHealthHttpHandler(
@@ -24,6 +27,32 @@ describe('health HTTP routes', () => {
       status: 'ok',
       service: 'portfolio-api',
       version: 'abc123',
+    });
+  });
+
+  it('bounds a readiness check that never resolves', async () => {
+    vi.useFakeTimers();
+    const handler = createHealthHttpHandler(
+      {
+        readinessCheck: () => new Promise<void>(() => undefined),
+      },
+      { readinessTimeoutMs: 25 },
+    );
+
+    const responsePromise = handler(
+      new Request('https://portfolio.test/health/ready'),
+      '/health/ready',
+    );
+
+    await vi.advanceTimersByTimeAsync(25);
+    const response = await responsePromise;
+
+    expect(response?.status).toBe(503);
+    await expect(response?.json()).resolves.toEqual({
+      error: {
+        code: 'SERVICE_NOT_READY',
+        message: 'Required service dependencies are unavailable.',
+      },
     });
   });
 
