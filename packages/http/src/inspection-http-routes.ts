@@ -1,6 +1,7 @@
 import {
   addInspectionSignatureCommand,
   attachInspectionEvidenceCommand,
+  authorizeInspectionBinaryUploadCommand,
   cancelInspectionCommand,
   createInspectionCommand,
   DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
@@ -494,6 +495,13 @@ export async function handleInspectionHttp(
       return validationFailure();
     }
 
+    const inspectionId = asInspectionId(parsedId.data);
+    await authorizeInspectionBinaryUploadCommand(
+      { inspectionRepository: deps.inspectionRepository },
+      actor,
+      inspectionId,
+    );
+
     const content = await readBoundedBinaryBody(
       request,
       DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
@@ -509,7 +517,7 @@ export async function handleInspectionHttp(
         sha256: deps.sha256,
       },
       actor,
-      asInspectionId(parsedId.data),
+      inspectionId,
       {
         purpose: purpose.data,
         uploadKey: uploadKey.data,
