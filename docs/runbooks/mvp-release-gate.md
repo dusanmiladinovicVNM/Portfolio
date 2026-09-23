@@ -76,7 +76,7 @@ This proves the restored database is not merely readable evidence; domain valida
 
 ## Exact-SHA provenance
 
-`RELEASE_CODE_SHA` is written to `.artifacts/release/manifest.txt` and forwarded to the recovery rehearsal as `RECOVERY_CODE_SHA`. The release gate fails if the recovery manifest SHA does not equal the release SHA.
+`RELEASE_CODE_SHA` is only an expected SHA assertion. Before any rehearsal work, the script reads the actual `git rev-parse HEAD`, fails if an expected SHA differs, and fails if the working tree has any tracked or untracked changes. The manifest records only that verified actual checkout SHA. CI explicitly checks out the PR head SHA (or `github.sha` on non-PR pushes), and the verified actual SHA is forwarded to recovery as `RECOVERY_CODE_SHA`. The release gate fails if recovery provenance differs.
 
 ## Production-only prerequisites
 
