@@ -233,6 +233,166 @@ function resumableSessionUrl(response: Response): string {
   return url.toString();
 }
 
+const MAX_RESUMABLE_RECOVERY_ATTEMPTS = 3;
+
+function isAmbiguousDriveUploadResponse(response: Response): boolean {
+  return response.status >= 500 && response.status <= 599;
+}
+
+function resumableConfirmedOffset(response: Response, totalBytes: number): number {
+  if (response.status !== 308) {
+    throw new Error(
+      `Google Drive resumable status query returned unexpected HTTP ${response.status}.`,
+    );
+  }
+
+  const range = response.headers.get('range');
+  if (range === null) return 0;
+
+  const match = /^bytes=0-(\d+)$/.exec(range.trim());
+  if (!match) {
+    throw new Error(
+      'Google Drive resumable status query returned an invalid Range header.',
+    );
+  }
+
+  const lastReceivedByte = Number(match[1]);
+  if (
+    !Number.isSafeInteger(lastReceivedByte) ||
+    lastReceivedByte < 0 ||
+    lastReceivedByte >= totalBytes
+  ) {
+    throw new Error(
+      'Google Drive resumable status query returned an impossible byte range.',
+    );
+  }
+
+  return lastReceivedByte + 1;
+}
+
+async function queryResumableUploadStatus(
+  fetchImpl: typeof fetch,
+  sessionUrl: string,
+  token: string,
+  totalBytes: number,
+): Promise<Response> {
+  return await fetchImpl(sessionUrl, {
+    method: 'PUT',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-length': '0',
+      'content-range': `bytes */${totalBytes}`,
+    },
+  });
+}
+
+async function putResumableRange(
+  fetchImpl: typeof fetch,
+  sessionUrl: string,
+  token: string,
+  mimeType: string,
+  content: Uint8Array,
+  offset: number,
+): Promise<Response> {
+  const remaining = content.subarray(offset);
+  const headers: Record<string, string> = {
+    authorization: `Bearer ${token}`,
+    'content-length': String(remaining.byteLength),
+    'content-type': mimeType,
+  };
+
+  if (offset > 0) {
+    headers['content-range'] =
+      `bytes ${offset}-${content.byteLength - 1}/${content.byteLength}`;
+  }
+
+  return await fetchImpl(sessionUrl, {
+    method: 'PUT',
+    headers,
+    body: toArrayBuffer(remaining),
+  });
+}
+
+async function completeResumableUpload(
+  fetchImpl: typeof fetch,
+  sessionUrl: string,
+  token: string,
+  mimeType: string,
+  content: Uint8Array,
+): Promise<DriveFile> {
+  let nextOffset = 0;
+  let recoveryAttempts = 0;
+
+  while (true) {
+    let response: Response | null = null;
+    let ambiguous = false;
+
+    try {
+      response = await putResumableRange(
+        fetchImpl,
+        sessionUrl,
+        token,
+        mimeType,
+        content,
+        nextOffset,
+      );
+      ambiguous = isAmbiguousDriveUploadResponse(response);
+    } catch {
+      ambiguous = true;
+    }
+
+    if (response && (response.status === 200 || response.status === 201)) {
+      return await readJson<DriveFile>(response);
+    }
+
+    if (!ambiguous) {
+      if (response?.status === 308) {
+        nextOffset = resumableConfirmedOffset(response, content.byteLength);
+        continue;
+      }
+      if (response) await requireOk(response);
+      throw new Error('Google Drive resumable upload failed unexpectedly.');
+    }
+
+    recoveryAttempts += 1;
+    if (recoveryAttempts > MAX_RESUMABLE_RECOVERY_ATTEMPTS) {
+      throw new Error(
+        'Google Drive resumable upload outcome remains ambiguous after recovery attempts.',
+      );
+    }
+
+    let statusResponse: Response;
+    try {
+      statusResponse = await queryResumableUploadStatus(
+        fetchImpl,
+        sessionUrl,
+        token,
+        content.byteLength,
+      );
+    } catch {
+      continue;
+    }
+
+    if (statusResponse.status === 200 || statusResponse.status === 201) {
+      return await readJson<DriveFile>(statusResponse);
+    }
+
+    if (statusResponse.status === 308) {
+      nextOffset = resumableConfirmedOffset(
+        statusResponse,
+        content.byteLength,
+      );
+      continue;
+    }
+
+    if (isAmbiguousDriveUploadResponse(statusResponse)) {
+      continue;
+    }
+
+    await requireOk(statusResponse);
+  }
+}
+
 export class GoogleDriveFileStorage implements FileStoragePort {
   private readonly folderId: string;
   private readonly accessTokenProvider: GoogleDriveAccessTokenProvider;
@@ -322,20 +482,16 @@ export class GoogleDriveFileStorage implements FileStoragePort {
     );
     const sessionUrl = resumableSessionUrl(initiationResponse);
 
-    // The application contract is already bounded to 16 MiB, so the
-    // resumable session can upload the complete body in one PUT. This keeps
-    // provider protocol support aligned with the product ceiling without
-    // introducing chunk/replay state into the storage port.
-    const created = await readJson<DriveFile>(
-      await this.fetchImpl(sessionUrl, {
-        method: 'PUT',
-        headers: {
-          authorization: `Bearer ${token}`,
-          'content-length': String(input.content.byteLength),
-          'content-type': mimeType,
-        },
-        body: toArrayBuffer(input.content),
-      }),
+    // Start with one complete bounded PUT. If its outcome is ambiguous,
+    // reconcile the same resumable session before sending anything else.
+    // A 308 response identifies the exact confirmed prefix, so only the
+    // remaining suffix is retried and no second Drive create is initiated.
+    const created = await completeResumableUpload(
+      this.fetchImpl,
+      sessionUrl,
+      token,
+      mimeType,
+      input.content,
     );
 
     const createdFile = resolveDriveFile(
