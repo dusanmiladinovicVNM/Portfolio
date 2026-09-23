@@ -93,8 +93,7 @@ begin
   where n.nspname = 'public'
     and c.relkind in ('r', 'p', 'v', 'm')
     and (
-      has_table_privilege('public', c.oid, 'SELECT')
-      or has_table_privilege('public', c.oid, 'INSERT')
+has_table_privilege('public', c.oid, 'INSERT')
       or has_table_privilege('public', c.oid, 'UPDATE')
       or has_table_privilege('public', c.oid, 'DELETE')
       or has_table_privilege('public', c.oid, 'TRUNCATE')
@@ -126,8 +125,7 @@ begin
   where n.nspname = 'public'
     and c.relkind = 'S'
     and (
-      has_sequence_privilege('public', c.oid, 'USAGE')
-      or has_sequence_privilege('public', c.oid, 'SELECT')
+has_sequence_privilege('public', c.oid, 'SELECT')
       or has_sequence_privilege('public', c.oid, 'UPDATE')
       or has_sequence_privilege('anon', c.oid, 'USAGE')
       or has_sequence_privilege('anon', c.oid, 'SELECT')
@@ -146,8 +144,7 @@ begin
   join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public'
     and (
-      has_function_privilege('public', p.oid, 'EXECUTE')
-      or has_function_privilege('anon', p.oid, 'EXECUTE')
+has_function_privilege('anon', p.oid, 'EXECUTE')
       or has_function_privilege('authenticated', p.oid, 'EXECUTE')
     );
 
@@ -155,8 +152,7 @@ begin
     raise exception 'Restore widened public function EXECUTE privileges.';
   end if;
 
-  if has_schema_privilege('public', 'public', 'CREATE')
-     or has_schema_privilege('anon', 'public', 'CREATE')
+  if has_schema_privilege('anon', 'public', 'CREATE')
      or has_schema_privilege('authenticated', 'public', 'CREATE')
   then
     raise exception 'Restore widened CREATE privilege on schema public.';
