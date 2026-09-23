@@ -27,6 +27,9 @@ const api = createSupabaseApi({
     : { readinessTimeoutMs: config.readinessTimeoutMs }),
 });
 
-Deno.serve(
-  createCorsHandler(config.webOrigin, (request) => api.fetch(request)),
+const fetch = createCorsHandler(
+  config.webOrigin,
+  (request) => api.fetch(request),
 );
+
+export default { fetch };
