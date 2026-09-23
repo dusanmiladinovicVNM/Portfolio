@@ -81,21 +81,46 @@ The CORS adapter also permits browser calls only from `PORTFOLIO_WEB_ORIGIN`.
 
 The canonical monorepo keeps Node-ESM `.js` specifiers in TypeScript source. Supabase's server-side `--use-api` bundler does not resolve that `.js` → `.ts` compatibility convention across the monorepo, so production deployment uses an explicit generated boundary instead of rewriting canonical imports.
 
-Build the self-contained JavaScript entrypoint first:
+Production deployment must start from the exact clean release checkout. The bundle command enforces that invariant:
 
 ~~~bash
-pnpm supabase:function:bundle
+DEPLOY_CODE_SHA=<exact-release-sha> pnpm supabase:function:bundle
 ~~~
 
-The command uses pinned `esbuild@0.28.2`, bundles the complete Edge dependency graph into `supabase/functions/api/dist/index.js`, rejects leftover relative ESM imports, and fails before deployment if the generated artifact reaches the 5 MB server-side bundle limit. The generated directory is ignored by Git, so creating it does not change the exact release SHA.
+The command refuses a dirty working tree or a mismatch between `DEPLOY_CODE_SHA` and `git rev-parse HEAD`. It then uses pinned `esbuild@0.28.2`, bundles the complete Edge dependency graph into `supabase/functions/api/dist/index.js`, rejects leftover relative ESM imports, and fails before deployment if the generated artifact reaches the 5 MB server-side bundle limit.
 
-`supabase/config.toml` points the `api` function at that generated JavaScript entrypoint. Deploy it with:
+It also writes an ignored deployment manifest at:
+
+~~~text
+.artifacts/deployment/supabase-api-manifest.txt
+~~~
+
+with:
+
+~~~text
+source_sha=<verified git HEAD>
+bundle_sha256=<SHA-256 of dist/index.js>
+bundle_bytes=<artifact byte size>
+esbuild_version=0.28.2
+~~~
+
+The generated bundle and manifest are ignored by Git, so their creation does not change the exact source revision.
+
+For production, do not run the raw build/deploy commands separately. Use the verified wrapper:
 
 ~~~bash
-pnpm dlx supabase@latest functions deploy api --project-ref <project-ref> --use-api
+SUPABASE_PROJECT_REF=<project-ref> pnpm supabase:function:deploy
 ~~~
 
-Do not deploy directly from `supabase/functions/api/index.ts`; the generated bundle is the production deployment artifact.
+The wrapper:
+1. requires a clean checkout;
+2. rebuilds from the current exact SHA;
+3. re-verifies manifest source SHA and bundle SHA-256;
+4. deploys the custom `dist/index.js` entrypoint using pinned Supabase CLI `2.117.0`;
+5. sets `PORTFOLIO_RELEASE_SHA` from the verified manifest source SHA;
+6. calls hosted `/health/live` and fails unless the response reports that exact SHA.
+
+Do not deploy directly from `supabase/functions/api/index.ts` and do not bypass the wrapper for a production release.
 
 Then verify:
 
@@ -104,7 +129,7 @@ GET https://<project-ref>.supabase.co/functions/v1/api/health/live  → 200
 GET https://<project-ref>.supabase.co/functions/v1/api/health/ready → 200
 ~~~
 
-The health payload must report the same `PORTFOLIO_RELEASE_SHA` that passed the release gate.
+The wrapper already verifies that the health payload reports the exact manifest `source_sha`. A manual follow-up may repeat the check, but must not substitute a separately typed SHA.
 
 ## 7. Bootstrap the first Portfolio admin
 
@@ -179,7 +204,7 @@ These are deployment policy decisions, not missing domain invariants.
 
 The canonical monorepo TypeScript uses Node-ESM `.js` specifiers from `.ts` source. The Edge Function `deno.json` enables Deno `sloppy-imports` solely as a compatibility bridge so the hosted Deno runtime can consume that canonical source without maintaining a second generated copy.
 
-CI still runs `deno check` and the Deno adapter tests against the canonical TypeScript entrypoint using the committed frozen `deno.lock`. It then builds the same self-contained JavaScript artifact referenced by `supabase/config.toml` and runs `deno check` against that artifact.
+CI still runs `deno check` and the Deno adapter tests against the canonical TypeScript entrypoint using the committed frozen `deno.lock`. It then proves the deployment provenance guards reject a mismatched expected SHA and a dirty source tree, builds the same self-contained JavaScript artifact referenced by `supabase/config.toml`, verifies its manifest SHA/hash/size/tool version, and runs `deno check` against that artifact.
 
 The source-level `sloppy-imports` bridge remains useful for Deno validation, but production deployment no longer depends on Supabase's server-side bundler implementing that unstable resolution behavior. The first real hosted deploy remains the final environment-level proof.
 
