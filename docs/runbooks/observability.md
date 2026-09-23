@@ -29,7 +29,7 @@ errorCode (when the HTTP response exposes one)
 
 Status mapping: 2xx/3xx = info, 4xx = warn, 5xx = error.
 
-Known operational failures such as `DOCUMENT_STORAGE_RECONCILIATION_REQUIRED` therefore remain machine-searchable by both request ID and domain/application error code.
+Known operational failures such as `DOCUMENT_STORAGE_RECONCILIATION_REQUIRED` therefore remain machine-searchable by both request ID and domain/application error code. If the outer host/authentication adapter itself throws, the wrapper emits a correlated unexpected-error diagnostic and returns a controlled `INTERNAL_ERROR` 500 carrying the same `x-request-id`.
 
 Successful binary response bodies are not inspected for logging.
 
