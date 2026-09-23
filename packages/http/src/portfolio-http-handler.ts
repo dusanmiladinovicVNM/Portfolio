@@ -86,6 +86,7 @@ export interface PortfolioHttpDependencies {
 export interface PortfolioHttpOptions {
   readonly basePath?: string;
   readonly serviceVersion?: string;
+  readonly readinessTimeoutMs?: number;
 }
 
 type Handler = (
@@ -175,9 +176,14 @@ export function createPortfolioHttpHandler(
   const healthHandler = deps.readinessCheck
     ? createHealthHttpHandler(
         { readinessCheck: deps.readinessCheck },
-        options.serviceVersion === undefined
-          ? {}
-          : { version: options.serviceVersion },
+        {
+          ...(options.serviceVersion === undefined
+            ? {}
+            : { version: options.serviceVersion }),
+          ...(options.readinessTimeoutMs === undefined
+            ? {}
+            : { readinessTimeoutMs: options.readinessTimeoutMs }),
+        },
       )
     : null;
 
