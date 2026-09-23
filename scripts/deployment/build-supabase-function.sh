@@ -44,6 +44,7 @@ pnpm dlx "esbuild@${ESBUILD_VERSION}" \
   --alias:@portfolio/http=./packages/http/src/index.ts \
   --alias:@portfolio/infrastructure=./packages/infrastructure/src/index.ts \
   --alias:@portfolio/google-drive=./integrations/google-drive/src/index.ts \
+  --define:__PORTFOLIO_BUILD_SHA__="\"$ACTUAL_SHA\"" \
   --outfile="$OUT_FILE"
 
 BYTES="$(wc -c < "$OUT_FILE" | tr -d ' ')"
@@ -55,6 +56,16 @@ fi
 
 if grep -Eq "from[[:space:]]+['\"]\.\.?/" "$OUT_FILE"; then
   echo "Supabase API bundle still contains relative ESM imports." >&2
+  exit 1
+fi
+
+if ! grep -Fq "$ACTUAL_SHA" "$OUT_FILE"; then
+  echo "Supabase API bundle does not contain verified source SHA $ACTUAL_SHA." >&2
+  exit 1
+fi
+
+if grep -Fq "__PORTFOLIO_BUILD_SHA__" "$OUT_FILE"; then
+  echo "Supabase API bundle still contains unresolved build-SHA placeholder." >&2
   exit 1
 fi
 
