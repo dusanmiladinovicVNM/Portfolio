@@ -1,7 +1,7 @@
 import {
   isPublicHealthRuntimePath,
   relativeRuntimePath,
-} from '@portfolio/api';
+} from '../../../apps/api/src/runtime-path.ts';
 
 export const SUPABASE_FUNCTION_BASE_PATH = '/api';
 
