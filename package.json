@@ -9,7 +9,8 @@
   "scripts": {
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "test:integration": "pnpm --filter @portfolio/infrastructure test:integration"
+    "test:integration": "pnpm --filter @portfolio/infrastructure test:integration",
+    "recovery:rehearse": "bash scripts/recovery/rehearse.sh"
   },
   "devDependencies": {
     "@types/node": "24.13.5",
