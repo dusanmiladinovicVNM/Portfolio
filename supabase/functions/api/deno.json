@@ -16,5 +16,9 @@
   },
   "unstable": [
     "sloppy-imports"
-  ]
+  ],
+  "lock": {
+    "path": "./deno.lock",
+    "frozen": true
+  }
 }
