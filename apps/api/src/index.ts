@@ -1,3 +1,4 @@
+import { isPublicHealthRuntimePath } from './runtime-path.js';
 import { createSupabaseContext } from '@supabase/server';
 import postgres from 'postgres';
 import type { FileStoragePort, PdfPort } from '@portfolio/application';
@@ -145,20 +146,8 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
   const authenticatedHandler = async (request: Request): Promise<Response> => {
       const path = new URL(request.url).pathname;
       const basePath = config.basePath ?? '/functions/v1/api';
-      const normalizedBasePath =
-        basePath === '/'
-          ? ''
-          : (basePath.startsWith('/') ? basePath : '/' + basePath).replace(/\/$/, '');
-      const relativePath =
-        !normalizedBasePath
-          ? path
-          : path === normalizedBasePath
-            ? '/'
-            : path.startsWith(normalizedBasePath + '/')
-              ? path.slice(normalizedBasePath.length)
-              : null;
 
-      if (relativePath === '/health/live' || relativePath === '/health/ready') {
+      if (isPublicHealthRuntimePath(path, basePath)) {
         return applicationHandler(request, null);
       }
 
@@ -207,3 +196,5 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
 }
 
 export * from './canonical-inspection-pdf-renderer.js';
+
+export * from './runtime-path.js';
