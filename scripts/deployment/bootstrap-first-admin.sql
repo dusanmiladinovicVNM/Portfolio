@@ -1,19 +1,26 @@
 \set ON_ERROR_STOP on
 
+begin;
+
+lock table
+  public.app_users,
+  public.auth_identities
+in share row exclusive mode;
+
 select exists(
   select 1
   from auth.users
   where id::text = :'admin_subject'
+  for key share
 ) as portfolio_admin_auth_exists
 \gset
 
 \if :portfolio_admin_auth_exists
 \else
   \echo 'First-admin bootstrap subject does not exist in auth.users.'
+  rollback;
   \quit 1
 \endif
-
-begin;
 
 do $bootstrap_guard$
 begin
