@@ -192,14 +192,45 @@ async function readBodyBounded(
   return concatBytes(chunks);
 }
 
-async function readJson<T>(response: Response): Promise<T> {
+async function requireOk(response: Response): Promise<Response> {
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(
       `Google Drive request failed with HTTP ${response.status}: ${detail.slice(0, 500)}`,
     );
   }
+  return response;
+}
+
+async function readJson<T>(response: Response): Promise<T> {
+  await requireOk(response);
   return await response.json() as T;
+}
+
+function resumableSessionUrl(response: Response): string {
+  const location = response.headers.get('location');
+  if (!location) {
+    throw new Error(
+      'Google Drive resumable upload did not return a session URL.',
+    );
+  }
+
+  let url: URL;
+  try {
+    url = new URL(location);
+  } catch {
+    throw new Error(
+      'Google Drive resumable upload returned an invalid session URL.',
+    );
+  }
+
+  if (url.protocol !== 'https:' || url.hostname !== 'www.googleapis.com') {
+    throw new Error(
+      'Google Drive resumable upload returned an unexpected session origin.',
+    );
+  }
+
+  return url.toString();
 }
 
 export class GoogleDriveFileStorage implements FileStoragePort {
@@ -258,8 +289,6 @@ export class GoogleDriveFileStorage implements FileStoragePort {
       };
     }
 
-    const boundary = `portfolio_${sha256.slice(0, 24)}`;
-    const encoder = new TextEncoder();
     const metadata = JSON.stringify({
       name: fileName,
       parents: [this.folderId],
@@ -269,44 +298,43 @@ export class GoogleDriveFileStorage implements FileStoragePort {
       },
     });
 
-    const prefix = encoder.encode(
-      `--${boundary}\r\n` +
-      'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
-      metadata +
-      `\r\n--${boundary}\r\n` +
-      `Content-Type: ${mimeType}\r\n\r\n`,
+    const initiationUrl = new URL(
+      'https://www.googleapis.com/upload/drive/v3/files',
     );
-    const suffix = encoder.encode(`\r\n--${boundary}--\r\n`);
-
-    // Keep the provider upload bounded without materializing a second
-    // concatenated Uint8Array plus a third ArrayBuffer copy.
-    const body = new Blob(
-      [
-        toArrayBuffer(prefix),
-        toArrayBuffer(input.content),
-        toArrayBuffer(suffix),
-      ],
-      {
-        type: `multipart/related; boundary=${boundary}`,
-      },
-    );
-
-    const url = new URL('https://www.googleapis.com/upload/drive/v3/files');
-    url.searchParams.set('uploadType', 'multipart');
-    url.searchParams.set('supportsAllDrives', 'true');
-    url.searchParams.set(
+    initiationUrl.searchParams.set('uploadType', 'resumable');
+    initiationUrl.searchParams.set('supportsAllDrives', 'true');
+    initiationUrl.searchParams.set(
       'fields',
       'id,size,sha256Checksum,appProperties',
     );
 
-    const created = await readJson<DriveFile>(
-      await this.fetchImpl(url, {
+    const initiationResponse = await requireOk(
+      await this.fetchImpl(initiationUrl, {
         method: 'POST',
         headers: {
           authorization: `Bearer ${token}`,
-          'content-type': body.type,
+          'content-type': 'application/json; charset=UTF-8',
+          'x-upload-content-length': String(input.content.byteLength),
+          'x-upload-content-type': mimeType,
         },
-        body,
+        body: metadata,
+      }),
+    );
+    const sessionUrl = resumableSessionUrl(initiationResponse);
+
+    // The application contract is already bounded to 16 MiB, so the
+    // resumable session can upload the complete body in one PUT. This keeps
+    // provider protocol support aligned with the product ceiling without
+    // introducing chunk/replay state into the storage port.
+    const created = await readJson<DriveFile>(
+      await this.fetchImpl(sessionUrl, {
+        method: 'PUT',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-length': String(input.content.byteLength),
+          'content-type': mimeType,
+        },
+        body: toArrayBuffer(input.content),
       }),
     );
 
