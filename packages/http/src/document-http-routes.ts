@@ -1,4 +1,5 @@
 import {
+  authorizeDocumentVersionUploadCommand,
   createDocumentCommand,
   DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
   finalizeDocumentVersionCommand,
@@ -272,6 +273,8 @@ export async function handleDocumentHttp(
       }
 
       if (!fileName || !mimeType) return validationFailure();
+
+      authorizeDocumentVersionUploadCommand(actor);
 
       const content = await readBoundedBinaryBody(
         request,
