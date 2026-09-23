@@ -63,6 +63,11 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
+      - name: First-admin bootstrap concurrency
+        env:
+          BOOTSTRAP_TEST_SERVER_URL: postgresql://postgres:postgres@localhost:5432
+        run: bash scripts/deployment/test-bootstrap-first-admin.sh
+
       - name: Full lifecycle MVP release gate
         env:
           RECOVERY_USE_DOCKER_TOOLS: "1"
@@ -76,4 +81,5 @@ jobs:
           deno check --config supabase/functions/api/deno.json supabase/functions/api/index.ts
           deno test --config supabase/functions/api/deno.json \
             supabase/functions/api/runtime-config.test.ts \
-            supabase/functions/api/cors.test.ts
+            supabase/functions/api/cors.test.ts \
+            supabase/functions/api/host-routing.test.ts
