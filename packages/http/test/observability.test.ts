@@ -101,6 +101,53 @@ describe('HTTP observability', () => {
     });
   });
 
+  it('returns a correlated fail-closed 500 when the wrapped host throws', async () => {
+    const events: OperationalLogEvent[] = [];
+    const handler = createObservedHttpHandler(
+      async () => {
+        throw new Error('provider auth dependency failed');
+      },
+      { log: (event) => events.push(event) },
+      {
+        requestIdFactory: () => 'outer-failure-id',
+        now: () => 20,
+      },
+    );
+
+    const response = await handler(
+      new Request('https://portfolio.test/properties'),
+    );
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get('x-request-id')).toBe('outer-failure-id');
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'An unexpected error occurred.',
+      },
+    });
+    expect(events).toEqual([
+      {
+        level: 'error',
+        event: 'http.unexpected_error',
+        requestId: 'outer-failure-id',
+        method: 'GET',
+        path: '/properties',
+        errorName: 'Error',
+      },
+      {
+        level: 'error',
+        event: 'http.request.failed',
+        requestId: 'outer-failure-id',
+        method: 'GET',
+        path: '/properties',
+        status: 500,
+        durationMs: 0,
+        errorCode: 'INTERNAL_ERROR',
+      },
+    ]);
+  });
+
   it('does not inspect successful binary response bodies', async () => {
     const bytes = new Uint8Array([1, 2, 3, 4]);
     const handler = createObservedHttpHandler(
