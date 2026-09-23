@@ -107,23 +107,50 @@ jobs:
           git restore supabase/functions/api/cors.ts
           test -z "$(git status --porcelain --untracked-files=all)"
 
-      - name: Prove Node built-in normalization
+      - name: Prove syntax-aware Node built-in normalization
         run: |
           mkdir -p .artifacts/node-builtins
           cat > .artifacts/node-builtins/fixture.js <<'EOF'
           import { performance } from "perf_hooks";
+          import path from "node:path";
           const fs = await import("fs/promises");
           const crypto = require("crypto");
-          import path from "node:path";
+
+          export const payloadA = 'provider error: require("crypto") failed';
+          export const payloadB = 'from "fs"';
+          export const payloadC = `import("fs/promises")`;
+
+          console.log(performance.now() >= 0, path.sep.length > 0, !!fs, !!crypto);
           EOF
-          node scripts/deployment/normalize-node-builtins.mjs .artifacts/node-builtins/fixture.js
-          grep -Fq 'from "node:perf_hooks"' .artifacts/node-builtins/fixture.js
-          grep -Fq 'import("node:fs/promises")' .artifacts/node-builtins/fixture.js
-          grep -Fq 'require("node:crypto")' .artifacts/node-builtins/fixture.js
-          grep -Fq 'from "node:path"' .artifacts/node-builtins/fixture.js
-          ! grep -Fq 'from "perf_hooks"' .artifacts/node-builtins/fixture.js
-          ! grep -Fq 'import("fs/promises")' .artifacts/node-builtins/fixture.js
-          ! grep -Fq 'require("crypto")' .artifacts/node-builtins/fixture.js
+
+          BUILTIN_ALIAS_ARGS=()
+          while IFS= read -r builtin; do
+            if [[ -n "$builtin" ]]; then
+              BUILTIN_ALIAS_ARGS+=("--alias:${builtin}=node:${builtin}")
+            fi
+          done < <(
+            node --input-type=module -e '
+              import { builtinModules } from "node:module";
+              process.stdout.write(
+                [...new Set(
+                  builtinModules
+                    .filter((name) => !name.startsWith("node:"))
+                    .sort(),
+                )].join("\n"),
+              );
+            '
+          )
+
+          pnpm dlx esbuild@0.28.2             .artifacts/node-builtins/fixture.js             --bundle             --format=esm             --platform=node             --target=es2022             "${BUILTIN_ALIAS_ARGS[@]}"             --outfile=.artifacts/node-builtins/out.js
+
+          grep -Fq 'from "node:perf_hooks"' .artifacts/node-builtins/out.js
+          grep -Fq '"node:fs/promises"' .artifacts/node-builtins/out.js
+          grep -Fq '"node:crypto"' .artifacts/node-builtins/out.js
+          grep -Fq 'from "node:path"' .artifacts/node-builtins/out.js
+
+          grep -Fq 'provider error: require("crypto") failed' .artifacts/node-builtins/out.js
+          grep -Fq 'from "fs"' .artifacts/node-builtins/out.js
+          grep -Fq 'import("fs/promises")' .artifacts/node-builtins/out.js
 
       - name: Build deployable Supabase Edge bundle
         env:
