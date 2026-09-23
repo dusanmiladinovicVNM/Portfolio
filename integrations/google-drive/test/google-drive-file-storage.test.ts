@@ -258,6 +258,61 @@ describe('GoogleDriveFileStorage', () => {
     );
   });
 
+  it('fails closed after bounded resumable retries without confirmed progress', async () => {
+    const content = new Uint8Array([1, 2, 3, 4]);
+    const objectKey = 'document-version:no-progress';
+    const sessionUrl =
+      'https://www.googleapis.com/upload/drive/v3/files?upload_id=no-progress';
+    let resumablePostCount = 0;
+    let payloadPutCount = 0;
+    let statusQueryCount = 0;
+
+    const storage = new GoogleDriveFileStorage({
+      folderId: 'folder-1',
+      accessTokenProvider: tokenProvider,
+      fetchImpl: async (input, init) => {
+        const request = new Request(input, init);
+
+        if (request.method === 'GET') {
+          return Response.json({ files: [] });
+        }
+        if (request.method === 'POST') {
+          resumablePostCount += 1;
+          return new Response(null, {
+            status: 200,
+            headers: { location: sessionUrl },
+          });
+        }
+
+        if (
+          request.headers.get('content-range') ===
+          `bytes */${content.byteLength}`
+        ) {
+          statusQueryCount += 1;
+          return new Response(null, { status: 308 });
+        }
+
+        payloadPutCount += 1;
+        return new Response('transient provider failure', { status: 503 });
+      },
+    });
+
+    await expect(
+      storage.put({
+        objectKey,
+        fileName: 'no-progress.bin',
+        mimeType: 'application/octet-stream',
+        content,
+      }),
+    ).rejects.toThrow(
+      'Google Drive resumable upload made no progress; storage reconciliation is required.',
+    );
+
+    expect(resumablePostCount).toBe(1);
+    expect(payloadPutCount).toBe(3);
+    expect(statusQueryCount).toBe(3);
+  });
+
   it('is idempotent for the same object key and exact content identity', async () => {
     const content = new TextEncoder().encode('same content');
     const objectKey = 'document-version:stable';
