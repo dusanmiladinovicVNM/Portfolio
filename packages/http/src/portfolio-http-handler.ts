@@ -175,7 +175,9 @@ export function createPortfolioHttpHandler(
   const healthHandler = deps.readinessCheck
     ? createHealthHttpHandler(
         { readinessCheck: deps.readinessCheck },
-        { version: options.serviceVersion },
+        options.serviceVersion === undefined
+          ? {}
+          : { version: options.serviceVersion },
       )
     : null;
 
