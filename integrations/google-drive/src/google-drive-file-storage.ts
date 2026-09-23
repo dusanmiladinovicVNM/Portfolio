@@ -341,7 +341,9 @@ async function reconcileResumableUpload(
     }
 
     if (response.status === 308) {
-      return resumableConfirmedOffset(response, totalBytes);
+      const offset = resumableConfirmedOffset(response, totalBytes);
+      if (offset === totalBytes) continue;
+      return offset;
     }
 
     if (isAmbiguousDriveUploadResponse(response)) {
@@ -395,7 +397,23 @@ async function completeResumableUpload(
 
     if (!ambiguous) {
       if (response?.status === 308) {
-        nextOffset = resumableConfirmedOffset(response, content.byteLength);
+        const offset = resumableConfirmedOffset(
+          response,
+          content.byteLength,
+        );
+        if (offset < content.byteLength) {
+          nextOffset = offset;
+          continue;
+        }
+
+        const reconciled = await reconcileResumableUpload(
+          fetchImpl,
+          sessionUrl,
+          token,
+          content.byteLength,
+        );
+        if (typeof reconciled !== 'number') return reconciled;
+        nextOffset = reconciled;
         continue;
       }
       if (response) await requireOk(response);
