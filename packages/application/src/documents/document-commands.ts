@@ -144,12 +144,16 @@ export async function createDocumentCommand(
   return createDocumentRecord(deps, input);
 }
 
+export function authorizeDocumentVersionUploadCommand(actor: Actor): void {
+  requireCapability(actor, 'documents:write');
+}
+
 export async function uploadDocumentVersionCommand(
   deps: UploadDocumentVersionDependencies,
   actor: Actor,
   input: UploadDocumentVersionCommandInput,
 ): Promise<DocumentVersion> {
-  requireCapability(actor, 'documents:write');
+  authorizeDocumentVersionUploadCommand(actor);
   return uploadDocumentVersionRecord(deps, input);
 }
 
