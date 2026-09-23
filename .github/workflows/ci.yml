@@ -84,8 +84,44 @@ jobs:
             supabase/functions/api/cors.test.ts \
             supabase/functions/api/host-routing.test.ts
 
+      - name: Reject mismatched Supabase deployment SHA
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          WRONG_SHA=0000000000000000000000000000000000000000
+          if DEPLOY_CODE_SHA="$WRONG_SHA" pnpm supabase:function:bundle; then
+            echo "Bundle accepted a mismatched deploy SHA." >&2
+            exit 1
+          fi
+
+      - name: Reject dirty Supabase deployment source
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          printf '\n' >> supabase/functions/api/cors.ts
+          if DEPLOY_CODE_SHA="$EXPECTED_SHA" pnpm supabase:function:bundle; then
+            echo "Bundle accepted a dirty working tree." >&2
+            git restore supabase/functions/api/cors.ts
+            exit 1
+          fi
+          git restore supabase/functions/api/cors.ts
+          test -z "$(git status --porcelain --untracked-files=all)"
+
       - name: Build deployable Supabase Edge bundle
+        env:
+          DEPLOY_CODE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: pnpm supabase:function:bundle
+
+      - name: Verify Supabase deployment provenance
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          MANIFEST=.artifacts/deployment/supabase-api-manifest.txt
+          test -f "$MANIFEST"
+          test "$(awk -F= '$1 == "source_sha" { print $2 }' "$MANIFEST")" = "$EXPECTED_SHA"
+          test "$(awk -F= '$1 == "bundle_sha256" { print $2 }' "$MANIFEST")" = "$(shasum -a 256 supabase/functions/api/dist/index.js | awk '{print $1}')"
+          test "$(awk -F= '$1 == "bundle_bytes" { print $2 }' "$MANIFEST")" = "$(wc -c < supabase/functions/api/dist/index.js | tr -d ' ')"
+          test "$(awk -F= '$1 == "esbuild_version" { print $2 }' "$MANIFEST")" = "0.28.2"
 
       - name: Check deployable Supabase Edge bundle
         run: deno check supabase/functions/api/dist/index.js
