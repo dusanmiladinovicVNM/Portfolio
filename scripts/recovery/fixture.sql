@@ -29,7 +29,7 @@ insert into public.units (
   '1',
   72.50,
   3.50,
-  'vacant',
+  'active',
   'Recovery rehearsal canonical unit'
 );
 
