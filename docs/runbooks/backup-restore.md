@@ -18,8 +18,9 @@ The rehearsal proves all of the following in one run:
 7. restored primary keys, parent relations, constraints, temporal final state,
    document hash/size and provider-neutral storage reference are verified;
 8. restored database security state is verified: RLS coverage, browser-role
-   relation/sequence/function/schema privileges, SECURITY DEFINER surface and
-   `unit_business_events` security-invoker mode;
+   relation/sequence/function/schema privileges, SECURITY DEFINER surface,
+   `unit_business_events` security-invoker mode, and the effective default
+   EXECUTE policy for a newly-created post-restore function;
 9. the restored database is read through `PostgresPortfolioRepository` and
    `PostgresDocumentRepository`.
 
