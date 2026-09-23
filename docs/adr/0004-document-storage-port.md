@@ -81,10 +81,12 @@ the request body through a bounded reader that:
 The application write service enforces the same ceiling again, so internal
 producers such as generated reports cannot bypass the storage write policy.
 
-Google Drive also enforces the ceiling before hashing or network I/O. Its
-multipart request remains a bounded buffered provider adapter for the MVP;
-moving to resumable/chunked Drive upload later is a performance optimization,
-not a correctness or unbounded-memory prerequisite.
+Google Drive also enforces the ceiling before hashing or network I/O. Provider
+writes use a resumable upload session so the full 16 MiB Portfolio contract is
+within Drive's documented upload path. Because Portfolio is already
+bounded-buffered, the session sends the complete binary in one PUT; chunked
+resume/replay remains a later performance optimization rather than a requirement
+for the current correctness boundary.
 
 For concurrent same-`DocumentVersionId` writes, PostgreSQL remains the only
 canonical winner. A losing newly-created storage object is removed only after
