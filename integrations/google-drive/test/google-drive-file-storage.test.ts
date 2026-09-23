@@ -31,7 +31,7 @@ function driveFile(
 }
 
 describe('GoogleDriveFileStorage', () => {
-  it('uploads bounded multipart content and re-verifies the created object identity', async () => {
+  it('uses a resumable session and single PUT for the bounded upload contract', async () => {
     const content = new TextEncoder().encode('signed lease');
     const objectKey = 'document-version:123';
     const expectedHash = await sha256(content);
@@ -42,6 +42,8 @@ describe('GoogleDriveFileStorage', () => {
       expectedHash,
     );
     const requests: Request[] = [];
+    const sessionUrl =
+      'https://www.googleapis.com/upload/drive/v3/files?upload_id=session-1';
     const storage = new GoogleDriveFileStorage({
       folderId: 'folder-1',
       accessTokenProvider: tokenProvider,
@@ -49,11 +51,20 @@ describe('GoogleDriveFileStorage', () => {
         const request = new Request(input, init);
         requests.push(request);
 
+        if (request.method === 'GET') {
+          return Response.json({ files: [] });
+        }
         if (request.method === 'POST') {
+          return new Response(null, {
+            status: 200,
+            headers: { location: sessionUrl },
+          });
+        }
+        if (request.method === 'PUT') {
           return Response.json(created);
         }
 
-        return Response.json({ files: [] });
+        throw new Error(`Unexpected request method ${request.method}`);
       },
     });
 
@@ -72,16 +83,39 @@ describe('GoogleDriveFileStorage', () => {
       sha256: expectedHash,
       disposition: 'created',
     });
-    expect(requests).toHaveLength(2);
+    expect(requests).toHaveLength(3);
     expect(requests[0]!.url).toContain('includeItemsFromAllDrives=true');
-    expect(requests[1]!.url).toContain('uploadType=multipart');
+
+    expect(requests[1]!.url).toContain('uploadType=resumable');
     expect(requests[1]!.headers.get('authorization')).toBe(
       'Bearer test-token',
     );
     expect(requests[1]!.headers.get('content-type')).toContain(
-      'multipart/related; boundary=',
+      'application/json',
     );
-    expect(await requests[1]!.text()).toContain('signed lease');
+    expect(requests[1]!.headers.get('x-upload-content-length')).toBe(
+      String(content.byteLength),
+    );
+    expect(requests[1]!.headers.get('x-upload-content-type')).toBe(
+      'application/pdf',
+    );
+    expect(await requests[1]!.json()).toMatchObject({
+      name: 'lease.pdf',
+      parents: ['folder-1'],
+      appProperties: { portfolioObjectKey: objectKey },
+    });
+
+    expect(requests[2]!.url).toBe(sessionUrl);
+    expect(requests[2]!.method).toBe('PUT');
+    expect(requests[2]!.headers.get('content-length')).toBe(
+      String(content.byteLength),
+    );
+    expect(requests[2]!.headers.get('content-type')).toBe(
+      'application/pdf',
+    );
+    expect(new Uint8Array(await requests[2]!.arrayBuffer())).toEqual(
+      content,
+    );
   });
 
   it('is idempotent for the same object key and exact content identity', async () => {
@@ -217,7 +251,7 @@ describe('GoogleDriveFileStorage', () => {
     );
   });
 
-  it('requires complete provider identity metadata after create', async () => {
+  it('requires complete provider identity metadata after resumable upload', async () => {
     const content = new TextEncoder().encode('binary');
     const objectKey = 'document-version:metadata';
     let calls = 0;
@@ -228,6 +262,15 @@ describe('GoogleDriveFileStorage', () => {
       fetchImpl: async (_input, init) => {
         calls += 1;
         if (init?.method === 'POST') {
+          return new Response(null, {
+            status: 200,
+            headers: {
+              location:
+                'https://www.googleapis.com/upload/drive/v3/files?upload_id=metadata',
+            },
+          });
+        }
+        if (init?.method === 'PUT') {
           return Response.json({
             id: 'drive-file-1',
             size: String(content.byteLength),
@@ -247,7 +290,7 @@ describe('GoogleDriveFileStorage', () => {
       }),
     ).rejects.toThrowError(/valid SHA-256 checksum/);
 
-    expect(calls).toBe(2);
+    expect(calls).toBe(3);
   });
 
   it('enforces the provider write bound before hashing or network I/O', async () => {
