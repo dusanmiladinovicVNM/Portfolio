@@ -72,7 +72,7 @@ PostgresPortfolioRepository.insertProperty(new canonical Property)
 → exact round-trip equality
 ~~~
 
-This proves the restored database is not merely readable evidence; canonical application persistence can continue after recovery.
+This proves the restored database is not merely readable evidence; domain validation, authorization, the application command and canonical PostgreSQL persistence can continue after recovery.
 
 ## Exact-SHA provenance
 
