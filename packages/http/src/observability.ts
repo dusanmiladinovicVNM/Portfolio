@@ -28,6 +28,17 @@ export interface OperationalLogger {
   log(event: OperationalLogEvent): void;
 }
 
+export function safeOperationalLog(
+  logger: OperationalLogger,
+  event: OperationalLogEvent,
+): void {
+  try {
+    logger.log(event);
+  } catch {
+    // Telemetry must never change business/HTTP semantics.
+  }
+}
+
 export interface ObservedHttpOptions {
   readonly requestIdFactory?: () => string;
   readonly now?: () => number;
@@ -99,7 +110,7 @@ export function createObservedHttpHandler(
       });
       const errorCode = await responseErrorCode(observedResponse);
 
-      logger.log({
+      safeOperationalLog(logger, {
         level: levelFor(observedResponse.status),
         event:
           observedResponse.status >= 500
@@ -115,7 +126,7 @@ export function createObservedHttpHandler(
 
       return observedResponse;
     } catch (error) {
-      logger.log({
+      safeOperationalLog(logger, {
         level: 'error',
         event: 'http.unexpected_error',
         requestId,
@@ -137,7 +148,7 @@ export function createObservedHttpHandler(
         },
       );
 
-      logger.log({
+      safeOperationalLog(logger, {
         level: 'error',
         event: 'http.request.failed',
         requestId,
