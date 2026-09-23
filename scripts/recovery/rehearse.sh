@@ -108,7 +108,7 @@ fi
 
 {
   echo "created_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  echo "git_sha=${GITHUB_SHA:-$(git rev-parse HEAD)}"
+  echo "code_sha=${RECOVERY_CODE_SHA:-${GITHUB_SHA:-$(git rev-parse HEAD)}}"
   echo "postgres_server_version=$(psql "$SOURCE_URL" -Atqc 'show server_version')"
   echo "source_database=$RECOVERY_SOURCE_DB"
   echo "restore_database=$RECOVERY_RESTORE_DB"
