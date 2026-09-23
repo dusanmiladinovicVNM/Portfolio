@@ -2596,6 +2596,22 @@ describe('Portfolio HTTP boundary', () => {
     };
     expect(document.latestVersionNumber).toBe(0);
 
+    const forbiddenUploadRequest = new Request(
+      `https://portfolio.test/documents/${document.id}/versions?fileName=forbidden.pdf&expectedDocumentRevision=1`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/pdf' },
+        body: new Uint8Array([7, 7, 7, 7]),
+      },
+    );
+    const forbiddenUpload = await handler(
+      forbiddenUploadRequest,
+      inspectorIdentity,
+    );
+    expect(forbiddenUpload.status).toBe(403);
+    expect(forbiddenUploadRequest.bodyUsed).toBe(false);
+    expect(fileStorage.putCallCount).toBe(0);
+
     const uploaded = await handler(
       new Request(
         `https://portfolio.test/documents/${document.id}/versions?fileName=lease.pdf&expectedDocumentRevision=1`,
