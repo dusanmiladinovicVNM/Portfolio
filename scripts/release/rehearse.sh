@@ -4,8 +4,22 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
+ACTUAL_SHA="$(git rev-parse HEAD)"
+EXPECTED_SHA="${RELEASE_CODE_SHA:-$ACTUAL_SHA}"
+
+if [[ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]]; then
+  echo "Expected release SHA $EXPECTED_SHA, but checkout is $ACTUAL_SHA." >&2
+  exit 1
+fi
+
+if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
+  echo "Release rehearsal requires a clean working tree." >&2
+  git status --short --untracked-files=all >&2
+  exit 1
+fi
+
+RELEASE_CODE_SHA="$ACTUAL_SHA"
 ARTIFACT_DIR="${RELEASE_ARTIFACT_DIR:-$ROOT_DIR/.artifacts/release}"
-RELEASE_CODE_SHA="${RELEASE_CODE_SHA:-${GITHUB_SHA:-$(git rev-parse HEAD)}}"
 
 mkdir -p "$ARTIFACT_DIR"
 
