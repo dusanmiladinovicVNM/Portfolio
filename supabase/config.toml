@@ -1,2 +1,3 @@
 [functions.api]
 verify_jwt = false
+entrypoint = "./functions/api/dist/index.js"

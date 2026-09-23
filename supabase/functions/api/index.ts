@@ -3,6 +3,7 @@ import {
   GoogleDriveFileStorage,
   GoogleOAuthRefreshTokenProvider,
 } from '@portfolio/google-drive';
+import { PORTFOLIO_BUILD_SHA } from './build-info.ts';
 import { createCorsHandler } from './cors.ts';
 import { SUPABASE_FUNCTION_BASE_PATH } from './host-routing.ts';
 import { readRuntimeConfig } from './runtime-config.ts';
@@ -23,7 +24,7 @@ const api = createSupabaseApi({
   }),
   pdfPort: new CanonicalInspectionPdfRenderer(),
   basePath: SUPABASE_FUNCTION_BASE_PATH,
-  serviceVersion: config.releaseSha,
+  serviceVersion: PORTFOLIO_BUILD_SHA,
   ...(config.readinessTimeoutMs === undefined
     ? {}
     : { readinessTimeoutMs: config.readinessTimeoutMs }),
