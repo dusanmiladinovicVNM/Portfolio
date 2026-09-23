@@ -1,9 +1,8 @@
-import { createSupabaseApi } from '@portfolio/api';
+import { CanonicalInspectionPdfRenderer, createSupabaseApi } from '@portfolio/api';
 import {
   GoogleDriveFileStorage,
   GoogleOAuthRefreshTokenProvider,
 } from '@portfolio/google-drive';
-import { CanonicalInspectionPdfRenderer } from '@portfolio/pdf';
 import { createCorsHandler } from './cors.ts';
 import { readRuntimeConfig } from './runtime-config.ts';
 
