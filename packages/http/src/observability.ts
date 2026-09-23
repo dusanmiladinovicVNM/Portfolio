@@ -1,6 +1,6 @@
 export type OperationalLogLevel = 'info' | 'warn' | 'error';
 
-export interface OperationalLogEvent {
+export interface HttpRequestLogEvent {
   readonly level: OperationalLogLevel;
   readonly event: 'http.request.completed' | 'http.request.failed';
   readonly requestId: string;
@@ -10,6 +10,19 @@ export interface OperationalLogEvent {
   readonly durationMs: number;
   readonly errorCode?: string;
 }
+
+export interface UnexpectedHttpErrorLogEvent {
+  readonly level: 'error';
+  readonly event: 'http.unexpected_error';
+  readonly requestId: string | null;
+  readonly method: string;
+  readonly path: string;
+  readonly errorName: string;
+}
+
+export type OperationalLogEvent =
+  | HttpRequestLogEvent
+  | UnexpectedHttpErrorLogEvent;
 
 export interface OperationalLogger {
   log(event: OperationalLogEvent): void;
