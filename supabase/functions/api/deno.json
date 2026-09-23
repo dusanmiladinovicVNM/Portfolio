@@ -7,7 +7,6 @@
     "@portfolio/http": "../../../packages/http/src/index.ts",
     "@portfolio/infrastructure": "../../../packages/infrastructure/src/index.ts",
     "@portfolio/google-drive": "../../../integrations/google-drive/src/index.ts",
-    "@portfolio/pdf": "../../../integrations/pdf/src/index.ts",
     "@supabase/server": "npm:@supabase/server@1.7.0",
     "postgres": "npm:postgres@3.4.9"
   },
