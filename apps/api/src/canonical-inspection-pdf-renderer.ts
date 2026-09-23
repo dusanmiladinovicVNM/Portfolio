@@ -1,5 +1,8 @@
 import type { PdfPort, PdfRenderResult } from '@portfolio/application';
-import type { InspectionFinalSnapshot } from '@portfolio/domain';
+
+type InspectionFinalSnapshot = Parameters<
+  PdfPort['renderInspectionFinalReport']
+>[0];
 
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
