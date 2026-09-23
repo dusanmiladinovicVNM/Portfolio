@@ -313,6 +313,55 @@ async function putResumableRange(
   });
 }
 
+async function reconcileResumableUpload(
+  fetchImpl: typeof fetch,
+  sessionUrl: string,
+  token: string,
+  totalBytes: number,
+): Promise<DriveFile | number> {
+  for (
+    let attempt = 1;
+    attempt <= MAX_RESUMABLE_RECOVERY_ATTEMPTS;
+    attempt += 1
+  ) {
+    let response: Response;
+    try {
+      response = await queryResumableUploadStatus(
+        fetchImpl,
+        sessionUrl,
+        token,
+        totalBytes,
+      );
+    } catch {
+      continue;
+    }
+
+    if (response.status === 200 || response.status === 201) {
+      return await readJson<DriveFile>(response);
+    }
+
+    if (response.status === 308) {
+      return resumableConfirmedOffset(response, totalBytes);
+    }
+
+    if (isAmbiguousDriveUploadResponse(response)) {
+      continue;
+    }
+
+    if (response.status === 404 || response.status === 410) {
+      throw new Error(
+        'Google Drive resumable session is no longer available; storage reconciliation is required.',
+      );
+    }
+
+    await requireOk(response);
+  }
+
+  throw new Error(
+    'Google Drive resumable upload outcome remains ambiguous after recovery attempts.',
+  );
+}
+
 async function completeResumableUpload(
   fetchImpl: typeof fetch,
   sessionUrl: string,
@@ -321,7 +370,6 @@ async function completeResumableUpload(
   content: Uint8Array,
 ): Promise<DriveFile> {
   let nextOffset = 0;
-  let recoveryAttempts = 0;
 
   while (true) {
     let response: Response | null = null;
@@ -354,42 +402,15 @@ async function completeResumableUpload(
       throw new Error('Google Drive resumable upload failed unexpectedly.');
     }
 
-    recoveryAttempts += 1;
-    if (recoveryAttempts > MAX_RESUMABLE_RECOVERY_ATTEMPTS) {
-      throw new Error(
-        'Google Drive resumable upload outcome remains ambiguous after recovery attempts.',
-      );
-    }
+    const reconciled = await reconcileResumableUpload(
+      fetchImpl,
+      sessionUrl,
+      token,
+      content.byteLength,
+    );
+    if (typeof reconciled !== 'number') return reconciled;
 
-    let statusResponse: Response;
-    try {
-      statusResponse = await queryResumableUploadStatus(
-        fetchImpl,
-        sessionUrl,
-        token,
-        content.byteLength,
-      );
-    } catch {
-      continue;
-    }
-
-    if (statusResponse.status === 200 || statusResponse.status === 201) {
-      return await readJson<DriveFile>(statusResponse);
-    }
-
-    if (statusResponse.status === 308) {
-      nextOffset = resumableConfirmedOffset(
-        statusResponse,
-        content.byteLength,
-      );
-      continue;
-    }
-
-    if (isAmbiguousDriveUploadResponse(statusResponse)) {
-      continue;
-    }
-
-    await requireOk(statusResponse);
+    nextOffset = reconciled;
   }
 }
 
