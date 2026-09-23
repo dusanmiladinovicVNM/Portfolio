@@ -95,9 +95,9 @@ else
 fi
 
 if [[ "$RECOVERY_USE_DOCKER_TOOLS" == "1" ]]; then
-  docker run --rm --network host     -v "$ARTIFACT_DIR:/artifacts"     "$RECOVERY_PG_IMAGE"     pg_dump "$SOURCE_URL"       --format=custom       --no-owner       --no-acl       --file=/artifacts/portfolio.dump
+  docker run --rm --network host     -v "$ARTIFACT_DIR:/artifacts"     "$RECOVERY_PG_IMAGE"     pg_dump "$SOURCE_URL"       --format=custom       --no-owner       --file=/artifacts/portfolio.dump
 else
-  pg_dump "$SOURCE_URL"     --format=custom     --no-owner     --no-acl     --file="$ARTIFACT_DIR/portfolio.dump"
+  pg_dump "$SOURCE_URL"     --format=custom     --no-owner     --file="$ARTIFACT_DIR/portfolio.dump"
 fi
 
 if command -v sha256sum >/dev/null 2>&1; then
@@ -131,9 +131,9 @@ fi
 create_database "$RECOVERY_RESTORE_DB"
 
 if [[ "$RECOVERY_USE_DOCKER_TOOLS" == "1" ]]; then
-  docker run --rm --network host     -v "$ARTIFACT_DIR:/artifacts"     "$RECOVERY_PG_IMAGE"     pg_restore       --no-owner       --no-acl       --exit-on-error       --dbname="$RESTORE_URL"       /artifacts/portfolio.dump
+  docker run --rm --network host     -v "$ARTIFACT_DIR:/artifacts"     "$RECOVERY_PG_IMAGE"     pg_restore       --no-owner       --exit-on-error       --dbname="$RESTORE_URL"       /artifacts/portfolio.dump
 else
-  pg_restore     --no-owner     --no-acl     --exit-on-error     --dbname="$RESTORE_URL"     "$ARTIFACT_DIR/portfolio.dump"
+  pg_restore     --no-owner     --exit-on-error     --dbname="$RESTORE_URL"     "$ARTIFACT_DIR/portfolio.dump"
 fi
 
 if command -v sha256sum >/dev/null 2>&1; then
