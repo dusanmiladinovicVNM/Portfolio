@@ -63,11 +63,6 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
-      - name: Supabase Edge Function check
-        run: |
-          deno check --config supabase/functions/api/deno.json supabase/functions/api/index.ts
-          deno test --config supabase/functions/api/deno.json             supabase/functions/api/runtime-config.test.ts             supabase/functions/api/cors.test.ts
-
       - name: Full lifecycle MVP release gate
         env:
           RECOVERY_USE_DOCKER_TOOLS: "1"
@@ -75,3 +70,13 @@ jobs:
           RECOVERY_SERVER_URL: postgresql://postgres:postgres@localhost:5432
           RELEASE_CODE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: pnpm release:rehearse
+
+      - name: Supabase Edge Function check
+        run: |
+          deno check --config supabase/functions/api/deno.json supabase/functions/api/index.ts
+          deno test --config supabase/functions/api/deno.json \
+            supabase/functions/api/runtime-config.test.ts \
+            supabase/functions/api/cors.test.ts
+          echo "__DENO_LOCK_BEGIN__"
+          cat supabase/functions/api/deno.lock
+          echo "__DENO_LOCK_END__"
