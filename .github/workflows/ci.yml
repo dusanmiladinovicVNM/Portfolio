@@ -67,4 +67,5 @@ jobs:
           RECOVERY_USE_DOCKER_TOOLS: "1"
           RECOVERY_PG_IMAGE: postgres:17
           RECOVERY_SERVER_URL: postgresql://postgres:postgres@localhost:5432
+          RECOVERY_CODE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: pnpm recovery:rehearse
