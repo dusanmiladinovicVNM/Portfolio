@@ -73,7 +73,14 @@ export interface PortfolioHttpDependencies {
   readonly userAccessRepository: UserAccessRepository;
   readonly idGenerator: IdGenerator;
   readonly readinessCheck?: () => Promise<void>;
-  readonly onUnexpectedError?: (error: unknown) => void;
+  readonly onUnexpectedError?: (
+    error: unknown,
+    context: {
+      readonly requestId: string | null;
+      readonly method: string;
+      readonly path: string;
+    },
+  ) => void;
 }
 
 export interface PortfolioHttpOptions {
@@ -425,7 +432,11 @@ export function createPortfolioHttpHandler(
         );
       }
 
-      deps.onUnexpectedError?.(error);
+      deps.onUnexpectedError?.(error, {
+        requestId: request.headers.get('x-request-id'),
+        method: request.method,
+        path: new URL(request.url).pathname,
+      });
       return errorResponse(
         'INTERNAL_ERROR',
         'An unexpected error occurred.',
