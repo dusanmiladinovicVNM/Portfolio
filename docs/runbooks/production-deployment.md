@@ -29,7 +29,7 @@ supabase db push
 
 The production host uses an OAuth refresh token to obtain short-lived Drive access tokens. Use a dedicated Portfolio Google account rather than a personal account.
 
-The OAuth grant must have access to the configured folder and sufficient Drive scope for Portfolio to create, search, read and delete its own objects. Keep the folder dedicated to Portfolio.
+The OAuth grant must have access to the configured folder and sufficient Drive scope for Portfolio to create, search, read and delete its own objects. Keep the folder dedicated to Portfolio. Before real production use, move the Google OAuth consent/client setup out of Testing into the appropriate production/published state; Testing-mode refresh-token lifetime is not an acceptable operational dependency for Portfolio.
 
 Set these Edge Function secrets:
 
@@ -73,7 +73,7 @@ supabase secrets set --env-file <production-secrets-file>
 verify_jwt = false
 ~~~
 
-This is required because `/health/live` and `/health/ready` are public. It does **not** make business routes anonymous: the Portfolio host calls `createSupabaseContext({ auth: 'user' })` for every non-health route, then resolves the verified subject through `auth_identities` before application authorization.
+This is required because `/health/live` and `/health/ready` are public. The external browser URL is `/functions/v1/api/...`, while Supabase invokes the function with the internal runtime prefix `/api/...`; the production adapter therefore sets `basePath: '/api'`. It does **not** make business routes anonymous: the Portfolio host calls `createSupabaseContext({ auth: 'user' })` for every non-health route, then resolves the verified subject through `auth_identities` before application authorization.
 
 The CORS adapter also permits browser calls only from `PORTFOLIO_WEB_ORIGIN`.
 
@@ -98,7 +98,7 @@ The health payload must report the same `PORTFOLIO_RELEASE_SHA` that passed the 
 
 Create the first user in Supabase Auth before running the bootstrap. Copy that user's stable Auth user UUID / JWT subject.
 
-The bootstrap is intentionally one-time and refuses to run if either `app_users` or `auth_identities` already contains rows.
+The bootstrap is intentionally one-time. It acquires transaction-scoped `SHARE ROW EXCLUSIVE` locks on `app_users` and `auth_identities`, verifies the Supabase Auth subject inside that transaction, and refuses to run if either internal table already contains rows. Concurrent bootstrap attempts therefore serialize and only one can cross the empty-state boundary.
 
 ~~~bash
 export SUPABASE_DB_URL='<operator database connection URL>'
