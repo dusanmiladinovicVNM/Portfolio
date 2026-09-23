@@ -234,6 +234,7 @@ function resumableSessionUrl(response: Response): string {
 }
 
 const MAX_RESUMABLE_RECOVERY_ATTEMPTS = 3;
+const MAX_RESUMABLE_NO_PROGRESS_CYCLES = 3;
 
 function isAmbiguousDriveUploadResponse(response: Response): boolean {
   return response.status >= 500 && response.status <= 599;
@@ -372,6 +373,30 @@ async function completeResumableUpload(
   content: Uint8Array,
 ): Promise<DriveFile> {
   let nextOffset = 0;
+  let confirmedOffset = 0;
+  let noProgressCycles = 0;
+
+  const acceptConfirmedOffset = (offset: number): number => {
+    if (offset < confirmedOffset) {
+      throw new Error(
+        'Google Drive resumable upload reported regressed progress; storage reconciliation is required.',
+      );
+    }
+
+    if (offset === confirmedOffset) {
+      noProgressCycles += 1;
+      if (noProgressCycles >= MAX_RESUMABLE_NO_PROGRESS_CYCLES) {
+        throw new Error(
+          'Google Drive resumable upload made no progress; storage reconciliation is required.',
+        );
+      }
+    } else {
+      confirmedOffset = offset;
+      noProgressCycles = 0;
+    }
+
+    return offset;
+  };
 
   while (true) {
     let response: Response | null = null;
@@ -402,7 +427,7 @@ async function completeResumableUpload(
           content.byteLength,
         );
         if (offset < content.byteLength) {
-          nextOffset = offset;
+          nextOffset = acceptConfirmedOffset(offset);
           continue;
         }
 
@@ -413,7 +438,7 @@ async function completeResumableUpload(
           content.byteLength,
         );
         if (typeof reconciled !== 'number') return reconciled;
-        nextOffset = reconciled;
+        nextOffset = acceptConfirmedOffset(reconciled);
         continue;
       }
       if (response) await requireOk(response);
@@ -428,7 +453,7 @@ async function completeResumableUpload(
     );
     if (typeof reconciled !== 'number') return reconciled;
 
-    nextOffset = reconciled;
+    nextOffset = acceptConfirmedOffset(reconciled);
   }
 }
 
