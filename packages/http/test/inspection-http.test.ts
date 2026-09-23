@@ -1217,15 +1217,18 @@ describe('Inspection HTTP backbone', () => {
     });
     expect(fileStorage.putCallCount).toBe(0);
 
+    const wrongInspectorRequest = new Request(scopedPhotoUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'image/jpeg' },
+      body: new Uint8Array([1, 2, 3, 4]),
+    });
     const wrongInspectorScopedPhoto = await handler(
-      new Request(scopedPhotoUrl, {
-        method: 'POST',
-        headers: { 'content-type': 'image/jpeg' },
-        body: new Uint8Array([1, 2, 3, 4]),
-      }),
+      wrongInspectorRequest,
       otherInspectorIdentity,
     );
     expect(wrongInspectorScopedPhoto.status).toBe(403);
+    expect(wrongInspectorRequest.bodyUsed).toBe(false);
+    expect(fileStorage.putCallCount).toBe(0);
 
     const scopedPhoto = await handler(
       new Request(scopedPhotoUrl, {
