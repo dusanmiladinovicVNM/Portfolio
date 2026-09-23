@@ -8,7 +8,8 @@
     "@portfolio/infrastructure": "../../../packages/infrastructure/src/index.ts",
     "@portfolio/google-drive": "../../../integrations/google-drive/src/index.ts",
     "@supabase/server": "npm:@supabase/server@1.7.0",
-    "postgres": "npm:postgres@3.4.9"
+    "postgres": "npm:postgres@3.4.9",
+    "zod": "npm:zod@4.6.5"
   },
   "compilerOptions": {
     "strict": true
