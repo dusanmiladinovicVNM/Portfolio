@@ -34,6 +34,7 @@ import { handleAssetServiceHttp } from './asset-service-http-routes.js';
 import { handleCostHttp } from './cost-http-routes.js';
 import { handleDocumentHttp } from './document-http-routes.js';
 import { errorResponse } from './http-utils.js';
+import { createHealthHttpHandler } from './health-http-routes.js';
 import { handleImprovementHttp } from './improvement-http-routes.js';
 import { handleInspectionHttp } from './inspection-http-routes.js';
 import { handleLeaseHttp } from './lease-http-routes.js';
@@ -71,11 +72,21 @@ export interface PortfolioHttpDependencies {
   readonly clock: ClockPort;
   readonly userAccessRepository: UserAccessRepository;
   readonly idGenerator: IdGenerator;
-  readonly onUnexpectedError?: (error: unknown) => void;
+  readonly readinessCheck?: () => Promise<void>;
+  readonly onUnexpectedError?: (
+    error: unknown,
+    context: {
+      readonly requestId: string | null;
+      readonly method: string;
+      readonly path: string;
+    },
+  ) => void;
 }
 
 export interface PortfolioHttpOptions {
   readonly basePath?: string;
+  readonly serviceVersion?: string;
+  readonly readinessTimeoutMs?: number;
 }
 
 type Handler = (
@@ -162,12 +173,30 @@ export function createPortfolioHttpHandler(
   options: PortfolioHttpOptions = {},
 ): Handler {
   const basePath = normalizeBasePath(options.basePath);
+  const healthHandler = deps.readinessCheck
+    ? createHealthHttpHandler(
+        { readinessCheck: deps.readinessCheck },
+        {
+          ...(options.serviceVersion === undefined
+            ? {}
+            : { version: options.serviceVersion }),
+          ...(options.readinessTimeoutMs === undefined
+            ? {}
+            : { readinessTimeoutMs: options.readinessTimeoutMs }),
+        },
+      )
+    : null;
 
   return async (request, identity) => {
     try {
       const path = routePath(request, basePath);
       if (path === null) {
         return errorResponse('NOT_FOUND', 'Route not found.', 404);
+      }
+
+      if (healthHandler) {
+        const healthResponse = await healthHandler(request, path);
+        if (healthResponse) return healthResponse;
       }
 
       if (!identity) {
@@ -411,7 +440,11 @@ export function createPortfolioHttpHandler(
         );
       }
 
-      deps.onUnexpectedError?.(error);
+      deps.onUnexpectedError?.(error, {
+        requestId: request.headers.get('x-request-id'),
+        method: request.method,
+        path: new URL(request.url).pathname,
+      });
       return errorResponse(
         'INTERNAL_ERROR',
         'An unexpected error occurred.',

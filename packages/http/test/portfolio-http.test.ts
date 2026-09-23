@@ -339,6 +339,7 @@ function buildHandler(
     readonly leaseRepository?: EmptyLeaseRepository;
     readonly documentRepository?: InMemoryDocumentRepository;
     readonly fileStorage?: MemoryFileStorage;
+    readonly readinessCheck?: () => Promise<void>;
   } = {},
 ) {
   return createPortfolioHttpHandler({
@@ -370,6 +371,9 @@ function buildHandler(
     clock,
     userAccessRepository: new InMemoryAccessRepository(),
     idGenerator: new FixedIds(ids),
+    ...(overrides.readinessCheck
+      ? { readinessCheck: overrides.readinessCheck }
+      : {}),
   });
 }
 
@@ -385,6 +389,49 @@ const propertyBody = {
 };
 
 describe('Portfolio HTTP boundary', () => {
+  it('serves health endpoints before the authentication boundary', async () => {
+    let readinessCalls = 0;
+    const handler = buildHandler([], new FixedClock(), {
+      readinessCheck: async () => {
+        readinessCalls += 1;
+      },
+    });
+
+    const live = await handler(
+      new Request('https://portfolio.test/health/live'),
+      null,
+    );
+    const ready = await handler(
+      new Request('https://portfolio.test/health/ready'),
+      null,
+    );
+
+    expect(live.status).toBe(200);
+    expect(ready.status).toBe(200);
+    expect(readinessCalls).toBe(1);
+  });
+
+  it('keeps readiness fail-closed without exposing dependency details', async () => {
+    const handler = buildHandler([], new FixedClock(), {
+      readinessCheck: async () => {
+        throw new Error('postgres password and provider details must stay private');
+      },
+    });
+
+    const response = await handler(
+      new Request('https://portfolio.test/health/ready'),
+      null,
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'SERVICE_NOT_READY',
+        message: 'Required service dependencies are unavailable.',
+      },
+    });
+  });
+
   it('requires a verified identity', async () => {
     const response = await buildHandler()(
       new Request('https://portfolio.test/properties'),

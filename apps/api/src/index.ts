@@ -1,7 +1,12 @@
 import { createSupabaseContext } from '@supabase/server';
 import postgres from 'postgres';
 import type { FileStoragePort, PdfPort } from '@portfolio/application';
-import { createPortfolioHttpHandler } from '@portfolio/http';
+import {
+  createObservedHttpHandler,
+  createPortfolioHttpHandler,
+  safeOperationalLog,
+  type OperationalLogger,
+} from '@portfolio/http';
 import {
   PostgresAccessItemRepository,
   PostgresAssetInventoryRepository,
@@ -31,6 +36,9 @@ export interface SupabaseApiConfig {
   readonly fileStorage: FileStoragePort;
   readonly pdfPort: PdfPort;
   readonly basePath?: string;
+  readonly serviceVersion?: string;
+  readonly readinessTimeoutMs?: number;
+  readonly logger?: OperationalLogger;
 }
 
 export interface SupabaseApi {
@@ -64,6 +72,25 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
   const meterRepository = new PostgresMeterRepository(sql);
   const unitTimelineRepository = new PostgresUnitTimelineRepository(sql);
 
+  const logger: OperationalLogger =
+    config.logger ??
+    {
+      log(event) {
+        const line = JSON.stringify({
+          timestamp: new Date().toISOString(),
+          service: 'portfolio-api',
+          ...event,
+        });
+        if (event.level === 'error') {
+          console.error(line);
+        } else if (event.level === 'warn') {
+          console.warn(line);
+        } else {
+          console.info(line);
+        }
+      },
+    };
+
   const applicationHandler = createPortfolioHttpHandler(
     {
       accessItemRepository,
@@ -90,15 +117,51 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
       clock: new SystemClock(),
       userAccessRepository,
       idGenerator: new WebCryptoIdGenerator(),
-      onUnexpectedError: (error) => {
-        console.error('Unhandled Portfolio API error', error);
+      readinessCheck: async () => {
+        await sql`select 1`;
+      },
+      onUnexpectedError: (error, context) => {
+        safeOperationalLog(logger, {
+          level: 'error',
+          event: 'http.unexpected_error',
+          requestId: context.requestId,
+          method: context.method,
+          path: context.path,
+          errorName: error instanceof Error ? error.name : 'UnknownError',
+        });
       },
     },
-    { basePath: config.basePath ?? '/functions/v1/api' },
+    {
+      basePath: config.basePath ?? '/functions/v1/api',
+      ...(config.serviceVersion === undefined
+        ? {}
+        : { serviceVersion: config.serviceVersion }),
+      ...(config.readinessTimeoutMs === undefined
+        ? {}
+        : { readinessTimeoutMs: config.readinessTimeoutMs }),
+    },
   );
 
-  return {
-    async fetch(request: Request): Promise<Response> {
+  const authenticatedHandler = async (request: Request): Promise<Response> => {
+      const path = new URL(request.url).pathname;
+      const basePath = config.basePath ?? '/functions/v1/api';
+      const normalizedBasePath =
+        basePath === '/'
+          ? ''
+          : (basePath.startsWith('/') ? basePath : '/' + basePath).replace(/\/$/, '');
+      const relativePath =
+        !normalizedBasePath
+          ? path
+          : path === normalizedBasePath
+            ? '/'
+            : path.startsWith(normalizedBasePath + '/')
+              ? path.slice(normalizedBasePath.length)
+              : null;
+
+      if (relativePath === '/health/live' || relativePath === '/health/ready') {
+        return applicationHandler(request, null);
+      }
+
       const { data: context, error } = await createSupabaseContext(request, {
         auth: 'user',
       });
@@ -127,7 +190,15 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
         provider: 'supabase',
         subject,
       });
-    },
+  };
+
+  const observedHandler = createObservedHttpHandler(
+    authenticatedHandler,
+    logger,
+  );
+
+  return {
+    fetch: observedHandler,
 
     async close(): Promise<void> {
       await sql.end();

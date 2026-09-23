@@ -36,3 +36,25 @@ A future Fastify host replaces this package's composition/authentication edge. I
 - the PostgreSQL schema
 
 No business use case depends on Supabase runtime types.
+
+## Operations
+
+The composition root accepts optional `serviceVersion`, `readinessTimeoutMs` and `logger` values.
+
+Production should pass the exact release commit SHA as `serviceVersion`. It is
+returned by the health endpoints so an operator can prove which build is
+serving traffic.
+
+If no logger is supplied, the host emits one JSON object per operational event
+to stdout/stderr. A deployment may inject another `OperationalLogger` sink
+without changing application behavior.
+
+Health endpoints:
+
+~~~text
+GET <basePath>/health/live
+GET <basePath>/health/ready
+~~~
+
+They are intentionally unauthenticated. Liveness has no dependency probe;
+readiness executes a minimal PostgreSQL query with a bounded dependency budget (1000 ms by default) and returns 503 without leaking provider/database error details when the probe fails or times out.
