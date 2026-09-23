@@ -12,7 +12,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     services:
       postgres:
@@ -61,3 +61,10 @@ jobs:
 
       - name: PostgreSQL integration tests
         run: pnpm test:integration
+
+      - name: Backup restore migration rehearsal
+        env:
+          RECOVERY_USE_DOCKER_TOOLS: "1"
+          RECOVERY_PG_IMAGE: postgres:17
+          RECOVERY_SERVER_URL: postgresql://postgres:postgres@localhost:5432
+        run: pnpm recovery:rehearse
