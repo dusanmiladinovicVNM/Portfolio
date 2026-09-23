@@ -62,6 +62,7 @@ pnpm dlx "esbuild@${ESBUILD_VERSION}" \
   --alias:@portfolio/infrastructure=./packages/infrastructure/src/index.ts \
   --alias:@portfolio/google-drive=./integrations/google-drive/src/index.ts \
   "${BUILTIN_ALIAS_ARGS[@]}" \
+  --inject:./scripts/deployment/esbuild-node-globals.ts \
   --define:__PORTFOLIO_BUILD_SHA__="\"$ACTUAL_SHA\"" \
   --outfile="$OUT_FILE"
 
