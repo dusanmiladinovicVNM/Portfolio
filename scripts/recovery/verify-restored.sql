@@ -187,5 +187,31 @@ has_function_privilege('anon', p.oid, 'EXECUTE')
   ) then
     raise exception 'authenticated regained EXECUTE on reporting_unit_snapshots(date).';
   end if;
+
+
+  execute $probe$
+    create function public.recovery_acl_probe()
+    returns integer
+    language sql
+    as 'select 1'
+  $probe$;
+
+  if has_function_privilege(
+    'anon',
+    'public.recovery_acl_probe()'::regprocedure,
+    'EXECUTE'
+  ) then
+    raise exception 'anon received default EXECUTE on a newly-created function after restore.';
+  end if;
+
+  if has_function_privilege(
+    'authenticated',
+    'public.recovery_acl_probe()'::regprocedure,
+    'EXECUTE'
+  ) then
+    raise exception 'authenticated received default EXECUTE on a newly-created function after restore.';
+  end if;
+
+  execute 'drop function public.recovery_acl_probe()';
 end
 $verify$;
