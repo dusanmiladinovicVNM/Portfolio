@@ -90,9 +90,10 @@ If that PUT has an ambiguous network or 5xx outcome, the adapter does not open a
 new Drive create. It queries the same resumable session with
 `Content-Range: bytes */TOTAL`. A completed session returns the created file
 metadata; a `308` response supplies the confirmed byte prefix and only the
-remaining suffix is resent through that same session. Session disappearance or
-repeatedly ambiguous status checks fail closed for storage reconciliation rather
-than guessing provider state.
+remaining suffix is resent through that same session. Session disappearance, repeatedly ambiguous status checks, or three confirmed
+no-progress cycles fail closed for storage reconciliation rather than guessing
+provider state or resending the same buffered payload indefinitely. Confirmed
+forward progress resets the no-progress budget.
 
 For concurrent same-`DocumentVersionId` writes, PostgreSQL remains the only
 canonical winner. A losing newly-created storage object is removed only after
