@@ -13,7 +13,8 @@
     "recovery:rehearse": "bash scripts/recovery/rehearse.sh",
     "release:rehearse": "bash scripts/release/rehearse.sh",
     "bootstrap:first-admin": "bash scripts/deployment/bootstrap-first-admin.sh",
-    "supabase:function:bundle": "bash scripts/deployment/build-supabase-function.sh"
+    "supabase:function:bundle": "bash scripts/deployment/build-supabase-function.sh",
+    "supabase:function:deploy": "bash scripts/deployment/deploy-supabase-function.sh"
   },
   "devDependencies": {
     "@types/node": "24.13.5",
