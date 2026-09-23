@@ -77,13 +77,25 @@ This is required because `/health/live` and `/health/ready` are public. The exte
 
 The CORS adapter also permits browser calls only from `PORTFOLIO_WEB_ORIGIN`.
 
-## 6. Deploy the API
+## 6. Build and deploy the API
 
-The function imports shared source outside `supabase/functions`, so use API-based deployment:
+The canonical monorepo keeps Node-ESM `.js` specifiers in TypeScript source. Supabase's server-side `--use-api` bundler does not resolve that `.js` → `.ts` compatibility convention across the monorepo, so production deployment uses an explicit generated boundary instead of rewriting canonical imports.
+
+Build the self-contained JavaScript entrypoint first:
 
 ~~~bash
-supabase functions deploy api --use-api
+pnpm supabase:function:bundle
 ~~~
+
+The command uses pinned `esbuild@0.28.2`, bundles the complete Edge dependency graph into `supabase/functions/api/dist/index.js`, rejects leftover relative ESM imports, and fails before deployment if the generated artifact reaches the 5 MB server-side bundle limit. The generated directory is ignored by Git, so creating it does not change the exact release SHA.
+
+`supabase/config.toml` points the `api` function at that generated JavaScript entrypoint. Deploy it with:
+
+~~~bash
+pnpm dlx supabase@latest functions deploy api --project-ref <project-ref> --use-api
+~~~
+
+Do not deploy directly from `supabase/functions/api/index.ts`; the generated bundle is the production deployment artifact.
 
 Then verify:
 
@@ -167,6 +179,8 @@ These are deployment policy decisions, not missing domain invariants.
 
 The canonical monorepo TypeScript uses Node-ESM `.js` specifiers from `.ts` source. The Edge Function `deno.json` enables Deno `sloppy-imports` solely as a compatibility bridge so the hosted Deno runtime can consume that canonical source without maintaining a second generated copy.
 
-CI runs `deno check` against the real function entrypoint and uses a committed frozen `deno.lock`. A green CI proves Deno resolution/type compatibility for the exact source revision, but the first real `supabase functions deploy api --use-api` remains an environment-level deployment rehearsal and must be completed before production use.
+CI still runs `deno check` and the Deno adapter tests against the canonical TypeScript entrypoint using the committed frozen `deno.lock`. It then builds the same self-contained JavaScript artifact referenced by `supabase/config.toml` and runs `deno check` against that artifact.
 
-This bridge is deployment debt, not a domain/application convention. A later Fastify/Node host removes it naturally without changing business code.
+The source-level `sloppy-imports` bridge remains useful for Deno validation, but production deployment no longer depends on Supabase's server-side bundler implementing that unstable resolution behavior. The first real hosted deploy remains the final environment-level proof.
+
+This compatibility layer is deployment debt, not a domain/application convention. A later Fastify/Node host can remove it without changing business code.
