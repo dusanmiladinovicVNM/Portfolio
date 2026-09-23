@@ -55,7 +55,10 @@ The MVP adapter is intentionally bounded-buffered at 16 MiB by default.
 - completed sessions return canonical metadata, while `308` resumes only the
   unconfirmed suffix reported by Drive's `Range` header;
 - no second Drive create is initiated while the first session outcome is
-  indeterminate.
+  indeterminate;
+- repeated payload failures with an unchanged confirmed offset are bounded;
+  after three no-progress cycles the adapter fails closed for reconciliation
+  instead of resending indefinitely.
 
 Chunked transfer remains unnecessary on the normal path; resumable suffix retry
 is used only to reconcile an interrupted/ambiguous write without changing
