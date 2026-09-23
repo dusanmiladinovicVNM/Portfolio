@@ -118,13 +118,16 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
       readinessCheck: async () => {
         await sql`select 1`;
       },
-      onUnexpectedError: (error) => {
+      onUnexpectedError: (error, context) => {
         console.error(
           JSON.stringify({
             timestamp: new Date().toISOString(),
             service: 'portfolio-api',
             level: 'error',
             event: 'http.unexpected_error',
+            requestId: context.requestId,
+            method: context.method,
+            path: context.path,
             errorName: error instanceof Error ? error.name : 'UnknownError',
             message:
               error instanceof Error
