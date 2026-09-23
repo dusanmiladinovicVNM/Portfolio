@@ -119,22 +119,14 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
         await sql`select 1`;
       },
       onUnexpectedError: (error, context) => {
-        console.error(
-          JSON.stringify({
-            timestamp: new Date().toISOString(),
-            service: 'portfolio-api',
-            level: 'error',
-            event: 'http.unexpected_error',
-            requestId: context.requestId,
-            method: context.method,
-            path: context.path,
-            errorName: error instanceof Error ? error.name : 'UnknownError',
-            message:
-              error instanceof Error
-                ? error.message
-                : 'Non-Error value thrown by HTTP handler.',
-          }),
-        );
+        logger.log({
+          level: 'error',
+          event: 'http.unexpected_error',
+          requestId: context.requestId,
+          method: context.method,
+          path: context.path,
+          errorName: error instanceof Error ? error.name : 'UnknownError',
+        });
       },
     },
     config.serviceVersion === undefined
