@@ -152,6 +152,21 @@ jobs:
           grep -Fq 'from "fs"' .artifacts/node-builtins/out.js
           grep -Fq 'import("fs/promises")' .artifacts/node-builtins/out.js
 
+      - name: Prove Buffer injection
+        run: |
+          mkdir -p .artifacts/node-buffer
+          cat > .artifacts/node-buffer/fixture.js <<'EOF'
+          const bytes = Buffer.from("ok");
+          const payload = 'Buffer.from("payload")';
+          console.log(bytes.toString("utf8"), payload);
+          EOF
+
+          pnpm dlx esbuild@0.28.2             .artifacts/node-buffer/fixture.js             --bundle             --format=esm             --platform=node             --target=es2022             --inject:./scripts/deployment/esbuild-node-globals.ts             --outfile=.artifacts/node-buffer/out.js
+
+          grep -Fq 'node:buffer' .artifacts/node-buffer/out.js
+          grep -Fq 'Buffer.from("payload")' .artifacts/node-buffer/out.js
+          deno run .artifacts/node-buffer/out.js | grep -Fq 'ok Buffer.from("payload")'
+
       - name: Build deployable Supabase Edge bundle
         env:
           DEPLOY_CODE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
