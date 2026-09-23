@@ -170,12 +170,11 @@ function assertExistingVersion(
   }
 }
 
-export async function uploadInspectionBinaryCommand(
-  deps: UploadInspectionBinaryDependencies,
+export async function authorizeInspectionBinaryUploadCommand(
+  deps: Pick<UploadInspectionBinaryDependencies, 'inspectionRepository'>,
   actor: Actor,
   inspectionId: InspectionId,
-  input: UploadInspectionBinaryInput,
-): Promise<DocumentVersion> {
+): Promise<Inspection> {
   requireCapability(actor, 'inspections:write');
 
   const inspection = await deps.inspectionRepository.getById(inspectionId);
@@ -183,6 +182,20 @@ export async function uploadInspectionBinaryCommand(
     throw new DomainError('INSPECTION_NOT_FOUND', 'Inspection not found.');
   }
   assertInspectionAccess(actor, inspection);
+  return inspection;
+}
+
+export async function uploadInspectionBinaryCommand(
+  deps: UploadInspectionBinaryDependencies,
+  actor: Actor,
+  inspectionId: InspectionId,
+  input: UploadInspectionBinaryInput,
+): Promise<DocumentVersion> {
+  const inspection = await authorizeInspectionBinaryUploadCommand(
+    deps,
+    actor,
+    inspectionId,
+  );
 
   if (input.purpose === 'signature') {
     if (inspection.status !== 'locked') {
