@@ -77,6 +77,3 @@ jobs:
           deno test --config supabase/functions/api/deno.json \
             supabase/functions/api/runtime-config.test.ts \
             supabase/functions/api/cors.test.ts
-          echo "__DENO_LOCK_BEGIN__"
-          cat supabase/functions/api/deno.lock
-          echo "__DENO_LOCK_END__"
