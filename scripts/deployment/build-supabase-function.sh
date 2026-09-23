@@ -29,6 +29,23 @@ rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR" "$ARTIFACT_DIR"
 rm -f "$MANIFEST"
 
+BUILTIN_ALIAS_ARGS=()
+while IFS= read -r builtin; do
+  if [[ -n "$builtin" ]]; then
+    BUILTIN_ALIAS_ARGS+=("--alias:${builtin}=node:${builtin}")
+  fi
+done < <(
+  node --input-type=module -e '
+    import { builtinModules } from "node:module";
+    const modules = [...new Set(
+      builtinModules
+        .filter((name) => !name.startsWith("node:"))
+        .sort(),
+    )];
+    process.stdout.write(modules.join("\n"));
+  '
+)
+
 pnpm dlx "esbuild@${ESBUILD_VERSION}" \
   supabase/functions/api/index.ts \
   --bundle \
@@ -44,8 +61,10 @@ pnpm dlx "esbuild@${ESBUILD_VERSION}" \
   --alias:@portfolio/http=./packages/http/src/index.ts \
   --alias:@portfolio/infrastructure=./packages/infrastructure/src/index.ts \
   --alias:@portfolio/google-drive=./integrations/google-drive/src/index.ts \
+  "${BUILTIN_ALIAS_ARGS[@]}" \
   --define:__PORTFOLIO_BUILD_SHA__="\"$ACTUAL_SHA\"" \
   --outfile="$OUT_FILE"
+
 
 BYTES="$(wc -c < "$OUT_FILE" | tr -d ' ')"
 
