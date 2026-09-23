@@ -1,5 +1,18 @@
 \set ON_ERROR_STOP on
 
+select exists(
+  select 1
+  from auth.users
+  where id::text = :'admin_subject'
+) as portfolio_admin_auth_exists
+\gset
+
+\if :portfolio_admin_auth_exists
+\else
+  \echo 'First-admin bootstrap subject does not exist in auth.users.'
+  \quit 1
+\endif
+
 begin;
 
 do $bootstrap_guard$
