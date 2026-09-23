@@ -1,9 +1,14 @@
 import postgres from 'postgres';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
+  createPropertyCommand,
+  type Actor,
+  type IdGenerator,
+} from '@portfolio/application';
+import {
   asDocumentVersionId,
   asPropertyId,
-  type Property,
+  asUserId,
 } from '@portfolio/domain';
 import {
   PostgresDocumentRepository,
@@ -62,22 +67,33 @@ describe('restored Portfolio database', () => {
     });
   });
 
-  it('can continue canonical writes after restore', async () => {
-    const continuedProperty: Property = {
-      id: asPropertyId('55555555-5555-4555-8555-555555555555'),
-      code: 'RECOVERY-CONTINUE-1',
-      name: 'Post-restore continuation property',
-      propertyType: 'apartment_building',
-      street: 'Recoverystrasse',
-      houseNumber: '2',
-      postalCode: '8000',
-      city: 'Zürich',
-      countryCode: 'CH',
-      yearBuilt: 2024,
-      status: 'active',
+  it('can continue the canonical application write path after restore', async () => {
+    const actor: Actor = {
+      userId: asUserId('66666666-6666-4666-8666-666666666666'),
+      role: 'admin',
+    };
+    const idGenerator: IdGenerator = {
+      next: () => '55555555-5555-4555-8555-555555555555',
     };
 
-    await portfolioRepository.insertProperty(continuedProperty);
+    const continuedProperty = await createPropertyCommand(
+      {
+        portfolioRepository,
+        idGenerator,
+      },
+      actor,
+      {
+        code: 'RECOVERY-CONTINUE-1',
+        name: 'Post-restore continuation property',
+        propertyType: 'apartment_building',
+        street: 'Recoverystrasse',
+        houseNumber: '2',
+        postalCode: '8000',
+        city: 'Zürich',
+        countryCode: 'CH',
+        yearBuilt: 2024,
+      },
+    );
 
     await expect(
       portfolioRepository.getPropertyById(continuedProperty.id),
