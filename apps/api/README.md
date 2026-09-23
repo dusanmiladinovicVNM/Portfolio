@@ -39,7 +39,7 @@ No business use case depends on Supabase runtime types.
 
 ## Operations
 
-The composition root accepts optional `serviceVersion` and `logger` values.
+The composition root accepts optional `serviceVersion`, `readinessTimeoutMs` and `logger` values.
 
 Production should pass the exact release commit SHA as `serviceVersion`. It is
 returned by the health endpoints so an operator can prove which build is
@@ -57,5 +57,4 @@ GET <basePath>/health/ready
 ~~~
 
 They are intentionally unauthenticated. Liveness has no dependency probe;
-readiness executes a minimal PostgreSQL query and returns 503 without leaking
-provider/database error details when the probe fails.
+readiness executes a minimal PostgreSQL query with a bounded dependency budget (1000 ms by default) and returns 503 without leaking provider/database error details when the probe fails or times out.
