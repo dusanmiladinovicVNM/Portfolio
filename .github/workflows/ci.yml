@@ -33,8 +33,10 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/portfolio_test
 
     steps:
-      - name: Checkout
+      - name: Checkout exact release candidate
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Use Node.js 24 LTS
         uses: actions/setup-node@v4
@@ -56,16 +58,10 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
-      - name: Browser navigation workflow
-        run: pnpm --filter @portfolio/web test:browser
-
-      - name: PostgreSQL integration tests
-        run: pnpm test:integration
-
-      - name: Backup restore migration rehearsal
+      - name: Full lifecycle MVP release gate
         env:
           RECOVERY_USE_DOCKER_TOOLS: "1"
           RECOVERY_PG_IMAGE: postgres:17
           RECOVERY_SERVER_URL: postgresql://postgres:postgres@localhost:5432
-          RECOVERY_CODE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: pnpm recovery:rehearse
+          RELEASE_CODE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: pnpm release:rehearse
