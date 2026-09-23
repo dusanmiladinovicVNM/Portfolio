@@ -118,6 +118,146 @@ describe('GoogleDriveFileStorage', () => {
     );
   });
 
+  it('reconciles a lost final PUT acknowledgement through the same resumable session', async () => {
+    const content = new Uint8Array([1, 2, 3, 4]);
+    const objectKey = 'document-version:lost-ack';
+    const expectedHash = await sha256(content);
+    const created = driveFile(
+      'drive-lost-ack',
+      objectKey,
+      content,
+      expectedHash,
+    );
+    const sessionUrl =
+      'https://www.googleapis.com/upload/drive/v3/files?upload_id=lost-ack';
+    const requests: Request[] = [];
+    let payloadPutCount = 0;
+
+    const storage = new GoogleDriveFileStorage({
+      folderId: 'folder-1',
+      accessTokenProvider: tokenProvider,
+      fetchImpl: async (input, init) => {
+        const request = new Request(input, init);
+        requests.push(request);
+
+        if (request.method === 'GET') {
+          return Response.json({ files: [] });
+        }
+        if (request.method === 'POST') {
+          return new Response(null, {
+            status: 200,
+            headers: { location: sessionUrl },
+          });
+        }
+
+        const contentRange = request.headers.get('content-range');
+        if (contentRange === `bytes */${content.byteLength}`) {
+          return Response.json(created, { status: 200 });
+        }
+
+        payloadPutCount += 1;
+        throw new TypeError('simulated lost upload acknowledgement');
+      },
+    });
+
+    await expect(
+      storage.put({
+        objectKey,
+        fileName: 'lost-ack.bin',
+        mimeType: 'application/octet-stream',
+        content,
+      }),
+    ).resolves.toEqual({
+      provider: 'google-drive',
+      objectId: 'drive-lost-ack',
+      objectKey,
+      byteSize: content.byteLength,
+      sha256: expectedHash,
+      disposition: 'created',
+    });
+
+    expect(payloadPutCount).toBe(1);
+    expect(requests.filter((request) => request.method === 'POST')).toHaveLength(1);
+    expect(requests).toHaveLength(4);
+    expect(requests[3]!.url).toBe(sessionUrl);
+    expect(requests[3]!.headers.get('content-range')).toBe(
+      `bytes */${content.byteLength}`,
+    );
+    expect(requests[3]!.headers.get('content-length')).toBe('0');
+  });
+
+  it('resumes only the unconfirmed suffix after an ambiguous resumable PUT', async () => {
+    const content = new Uint8Array([1, 2, 3, 4]);
+    const objectKey = 'document-version:partial-resume';
+    const expectedHash = await sha256(content);
+    const created = driveFile(
+      'drive-partial',
+      objectKey,
+      content,
+      expectedHash,
+    );
+    const sessionUrl =
+      'https://www.googleapis.com/upload/drive/v3/files?upload_id=partial';
+    const requests: Request[] = [];
+
+    const storage = new GoogleDriveFileStorage({
+      folderId: 'folder-1',
+      accessTokenProvider: tokenProvider,
+      fetchImpl: async (input, init) => {
+        const request = new Request(input, init);
+        requests.push(request);
+
+        if (request.method === 'GET') {
+          return Response.json({ files: [] });
+        }
+        if (request.method === 'POST') {
+          return new Response(null, {
+            status: 200,
+            headers: { location: sessionUrl },
+          });
+        }
+
+        const contentRange = request.headers.get('content-range');
+        if (contentRange === `bytes */${content.byteLength}`) {
+          return new Response(null, {
+            status: 308,
+            headers: { range: 'bytes=0-1' },
+          });
+        }
+        if (contentRange === 'bytes 2-3/4') {
+          return Response.json(created, { status: 200 });
+        }
+
+        return new Response('ambiguous provider failure', { status: 503 });
+      },
+    });
+
+    const stored = await storage.put({
+      objectKey,
+      fileName: 'partial.bin',
+      mimeType: 'application/octet-stream',
+      content,
+    });
+
+    expect(stored).toEqual({
+      provider: 'google-drive',
+      objectId: 'drive-partial',
+      objectKey,
+      byteSize: content.byteLength,
+      sha256: expectedHash,
+      disposition: 'created',
+    });
+
+    expect(requests.filter((request) => request.method === 'POST')).toHaveLength(1);
+    expect(requests).toHaveLength(5);
+    expect(requests[3]!.headers.get('content-range')).toBe('bytes */4');
+    expect(requests[4]!.headers.get('content-range')).toBe('bytes 2-3/4');
+    expect(requests[4]!.headers.get('content-length')).toBe('2');
+    expect(new Uint8Array(await requests[4]!.arrayBuffer())).toEqual(
+      new Uint8Array([3, 4]),
+    );
+  });
+
   it('is idempotent for the same object key and exact content identity', async () => {
     const content = new TextEncoder().encode('same content');
     const objectKey = 'document-version:stable';
