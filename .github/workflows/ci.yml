@@ -122,6 +122,9 @@ jobs:
           test "$(awk -F= '$1 == "bundle_sha256" { print $2 }' "$MANIFEST")" = "$(shasum -a 256 supabase/functions/api/dist/index.js | awk '{print $1}')"
           test "$(awk -F= '$1 == "bundle_bytes" { print $2 }' "$MANIFEST")" = "$(wc -c < supabase/functions/api/dist/index.js | tr -d ' ')"
           test "$(awk -F= '$1 == "esbuild_version" { print $2 }' "$MANIFEST")" = "0.28.2"
+          grep -Fq "$EXPECTED_SHA" supabase/functions/api/dist/index.js
+          ! grep -Fq "__PORTFOLIO_BUILD_SHA__" supabase/functions/api/dist/index.js
+          ! grep -Fq "PORTFOLIO_RELEASE_SHA" supabase/functions/api/dist/index.js
 
       - name: Check deployable Supabase Edge bundle
         run: deno check supabase/functions/api/dist/index.js
