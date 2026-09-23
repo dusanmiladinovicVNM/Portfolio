@@ -117,6 +117,17 @@ fi
 
 # Disaster boundary: the source is gone before the restore database exists.
 drop_database "$RECOVERY_SOURCE_DB"
+
+if [[ -n "$(psql "$ADMIN_URL" -Atqc "select 1 from pg_database where datname = '$RECOVERY_SOURCE_DB'")" ]]; then
+  echo "Recovery rehearsal source database still exists after destructive boundary." >&2
+  exit 1
+fi
+
+if [[ -n "$(psql "$ADMIN_URL" -Atqc "select 1 from pg_database where datname = '$RECOVERY_RESTORE_DB'")" ]]; then
+  echo "Recovery restore database must not exist before fresh restore creation." >&2
+  exit 1
+fi
+
 create_database "$RECOVERY_RESTORE_DB"
 
 if [[ "$RECOVERY_USE_DOCKER_TOOLS" == "1" ]]; then
