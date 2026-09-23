@@ -58,3 +58,11 @@ GET <basePath>/health/ready
 
 They are intentionally unauthenticated. Liveness has no dependency probe;
 readiness executes a minimal PostgreSQL query with a bounded dependency budget (1000 ms by default) and returns 503 without leaking provider/database error details when the probe fails or times out.
+
+## Supabase production host
+
+The deployable Edge Function lives at `supabase/functions/api/index.ts`. It composes this package with the Google Drive adapter and canonical inspection PDF renderer.
+
+The function-specific `deno.json` maps monorepo package imports to the canonical source tree. CI runs Deno `check` and tests on the Edge Function entrypoint so Node TypeScript success alone is not treated as deployability proof.
+
+`supabase/config.toml` sets `verify_jwt = false` only so public health endpoints can reach the handler. All non-health requests still execute the `createSupabaseContext({ auth: 'user' })` verification path before Portfolio authorization.
