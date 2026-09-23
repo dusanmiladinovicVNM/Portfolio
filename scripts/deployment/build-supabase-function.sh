@@ -4,13 +4,30 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
+ACTUAL_SHA="$(git rev-parse HEAD)"
+EXPECTED_SHA="${DEPLOY_CODE_SHA:-$ACTUAL_SHA}"
+
+if [[ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]]; then
+  echo "Expected deploy SHA $EXPECTED_SHA, but checkout is $ACTUAL_SHA." >&2
+  exit 1
+fi
+
+if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
+  echo "Supabase deployment bundle requires a clean working tree." >&2
+  git status --short --untracked-files=all >&2
+  exit 1
+fi
+
 OUT_DIR="$ROOT_DIR/supabase/functions/api/dist"
 OUT_FILE="$OUT_DIR/index.js"
+ARTIFACT_DIR="${DEPLOY_ARTIFACT_DIR:-$ROOT_DIR/.artifacts/deployment}"
+MANIFEST="$ARTIFACT_DIR/supabase-api-manifest.txt"
 MAX_BYTES=5000000
 ESBUILD_VERSION=0.28.2
 
 rm -rf "$OUT_DIR"
-mkdir -p "$OUT_DIR"
+mkdir -p "$OUT_DIR" "$ARTIFACT_DIR"
+rm -f "$MANIFEST"
 
 pnpm dlx "esbuild@${ESBUILD_VERSION}" \
   supabase/functions/api/index.ts \
@@ -41,4 +58,20 @@ if grep -Eq "from[[:space:]]+['\"]\.\.?/" "$OUT_FILE"; then
   exit 1
 fi
 
+if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
+  echo "Supabase bundle build changed the tracked/untracked source tree." >&2
+  git status --short --untracked-files=all >&2
+  exit 1
+fi
+
+BUNDLE_SHA256="$(shasum -a 256 "$OUT_FILE" | awk '{print $1}')"
+
+{
+  echo "source_sha=$ACTUAL_SHA"
+  echo "bundle_sha256=$BUNDLE_SHA256"
+  echo "bundle_bytes=$BYTES"
+  echo "esbuild_version=$ESBUILD_VERSION"
+} > "$MANIFEST"
+
 echo "Supabase API bundle ready: ${BYTES} bytes"
+echo "Deployment manifest: $MANIFEST"
