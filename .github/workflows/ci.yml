@@ -46,6 +46,11 @@ jobs:
       - name: Install pnpm
         run: npm install --global pnpm@12.4.2
 
+      - name: Use Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -58,6 +63,11 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
+      - name: First-admin bootstrap concurrency
+        env:
+          BOOTSTRAP_TEST_SERVER_URL: postgresql://postgres:postgres@localhost:5432
+        run: bash scripts/deployment/test-bootstrap-first-admin.sh
+
       - name: Full lifecycle MVP release gate
         env:
           RECOVERY_USE_DOCKER_TOOLS: "1"
@@ -65,3 +75,11 @@ jobs:
           RECOVERY_SERVER_URL: postgresql://postgres:postgres@localhost:5432
           RELEASE_CODE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: pnpm release:rehearse
+
+      - name: Supabase Edge Function check
+        run: |
+          deno check --config supabase/functions/api/deno.json supabase/functions/api/index.ts
+          deno test --config supabase/functions/api/deno.json \
+            supabase/functions/api/runtime-config.test.ts \
+            supabase/functions/api/cors.test.ts \
+            supabase/functions/api/host-routing.test.ts

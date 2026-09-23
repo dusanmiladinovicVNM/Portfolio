@@ -73,3 +73,9 @@ Requests include `supportsAllDrives=true`; list/search also includes `includeIte
 OAuth/service-account token acquisition is deliberately outside this adapter.
 
 The host supplies a `GoogleDriveAccessTokenProvider`, keeping credentials and Supabase/Fastify hosting details out of the storage contract.
+
+## Production OAuth refresh-token provider
+
+`GoogleOAuthRefreshTokenProvider` exchanges a dedicated Google OAuth refresh token for short-lived Drive access tokens and caches only the short-lived token until shortly before expiry.
+
+The host owns the OAuth client ID, client secret and refresh token as runtime secrets. Use a dedicated Portfolio Google account/folder and grant only the Drive scope required by the deployment. Token endpoint failure details are not copied into Portfolio HTTP responses.
