@@ -4,7 +4,7 @@ This runbook defines the release procedure. Exact provider commands remain deplo
 
 ## Preconditions
 
-Do not deploy a commit unless exact-head CI is green, all required SQL migrations are present, backup/restore rehearsal is green, required production roles/secrets exist, storage and PostgreSQL credentials are available, and the release SHA is recorded.
+Do not deploy a commit unless exact-head CI is green, all required SQL migrations are present, backup/restore rehearsal is green, required production roles/secrets exist, storage and PostgreSQL credentials are available, the release SHA is recorded, and the deployment edge/platform has explicit request, upload and abuse/concurrency limits appropriate for the production environment.
 
 ## Deploy
 
