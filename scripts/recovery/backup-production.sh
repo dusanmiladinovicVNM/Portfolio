@@ -133,6 +133,7 @@ RESTORE_URL="$RESTORE_SERVER_URL/$RESTORE_DB"
 
 psql_cmd "$ADMIN_URL" -v ON_ERROR_STOP=1   -c "drop database if exists \"$RESTORE_DB\" with (force)" >/dev/null
 psql_cmd "$ADMIN_URL" -v ON_ERROR_STOP=1   -c "create database \"$RESTORE_DB\"" >/dev/null
+psql_cmd "$RESTORE_URL" -v ON_ERROR_STOP=1   -c "drop schema public cascade" >/dev/null
 
 cleanup() {
   psql_cmd "$ADMIN_URL" -v ON_ERROR_STOP=1     -c "drop database if exists \"$RESTORE_DB\" with (force)" >/dev/null || true
