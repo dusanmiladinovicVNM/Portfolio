@@ -81,15 +81,37 @@ capture_counts() {
     count="$(psql_cmd "$url" -Atqc "select count(*) from public.$table")"
     printf 'public.%s\t%s\n' "$table" "$count" >> "$output"
   done < <(
-    psql_cmd "$url" -Atqc       "select quote_ident(tablename) from pg_tables where schemaname='public' and tablename <> 'api_rate_limit_buckets' order by tablename"
+    psql_cmd "$url" -Atqc \
+      "select quote_ident(tablename)
+       from pg_tables
+       where schemaname = 'public'
+         and tablename <> 'api_rate_limit_buckets'
+       order by tablename"
   )
 }
 
 dump_public() {
   if [[ "$USE_DOCKER" == "1" ]]; then
-    docker run --rm --network host       -v "$ARTIFACT_DIR:/artifacts"       "$PG_IMAGE"       pg_dump "$PORTFOLIO_PRODUCTION_DB_URL"         --format=custom         --no-owner         --no-acl         --schema=public         --file=/artifacts/portfolio-public.dump
+    docker run --rm --network host \
+      -v "$ARTIFACT_DIR:/artifacts" \
+      "$PG_IMAGE" \
+      pg_dump "$PORTFOLIO_PRODUCTION_DB_URL" \
+        --format=custom \
+        --data-only \
+        --no-owner \
+        --no-acl \
+        --schema=public \
+        --exclude-table-data=public.api_rate_limit_buckets \
+        --file=/artifacts/portfolio-public.dump
   else
-    pg_dump "$PORTFOLIO_PRODUCTION_DB_URL"       --format=custom       --no-owner       --no-acl       --schema=public       --file="$PUBLIC_DUMP"
+    pg_dump "$PORTFOLIO_PRODUCTION_DB_URL" \
+      --format=custom \
+      --data-only \
+      --no-owner \
+      --no-acl \
+      --schema=public \
+      --exclude-table-data=public.api_rate_limit_buckets \
+      --file="$PUBLIC_DUMP"
   fi
 }
 
@@ -100,18 +122,52 @@ dump_auth() {
   fi
 
   if [[ "$USE_DOCKER" == "1" ]]; then
-    docker run --rm --network host       -v "$ARTIFACT_DIR:/artifacts"       "$PG_IMAGE"       pg_dump "$PORTFOLIO_PRODUCTION_DB_URL"         --data-only         --no-owner         --no-acl         --schema=auth         --table=auth.users         --table=auth.identities         --file=/artifacts/supabase-auth-data.sql
+    docker run --rm --network host \
+      -v "$ARTIFACT_DIR:/artifacts" \
+      "$PG_IMAGE" \
+      pg_dump "$PORTFOLIO_PRODUCTION_DB_URL" \
+        --data-only \
+        --no-owner \
+        --no-acl \
+        --schema=auth \
+        --table=auth.users \
+        --table=auth.identities \
+        --file=/artifacts/supabase-auth-data.sql
   else
-    pg_dump "$PORTFOLIO_PRODUCTION_DB_URL"       --data-only       --no-owner       --no-acl       --schema=auth       --table=auth.users       --table=auth.identities       --file="$AUTH_DUMP"
+    pg_dump "$PORTFOLIO_PRODUCTION_DB_URL" \
+      --data-only \
+      --no-owner \
+      --no-acl \
+      --schema=auth \
+      --table=auth.users \
+      --table=auth.identities \
+      --file="$AUTH_DUMP"
   fi
 }
 
 restore_public() {
   local restore_url="$1"
   if [[ "$USE_DOCKER" == "1" ]]; then
-    docker run --rm --network host       -v "$ARTIFACT_DIR:/artifacts"       "$PG_IMAGE"       pg_restore         --no-owner         --no-acl         --exit-on-error         --dbname="$restore_url"         /artifacts/portfolio-public.dump
+    docker run --rm --network host \
+      -v "$ARTIFACT_DIR:/artifacts" \
+      "$PG_IMAGE" \
+      pg_restore \
+        --data-only \
+        --disable-triggers \
+        --no-owner \
+        --no-acl \
+        --exit-on-error \
+        --dbname="$restore_url" \
+        /artifacts/portfolio-public.dump
   else
-    pg_restore       --no-owner       --no-acl       --exit-on-error       --dbname="$restore_url"       "$PUBLIC_DUMP"
+    pg_restore \
+      --data-only \
+      --disable-triggers \
+      --no-owner \
+      --no-acl \
+      --exit-on-error \
+      --dbname="$restore_url" \
+      "$PUBLIC_DUMP"
   fi
 }
 
@@ -155,8 +211,10 @@ migrations_sha="$(sha256_file "$MIGRATION_HASHES")"
 ADMIN_URL="$RESTORE_SERVER_URL/postgres"
 RESTORE_URL="$RESTORE_SERVER_URL/$RESTORE_DB"
 
-psql_cmd "$ADMIN_URL" -v ON_ERROR_STOP=1   -c "drop database if exists \"$RESTORE_DB\" with (force)" >/dev/null
-psql_cmd "$ADMIN_URL" -v ON_ERROR_STOP=1   -c "create database \"$RESTORE_DB\"" >/dev/null
+psql_cmd "$ADMIN_URL" -v ON_ERROR_STOP=1 \
+  -c "drop database if exists \"$RESTORE_DB\" with (force)" >/dev/null
+psql_cmd "$ADMIN_URL" -v ON_ERROR_STOP=1 \
+  -c "create database \"$RESTORE_DB\"" >/dev/null
 
 psql_cmd "$ADMIN_URL" -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
 do $roles$
@@ -176,7 +234,8 @@ for migration in supabase/migrations/*.sql; do
 done
 
 cleanup() {
-  psql_cmd "$ADMIN_URL" -v ON_ERROR_STOP=1     -c "drop database if exists \"$RESTORE_DB\" with (force)" >/dev/null || true
+  psql_cmd "$ADMIN_URL" -v ON_ERROR_STOP=1 \
+    -c "drop database if exists \"$RESTORE_DB\" with (force)" >/dev/null || true
 }
 trap cleanup EXIT
 
@@ -188,12 +247,17 @@ if ! diff -u "$SOURCE_COUNTS" "$RESTORE_COUNTS"; then
   exit 1
 fi
 
-RECOVERY_DATABASE_URL="$RESTORE_URL"   pnpm --workspace-root exec vitest run   packages/infrastructure/test/recovery/production-restore-smoke.test.ts
+RECOVERY_DATABASE_URL="$RESTORE_URL" \
+  pnpm --workspace-root exec vitest run \
+  packages/infrastructure/test/recovery/production-restore-smoke.test.ts
 
 encrypt_file() {
   local source="$1"
   local target="$2"
-  openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000     -pass env:PORTFOLIO_BACKUP_ENCRYPTION_KEY     -in "$source"     -out "$target"
+  openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 \
+    -pass env:PORTFOLIO_BACKUP_ENCRYPTION_KEY \
+    -in "$source" \
+    -out "$target"
   rm -f "$source"
 }
 
