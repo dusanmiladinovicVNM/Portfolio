@@ -9,7 +9,7 @@
   "scripts": {
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "test:integration": "pnpm --filter @portfolio/infrastructure test:integration",
+    "test:integration": "pnpm --filter @portfolio/infrastructure test:integration && pnpm --filter @portfolio/api test:integration",
     "recovery:rehearse": "bash scripts/recovery/rehearse.sh",
     "release:rehearse": "bash scripts/release/rehearse.sh",
     "bootstrap:first-admin": "bash scripts/deployment/bootstrap-first-admin.sh",
