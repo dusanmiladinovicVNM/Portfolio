@@ -94,6 +94,8 @@ import {
   signLeaseAgreementCommand,
   signLeaseAmendmentCommand,
   uploadDocumentVersionCommand,
+  DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
+  type FileStoragePort,
   type IdGenerator,
   type VerifiedIdentity,
 } from '@portfolio/application';
@@ -134,6 +136,8 @@ import {
   PostgresPartyRepository,
   PostgresPortfolioRepository,
   PostgresReportingRepository,
+  restoreDocumentBinarySnapshot,
+  WebCryptoSha256,
   PostgresTenancyRepository,
   PostgresUnitTimelineRepository,
   PostgresUserAccessRepository,
@@ -3006,6 +3010,205 @@ describe('PostgreSQL infrastructure', () => {
         storage_object_key: objectKey,
       },
     ]);
+  });
+
+
+  it('restores snapshot bytes end-to-end and is restartable without duplicate relocation', async () => {
+    const documentId = '64000000-0000-4000-8000-000000000010';
+    const versionId = asDocumentVersionId(
+      '64000000-0000-4000-8000-000000000011',
+    );
+    const objectKey = `document-version:${versionId}`;
+    const bytes = new Uint8Array([10, 20, 30, 40, 50]);
+    const sha256 = new WebCryptoSha256();
+    const digest = await sha256.digest(bytes);
+
+    await sql`
+      insert into public.documents (
+        id, code, title, category, status, latest_version_number, revision
+      ) values (
+        ${documentId},
+        'RECOVERY-E2E-001',
+        'Binary restore integration evidence',
+        'technical',
+        'active',
+        1,
+        1
+      )
+    `;
+
+    await sql`
+      insert into public.document_versions (
+        id, document_id, version_number, file_name, mime_type,
+        byte_size, sha256, status, finalized_at,
+        storage_provider, storage_object_id, storage_object_key
+      ) values (
+        ${versionId},
+        ${documentId},
+        1,
+        'recovered.bin',
+        'application/octet-stream',
+        ${bytes.byteLength},
+        ${digest},
+        'final',
+        '2026-09-24T12:30:00.000Z',
+        'google-drive',
+        'drive-before-disaster',
+        ${objectKey}
+      )
+    `;
+
+    const objects = new Map<
+      string,
+      {
+        readonly objectId: string;
+        readonly content: Uint8Array;
+        readonly byteSize: number;
+        readonly sha256: string;
+      }
+    >();
+    let putCalls = 0;
+
+    const recoveryStorage: FileStoragePort = {
+      async put(input) {
+        putCalls += 1;
+        const contentSha = await sha256.digest(input.content);
+        const existing = objects.get(input.objectKey);
+
+        if (existing) {
+          if (
+            existing.byteSize !== input.content.byteLength ||
+            existing.sha256 !== contentSha
+          ) {
+            throw new Error('Recovery storage objectKey collision.');
+          }
+          return {
+            provider: 'recovery-test',
+            objectId: existing.objectId,
+            objectKey: input.objectKey,
+            byteSize: existing.byteSize,
+            sha256: existing.sha256,
+            disposition: 'reused',
+          };
+        }
+
+        const entry = {
+          objectId: 'recovery-object-1',
+          content: new Uint8Array(input.content),
+          byteSize: input.content.byteLength,
+          sha256: contentSha,
+        };
+        objects.set(input.objectKey, entry);
+
+        return {
+          provider: 'recovery-test',
+          objectId: entry.objectId,
+          objectKey: input.objectKey,
+          byteSize: entry.byteSize,
+          sha256: entry.sha256,
+          disposition: 'created',
+        };
+      },
+
+      async stat(reference) {
+        if (reference.provider !== 'recovery-test') return null;
+        const entry = objects.get(reference.objectKey);
+        if (!entry || entry.objectId !== reference.objectId) return null;
+        return {
+          ...reference,
+          byteSize: entry.byteSize,
+          sha256: entry.sha256,
+        };
+      },
+
+      async read(reference, policy) {
+        if (reference.provider !== 'recovery-test') return null;
+        const entry = objects.get(reference.objectKey);
+        if (!entry || entry.objectId !== reference.objectId) return null;
+        if (entry.byteSize > policy.maxBytes) {
+          throw new Error('Recovery test object exceeds read policy.');
+        }
+        return {
+          ...reference,
+          byteSize: entry.byteSize,
+          sha256: entry.sha256,
+          content: new Uint8Array(entry.content),
+        };
+      },
+
+      async remove(reference) {
+        const entry = objects.get(reference.objectKey);
+        if (entry?.objectId === reference.objectId) {
+          objects.delete(reference.objectKey);
+        }
+      },
+    };
+
+    const item = {
+      versionId,
+      documentId: asDocumentId(documentId),
+      fileName: 'recovered.bin',
+      mimeType: 'application/octet-stream',
+      byteSize: bytes.byteLength,
+      sha256: digest,
+      provider: 'google-drive',
+      objectId: 'drive-before-disaster',
+      objectKey,
+    } as const;
+
+    const deps = {
+      documentRepository,
+      recoveryStorage,
+      sha256,
+      readContent: async () => new Uint8Array(bytes),
+    };
+
+    await expect(
+      restoreDocumentBinarySnapshot(deps, [item]),
+    ).resolves.toEqual({
+      restored: 1,
+      totalBytes: bytes.byteLength,
+    });
+
+    const firstLocator = await documentRepository.getStorageReference(versionId);
+    expect(firstLocator).toEqual({
+      provider: 'recovery-test',
+      objectId: 'recovery-object-1',
+      objectKey,
+    });
+
+    const firstRelocationCount = await sql<{ count: string }[]>`
+      select count(*)::text as count
+      from public.document_version_storage_relocations
+      where document_version_id = ${versionId}
+    `;
+    expect(firstRelocationCount[0]?.count).toBe('1');
+
+    const normalRead = await recoveryStorage.read(
+      firstLocator!,
+      DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
+    );
+    expect(normalRead).not.toBeNull();
+    expect(Array.from(normalRead!.content)).toEqual(Array.from(bytes));
+    expect(normalRead!.sha256).toBe(digest);
+
+    await expect(
+      restoreDocumentBinarySnapshot(deps, [item]),
+    ).resolves.toEqual({
+      restored: 1,
+      totalBytes: bytes.byteLength,
+    });
+
+    const secondLocator = await documentRepository.getStorageReference(versionId);
+    expect(secondLocator).toEqual(firstLocator);
+
+    const secondRelocationCount = await sql<{ count: string }[]>`
+      select count(*)::text as count
+      from public.document_version_storage_relocations
+      where document_version_id = ${versionId}
+    `;
+    expect(secondRelocationCount[0]?.count).toBe('1');
+    expect(putCalls).toBe(2);
   });
 
 
