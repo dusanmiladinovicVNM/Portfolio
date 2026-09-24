@@ -1,7 +1,10 @@
+import { staffResponseSchema, type StaffResponse } from '@portfolio/contracts';
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortfolioApi } from './api/portfolio-api.js';
 import type { AuthSession, SessionGateway } from './auth/session-gateway.js';
 import { PartyDirectory } from './admin/PartyDirectory.js';
+import { StaffAdministration } from './admin/StaffAdministration.js';
+import { currentStaffPath } from './api/paths.js';
 import { PortfolioDashboard } from './dashboard/PortfolioDashboard.js';
 import { PropertyUnits } from './dossier/PropertyUnits.js';
 import { UnitDossier } from './dossier/UnitDossier.js';
@@ -9,6 +12,7 @@ import { WorkspaceLink } from './navigation/WorkspaceLink.js';
 import {
   dashboardRoute,
   partiesRoute,
+  staffRoute,
   propertyRoute,
   unitRoute,
   workspaceRouteOwnerKey,
@@ -90,6 +94,8 @@ function AuthenticatedShell({
   readonly sessionGateway: SessionGateway;
 }) {
   const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [currentStaff, setCurrentStaff] = useState<StaffResponse | null>(null);
+  const [currentStaffError, setCurrentStaffError] = useState<string | null>(null);
   const { route, navigate, setNavigationBlocker } =
     useWorkspaceNavigation();
   const mainRef = useRef<HTMLElement>(null);
@@ -98,7 +104,9 @@ function AuthenticatedShell({
       ? 'dashboard'
       : route.kind === 'parties'
         ? 'parties'
-        : route.kind === 'property'
+        : route.kind === 'staff'
+          ? 'staff'
+          : route.kind === 'property'
           ? 'property:' + route.propertyId
           : 'unit:' + route.propertyId + ':' + route.unitId + ':' + route.tab;
   const api = useMemo(
@@ -109,6 +117,27 @@ function AuthenticatedShell({
       }),
     [apiBaseUrl, session.accessToken],
   );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setCurrentStaffError(null);
+    void api
+      .get(currentStaffPath(), staffResponseSchema, {
+        signal: controller.signal,
+      })
+      .then((staff) => {
+        if (!controller.signal.aborted) setCurrentStaff(staff);
+      })
+      .catch((cause: unknown) => {
+        if (controller.signal.aborted) return;
+        setCurrentStaffError(
+          cause instanceof Error
+            ? cause.message
+            : 'Current Portfolio staff identity could not be loaded.',
+        );
+      });
+    return () => controller.abort();
+  }, [api]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -157,6 +186,16 @@ function AuthenticatedShell({
           >
             Parties
           </WorkspaceLink>
+          {currentStaff?.role === 'admin' ? (
+            <WorkspaceLink
+              ariaCurrent={route.kind === 'staff' ? 'page' : undefined}
+              className={'nav-item ' + (route.kind === 'staff' ? 'nav-item-active' : '')}
+              navigate={navigate}
+              route={staffRoute(route.asOf)}
+            >
+              Staff
+            </WorkspaceLink>
+          ) : null}
           {route.kind === 'property' || route.kind === 'unit' ? (
             <WorkspaceLink
               ariaCurrent={route.kind === 'property' ? 'page' : undefined}
@@ -216,6 +255,9 @@ function AuthenticatedShell({
             Sign out
           </button>
           {signOutError ? <p className="form-error" role="alert">{signOutError}</p> : null}
+          {currentStaffError ? (
+            <p className="form-error" role="alert">{currentStaffError}</p>
+          ) : null}
         </div>
       </aside>
 
@@ -231,6 +273,22 @@ function AuthenticatedShell({
 
         {route.kind === 'parties' ? (
           <PartyDirectory api={api} asOf={route.asOf} />
+        ) : null}
+
+        {route.kind === 'staff' ? (
+          currentStaff?.role === 'admin' ? (
+            <StaffAdministration
+              api={api}
+              currentUserId={currentStaff.userId}
+            />
+          ) : (
+            <section className="panel" role="alert">
+              <h1>Staff Administration</h1>
+              <p className="form-error">
+                Administrator access is required.
+              </p>
+            </section>
+          )
         ) : null}
 
         {route.kind === 'property' ? (
