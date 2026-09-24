@@ -14,7 +14,8 @@
     "release:rehearse": "bash scripts/release/rehearse.sh",
     "bootstrap:first-admin": "bash scripts/deployment/bootstrap-first-admin.sh",
     "supabase:function:bundle": "bash scripts/deployment/build-supabase-function.sh",
-    "supabase:function:deploy": "bash scripts/deployment/deploy-supabase-function.sh"
+    "supabase:function:deploy": "bash scripts/deployment/deploy-supabase-function.sh",
+    "web:deployment:check": "node scripts/deployment/check-public-web-deployment.mjs"
   },
   "devDependencies": {
     "@types/node": "24.13.5",
