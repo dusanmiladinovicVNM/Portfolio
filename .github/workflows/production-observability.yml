@@ -20,7 +20,7 @@ jobs:
     env:
       SUPABASE_PROJECT_REF: fiowxgamyjjcondlheqg
       PORTFOLIO_PRODUCTION_API_BASE_URL: https://fiowxgamyjjcondlheqg.supabase.co/functions/v1/api
-      OBSERVABILITY_WINDOW_MINUTES: '10'
+      OBSERVABILITY_WINDOW_MINUTES: '20'
       ALERT_GENERIC_5XX: '3'
       ALERT_UNEXPECTED_ERRORS: '1'
       ALERT_STORAGE_FAILURES: '1'
