@@ -472,9 +472,22 @@ export class PostgresDocumentRepository implements DocumentRepository {
       storage_object_id: string;
       storage_object_key: string;
     }[]>`
-      select storage_provider, storage_object_id, storage_object_key
-      from public.document_versions
-      where id = ${versionId}
+      select
+        coalesce(r.storage_provider, v.storage_provider) as storage_provider,
+        coalesce(r.storage_object_id, v.storage_object_id) as storage_object_id,
+        coalesce(r.storage_object_key, v.storage_object_key) as storage_object_key
+      from public.document_versions v
+      left join lateral (
+        select
+          storage_provider,
+          storage_object_id,
+          storage_object_key
+        from public.document_version_storage_relocations
+        where document_version_id = v.id
+        order by generation desc
+        limit 1
+      ) r on true
+      where v.id = ${versionId}
       limit 1
     `;
 
@@ -486,6 +499,85 @@ export class PostgresDocumentRepository implements DocumentRepository {
           objectKey: row.storage_object_key,
         }
       : null;
+  }
+
+  async relocateStorageReference(
+    versionId: DocumentVersionId,
+    expectedCurrent: StorageObjectReference,
+    replacement: StorageObjectReference,
+    reason: string,
+  ): Promise<void> {
+    await this.sql.begin(async (tx) => {
+      const rows = await tx<{
+        generation: number;
+        storage_provider: string;
+        storage_object_id: string;
+        storage_object_key: string;
+      }[]>`
+        select
+          coalesce(r.generation, 0)::int as generation,
+          coalesce(r.storage_provider, v.storage_provider) as storage_provider,
+          coalesce(r.storage_object_id, v.storage_object_id) as storage_object_id,
+          coalesce(r.storage_object_key, v.storage_object_key) as storage_object_key
+        from public.document_versions v
+        left join lateral (
+          select
+            generation,
+            storage_provider,
+            storage_object_id,
+            storage_object_key
+          from public.document_version_storage_relocations
+          where document_version_id = v.id
+          order by generation desc
+          limit 1
+        ) r on true
+        where v.id = ${versionId}
+        for update of v
+      `;
+
+      const current = rows[0];
+      if (!current) {
+        throw new DomainError(
+          'DOCUMENT_VERSION_NOT_FOUND',
+          'Document version not found.',
+        );
+      }
+
+      if (
+        current.storage_provider !== expectedCurrent.provider ||
+        current.storage_object_id !== expectedCurrent.objectId ||
+        current.storage_object_key !== expectedCurrent.objectKey
+      ) {
+        throw new DomainError(
+          'DOCUMENT_STORAGE_RELOCATION_CONFLICT',
+          'Document storage location changed before recovery could be committed.',
+        );
+      }
+
+      await tx`
+        insert into public.document_version_storage_relocations (
+          document_version_id,
+          generation,
+          previous_storage_provider,
+          previous_storage_object_id,
+          previous_storage_object_key,
+          storage_provider,
+          storage_object_id,
+          storage_object_key,
+          reason
+        ) values (
+          ${versionId},
+          ${current.generation + 1},
+          ${current.storage_provider},
+          ${current.storage_object_id},
+          ${current.storage_object_key},
+          ${replacement.provider},
+          ${replacement.objectId},
+          ${replacement.objectKey},
+          ${reason}
+        )
+      `;
+    });
   }
 
   async insertLink(link: DocumentLink): Promise<void> {
