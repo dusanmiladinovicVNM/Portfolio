@@ -79,6 +79,11 @@ jobs:
           RELEASE_CODE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: pnpm release:rehearse
 
+      - name: Production backup restore rehearsal
+        env:
+          BACKUP_TEST_SERVER_URL: postgresql://postgres:postgres@localhost:5432
+        run: bash scripts/recovery/test-production-backup.sh
+
       - name: Supabase Edge Function source check
         run: |
           deno check --config supabase/functions/api/deno.json supabase/functions/api/index.ts

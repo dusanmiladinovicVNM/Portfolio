@@ -1,0 +1,71 @@
+name: Production Backup
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 2 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout exact main
+        uses: actions/checkout@v4
+
+      - name: Refuse non-main backup source
+        run: |
+          test "$GITHUB_REF_NAME" = "main" || {
+            echo "Production backup must run from main." >&2
+            exit 1
+          }
+
+      - name: Use Node.js 24 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install pnpm
+        run: npm install --global pnpm@12.4.2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create and prove production backup
+        env:
+          PORTFOLIO_PRODUCTION_DB_URL: ${{ secrets.PORTFOLIO_PRODUCTION_DB_URL }}
+          PORTFOLIO_BACKUP_ENCRYPTION_KEY: ${{ secrets.PORTFOLIO_BACKUP_ENCRYPTION_KEY }}
+          PORTFOLIO_BACKUP_RESTORE_SERVER_URL: postgresql://postgres:postgres@localhost:5432
+          PORTFOLIO_BACKUP_USE_DOCKER_TOOLS: "1"
+          PORTFOLIO_BACKUP_PG_IMAGE: postgres:17
+          PORTFOLIO_BACKUP_CODE_SHA: ${{ github.sha }}
+        run: bash scripts/recovery/backup-production.sh
+
+      - name: Upload encrypted backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-production-backup-${{ github.run_id }}-${{ github.sha }}
+          path: |
+            .artifacts/production-backup/*.enc
+            .artifacts/production-backup/manifest.txt
+          if-no-files-found: error
+          retention-days: 14
