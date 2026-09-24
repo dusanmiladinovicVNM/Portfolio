@@ -2831,6 +2831,184 @@ describe('PostgreSQL infrastructure', () => {
   });
 
 
+
+  it('keeps DocumentVersion evidence immutable while relocating storage through an append-only CAS chain', async () => {
+    const documentId = '63000000-0000-4000-8000-000000000010';
+    const versionId = asDocumentVersionId(
+      '63000000-0000-4000-8000-000000000011',
+    );
+    const objectKey = `document-version:${versionId}`;
+
+    await sql`
+      insert into public.documents (
+        id, code, title, category, status, latest_version_number, revision
+      ) values (
+        ${documentId},
+        'RECOVERY-STORAGE-001',
+        'Recovery storage evidence',
+        'technical',
+        'active',
+        1,
+        1
+      )
+    `;
+
+    await sql`
+      insert into public.document_versions (
+        id, document_id, version_number, file_name, mime_type,
+        byte_size, sha256, status, finalized_at,
+        storage_provider, storage_object_id, storage_object_key
+      ) values (
+        ${versionId},
+        ${documentId},
+        1,
+        'recovery.pdf',
+        'application/pdf',
+        4,
+        ${'a'.repeat(64)},
+        'final',
+        '2026-09-24T12:00:00.000Z',
+        'google-drive',
+        'drive-original',
+        ${objectKey}
+      )
+    `;
+
+    const original = {
+      provider: 'google-drive',
+      objectId: 'drive-original',
+      objectKey,
+    };
+    const recovered = {
+      provider: 'google-drive',
+      objectId: 'drive-recovered-1',
+      objectKey,
+    };
+
+    await expect(
+      documentRepository.getStorageReference(versionId),
+    ).resolves.toEqual(original);
+
+    await documentRepository.relocateStorageReference(
+      versionId,
+      original,
+      recovered,
+      'restore from secondary binary backup',
+    );
+
+    await expect(
+      documentRepository.getStorageReference(versionId),
+    ).resolves.toEqual(recovered);
+
+    await expect(
+      documentRepository.relocateStorageReference(
+        versionId,
+        original,
+        {
+          ...recovered,
+          objectId: 'drive-recovered-stale-writer',
+        },
+        'stale recovery attempt',
+      ),
+    ).rejects.toMatchObject({
+      code: 'DOCUMENT_STORAGE_RELOCATION_CONFLICT',
+    });
+
+    await expect(
+      sql`
+        insert into public.document_version_storage_relocations (
+          document_version_id,
+          generation,
+          previous_storage_provider,
+          previous_storage_object_id,
+          previous_storage_object_key,
+          storage_provider,
+          storage_object_id,
+          storage_object_key,
+          reason
+        ) values (
+          ${versionId},
+          3,
+          'google-drive',
+          'drive-recovered-1',
+          ${objectKey},
+          'google-drive',
+          'drive-recovered-3',
+          ${objectKey},
+          'skip one generation'
+        )
+      `,
+    ).rejects.toMatchObject({
+      constraint_name: 'document_storage_relocation_generation_chain',
+    });
+
+    await expect(
+      sql`
+        insert into public.document_version_storage_relocations (
+          document_version_id,
+          generation,
+          previous_storage_provider,
+          previous_storage_object_id,
+          previous_storage_object_key,
+          storage_provider,
+          storage_object_id,
+          storage_object_key,
+          reason
+        ) values (
+          ${versionId},
+          2,
+          'google-drive',
+          'wrong-previous-object',
+          ${objectKey},
+          'google-drive',
+          'drive-recovered-2',
+          ${objectKey},
+          'wrong previous locator'
+        )
+      `,
+    ).rejects.toMatchObject({
+      constraint_name: 'document_storage_relocation_previous_mismatch',
+    });
+
+    await expect(
+      sql`
+        update public.document_version_storage_relocations
+        set reason = 'rewrite history'
+        where document_version_id = ${versionId}
+          and generation = 1
+      `,
+    ).rejects.toMatchObject({
+      constraint_name: 'document_storage_relocation_append_only',
+    });
+
+    const persistedVersion = await documentRepository.getVersionById(versionId);
+    expect(persistedVersion).toMatchObject({
+      id: versionId,
+      byteSize: 4,
+      sha256: 'a'.repeat(64),
+      status: 'final',
+    });
+
+    const originalLocator = await sql<{
+      storage_provider: string;
+      storage_object_id: string;
+      storage_object_key: string;
+    }[]>`
+      select storage_provider, storage_object_id, storage_object_key
+      from public.document_versions
+      where id = ${versionId}
+    `;
+
+    expect(originalLocator).toEqual([
+      {
+        storage_provider: 'google-drive',
+        storage_object_id: 'drive-original',
+        storage_object_key: objectKey,
+      },
+    ]);
+  });
+
+
   it('persists inspection backbone and rejects direct invariant bypasses', async () => {
     const actor = await resolveActor(accessRepository, {
       provider: 'supabase',
