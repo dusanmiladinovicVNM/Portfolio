@@ -101,7 +101,7 @@ export class PostgresApiRateLimiter {
     await this.sql.begin(async (tx) => {
       for (const rule of rules) {
         const rows = await tx<RateLimitRow[]>`
-          insert into public.api_rate_limit_buckets (
+          insert into public.api_rate_limit_buckets as bucket (
             rate_key,
             scope,
             window_started_at,
@@ -118,18 +118,18 @@ export class PostgresApiRateLimiter {
           on conflict (rate_key, scope) do update
           set
             request_count = case
-              when public.api_rate_limit_buckets.window_started_at
+              when bucket.window_started_at
                 + make_interval(secs => ${rule.windowSeconds})
                 <= statement_timestamp()
                 then 1
-              else public.api_rate_limit_buckets.request_count + 1
+              else bucket.request_count + 1
             end,
             window_started_at = case
-              when public.api_rate_limit_buckets.window_started_at
+              when bucket.window_started_at
                 + make_interval(secs => ${rule.windowSeconds})
                 <= statement_timestamp()
                 then statement_timestamp()
-              else public.api_rate_limit_buckets.window_started_at
+              else bucket.window_started_at
             end,
             updated_at = statement_timestamp()
           returning
