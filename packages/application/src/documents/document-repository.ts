@@ -54,3 +54,17 @@ export interface DocumentRepository {
     target: DocumentReadTarget,
   ): Promise<readonly TargetDocumentReference[]>;
 }
+
+
+export interface DocumentStorageLocationRepository {
+  getStorageReference(
+    versionId: DocumentVersionId,
+  ): Promise<StorageObjectReference | null>;
+
+  relocateStorageReference(
+    versionId: DocumentVersionId,
+    expectedCurrent: StorageObjectReference,
+    replacement: StorageObjectReference,
+    reason: string,
+  ): Promise<void>;
+}
