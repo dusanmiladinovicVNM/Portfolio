@@ -1,0 +1,96 @@
+name: Production Observability
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/15 * * * *'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: production-observability
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_PROJECT_REF: fiowxgamyjjcondlheqg
+      PORTFOLIO_PRODUCTION_API_BASE_URL: https://fiowxgamyjjcondlheqg.supabase.co/functions/v1/api
+      OBSERVABILITY_WINDOW_MINUTES: '10'
+      ALERT_GENERIC_5XX: '3'
+      ALERT_UNEXPECTED_ERRORS: '1'
+      ALERT_STORAGE_FAILURES: '1'
+      ALERT_RATE_LIMIT_EXCEEDED: '10'
+      ALERT_AUTH_FAILURES: '20'
+      INCIDENT_TITLE: '[Production Alert] Portfolio observability'
+
+    steps:
+      - name: Checkout exact main
+        uses: actions/checkout@v4
+
+      - name: Refuse non-main monitor source
+        run: |
+          test "$GITHUB_REF_NAME" = "main" || {
+            echo "Production observability must run from main." >&2
+            exit 1
+          }
+
+      - name: Use Node.js 24 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Check production availability and signals
+        id: check
+        continue-on-error: true
+        env:
+          SUPABASE_OBSERVABILITY_ACCESS_TOKEN: ${{ secrets.SUPABASE_OBSERVABILITY_ACCESS_TOKEN }}
+        run: node scripts/operations/check-production-observability.mjs
+
+      - name: Publish observability summary
+        if: always()
+        run: |
+          if [ -f .artifacts/observability/summary.md ]; then
+            cat .artifacts/observability/summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '# Portfolio production observability — MONITOR FAILURE' >> "$GITHUB_STEP_SUMMARY"
+            echo '' >> "$GITHUB_STEP_SUMMARY"
+            echo 'The observability process failed before producing a report.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Open or update production incident
+        if: steps.check.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          summary='.artifacts/observability/summary.md'
+          if [ ! -f "$summary" ]; then
+            mkdir -p .artifacts/observability
+            printf '# Portfolio production observability — MONITOR FAILURE\n\nRun: %s\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > "$summary"
+          fi
+          printf '\nWorkflow run: %s\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> "$summary"
+          issue="$(gh issue list --state open --json number,title --jq ".[] | select(.title == env.INCIDENT_TITLE) | .number" | head -n 1)"
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body-file "$summary"
+          else
+            gh issue create --title "$INCIDENT_TITLE" --body-file "$summary"
+          fi
+
+      - name: Close recovered production incident
+        if: steps.check.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          issue="$(gh issue list --state open --json number,title --jq ".[] | select(.title == env.INCIDENT_TITLE) | .number" | head -n 1)"
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body "Recovered in $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            gh issue close "$issue" --reason completed
+          fi
+
+      - name: Fail workflow on production alert
+        if: steps.check.outcome == 'failure'
+        run: exit 1
