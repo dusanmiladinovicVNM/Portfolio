@@ -145,7 +145,7 @@ For loss of the primary Portfolio Drive folder/provider location:
 3. verify the snapshot manifest and every object hash;
 4. provision a replacement storage location accessible only to the dedicated Portfolio account;
 5. set the recovery Google Drive folder and OAuth environment variables;
-6. run `pnpm binary-backup:restore -- /path/to/portfolio-binaries.tar.enc`;
+6. run `pnpm binary-backup:restore /path/to/portfolio-binaries.tar.enc`;
 7. verify application binary read by DocumentVersionId;
 8. preserve the original locator and relocation history as evidence.
 
@@ -158,7 +158,7 @@ There is intentionally no browser/API endpoint for this operation. It is an oper
 The committed recovery entrypoint is:
 
 ~~~text
-pnpm binary-backup:restore -- /path/to/portfolio-binaries.tar.enc
+pnpm binary-backup:restore /path/to/portfolio-binaries.tar.enc
 ~~~
 
 Required environment:
@@ -209,23 +209,61 @@ apply document storage relocation migration
 
 Readiness touches `document_version_storage_relocations`, so code cannot be considered ready if the migration is absent.
 
-## Hosted proof required
+## Hosted acceptance — completed 2026-09-24
 
-Repository CI proves the recovery invariants, archive verifier, executable restore-operator build, and one complete real-PostgreSQL restartability scenario. Production status remains `IMPLEMENTED BUT NOT HOSTED-PROVEN` until:
+Repository CI proves the recovery invariants, archive verifier, executable restore-operator build, and a complete real-PostgreSQL restartability scenario. The production path is additionally **HOSTED-PROVEN**.
+
+The hosted rehearsal used exact deployed release:
 
 ~~~text
-migration applied
-→ exact API release deployed
-→ manual binary backup reads all real canonical Drive objects
-→ encrypted GitHub artifact created
-→ artifact decrypted in a controlled rehearsal
-→ snapshot verification PASS
-→ one non-business/smoke DocumentVersion recovered into a separate recovery folder
-→ relocation appended
-→ normal API read returns exact original SHA-256 bytes
+cafa2462f0031c9dcded6c7e5334dbb06e2e42fd
 ~~~
 
-After that rehearsal, the test version may be relocated back to the original verified locator by appending another generation. Never delete relocation history.
+Production evidence:
+
+~~~text
+document storage relocation migration applied
+→ exact API release deployed and /health/ready PASS
+→ real Production Binary Backup read 4 canonical Drive objects / 10,008 bytes
+→ encrypted GitHub Actions artifact created
+→ artifact decrypted locally with the retained backup encryption key
+→ full snapshot verification PASS
+→ smoke DocumentVersion 25314596-2a3f-4be1-aa62-5a93e5af18bc restored into a separate recovery Drive folder
+→ relocation generation 1 appended
+→ normal production API GET /document-versions/<id>/content returned HTTP 200
+→ 29 downloaded bytes matched immutable SHA-256 exactly
+→ smoke DocumentVersion relocated back to the original primary object
+→ relocation generation 2 appended
+→ post-rehearsal Production Binary Backup PASS
+~~~
+
+Immutable smoke identity remained:
+
+~~~text
+DocumentVersionId:
+25314596-2a3f-4be1-aa62-5a93e5af18bc
+
+byteSize:
+29
+
+SHA-256:
+eeba7c78359b536a7a62f8eabae6e9dd9cb90274e8c1a262198b5cbecbf5fccf
+
+stable objectKey:
+document-version:25314596-2a3f-4be1-aa62-5a93e5af18bc
+~~~
+
+The append-only recovery history records:
+
+~~~text
+generation 0: original primary Drive object
+generation 1: primary → separate recovery object
+generation 2: recovery → original verified primary object
+~~~
+
+The post-rehearsal backup succeeded with the canonical locator back in the configured primary Portfolio Drive folder, proving that the recovery exercise did not leave scheduled backup state broken.
+
+Never delete relocation history.
 
 ## Failure boundaries
 
