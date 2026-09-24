@@ -36,6 +36,26 @@ done
 
 psql "$SOURCE_URL" -v ON_ERROR_STOP=1   -f scripts/recovery/fixture.sql >/dev/null
 
+psql "$SOURCE_URL" -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
+insert into public.app_users (
+  id, display_name, email, role, status
+) values (
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  'Backup Rehearsal Admin',
+  'backup-admin@example.test',
+  'admin',
+  'active'
+);
+
+insert into public.auth_identities (
+  user_id, provider, subject
+) values (
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  'supabase',
+  'backup-rehearsal-subject'
+);
+SQL
+
 PORTFOLIO_PRODUCTION_DB_URL="$SOURCE_URL" PORTFOLIO_BACKUP_ENCRYPTION_KEY="ci-only-backup-key-not-for-production" PORTFOLIO_BACKUP_RESTORE_SERVER_URL="$SERVER_URL" PORTFOLIO_BACKUP_USE_DOCKER_TOOLS=1 PORTFOLIO_BACKUP_INCLUDE_AUTH=0 PORTFOLIO_BACKUP_CODE_SHA="${GITHUB_SHA:-$(git rev-parse HEAD)}" bash scripts/recovery/backup-production.sh
 
 test -f .artifacts/production-backup/portfolio-public.dump.enc
