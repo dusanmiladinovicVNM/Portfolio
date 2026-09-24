@@ -106,7 +106,20 @@ write_expected_migration_ledger() {
 }
 
 assert_source_migration_ledger() {
-  psql_cmd "$PORTFOLIO_PRODUCTION_DB_URL" -At -F   if [[ "$USE_DOCKER" == "1" ]]; then
+  psql_cmd "$PORTFOLIO_PRODUCTION_DB_URL" -At -F $'\t' -c \
+    "select version, name
+     from supabase_migrations.schema_migrations
+     order by version" > "$SOURCE_MIGRATIONS"
+
+  if ! diff -u "$EXPECTED_MIGRATIONS" "$SOURCE_MIGRATIONS"; then
+    echo "Production migration ledger does not match repository migrations at code_sha=$CODE_SHA." >&2
+    echo "Backup refused: deploy/apply migrations before taking a canonical data-only backup." >&2
+    exit 1
+  fi
+}
+
+dump_public() {
+  if [[ "$USE_DOCKER" == "1" ]]; then
     docker run --rm --network host \
       -v "$ARTIFACT_DIR:/artifacts" \
       "$PG_IMAGE" \
@@ -129,7 +142,6 @@ assert_source_migration_ledger() {
       --file="$PUBLIC_DUMP"
   fi
 }
-
 dump_auth() {
   if [[ "$INCLUDE_AUTH" != "1" ]]; then
     printf '%s\n' '-- Auth recovery asset omitted by explicit test configuration.' > "$AUTH_DUMP"
