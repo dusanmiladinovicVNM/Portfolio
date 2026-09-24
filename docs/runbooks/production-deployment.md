@@ -266,11 +266,26 @@ health/live
 
 Delete or clearly label smoke data according to the business policy; do not manually mutate canonical rows to hide a failed smoke.
 
-## 11. PDF boundary
+## 11. Production observability
+
+The MVP production monitor is defined in `docs/runbooks/production-observability.md`.
+
+It keeps availability and application-error detection in separate failure domains:
+
+~~~text
+external /health/ready probe
++
+read-only Supabase structured-log aggregates
+→ GitHub incident issue + failed monitor run
+~~~
+
+The monitor does not add telemetry writes to the Portfolio request path. Hosted acceptance requires a project-scoped Supabase `Logs: Read` token and an exercised healthy + alert/recovery workflow on `main`.
+
+## 12. PDF boundary
 
 `CanonicalInspectionPdfRenderer` emits a valid dependency-free PDF containing the complete immutable final snapshot. Non-ASCII code points are rendered as explicit `\\uXXXX` / `\\u{...}` text rather than being silently dropped or transliterated. This prioritizes evidence fidelity for the first MVP deployment; a later presentation-focused renderer may improve typography without changing the canonical snapshot or report workflow.
 
-## 12. Production-only decisions still required
+## 13. Production-only decisions still required
 
 Before real company use, record explicit decisions for:
 
