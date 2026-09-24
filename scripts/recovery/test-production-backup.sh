@@ -41,10 +41,12 @@ PORTFOLIO_PRODUCTION_DB_URL="$SOURCE_URL" PORTFOLIO_BACKUP_ENCRYPTION_KEY="ci-on
 test -f .artifacts/production-backup/portfolio-public.dump.enc
 test -f .artifacts/production-backup/supabase-auth-data.sql.enc
 test -f .artifacts/production-backup/source-row-counts.tsv.enc
+test -f .artifacts/production-backup/migrations.sha256.enc
 test -f .artifacts/production-backup/manifest.txt
 
 test ! -f .artifacts/production-backup/portfolio-public.dump
 test ! -f .artifacts/production-backup/supabase-auth-data.sql
 test ! -f .artifacts/production-backup/source-row-counts.tsv
+test ! -f .artifacts/production-backup/migrations.sha256
 
 echo "Production backup CI rehearsal passed."
