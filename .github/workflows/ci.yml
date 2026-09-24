@@ -84,6 +84,9 @@ jobs:
           BACKUP_TEST_SERVER_URL: postgresql://postgres:postgres@localhost:5432
         run: bash scripts/recovery/test-production-backup.sh
 
+      - name: Production observability policy self-test
+        run: pnpm observability:self-test
+
       - name: Supabase Edge Function source check
         run: |
           deno check --config supabase/functions/api/deno.json supabase/functions/api/index.ts

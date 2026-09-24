@@ -16,7 +16,8 @@
     "supabase:function:bundle": "bash scripts/deployment/build-supabase-function.sh",
     "supabase:function:deploy": "bash scripts/deployment/deploy-supabase-function.sh",
     "web:deployment:check": "node scripts/deployment/check-public-web-deployment.mjs",
-    "backup:rehearse": "bash scripts/recovery/test-production-backup.sh"
+    "backup:rehearse": "bash scripts/recovery/test-production-backup.sh",
+    "observability:self-test": "node scripts/operations/check-production-observability.mjs --self-test"
   },
   "devDependencies": {
     "@types/node": "24.13.5",
