@@ -13,7 +13,7 @@ No monitoring table is written on the request path. A 429/5xx burst therefore do
 
 The GitHub Actions workflow `.github/workflows/production-observability.yml` runs every 15 minutes and can also be started manually.
 
-It inspects a 10-minute log window. Scheduled executions may be delayed by GitHub Actions; this is an MVP operational monitor, not a hard real-time paging system.
+It inspects a 20-minute log window on a 15-minute cadence. The deliberate five-minute overlap removes deterministic gaps and also tolerates modest GitHub Actions schedule delay. Duplicate observation across adjacent runs is acceptable because alerting uses one persistent incident issue.
 
 ## Signals and thresholds
 
@@ -21,12 +21,14 @@ Default alert thresholds:
 
 ~~~text
 /health/ready != 200/ready           → immediate alert
-http.unexpected_error >= 1 / 10 min  → alert
+http.unexpected_error >= 1 / 20 min  → alert
 Drive/storage/reconciliation >= 1    → alert
-HTTP 5xx >= 3 / 10 min               → alert
-RATE_LIMIT_EXCEEDED >= 10 / 10 min   → alert
-HTTP 401 >= 20 / 10 min              → alert
+HTTP 5xx >= 3 / 20 min               → alert
+RATE_LIMIT_EXCEEDED >= 10 / 20 min   → alert
+HTTP 401 >= 20 / 20 min              → alert
 ~~~
+
+Generic HTTP 5xx is measured from `function_edge_logs` using the actual `/functions/v1/api` invocation path and response status, so boot/runtime/platform failures are visible even when Portfolio application code cannot emit a console event. Application-specific signals remain on `function_logs` for richer Portfolio error codes and event names.
 
 The storage category includes document storage failures, binary integrity/missing failures, and inspection/document reconciliation-required errors.
 
