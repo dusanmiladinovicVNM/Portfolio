@@ -194,6 +194,21 @@ importers:
         specifier: 3.4.9
         version: 3.4.9
 
+  apps/recovery:
+    dependencies:
+      '@portfolio/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
+      '@portfolio/google-drive':
+        specifier: workspace:*
+        version: link:../../integrations/google-drive
+      '@portfolio/infrastructure':
+        specifier: workspace:*
+        version: link:../../packages/infrastructure
+      postgres:
+        specifier: 3.4.9
+        version: 3.4.9
+
   apps/web:
     dependencies:
       '@portfolio/contracts':
