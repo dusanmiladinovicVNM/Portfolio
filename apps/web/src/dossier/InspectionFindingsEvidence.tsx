@@ -129,8 +129,11 @@ export function InspectionFindingsEvidence({
     (section) => section.id === selectedSectionId,
   );
 
-  useEffect(() => () => {
-    mountedRef.current = false;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   useEffect(() => {
