@@ -84,6 +84,9 @@ jobs:
           BACKUP_TEST_SERVER_URL: postgresql://postgres:postgres@localhost:5432
         run: bash scripts/recovery/test-production-backup.sh
 
+      - name: Production binary backup self-test
+        run: pnpm binary-backup:self-test
+
       - name: Production observability policy self-test
         run: pnpm observability:self-test
 
