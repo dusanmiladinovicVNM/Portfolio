@@ -47,6 +47,7 @@ AUTH_DUMP="$ARTIFACT_DIR/supabase-auth-data.sql"
 MANIFEST="$ARTIFACT_DIR/manifest.txt"
 SOURCE_COUNTS="$ARTIFACT_DIR/source-row-counts.tsv"
 RESTORE_COUNTS="$ARTIFACT_DIR/restore-row-counts.tsv"
+MIGRATION_HASHES="$ARTIFACT_DIR/migrations.sha256"
 
 psql_cmd() {
   local url="$1"
@@ -69,7 +70,7 @@ capture_counts() {
     count="$(psql_cmd "$url" -Atqc "select count(*) from public.$table")"
     printf 'public.%s\t%s\n' "$table" "$count" >> "$output"
   done < <(
-    psql_cmd "$url" -Atqc       "select quote_ident(tablename) from pg_tables where schemaname='public' order by tablename"
+    psql_cmd "$url" -Atqc       "select quote_ident(tablename) from pg_tables where schemaname='public' and tablename <> 'api_rate_limit_buckets' order by tablename"
   )
 }
 
@@ -111,6 +112,16 @@ sha256_file() {
   fi
 }
 
+if command -v sha256sum >/dev/null 2>&1; then
+  find supabase/migrations -type f -name '*.sql' -print0 \
+    | sort -z \
+    | xargs -0 sha256sum > "$MIGRATION_HASHES"
+else
+  find supabase/migrations -type f -name '*.sql' -print0 \
+    | sort -z \
+    | xargs -0 shasum -a 256 > "$MIGRATION_HASHES"
+fi
+
 capture_counts "$PORTFOLIO_PRODUCTION_DB_URL" "$SOURCE_COUNTS"
 dump_public
 dump_auth
@@ -118,6 +129,7 @@ dump_auth
 dump_sha="$(sha256_file "$PUBLIC_DUMP")"
 auth_sha="$(sha256_file "$AUTH_DUMP")"
 counts_sha="$(sha256_file "$SOURCE_COUNTS")"
+migrations_sha="$(sha256_file "$MIGRATION_HASHES")"
 
 {
   echo "created_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -126,6 +138,7 @@ counts_sha="$(sha256_file "$SOURCE_COUNTS")"
   echo "public_dump_sha256=$dump_sha"
   echo "auth_dump_sha256=$auth_sha"
   echo "source_row_counts_sha256=$counts_sha"
+  echo "migrations_sha256=$migrations_sha"
 } > "$MANIFEST"
 
 ADMIN_URL="$RESTORE_SERVER_URL/postgres"
@@ -133,7 +146,23 @@ RESTORE_URL="$RESTORE_SERVER_URL/$RESTORE_DB"
 
 psql_cmd "$ADMIN_URL" -v ON_ERROR_STOP=1   -c "drop database if exists \"$RESTORE_DB\" with (force)" >/dev/null
 psql_cmd "$ADMIN_URL" -v ON_ERROR_STOP=1   -c "create database \"$RESTORE_DB\"" >/dev/null
-psql_cmd "$RESTORE_URL" -v ON_ERROR_STOP=1   -c "drop schema public cascade" >/dev/null
+
+psql_cmd "$ADMIN_URL" -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
+do $roles$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'anon') then
+    create role anon nologin;
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'authenticated') then
+    create role authenticated nologin;
+  end if;
+end
+$roles$;
+SQL
+
+for migration in supabase/migrations/*.sql; do
+  psql_cmd "$RESTORE_URL" -v ON_ERROR_STOP=1 -f "$migration" >/dev/null
+done
 
 cleanup() {
   psql_cmd "$ADMIN_URL" -v ON_ERROR_STOP=1     -c "drop database if exists \"$RESTORE_DB\" with (force)" >/dev/null || true
@@ -160,6 +189,7 @@ encrypt_file() {
 encrypt_file "$PUBLIC_DUMP" "$PUBLIC_DUMP.enc"
 encrypt_file "$AUTH_DUMP" "$AUTH_DUMP.enc"
 encrypt_file "$SOURCE_COUNTS" "$SOURCE_COUNTS.enc"
+encrypt_file "$MIGRATION_HASHES" "$MIGRATION_HASHES.enc"
 rm -f "$RESTORE_COUNTS"
 
 echo "Production backup created, restored, verified and encrypted."
