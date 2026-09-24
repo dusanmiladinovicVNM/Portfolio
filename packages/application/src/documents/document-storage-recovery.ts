@@ -118,6 +118,20 @@ export async function recoverDocumentVersionBinary(
     );
   }
 
+  const current = await deps.documentRepository.getStorageReference(version.id);
+  if (!current) {
+    throw new DomainError(
+      'DOCUMENT_STORAGE_REFERENCE_MISSING',
+      'Document version has no registered storage reference.',
+    );
+  }
+  if (!storageReferenceMatches(current, input.expectedCurrent)) {
+    throw new DomainError(
+      'DOCUMENT_STORAGE_RELOCATION_CONFLICT',
+      'Document storage location changed before recovery upload started.',
+    );
+  }
+
   assertBufferedDocumentBinaryWriteSize(input.content.byteLength);
 
   if (input.content.byteLength !== version.byteSize) {
@@ -158,12 +172,31 @@ export async function recoverDocumentVersionBinary(
     return replacement;
   }
 
-  await deps.documentRepository.relocateStorageReference(
-    version.id,
-    input.expectedCurrent,
-    replacement,
-    input.reason.trim() || 'restore immutable DocumentVersion from verified backup',
-  );
+  try {
+    await deps.documentRepository.relocateStorageReference(
+      version.id,
+      input.expectedCurrent,
+      replacement,
+      input.reason.trim() ||
+        'restore immutable DocumentVersion from verified backup',
+    );
+  } catch {
+    let persisted: StorageObjectReference | null = null;
+    try {
+      persisted = await deps.documentRepository.getStorageReference(version.id);
+    } catch {
+      // Preserve the verified replacement when canonical outcome is unknown.
+    }
+
+    if (persisted && storageReferenceMatches(persisted, replacement)) {
+      return replacement;
+    }
+
+    throw new ApplicationError(
+      'DOCUMENT_STORAGE_RECONCILIATION_REQUIRED',
+      'Recovered binary was verified in storage but its canonical relocation could not be confirmed. The replacement object was preserved for reconciliation.',
+    );
+  }
 
   return replacement;
 }
