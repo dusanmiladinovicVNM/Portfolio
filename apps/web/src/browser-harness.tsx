@@ -35,6 +35,7 @@ import type {
   TenancyTermVersionResponse,
   UnitResponse,
 } from '@portfolio/contracts';
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
 import type { SessionGateway } from './auth/session-gateway.js';
@@ -4822,5 +4823,7 @@ if (!rootElement) {
 }
 
 createRoot(rootElement).render(
-  <App apiBaseUrl="/api" sessionGateway={sessionGateway} />,
+  <StrictMode>
+    <App apiBaseUrl="/api" sessionGateway={sessionGateway} />
+  </StrictMode>,
 );
