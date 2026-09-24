@@ -22,4 +22,18 @@ create table public.api_rate_limit_buckets (
 comment on table public.api_rate_limit_buckets is
   'Application-internal fixed-window counters for authenticated HTTP abuse protection. Not business history.';
 
+revoke all privileges on public.api_rate_limit_buckets from public;
+
+do $rate_limit_lockdown$
+begin
+  if to_regrole('anon') is not null then
+    execute 'revoke all privileges on public.api_rate_limit_buckets from anon';
+  end if;
+
+  if to_regrole('authenticated') is not null then
+    execute 'revoke all privileges on public.api_rate_limit_buckets from authenticated';
+  end if;
+end
+$rate_limit_lockdown$;
+
 commit;
