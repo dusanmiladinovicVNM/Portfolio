@@ -21,6 +21,8 @@ import {
   type PortfolioRepository,
   type ReportingRepository,
   type Sha256Port,
+  type StaffAdministrationRepository,
+  type StaffAuthAdminPort,
   type StaffDirectoryRepository,
   type TenancyRepository,
   type UnitTimelineRepository,
@@ -44,6 +46,7 @@ import { handleOwnershipHttp } from './ownership-http-routes.js';
 import { handlePartyHttp } from './party-http-routes.js';
 import { handlePortfolioHttp } from './portfolio-http-routes.js';
 import { handleReportingHttp } from './reporting-http-routes.js';
+import { handleStaffHttp } from './staff-http-routes.js';
 import { handleTenancyHttp } from './tenancy-http-routes.js';
 import { handleUnitTimelineHttp } from './unit-timeline-http-routes.js';
 
@@ -66,6 +69,8 @@ export interface PortfolioHttpDependencies {
   readonly meterRepository: MeterRepository;
   readonly unitTimelineRepository: UnitTimelineRepository;
   readonly staffDirectoryRepository: StaffDirectoryRepository;
+  readonly staffAdministrationRepository?: StaffAdministrationRepository;
+  readonly staffAuthAdmin?: StaffAuthAdminPort;
   readonly fileStorage: FileStoragePort;
   readonly pdfPort: PdfPort;
   readonly sha256: Sha256Port;
@@ -127,6 +132,8 @@ function errorStatus(code: string): number {
     code === 'DOCUMENT_STORAGE_VERIFICATION_FAILED'
   ) return 502;
   if (code === 'DOCUMENT_BINARY_UPLOAD_LIMIT_EXCEEDED') return 413;
+  if (code === 'STAFF_AUTH_RECONCILIATION_REQUIRED' || code === 'STAFF_ADMINISTRATION_UNAVAILABLE') return 503;
+  if (code === 'STAFF_AUTH_INVITE_FAILED') return 502;
   if (
     code === 'DOCUMENT_BINARY_DELIVERY_LIMIT_EXCEEDED' ||
     code === 'DOCUMENT_STORAGE_RECONCILIATION_REQUIRED' ||
@@ -162,7 +169,13 @@ function errorStatus(code: string): number {
     code === 'ACCESS_ITEM_RETIRED' ||
     code === 'ACCESS_ITEM_ALREADY_RETIRED' ||
     code === 'METER_ALREADY_RETIRED' ||
-    code === 'INSPECTION_FINAL_REPORT_RECONCILIATION_REQUIRED'
+    code === 'INSPECTION_FINAL_REPORT_RECONCILIATION_REQUIRED' ||
+    code === 'STAFF_SELF_LOCKOUT' ||
+    code === 'STAFF_IDENTITY_REQUIRED' ||
+    code === 'STAFF_IDENTITY_ALREADY_LINKED' ||
+    code === 'STAFF_IDENTITY_CONFLICT' ||
+    code === 'STAFF_LAST_ADMIN_REQUIRED' ||
+    code === 'STAFF_AUTH_IDENTITY_MISMATCH'
   ) {
     return 409;
   }
@@ -210,7 +223,30 @@ export function createPortfolioHttpHandler(
 
       const actor = await resolveActor(deps.userAccessRepository, identity);
 
+      if (
+        (path === '/me' || path === '/staff' || path.startsWith('/staff/')) &&
+        (!deps.staffAdministrationRepository || !deps.staffAuthAdmin)
+      ) {
+        throw new ApplicationError(
+          'STAFF_ADMINISTRATION_UNAVAILABLE',
+          'Staff Administration is not configured on this host.',
+        );
+      }
+
       const handlers = [
+        () =>
+          deps.staffAdministrationRepository && deps.staffAuthAdmin
+            ? handleStaffHttp(
+                {
+                  staffRepository: deps.staffAdministrationRepository,
+                  authAdmin: deps.staffAuthAdmin,
+                  idGenerator: deps.idGenerator,
+                },
+                actor,
+                request,
+                path,
+              )
+            : Promise.resolve(null),
         () =>
           handleReportingHttp(
             {
