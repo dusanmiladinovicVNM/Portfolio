@@ -51,6 +51,9 @@ describe('production backup restore smoke', () => {
       const version = await documentRepository.getVersionById(
         asDocumentVersionId(versionRow.id),
       );
+      if (!version) {
+        throw new Error('Restored DocumentVersion disappeared during smoke.');
+      }
       expect(version.byteSize).toBeGreaterThan(0);
       await expect(
         documentRepository.getStorageReference(version.id),
