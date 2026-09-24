@@ -44,9 +44,7 @@ create table public.document_version_storage_relocations (
   constraint document_storage_relocation_generation_uq
     unique (document_version_id, generation),
   constraint document_storage_relocation_provider_object_uq
-    unique (storage_provider, storage_object_id),
-  constraint document_storage_relocation_provider_key_uq
-    unique (storage_provider, storage_object_key)
+    unique (storage_provider, storage_object_id)
 );
 
 create index document_storage_relocation_version_idx
