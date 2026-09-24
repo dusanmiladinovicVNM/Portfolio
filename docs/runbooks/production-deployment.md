@@ -275,7 +275,7 @@ Delete or clearly label smoke data according to the business policy; do not manu
 Before real company use, record explicit decisions for:
 
 - platform-level ingress / unauthenticated abuse controls and any explicit concurrency ceiling beyond the authenticated application limiter;
-- PostgreSQL backup destination, schedule and retention;
+- PostgreSQL logical backup is defined in `docs/runbooks/production-backup-restore.md`; scheduled hosted proof remains required after repository secrets are configured;
 - whether Google Drive durability alone is accepted for MVP or a secondary binary backup is required;
 - operational ownership of OAuth credential rotation and incident response.
 
