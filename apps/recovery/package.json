@@ -1,0 +1,14 @@
+{
+  "name": "@portfolio/recovery",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "pnpm --workspace-root exec tsc --noEmit -p apps/recovery/tsconfig.json"
+  },
+  "dependencies": {
+    "@portfolio/domain": "workspace:*",
+    "@portfolio/infrastructure": "workspace:*",
+    "@portfolio/google-drive": "workspace:*",
+    "postgres": "3.4.9"
+  }
+}
