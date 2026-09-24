@@ -3,6 +3,7 @@ import { unitOverviewPath } from '../src/api/paths.js';
 import {
   dashboardRoute,
   partiesRoute,
+  staffRoute,
   parseWorkspaceLocation,
   isWorkspaceAsOf,
   propertyRoute,
@@ -213,6 +214,22 @@ describe('workspace URL navigation', () => {
       kind: 'parties',
       asOf: '2025-06-30',
     });
+  });
+
+  it('round-trips the global Staff Administration route', () => {
+    const route = staffRoute('2025-06-30');
+    expect(workspaceRouteHref(route)).toBe('/staff?asOf=2025-06-30');
+    expect(
+      parseWorkspaceLocation(
+        '/staff',
+        '?asOf=2025-06-30',
+        '2026-09-21',
+      ),
+    ).toEqual({
+      kind: 'staff',
+      asOf: '2025-06-30',
+    });
+    expect(workspaceRouteOwnerKey(route)).toBe('staff');
   });
 
   it('deep-links one Asset only inside the Assets dossier tab', () => {
