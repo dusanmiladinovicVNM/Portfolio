@@ -47,7 +47,10 @@ while IFS= read -r migration; do
   version="${base%%_*}"
   name="${base#*_}"
   name="${name%.sql}"
-  psql "$SOURCE_URL" -v ON_ERROR_STOP=1     -v version="$version"     -v name="$name"     -c "insert into supabase_migrations.schema_migrations(version, name) values (:'version', :'name')"     >/dev/null
+  psql "$SOURCE_URL" -v ON_ERROR_STOP=1 -v version="$version" -v name="$name" <<'SQL' >/dev/null
+insert into supabase_migrations.schema_migrations(version, name)
+values (:'version', :'name');
+SQL
 done < <(find supabase/migrations -type f -name '*.sql' | sort)
 
 LATEST_MIGRATION="$(find supabase/migrations -type f -name '*.sql' | sort | tail -n 1)"
@@ -56,7 +59,10 @@ LATEST_VERSION="${LATEST_BASE%%_*}"
 LATEST_NAME="${LATEST_BASE#*_}"
 LATEST_NAME="${LATEST_NAME%.sql}"
 
-psql "$SOURCE_URL" -v ON_ERROR_STOP=1   -v version="$LATEST_VERSION"   -c "delete from supabase_migrations.schema_migrations where version = :'version'"   >/dev/null
+psql "$SOURCE_URL" -v ON_ERROR_STOP=1 -v version="$LATEST_VERSION" <<'SQL' >/dev/null
+delete from supabase_migrations.schema_migrations
+where version = :'version';
+SQL
 
 SABOTAGE_DIR="$ROOT_DIR/.artifacts/production-backup-migration-mismatch"
 rm -rf "$SABOTAGE_DIR"
@@ -69,7 +75,10 @@ fi
 test ! -e "$SABOTAGE_DIR/portfolio-public.dump"
 test ! -e "$SABOTAGE_DIR/portfolio-public.dump.enc"
 
-psql "$SOURCE_URL" -v ON_ERROR_STOP=1   -v version="$LATEST_VERSION"   -v name="$LATEST_NAME"   -c "insert into supabase_migrations.schema_migrations(version, name) values (:'version', :'name')"   >/dev/null
+psql "$SOURCE_URL" -v ON_ERROR_STOP=1 -v version="$LATEST_VERSION" -v name="$LATEST_NAME" <<'SQL' >/dev/null
+insert into supabase_migrations.schema_migrations(version, name)
+values (:'version', :'name');
+SQL
 
 psql "$SOURCE_URL" -v ON_ERROR_STOP=1   -f scripts/recovery/fixture.sql >/dev/null
 
