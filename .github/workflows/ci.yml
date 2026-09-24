@@ -84,6 +84,12 @@ jobs:
           BACKUP_TEST_SERVER_URL: postgresql://postgres:postgres@localhost:5432
         run: bash scripts/recovery/test-production-backup.sh
 
+      - name: Binary restore operator typecheck
+        run: pnpm binary-backup:restore:typecheck
+
+      - name: Build binary restore operator
+        run: pnpm binary-backup:restore:build
+
       - name: Production binary backup self-test
         run: pnpm binary-backup:self-test
 
