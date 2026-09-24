@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-const DEFAULT_WINDOW_MINUTES = 10;
+const DEFAULT_WINDOW_MINUTES = 20;
 const DEFAULT_THRESHOLDS = Object.freeze({
   generic5xx: 3,
   unexpectedErrors: 1,
@@ -100,8 +100,14 @@ function logAggregateSql(windowMinutes) {
   return `
 select
   countIf(
-    source = 'function_logs'
-    and event_message like '%"event":"http.request.failed"%'
+    source = 'function_edge_logs'
+    and startsWith(
+      log_attributes['request.pathname'],
+      '/functions/v1/api'
+    )
+    and toInt32OrZero(
+      log_attributes['response.status_code']
+    ) between 500 and 599
   ) as generic_5xx,
   countIf(
     source = 'function_logs'
@@ -229,10 +235,14 @@ function selfTest() {
       'authentication failures 20 >= 20',
     ],
   );
-  const sql = logAggregateSql(10);
-  assert.match(sql, /function_logs/);
+  const sql = logAggregateSql(20);
+  assert.match(sql, /source = 'function_edge_logs'/);
+  assert.match(sql, /request\.pathname/);
+  assert.match(sql, /response\.status_code/);
+  assert.match(sql, /between 500 and 599/);
+  assert.match(sql, /source = 'function_logs'/);
   assert.match(sql, /RATE_LIMIT_EXCEEDED/);
-  assert.match(sql, /INTERVAL 10 MINUTE/);
+  assert.match(sql, /INTERVAL 20 MINUTE/);
   console.log('Production observability self-test passed.');
 }
 
