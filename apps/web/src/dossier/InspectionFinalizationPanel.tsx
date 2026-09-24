@@ -144,8 +144,11 @@ export function InspectionFinalizationPanel({
     [bundle.signatures],
   );
 
-  useEffect(() => () => {
-    mountedRef.current = false;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   useEffect(() => {
