@@ -20,7 +20,7 @@
     "observability:self-test": "node scripts/operations/check-production-observability.mjs --self-test",
     "binary-backup:self-test": "node scripts/recovery/backup-google-drive-binaries.mjs --self-test",
     "binary-backup:restore": "bash scripts/recovery/restore-production-binaries.sh",
-    "binary-backup:restore:typecheck": "pnpm --workspace-root exec tsc --noEmit -p scripts/recovery/tsconfig.restore.json",
+    "binary-backup:restore:typecheck": "pnpm --filter @portfolio/recovery typecheck",
     "binary-backup:restore:build": "bash scripts/recovery/build-binary-restore-operator.sh .artifacts/binary-restore/restore-production-binaries.mjs"
   },
   "devDependencies": {
