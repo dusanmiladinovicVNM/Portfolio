@@ -24,7 +24,7 @@ This provides one automated logical recovery point per day. It is not PITR and d
 
 ## Backup contents
 
-The primary encrypted backup contains the complete Portfolio-owned `public` schema and data, including canonical business records, internal Portfolio users/identity mappings, document/version metadata and Google Drive storage references.
+The primary encrypted backup contains Portfolio-owned `public` **data**. Schema truth remains the versioned repository migrations. Recovery first applies the exact migrations recorded with the backup, then imports production data. The data includes canonical business records, internal Portfolio users/identity mappings, document/version metadata and Google Drive storage references. Transient `api_rate_limit_buckets` rows are deliberately excluded because admission counters are operational state, not recovery truth.
 
 Supabase Auth is a managed schema and is not Portfolio domain truth. A separate encrypted data-only recovery asset is captured for `auth.users` and `auth.identities`. It is not restored by the plain PostgreSQL-17 application smoke because a fresh plain PostgreSQL database does not contain Supabase's managed Auth schema. In a disaster migration to a new Supabase project, Auth must be restored/migrated through Supabase's supported Auth migration procedure. Existing JWT sessions are not recovery truth and users may have to sign in again.
 
@@ -35,9 +35,11 @@ Google Drive binary bytes are **not** included in this database backup. The data
 A production backup is uploadable only after:
 
 ~~~text
-production public-schema dump succeeds
-→ exact source row count captured for every public table
-→ restore into fresh PostgreSQL 17 database
+production public data dump succeeds
+→ repository migration hashes captured
+→ exact source row count captured for every recoverable public table
+→ apply canonical migrations to fresh PostgreSQL 17 database
+→ restore production data with triggers disabled during import
 → exact restored row count matches every source table
 → canonical repositories can read restored identity/binary references
 → createPropertyCommand succeeds against restored DB
@@ -67,11 +69,13 @@ For a database-only disaster or verification exercise:
 
 1. download one encrypted artifact;
 2. verify the manifest and expected files;
-3. decrypt `portfolio-public.dump.enc`;
-4. restore into a fresh PostgreSQL 17 target with `pg_restore --no-owner --no-acl --exit-on-error`;
-5. compare exact source/restored table counts;
-6. run the production restore application smoke;
-7. only then consider application cutover.
+3. decrypt `portfolio-public.dump.enc`, `source-row-counts.tsv.enc`, and `migrations.sha256.enc`;
+4. check out the recorded `code_sha` and verify its migration hashes;
+5. apply those canonical migrations to a fresh PostgreSQL 17 target;
+6. restore data with `pg_restore --data-only --disable-triggers --no-owner --no-acl --exit-on-error`;
+7. compare exact source/restored table counts;
+8. run the production restore application smoke;
+9. only then consider application cutover.
 
 For a complete Supabase-project disaster, additionally recreate the target project configuration, migrate managed Auth recovery data using Supabase-supported procedures, redeploy the exact application release, restore Edge Function secrets, and update public frontend configuration if the project URL changes.
 
