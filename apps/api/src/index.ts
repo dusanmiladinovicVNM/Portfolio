@@ -1,3 +1,4 @@
+import { PostgresApiRateLimiter } from './api-rate-limit.js';
 import { isPublicHealthRuntimePath } from './runtime-path.js';
 import { createSupabaseContext } from '@supabase/server';
 import postgres from 'postgres';
@@ -53,6 +54,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
     prepare: false,
     ssl: 'require',
   });
+  const apiRateLimiter = new PostgresApiRateLimiter(sql);
 
   const portfolioRepository = new PostgresPortfolioRepository(sql);
   const reportingRepository = new PostgresReportingRepository(sql);
@@ -172,6 +174,52 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
         return Response.json(
           { error: { code: 'UNAUTHORIZED', message: 'Authenticated user has no subject claim.' } },
           { status: 401 },
+        );
+      }
+
+      let rateLimit;
+      try {
+        rateLimit = await apiRateLimiter.consume(
+          `supabase:${subject}`,
+          request,
+        );
+      } catch (error) {
+        safeOperationalLog(logger, {
+          level: 'error',
+          event: 'http.unexpected_error',
+          requestId: request.headers.get('x-request-id'),
+          method: request.method,
+          path,
+          errorName:
+            error instanceof Error
+              ? `RateLimitCheck:${error.name}`
+              : 'RateLimitCheck:UnknownError',
+        });
+        return Response.json(
+          {
+            error: {
+              code: 'RATE_LIMIT_CHECK_UNAVAILABLE',
+              message: 'Request admission control is temporarily unavailable.',
+            },
+          },
+          { status: 503 },
+        );
+      }
+
+      if (!rateLimit.allowed) {
+        return Response.json(
+          {
+            error: {
+              code: 'RATE_LIMIT_EXCEEDED',
+              message: 'Too many requests. Retry after the indicated delay.',
+            },
+          },
+          {
+            status: 429,
+            headers: {
+              'retry-after': String(rateLimit.retryAfterSeconds),
+            },
+          },
         );
       }
 
