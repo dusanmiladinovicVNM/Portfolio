@@ -22,6 +22,9 @@ create table public.api_rate_limit_buckets (
 comment on table public.api_rate_limit_buckets is
   'Application-internal fixed-window counters for authenticated HTTP abuse protection. Not business history.';
 
+alter table public.api_rate_limit_buckets
+  enable row level security;
+
 revoke all privileges on public.api_rate_limit_buckets from public;
 
 do $rate_limit_lockdown$
