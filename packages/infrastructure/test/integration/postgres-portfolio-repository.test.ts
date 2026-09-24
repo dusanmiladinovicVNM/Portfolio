@@ -296,6 +296,17 @@ beforeAll(async () => {
   `;
 
   await sql`
+    insert into public.app_users (id, display_name, email, role, status)
+    values (
+      'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      'Backup Administrator',
+      'backup-admin@example.test',
+      'admin',
+      'active'
+    )
+  `;
+
+  await sql`
     insert into public.auth_identities (user_id, provider, subject)
     values (
       'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -377,7 +388,8 @@ describe('PostgreSQL infrastructure', () => {
   it('does not resolve an inactive internal user', async () => {
     await sql`
       update public.app_users
-      set status = 'inactive'
+      set status = 'inactive',
+          revision = revision + 1
       where id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     `;
 
@@ -390,8 +402,48 @@ describe('PostgreSQL infrastructure', () => {
 
     await sql`
       update public.app_users
-      set status = 'active'
+      set status = 'active',
+          revision = revision + 1
       where id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    `;
+  });
+
+  it('DB-enforces staff revision progression and preserves the last active administrator', async () => {
+    await expect(
+      sql`
+        update public.app_users
+        set display_name = 'Bypass revision'
+        where id = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'app_users_revision_sequence',
+    });
+
+    await sql`
+      update public.app_users
+      set status = 'inactive',
+          revision = revision + 1
+      where id = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    `;
+
+    await expect(
+      sql`
+        update public.app_users
+        set status = 'inactive',
+            revision = revision + 1
+        where id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'app_users_active_admin_required',
+    });
+
+    await sql`
+      update public.app_users
+      set status = 'active',
+          revision = revision + 1
+      where id = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
     `;
   });
 

@@ -24,12 +24,14 @@ function allowed(role: StaffRole, capability: Capability): boolean {
 }
 
 describe('Portfolio authorization capability matrix', () => {
-  it('keeps admin and manager on the full internal capability set', () => {
-    for (const role of ['admin', 'manager'] as const) {
-      expect(
-        CAPABILITIES.filter((capability) => !allowed(role, capability)),
-      ).toEqual([]);
-    }
+  it('keeps staff administration admin-only while manager retains every business capability', () => {
+    expect(
+      CAPABILITIES.filter((capability) => !allowed('admin', capability)),
+    ).toEqual([]);
+
+    expect(
+      CAPABILITIES.filter((capability) => !allowed('manager', capability)),
+    ).toEqual(['staff:admin']);
   });
 
   it('keeps inspector read-mostly with only assigned Inspection and meter-reading writes', () => {
