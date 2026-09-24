@@ -45,7 +45,7 @@ tar -C "$SNAPSHOT_DIR" -xf "$BUNDLE"
 
 node scripts/recovery/backup-google-drive-binaries.mjs   --verify "$SNAPSHOT_DIR"
 
-pnpm dlx esbuild@0.28.2   scripts/recovery/restore-production-binaries.ts   --bundle   --format=esm   --platform=node   --target=es2022   --packages=bundle   --main-fields=module,main   --alias:@portfolio/application=./packages/application/src/index.ts   --alias:@portfolio/domain=./packages/domain/src/index.ts   --alias:@portfolio/infrastructure=./packages/infrastructure/src/index.ts   --alias:@portfolio/google-drive=./integrations/google-drive/src/index.ts   --outfile="$RESTORE_JS"
+bash scripts/recovery/build-binary-restore-operator.sh "$RESTORE_JS"
 
 PORTFOLIO_BINARY_SNAPSHOT_DIR="$SNAPSHOT_DIR"   node "$RESTORE_JS"
 
