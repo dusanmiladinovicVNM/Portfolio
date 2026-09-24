@@ -50,7 +50,11 @@ function snapshotItems(value: unknown): readonly BinaryRecoverySnapshotItem[] {
     };
 
     const byteSize = item.byteSize;
-    if (!Number.isInteger(byteSize) || Number(byteSize) <= 0) {
+    if (
+      typeof byteSize !== 'number' ||
+      !Number.isInteger(byteSize) ||
+      byteSize <= 0
+    ) {
       throw new Error(
         `Binary recovery manifest item ${index} has invalid byteSize.`,
       );
@@ -61,7 +65,7 @@ function snapshotItems(value: unknown): readonly BinaryRecoverySnapshotItem[] {
       documentId: asDocumentId(stringField('documentId')),
       fileName: stringField('fileName'),
       mimeType: stringField('mimeType'),
-      byteSize: Number(byteSize),
+      byteSize,
       sha256: stringField('sha256'),
       provider: stringField('provider'),
       objectId: stringField('objectId'),
