@@ -7,7 +7,8 @@
   },
   "scripts": {
     "typecheck": "pnpm --workspace-root exec tsc --noEmit -p apps/api/tsconfig.json",
-    "test": "pnpm --workspace-root exec vitest run --passWithNoTests apps/api/test"
+    "test": "pnpm --workspace-root exec vitest run --passWithNoTests apps/api/test",
+    "test:integration": "pnpm --workspace-root exec vitest run apps/api/integration"
   },
   "dependencies": {
     "@portfolio/application": "workspace:*",

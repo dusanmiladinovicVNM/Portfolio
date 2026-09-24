@@ -193,6 +193,7 @@ async function resetAndMigrate(): Promise<void> {
 
   await sql.unsafe(
     `drop table if exists
+      public.api_rate_limit_buckets,
       public.meter_reading_boundaries,
       public.meter_readings,
       public.meters,
@@ -302,6 +303,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await sql.unsafe(
     `drop table if exists
+      public.api_rate_limit_buckets,
       public.meter_reading_boundaries,
       public.meter_readings,
       public.meters,

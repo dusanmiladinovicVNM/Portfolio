@@ -206,7 +206,49 @@ Also verify that the production origin receives the expected CORS allow-origin b
 
 Until this public-origin browser smoke passes, classify the repository state as `IMPLEMENTED BUT NOT HOSTED-PROVEN`, not `PROVEN`. The first public-host acceptance passed on 2026-09-24 and is recorded in `docs/runbooks/public-web-production-smoke-2026-09-24.md`.
 
-## 9. Production smoke
+## 9. Authenticated API abuse and resource limits
+
+Portfolio enforces application-level admission control after Supabase has verified the JWT and before business repositories execute. The rate key is the verified Supabase provider + subject and is used only as an operational partition; it is not Portfolio business identity.
+
+The versioned default policy is:
+
+~~~text
+all authenticated API requests   180 / 60 s
+write requests                    60 / 60 s
+binary upload endpoints           12 / 60 s
+final-report generation            6 / 60 s
+~~~
+
+A request may consume more than one bucket. For example, final-report generation consumes the authenticated, write and final-report buckets. Exceeding any applicable bucket returns `429 RATE_LIMIT_EXCEEDED` with a `Retry-After` header.
+
+Counters live in `api_rate_limit_buckets`. The table keeps one row per verified identity + scope; atomic PostgreSQL UPSERT updates make the policy consistent across horizontally scaled Edge Function isolates instead of pretending a process-local counter is a production invariant.
+
+Resource ceilings are separate from rate buckets:
+
+~~~text
+JSON request body:     256 KiB
+buffered binary upload: 16 MiB
+~~~
+
+JSON is streamed and rejected with `413 REQUEST_BODY_TOO_LARGE` even when `Content-Length` is absent. Binary uploads retain the existing bounded streaming reader and canonical 16 MiB ceiling.
+
+Public health endpoints and CORS preflights are outside the authenticated limiter. Supabase Auth endpoints are also outside Portfolio's function and remain subject to Supabase Auth/platform controls. This application-level limiter therefore protects authenticated Portfolio work and expensive downstream operations; it does not claim to be a general Internet DDoS firewall.
+
+Deployment order matters. Apply the migration that creates `api_rate_limit_buckets` before deploying code that requires it:
+
+~~~text
+supabase db push
+→ deploy exact API release
+→ /health/live
+→ /health/ready
+→ authenticated smoke
+~~~
+
+Readiness explicitly touches `api_rate_limit_buckets`, so a code release cannot be classified ready when the admission-control migration is missing.
+
+Until the migration and API release have been exercised in the hosted environment, classify this guard as `IMPLEMENTED BUT NOT HOSTED-PROVEN`.
+
+## 10. Production smoke
 
 Run in this order:
 
@@ -224,15 +266,15 @@ health/live
 
 Delete or clearly label smoke data according to the business policy; do not manually mutate canonical rows to hide a failed smoke.
 
-## 10. PDF boundary
+## 11. PDF boundary
 
 `CanonicalInspectionPdfRenderer` emits a valid dependency-free PDF containing the complete immutable final snapshot. Non-ASCII code points are rendered as explicit `\\uXXXX` / `\\u{...}` text rather than being silently dropped or transliterated. This prioritizes evidence fidelity for the first MVP deployment; a later presentation-focused renderer may improve typography without changing the canonical snapshot or report workflow.
 
-## 11. Production-only decisions still required
+## 12. Production-only decisions still required
 
 Before real company use, record explicit decisions for:
 
-- edge/platform request, upload and abuse/concurrency limits;
+- platform-level ingress / unauthenticated abuse controls and any explicit concurrency ceiling beyond the authenticated application limiter;
 - PostgreSQL backup destination, schedule and retention;
 - whether Google Drive durability alone is accepted for MVP or a secondary binary backup is required;
 - operational ownership of OAuth credential rotation and incident response.

@@ -118,6 +118,7 @@ function errorStatus(code: string): number {
     code === 'INSPECTION_FINALIZE_FORBIDDEN'
   ) return 403;
   if (code === 'INVALID_REQUEST') return 400;
+  if (code === 'REQUEST_BODY_TOO_LARGE') return 413;
   if (
     code === 'DOCUMENT_STORAGE_READ_FAILED' ||
     code === 'DOCUMENT_BINARY_INTEGRITY_MISMATCH' ||
