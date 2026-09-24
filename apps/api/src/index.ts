@@ -82,6 +82,9 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
         const line = JSON.stringify({
           timestamp: new Date().toISOString(),
           service: 'portfolio-api',
+          ...(config.serviceVersion === undefined
+            ? {}
+            : { releaseSha: config.serviceVersion }),
           ...event,
         });
         if (event.level === 'error') {
