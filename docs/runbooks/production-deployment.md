@@ -145,9 +145,21 @@ pnpm bootstrap:first-admin
 
 After this point, do not rerun the first-admin bootstrap. Future staff administration should use an explicit supported workflow rather than direct SQL.
 
-## 8. Web production build
+## 8. Public web deployment
 
-Set:
+The first public web host is Vercel. Keep the Vercel project root at the repository root so the checked-in `vercel.json` is the deployment contract.
+
+The repository pins:
+
+~~~text
+build command:    pnpm --filter @portfolio/web build
+output directory: apps/web/dist
+SPA fallback:     /(.*) -> /index.html
+~~~
+
+The SPA fallback is required because Portfolio uses History API routes such as `/dashboard` and `/properties/<id>/units/<id>`. A direct browser refresh of one of those URLs must return the same `index.html` shell rather than a host-level 404.
+
+Configure these build-time variables in the Vercel Production environment:
 
 ~~~text
 VITE_SUPABASE_URL=https://<project-ref>.supabase.co
@@ -155,15 +167,44 @@ VITE_SUPABASE_ANON_KEY=<browser-safe publishable/anon key>
 VITE_API_BASE_URL=https://<project-ref>.supabase.co/functions/v1/api
 ~~~
 
-`VITE_API_BASE_URL` should be absolute in production unless the web host has an explicit reverse proxy for `/functions/v1/api`.
+Only browser-safe values belong in `VITE_*`. Never put the Supabase service-role key, database password, Google client secret, Google refresh token, or any other server credential into Vercel frontend variables.
 
-Build:
+Before deployment, CI runs:
 
 ~~~bash
 pnpm --filter @portfolio/web build
+pnpm web:deployment:check
 ~~~
 
-Deploy only the generated static web output to the chosen host.
+The second command verifies the versioned Vercel build/output/SPA contract, required browser configuration names, the generated `dist/index.html`, and that the test-only `browser-harness.html` is absent from the production artifact.
+
+After Vercel assigns the canonical production HTTPS origin, update the hosted API secret:
+
+~~~text
+PORTFOLIO_WEB_ORIGIN=https://<exact-production-host>
+~~~
+
+This must be the exact browser origin. Do not use a wildcard and do not add Vercel preview origins to the production API merely to make preview deployments convenient. Production browser identity remains one explicit origin.
+
+Then redeploy the hosted API only because its CORS runtime configuration changed; verify `/health/live` and `/health/ready` after that deployment.
+
+Public-host acceptance is not complete until the deployed HTTPS site proves:
+
+~~~text
+direct load /dashboard
+→ sign in through Supabase Auth
+→ dashboard reads hosted canonical data
+→ Property
+→ Unit dossier
+→ Inspection
+→ Generate / reuse final report
+→ canonical report visible
+→ hard refresh on a deep /properties/... route still loads the SPA
+~~~
+
+Also verify that the production origin receives the expected CORS allow-origin behavior while an unrelated foreign Origin does not.
+
+Until this public-origin browser smoke passes, classify the repository state as `IMPLEMENTED BUT NOT HOSTED-PROVEN`, not `PROVEN`.
 
 ## 9. Production smoke
 
