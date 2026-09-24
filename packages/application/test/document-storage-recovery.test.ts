@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  recoverDocumentVersionBinary,
   relocateDocumentVersionStorage,
   type DocumentStorageLocationRepository,
   type StorageObjectReference,
@@ -149,4 +150,91 @@ describe('document storage disaster recovery', () => {
 
     expect(relocations).toEqual([]);
   });
+
+  it('rehashes backup bytes before upload and relocates the verified provider object', async () => {
+    const { repository, relocations } = repositorySpy();
+    const puts: unknown[] = [];
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+
+    await expect(
+      recoverDocumentVersionBinary(
+        {
+          documentRepository: repository,
+          sha256: {
+            async digest() {
+              return version.sha256;
+            },
+          },
+          recoveryStorage: {
+            async put(input) {
+              puts.push(input);
+              return {
+                provider: replacement.provider,
+                objectId: replacement.objectId,
+                objectKey: replacement.objectKey,
+                byteSize: version.byteSize,
+                sha256: version.sha256,
+                disposition: 'created',
+              };
+            },
+            async stat() {
+              throw new Error('stat is not used by recovery upload');
+            },
+            async remove() {
+              throw new Error('remove is not used by recovery upload');
+            },
+          },
+        },
+        {
+          versionId: version.id,
+          expectedCurrent: current,
+          content: bytes,
+          reason: 'restore from encrypted binary artifact',
+        },
+      ),
+    ).resolves.toEqual(replacement);
+
+    expect(puts).toHaveLength(1);
+    expect(relocations).toHaveLength(1);
+  });
+
+  it('rejects corrupted backup bytes before touching recovery storage', async () => {
+    const { repository, relocations } = repositorySpy();
+    let putCalled = false;
+
+    await expect(
+      recoverDocumentVersionBinary(
+        {
+          documentRepository: repository,
+          sha256: {
+            async digest() {
+              return 'b'.repeat(64);
+            },
+          },
+          recoveryStorage: {
+            async put() {
+              putCalled = true;
+              throw new Error('must not upload corrupt recovery bytes');
+            },
+            async stat() {
+              return null;
+            },
+            async remove() {},
+          },
+        },
+        {
+          versionId: version.id,
+          expectedCurrent: current,
+          content: new Uint8Array([1, 2, 3, 4]),
+          reason: 'restore',
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'DOCUMENT_BINARY_INTEGRITY_MISMATCH',
+    });
+
+    expect(putCalled).toBe(false);
+    expect(relocations).toEqual([]);
+  });
+
 });
