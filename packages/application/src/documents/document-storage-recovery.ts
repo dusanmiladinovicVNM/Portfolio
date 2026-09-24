@@ -1,5 +1,6 @@
 import { DomainError, type DocumentVersionId } from '@portfolio/domain';
 import { ApplicationError } from '../shared/application-error.js';
+import type { Sha256Port } from '../shared/sha256-port.js';
 import type {
   DocumentRepository,
   DocumentStorageLocationRepository,
@@ -8,6 +9,7 @@ import type {
   FileStorageWritePort,
   StorageObjectReference,
 } from './file-storage-port.js';
+import { assertBufferedDocumentBinaryWriteSize } from './document-binary-policy.js';
 import {
   assertStorageObjectMatchesVersion,
   storageReferenceMatches,
@@ -87,4 +89,81 @@ export async function relocateDocumentVersionStorage(
   );
 
   return input.replacement;
+}
+
+
+export interface RecoverDocumentVersionBinaryDependencies {
+  readonly documentRepository: Pick<DocumentRepository, 'getVersionById'> &
+    DocumentStorageLocationRepository;
+  readonly recoveryStorage: FileStorageWritePort;
+  readonly sha256: Sha256Port;
+}
+
+export interface RecoverDocumentVersionBinaryInput {
+  readonly versionId: DocumentVersionId;
+  readonly expectedCurrent: StorageObjectReference;
+  readonly content: Uint8Array;
+  readonly reason: string;
+}
+
+export async function recoverDocumentVersionBinary(
+  deps: RecoverDocumentVersionBinaryDependencies,
+  input: RecoverDocumentVersionBinaryInput,
+): Promise<StorageObjectReference> {
+  const version = await deps.documentRepository.getVersionById(input.versionId);
+  if (!version) {
+    throw new DomainError(
+      'DOCUMENT_VERSION_NOT_FOUND',
+      'Document version not found.',
+    );
+  }
+
+  assertBufferedDocumentBinaryWriteSize(input.content.byteLength);
+
+  if (input.content.byteLength !== version.byteSize) {
+    throw new DomainError(
+      'DOCUMENT_BINARY_INTEGRITY_MISMATCH',
+      'Recovery bytes do not match the immutable DocumentVersion byte size.',
+    );
+  }
+
+  const contentSha256 = (await deps.sha256.digestHex(input.content)).toLowerCase();
+  if (contentSha256 !== version.sha256.toLowerCase()) {
+    throw new DomainError(
+      'DOCUMENT_BINARY_INTEGRITY_MISMATCH',
+      'Recovery bytes do not match the immutable DocumentVersion SHA-256.',
+    );
+  }
+
+  const stored = await deps.recoveryStorage.put({
+    objectKey: input.expectedCurrent.objectKey,
+    fileName: version.fileName,
+    mimeType: version.mimeType,
+    content: input.content,
+  });
+
+  assertStorageObjectMatchesVersion(stored, {
+    provider: stored.provider,
+    objectId: stored.objectId,
+    objectKey: stored.objectKey,
+  }, version);
+
+  const replacement: StorageObjectReference = {
+    provider: stored.provider,
+    objectId: stored.objectId,
+    objectKey: stored.objectKey,
+  };
+
+  if (storageReferenceMatches(input.expectedCurrent, replacement)) {
+    return replacement;
+  }
+
+  await deps.documentRepository.relocateStorageReference(
+    version.id,
+    input.expectedCurrent,
+    replacement,
+    input.reason.trim() || 'restore immutable DocumentVersion from verified backup',
+  );
+
+  return replacement;
 }
