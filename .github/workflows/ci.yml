@@ -60,6 +60,9 @@ jobs:
       - name: Web production build
         run: pnpm --filter @portfolio/web build
 
+      - name: Validate public web deployment contract
+        run: pnpm web:deployment:check
+
       - name: Unit tests
         run: pnpm test
 
