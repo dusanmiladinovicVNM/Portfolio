@@ -1,0 +1,57 @@
+name: Production Binary Backup
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-binary-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout exact main
+        uses: actions/checkout@v4
+
+      - name: Refuse non-main backup source
+        run: |
+          test "$GITHUB_REF_NAME" = "main" || {
+            echo "Production binary backup must run from main." >&2
+            exit 1
+          }
+
+      - name: Use Node.js 24 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Create and prove production binary backup
+        env:
+          PORTFOLIO_PRODUCTION_DB_URL: ${{ secrets.PORTFOLIO_PRODUCTION_DB_URL }}
+          PORTFOLIO_BACKUP_ENCRYPTION_KEY: ${{ secrets.PORTFOLIO_BACKUP_ENCRYPTION_KEY }}
+          PORTFOLIO_GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.PORTFOLIO_GOOGLE_DRIVE_FOLDER_ID }}
+          PORTFOLIO_GOOGLE_CLIENT_ID: ${{ secrets.PORTFOLIO_GOOGLE_CLIENT_ID }}
+          PORTFOLIO_GOOGLE_CLIENT_SECRET: ${{ secrets.PORTFOLIO_GOOGLE_CLIENT_SECRET }}
+          PORTFOLIO_GOOGLE_REFRESH_TOKEN: ${{ secrets.PORTFOLIO_GOOGLE_REFRESH_TOKEN }}
+          PORTFOLIO_BINARY_BACKUP_USE_DOCKER_TOOLS: "1"
+          PORTFOLIO_BINARY_BACKUP_PG_IMAGE: postgres:17
+          PORTFOLIO_BACKUP_CODE_SHA: ${{ github.sha }}
+        run: bash scripts/recovery/backup-production-binaries.sh
+
+      - name: Upload encrypted binary backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-production-binaries-${{ github.run_id }}-${{ github.sha }}
+          path: |
+            .artifacts/production-binary-backup/portfolio-binaries.tar.enc
+            .artifacts/production-binary-backup/manifest.txt
+          if-no-files-found: error
+          retention-days: 14

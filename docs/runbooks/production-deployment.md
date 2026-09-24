@@ -291,7 +291,7 @@ Before real company use, record explicit decisions for:
 
 - platform-level ingress / unauthenticated abuse controls and any explicit concurrency ceiling beyond the authenticated application limiter;
 - PostgreSQL logical backup is defined in `docs/runbooks/production-backup-restore.md`; scheduled hosted proof remains required after repository secrets are configured;
-- whether Google Drive durability alone is accepted for MVP or a secondary binary backup is required;
+- secondary Google Drive binary recovery is defined in `docs/runbooks/production-binary-backup-restore.md`; hosted backup + restore proof remains required;
 - operational ownership of OAuth credential rotation and incident response.
 
 These are deployment policy decisions, not missing domain invariants.

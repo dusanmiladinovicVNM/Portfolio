@@ -24,6 +24,7 @@ export * from './documents/document-binary-policy.js';
 export * from './documents/file-storage-port.js';
 export * from './documents/pdf-port.js';
 export * from './documents/document-repository.js';
+export * from './documents/document-storage-recovery.js';
 export * from './documents/document-commands.js';
 export * from './documents/document-queries.js';
 export * from './inspections/inspection-repository.js';

@@ -28,7 +28,7 @@ The primary encrypted backup contains Portfolio-owned `public` **data**. Schema 
 
 Supabase Auth is a managed schema and is not Portfolio domain truth. A separate encrypted data-only recovery asset is captured for `auth.users` and `auth.identities`. It is not restored by the plain PostgreSQL-17 application smoke because a fresh plain PostgreSQL database does not contain Supabase's managed Auth schema. In a disaster migration to a new Supabase project, Auth must be restored/migrated through Supabase's supported Auth migration procedure. Existing JWT sessions are not recovery truth and users may have to sign in again.
 
-Google Drive binary bytes are **not** included in this database backup. The database backup preserves immutable `DocumentVersion` hashes, sizes and Drive object references. A byte-for-byte secondary binary store remains a separate production decision and is **NOT DONE**.
+Google Drive binary bytes are **not** included in this database backup. The database backup preserves immutable `DocumentVersion` hashes, sizes and storage history. The separate byte-for-byte secondary binary recovery path is defined in `docs/runbooks/production-binary-backup-restore.md`; until its hosted backup + restore rehearsal passes, that layer remains `IMPLEMENTED BUT NOT HOSTED-PROVEN`.
 
 ## Acceptance gate
 
@@ -85,7 +85,7 @@ For a complete Supabase-project disaster, additionally recreate the target proje
 
 This backup survives loss/corruption of the Supabase database because the accepted encrypted artifact lives outside Supabase.
 
-It does not yet survive simultaneous loss of the primary Google Drive folder/provider. Portfolio currently stores binary bytes in Google Drive; only their canonical hashes/metadata are present in PostgreSQL. A secondary binary provider is therefore still an explicit production gap.
+Database backup alone does not survive loss of the primary Google Drive folder/provider. The separate encrypted binary snapshot workflow covers that failure mode once its hosted acceptance is proven; see `docs/runbooks/production-binary-backup-restore.md`.
 
 It also does not replace Supabase managed backup/PITR when those features are enabled. Managed backup/PITR and this logical export cover different failure modes and should be treated as complementary.
 

@@ -126,6 +126,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
       readinessCheck: async () => {
         await sql`select 1`;
         await sql`select 1 from public.api_rate_limit_buckets limit 0`;
+        await sql`select 1 from public.document_version_storage_relocations limit 0`;
       },
       onUnexpectedError: (error, context) => {
         safeOperationalLog(logger, {
