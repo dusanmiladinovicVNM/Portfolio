@@ -102,6 +102,7 @@ import {
 import {
   addStoredDocumentVersion,
   asDateOnly,
+  asDocumentId,
   asCostId,
   asCostReversalId,
   asDocumentVersionId,
