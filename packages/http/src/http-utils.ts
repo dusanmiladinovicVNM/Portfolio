@@ -17,15 +17,8 @@ export function errorResponse(
   code: string,
   message: string,
   status: number,
-  headers?: HeadersInit,
 ): Response {
-  return new Response(JSON.stringify({ error: { code, message } }), {
-    status,
-    headers: {
-      ...JSON_HEADERS,
-      ...Object.fromEntries(new Headers(headers).entries()),
-    },
-  });
+  return json({ error: { code, message } }, status);
 }
 
 function requestBodyTooLarge(): ApplicationError {
