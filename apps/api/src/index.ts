@@ -122,6 +122,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
       idGenerator: new WebCryptoIdGenerator(),
       readinessCheck: async () => {
         await sql`select 1`;
+        await sql`select 1 from api_rate_limit_buckets limit 0`;
       },
       onUnexpectedError: (error, context) => {
         safeOperationalLog(logger, {
