@@ -144,14 +144,54 @@ For loss of the primary Portfolio Drive folder/provider location:
 2. decrypt and extract the binary snapshot;
 3. verify the snapshot manifest and every object hash;
 4. provision a replacement storage location accessible only to the dedicated Portfolio account;
-5. construct the Google Drive FileStoragePort against the replacement folder;
-6. for each affected DocumentVersion, invoke `recoverDocumentVersionBinary` using the current canonical locator as `expectedCurrent`;
+5. set the recovery Google Drive folder and OAuth environment variables;
+6. run `pnpm binary-backup:restore -- /path/to/portfolio-binaries.tar.enc`;
 7. verify application binary read by DocumentVersionId;
 8. preserve the original locator and relocation history as evidence.
 
 Do not update `document_versions.storage_object_id` manually.
 
 There is intentionally no browser/API endpoint for this operation. It is an operator-only disaster-recovery capability.
+
+### Executable operator command
+
+The committed recovery entrypoint is:
+
+~~~text
+pnpm binary-backup:restore -- /path/to/portfolio-binaries.tar.enc
+~~~
+
+Required environment:
+
+~~~text
+PORTFOLIO_PRODUCTION_DB_URL
+PORTFOLIO_BACKUP_ENCRYPTION_KEY
+PORTFOLIO_RECOVERY_GOOGLE_DRIVE_FOLDER_ID
+PORTFOLIO_GOOGLE_CLIENT_ID
+PORTFOLIO_GOOGLE_CLIENT_SECRET
+PORTFOLIO_GOOGLE_REFRESH_TOKEN
+~~~
+
+The command performs the full operator path:
+
+~~~text
+decrypt encrypted artifact into a temporary directory
+→ extract snapshot
+→ verify manifest + every archived byte
+→ build the committed restore operator
+→ load canonical DocumentVersions through PostgresDocumentRepository
+→ require manifest version/document/size/hash/objectKey parity
+→ read current canonical locator
+→ recoverDocumentVersionBinary()
+→ verify persisted latest locator
+→ read replacement bytes back through FileStoragePort
+→ rehash final read
+→ remove temporary plaintext files
+~~~
+
+The command is restartable. It resolves the current locator for every item on every run. If an earlier run already restored an object, the stable objectKey causes the recovery storage adapter to reuse the verified object; `recoverDocumentVersionBinary()` then observes that the replacement is already canonical and does not append a duplicate relocation generation.
+
+A partial failure at item 83 therefore does not require manual rollback of items 1–82; rerun the same command after resolving the failure.
 
 ## Deployment order
 
@@ -171,7 +211,7 @@ Readiness touches `document_version_storage_relocations`, so code cannot be cons
 
 ## Hosted proof required
 
-Repository CI proves the recovery invariants and archive verifier, but production status remains `IMPLEMENTED BUT NOT HOSTED-PROVEN` until:
+Repository CI proves the recovery invariants, archive verifier, executable restore-operator build, and one complete real-PostgreSQL restartability scenario. Production status remains `IMPLEMENTED BUT NOT HOSTED-PROVEN` until:
 
 ~~~text
 migration applied
