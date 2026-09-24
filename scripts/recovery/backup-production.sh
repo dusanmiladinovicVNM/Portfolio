@@ -11,13 +11,28 @@ ARTIFACT_DIR="${PORTFOLIO_BACKUP_ARTIFACT_DIR:-$ROOT_DIR/.artifacts/production-b
 RESTORE_SERVER_URL="${PORTFOLIO_BACKUP_RESTORE_SERVER_URL:-postgresql://postgres:postgres@localhost:5432}"
 RESTORE_DB="${PORTFOLIO_BACKUP_RESTORE_DB:-portfolio_production_restore}"
 CODE_SHA="${PORTFOLIO_BACKUP_CODE_SHA:-${GITHUB_SHA:-$(git rev-parse HEAD)}}"
+PG_IMAGE="${PORTFOLIO_BACKUP_PG_IMAGE:-postgres:17}"
+USE_DOCKER="${PORTFOLIO_BACKUP_USE_DOCKER_TOOLS:-0}"
+INCLUDE_AUTH="${PORTFOLIO_BACKUP_INCLUDE_AUTH:-1}"
 
-for command in pg_dump pg_restore psql openssl; do
-  command -v "$command" >/dev/null 2>&1 || {
-    echo "$command is required." >&2
+command -v openssl >/dev/null 2>&1 || {
+  echo "openssl is required." >&2
+  exit 1
+}
+
+if [[ "$USE_DOCKER" == "1" ]]; then
+  command -v docker >/dev/null 2>&1 || {
+    echo "docker is required when PORTFOLIO_BACKUP_USE_DOCKER_TOOLS=1." >&2
     exit 1
   }
-done
+else
+  for command in pg_dump pg_restore psql; do
+    command -v "$command" >/dev/null 2>&1 || {
+      echo "$command is required." >&2
+      exit 1
+    }
+  done
+fi
 
 if [[ ! "$RESTORE_DB" =~ ^[A-Za-z0-9_]+$ ]]; then
   echo "Invalid restore database name: $RESTORE_DB" >&2
@@ -33,27 +48,81 @@ MANIFEST="$ARTIFACT_DIR/manifest.txt"
 SOURCE_COUNTS="$ARTIFACT_DIR/source-row-counts.tsv"
 RESTORE_COUNTS="$ARTIFACT_DIR/restore-row-counts.tsv"
 
-count_sql="
-select format('%I.%I', schemaname, tablename), n_live_tup::bigint
-from pg_stat_user_tables
-where schemaname = 'public'
-order by 1;
-"
+psql_cmd() {
+  local url="$1"
+  shift
+  if [[ "$USE_DOCKER" == "1" ]]; then
+    docker run --rm --network host "$PG_IMAGE" psql "$url" "$@"
+  else
+    psql "$url" "$@"
+  fi
+}
 
-psql "$PORTFOLIO_PRODUCTION_DB_URL" -At -F $'\t' -c "$count_sql" > "$SOURCE_COUNTS"
+capture_counts() {
+  local url="$1"
+  local output="$2"
+  : > "$output"
 
-pg_dump "$PORTFOLIO_PRODUCTION_DB_URL"   --format=custom   --no-owner   --no-acl   --schema=public   --file="$PUBLIC_DUMP"
+  while IFS= read -r table; do
+    [[ -n "$table" ]] || continue
+    local count
+    count="$(psql_cmd "$url" -Atqc "select count(*) from public.$table")"
+    printf 'public.%s\t%s\n' "$table" "$count" >> "$output"
+  done < <(
+    psql_cmd "$url" -Atqc       "select quote_ident(tablename) from pg_tables where schemaname='public' order by tablename"
+  )
+}
 
-pg_dump "$PORTFOLIO_PRODUCTION_DB_URL"   --data-only   --no-owner   --no-acl   --schema=auth   --table=auth.users   --table=auth.identities   --file="$AUTH_DUMP"
+dump_public() {
+  if [[ "$USE_DOCKER" == "1" ]]; then
+    docker run --rm --network host       -v "$ARTIFACT_DIR:/artifacts"       "$PG_IMAGE"       pg_dump "$PORTFOLIO_PRODUCTION_DB_URL"         --format=custom         --no-owner         --no-acl         --schema=public         --file=/artifacts/portfolio-public.dump
+  else
+    pg_dump "$PORTFOLIO_PRODUCTION_DB_URL"       --format=custom       --no-owner       --no-acl       --schema=public       --file="$PUBLIC_DUMP"
+  fi
+}
 
-dump_sha="$(shasum -a 256 "$PUBLIC_DUMP" | awk '{print $1}')"
-auth_sha="$(shasum -a 256 "$AUTH_DUMP" | awk '{print $1}')"
-counts_sha="$(shasum -a 256 "$SOURCE_COUNTS" | awk '{print $1}')"
+dump_auth() {
+  if [[ "$INCLUDE_AUTH" != "1" ]]; then
+    printf '%s\n' '-- Auth recovery asset omitted by explicit test configuration.' > "$AUTH_DUMP"
+    return
+  fi
+
+  if [[ "$USE_DOCKER" == "1" ]]; then
+    docker run --rm --network host       -v "$ARTIFACT_DIR:/artifacts"       "$PG_IMAGE"       pg_dump "$PORTFOLIO_PRODUCTION_DB_URL"         --data-only         --no-owner         --no-acl         --schema=auth         --table=auth.users         --table=auth.identities         --file=/artifacts/supabase-auth-data.sql
+  else
+    pg_dump "$PORTFOLIO_PRODUCTION_DB_URL"       --data-only       --no-owner       --no-acl       --schema=auth       --table=auth.users       --table=auth.identities       --file="$AUTH_DUMP"
+  fi
+}
+
+restore_public() {
+  local restore_url="$1"
+  if [[ "$USE_DOCKER" == "1" ]]; then
+    docker run --rm --network host       -v "$ARTIFACT_DIR:/artifacts"       "$PG_IMAGE"       pg_restore         --no-owner         --no-acl         --exit-on-error         --dbname="$restore_url"         /artifacts/portfolio-public.dump
+  else
+    pg_restore       --no-owner       --no-acl       --exit-on-error       --dbname="$restore_url"       "$PUBLIC_DUMP"
+  fi
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+capture_counts "$PORTFOLIO_PRODUCTION_DB_URL" "$SOURCE_COUNTS"
+dump_public
+dump_auth
+
+dump_sha="$(sha256_file "$PUBLIC_DUMP")"
+auth_sha="$(sha256_file "$AUTH_DUMP")"
+counts_sha="$(sha256_file "$SOURCE_COUNTS")"
 
 {
   echo "created_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "code_sha=$CODE_SHA"
-  echo "postgres_server_version=$(psql "$PORTFOLIO_PRODUCTION_DB_URL" -Atqc 'show server_version')"
+  echo "postgres_server_version=$(psql_cmd "$PORTFOLIO_PRODUCTION_DB_URL" -Atqc 'show server_version')"
   echo "public_dump_sha256=$dump_sha"
   echo "auth_dump_sha256=$auth_sha"
   echo "source_row_counts_sha256=$counts_sha"
@@ -62,20 +131,19 @@ counts_sha="$(shasum -a 256 "$SOURCE_COUNTS" | awk '{print $1}')"
 ADMIN_URL="$RESTORE_SERVER_URL/postgres"
 RESTORE_URL="$RESTORE_SERVER_URL/$RESTORE_DB"
 
-psql "$ADMIN_URL" -v ON_ERROR_STOP=1   -c "drop database if exists \"$RESTORE_DB\" with (force)" >/dev/null
-psql "$ADMIN_URL" -v ON_ERROR_STOP=1   -c "create database \"$RESTORE_DB\"" >/dev/null
+psql_cmd "$ADMIN_URL" -v ON_ERROR_STOP=1   -c "drop database if exists \"$RESTORE_DB\" with (force)" >/dev/null
+psql_cmd "$ADMIN_URL" -v ON_ERROR_STOP=1   -c "create database \"$RESTORE_DB\"" >/dev/null
 
 cleanup() {
-  psql "$ADMIN_URL" -v ON_ERROR_STOP=1     -c "drop database if exists \"$RESTORE_DB\" with (force)" >/dev/null || true
+  psql_cmd "$ADMIN_URL" -v ON_ERROR_STOP=1     -c "drop database if exists \"$RESTORE_DB\" with (force)" >/dev/null || true
 }
 trap cleanup EXIT
 
-pg_restore   --no-owner   --no-acl   --exit-on-error   --dbname="$RESTORE_URL"   "$PUBLIC_DUMP"
-
-psql "$RESTORE_URL" -At -F $'\t' -c "$count_sql" > "$RESTORE_COUNTS"
+restore_public "$RESTORE_URL"
+capture_counts "$RESTORE_URL" "$RESTORE_COUNTS"
 
 if ! diff -u "$SOURCE_COUNTS" "$RESTORE_COUNTS"; then
-  echo "Production backup row-count parity check failed." >&2
+  echo "Production backup exact row-count parity check failed." >&2
   exit 1
 fi
 
