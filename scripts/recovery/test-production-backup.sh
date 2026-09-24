@@ -67,7 +67,7 @@ SQL
 SABOTAGE_DIR="$ROOT_DIR/.artifacts/production-backup-migration-mismatch"
 rm -rf "$SABOTAGE_DIR"
 
-if PORTFOLIO_PRODUCTION_DB_URL="$SOURCE_URL"   PORTFOLIO_BACKUP_ENCRYPTION_KEY="ci-only-backup-key-not-for-production"   PORTFOLIO_BACKUP_RESTORE_SERVER_URL="$SERVER_URL"   PORTFOLIO_BACKUP_USE_DOCKER_TOOLS=1   PORTFOLIO_BACKUP_INCLUDE_AUTH=0   PORTFOLIO_BACKUP_ARTIFACT_DIR="$SABOTAGE_DIR"   PORTFOLIO_BACKUP_CODE_SHA="${GITHUB_SHA:-$(git rev-parse HEAD)}"   bash scripts/recovery/backup-production.sh; then
+if PORTFOLIO_PRODUCTION_DB_URL="$SOURCE_URL"   PORTFOLIO_BACKUP_ENCRYPTION_KEY="ci-only-backup-key-not-for-production"   PORTFOLIO_BACKUP_RESTORE_SERVER_URL="$SERVER_URL"   PORTFOLIO_BACKUP_USE_DOCKER_TOOLS=1   PORTFOLIO_BACKUP_INCLUDE_AUTH=0   PORTFOLIO_BACKUP_ARTIFACT_DIR="$SABOTAGE_DIR"   PORTFOLIO_BACKUP_CODE_SHA="$(git rev-parse HEAD)"   bash scripts/recovery/backup-production.sh; then
   echo "Backup accepted a production/repository migration ledger mismatch." >&2
   exit 1
 fi
@@ -102,7 +102,7 @@ insert into public.auth_identities (
 );
 SQL
 
-PORTFOLIO_PRODUCTION_DB_URL="$SOURCE_URL" PORTFOLIO_BACKUP_ENCRYPTION_KEY="ci-only-backup-key-not-for-production" PORTFOLIO_BACKUP_RESTORE_SERVER_URL="$SERVER_URL" PORTFOLIO_BACKUP_USE_DOCKER_TOOLS=1 PORTFOLIO_BACKUP_INCLUDE_AUTH=0 PORTFOLIO_BACKUP_CODE_SHA="${GITHUB_SHA:-$(git rev-parse HEAD)}" bash scripts/recovery/backup-production.sh
+PORTFOLIO_PRODUCTION_DB_URL="$SOURCE_URL" PORTFOLIO_BACKUP_ENCRYPTION_KEY="ci-only-backup-key-not-for-production" PORTFOLIO_BACKUP_RESTORE_SERVER_URL="$SERVER_URL" PORTFOLIO_BACKUP_USE_DOCKER_TOOLS=1 PORTFOLIO_BACKUP_INCLUDE_AUTH=0 PORTFOLIO_BACKUP_CODE_SHA="$(git rev-parse HEAD)" bash scripts/recovery/backup-production.sh
 
 test -f .artifacts/production-backup/portfolio-public.dump.enc
 test -f .artifacts/production-backup/supabase-auth-data.sql.enc
