@@ -53,9 +53,20 @@ psql_cmd() {
   local url="$1"
   shift
   if [[ "$USE_DOCKER" == "1" ]]; then
-    docker run --rm --network host "$PG_IMAGE" psql "$url" "$@"
+    docker run --rm -i --network host "$PG_IMAGE" psql "$url" "$@"
   else
     psql "$url" "$@"
+  fi
+}
+
+apply_sql_file() {
+  local url="$1"
+  local file="$2"
+  if [[ "$USE_DOCKER" == "1" ]]; then
+    docker run --rm -i --network host "$PG_IMAGE" \
+      psql "$url" -v ON_ERROR_STOP=1 < "$file"
+  else
+    psql "$url" -v ON_ERROR_STOP=1 -f "$file"
   fi
 }
 
@@ -161,7 +172,7 @@ $roles$;
 SQL
 
 for migration in supabase/migrations/*.sql; do
-  psql_cmd "$RESTORE_URL" -v ON_ERROR_STOP=1 -f "$migration" >/dev/null
+  apply_sql_file "$RESTORE_URL" "$migration" >/dev/null
 done
 
 cleanup() {
