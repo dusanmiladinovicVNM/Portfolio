@@ -127,7 +127,7 @@ export async function recoverDocumentVersionBinary(
     );
   }
 
-  const contentSha256 = (await deps.sha256.digestHex(input.content)).toLowerCase();
+  const contentSha256 = (await deps.sha256.digest(input.content)).toLowerCase();
   if (contentSha256 !== version.sha256.toLowerCase()) {
     throw new DomainError(
       'DOCUMENT_BINARY_INTEGRITY_MISMATCH',
