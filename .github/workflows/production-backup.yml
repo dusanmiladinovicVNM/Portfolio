@@ -47,11 +47,6 @@ jobs:
       - name: Install pnpm
         run: npm install --global pnpm@12.4.2
 
-      - name: Install PostgreSQL 17 client
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client-17
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -60,6 +55,8 @@ jobs:
           PORTFOLIO_PRODUCTION_DB_URL: ${{ secrets.PORTFOLIO_PRODUCTION_DB_URL }}
           PORTFOLIO_BACKUP_ENCRYPTION_KEY: ${{ secrets.PORTFOLIO_BACKUP_ENCRYPTION_KEY }}
           PORTFOLIO_BACKUP_RESTORE_SERVER_URL: postgresql://postgres:postgres@localhost:5432
+          PORTFOLIO_BACKUP_USE_DOCKER_TOOLS: "1"
+          PORTFOLIO_BACKUP_PG_IMAGE: postgres:17
           PORTFOLIO_BACKUP_CODE_SHA: ${{ github.sha }}
         run: bash scripts/recovery/backup-production.sh
 
