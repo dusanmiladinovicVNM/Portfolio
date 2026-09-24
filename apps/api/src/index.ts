@@ -2,7 +2,7 @@ import { PostgresApiRateLimiter } from './api-rate-limit.js';
 import { isPublicHealthRuntimePath } from './runtime-path.js';
 import { createSupabaseContext } from '@supabase/server';
 import postgres from 'postgres';
-import type { FileStoragePort, PdfPort } from '@portfolio/application';
+import type { FileStoragePort, PdfPort, StaffAuthAdminPort } from '@portfolio/application';
 import {
   createObservedHttpHandler,
   createPortfolioHttpHandler,
@@ -37,6 +37,7 @@ export interface SupabaseApiConfig {
   readonly databaseUrl: string;
   readonly fileStorage: FileStoragePort;
   readonly pdfPort: PdfPort;
+  readonly staffAuthAdmin: StaffAuthAdminPort;
   readonly basePath?: string;
   readonly serviceVersion?: string;
   readonly readinessTimeoutMs?: number;
@@ -117,6 +118,8 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
       meterRepository,
       unitTimelineRepository,
       staffDirectoryRepository: userAccessRepository,
+      staffAdministrationRepository: userAccessRepository,
+      staffAuthAdmin: config.staffAuthAdmin,
       fileStorage: config.fileStorage,
       pdfPort: config.pdfPort,
       sha256: new WebCryptoSha256(),
@@ -127,6 +130,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
         await sql`select 1`;
         await sql`select 1 from public.api_rate_limit_buckets limit 0`;
         await sql`select 1 from public.document_version_storage_relocations limit 0`;
+        await sql`select revision from public.app_users limit 0`;
       },
       onUnexpectedError: (error, context) => {
         safeOperationalLog(logger, {
@@ -251,3 +255,5 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
 export * from './canonical-inspection-pdf-renderer.js';
 
 export * from './runtime-path.js';
+
+export * from './supabase-staff-auth-admin.js';
