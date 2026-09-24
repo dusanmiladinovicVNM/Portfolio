@@ -167,6 +167,8 @@ Deploy only the generated static web output to the chosen host.
 
 ## 9. Production smoke
 
+The first real hosted acceptance run is preserved in [hosted-production-acceptance-2026-09-24.md](./hosted-production-acceptance-2026-09-24.md). That record is evidence for one environment/run; this section remains the reusable deployment procedure.
+
 Run in this order:
 
 ~~~text
