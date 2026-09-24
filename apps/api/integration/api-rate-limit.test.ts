@@ -8,6 +8,7 @@ if (!connectionString) {
   throw new Error('DATABASE_URL is required for API integration tests.');
 }
 
+const setupSql = postgres(connectionString, { max: 1 });
 const sql = postgres(connectionString, { max: 10 });
 const limiter = new PostgresApiRateLimiter(sql);
 
@@ -30,7 +31,7 @@ async function row(rateKey: string, scope: string) {
 }
 
 beforeAll(async () => {
-  await sql`drop table if exists public.api_rate_limit_buckets cascade`;
+  await setupSql`drop table if exists public.api_rate_limit_buckets cascade`;
   const migration = await readFile(
     new URL(
       '../../../supabase/migrations/20260924112000_api_rate_limits.sql',
@@ -38,12 +39,13 @@ beforeAll(async () => {
     ),
     'utf8',
   );
-  await sql.unsafe(migration);
+  await setupSql.unsafe(migration);
 });
 
 afterAll(async () => {
-  await sql`drop table if exists public.api_rate_limit_buckets cascade`;
+  await setupSql`drop table if exists public.api_rate_limit_buckets cascade`;
   await sql.end();
+  await setupSql.end();
 });
 
 describe('PostgresApiRateLimiter integration', () => {
