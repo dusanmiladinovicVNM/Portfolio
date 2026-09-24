@@ -28,6 +28,10 @@ export type WorkspaceRoute =
       readonly asOf: string;
     }
   | {
+      readonly kind: 'staff';
+      readonly asOf: string;
+    }
+  | {
       readonly kind: 'property';
       readonly propertyId: string;
       readonly asOf: string;
@@ -52,6 +56,7 @@ export type WorkspaceRoute =
 export function workspaceRouteOwnerKey(route: WorkspaceRoute): string {
   if (route.kind === 'dashboard') return 'dashboard';
   if (route.kind === 'parties') return 'parties';
+  if (route.kind === 'staff') return 'staff';
   if (route.kind === 'property') return 'property:' + route.propertyId;
   return 'unit:' + route.propertyId + ':' + route.unitId;
 }
@@ -102,6 +107,10 @@ export function dashboardRoute(asOf: string): WorkspaceRoute {
 
 export function partiesRoute(asOf: string): WorkspaceRoute {
   return { kind: 'parties', asOf: requireWorkspaceAsOf(asOf) };
+}
+
+export function staffRoute(asOf: string): WorkspaceRoute {
+  return { kind: 'staff', asOf: requireWorkspaceAsOf(asOf) };
 }
 
 export function propertyRoute(
@@ -252,6 +261,10 @@ export function parseWorkspaceLocation(
     return partiesRoute(asOf);
   }
 
+  if (segments.length === 1 && segments[0] === 'staff') {
+    return staffRoute(asOf);
+  }
+
   if (segments.length === 2 && segments[0] === 'properties') {
     const propertyId = readEntityId(segments[1]);
     if (propertyId) return propertyRoute(propertyId, asOf);
@@ -300,6 +313,9 @@ export function workspaceRouteHref(route: WorkspaceRoute): string {
   }
   if (route.kind === 'parties') {
     return '/parties?' + search.toString();
+  }
+  if (route.kind === 'staff') {
+    return '/staff?' + search.toString();
   }
   if (route.kind === 'property') {
     return `/properties/${encodeURIComponent(route.propertyId)}?${search.toString()}`;
