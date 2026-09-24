@@ -1,4 +1,4 @@
-import { CanonicalInspectionPdfRenderer, createSupabaseApi } from '@portfolio/api';
+import { CanonicalInspectionPdfRenderer, createSupabaseApi, SupabaseStaffAuthAdmin } from '@portfolio/api';
 import {
   GoogleDriveFileStorage,
   GoogleOAuthRefreshTokenProvider,
@@ -23,6 +23,11 @@ const api = createSupabaseApi({
     accessTokenProvider,
   }),
   pdfPort: new CanonicalInspectionPdfRenderer(),
+  staffAuthAdmin: new SupabaseStaffAuthAdmin({
+    supabaseUrl: config.supabaseUrl,
+    serviceRoleKey: config.serviceRoleKey,
+    webOrigin: config.webOrigin,
+  }),
   basePath: SUPABASE_FUNCTION_BASE_PATH,
   serviceVersion: PORTFOLIO_BUILD_SHA,
   ...(config.readinessTimeoutMs === undefined
