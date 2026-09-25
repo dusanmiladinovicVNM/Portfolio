@@ -272,7 +272,6 @@ class ReportLayout {
       : [];
 
     const drawTitleLine = (line: string, continued: boolean): void => {
-      this.ensureLine(24);
       fillRect(this.page, MARGIN, this.y - 16, CONTENT_WIDTH, 24, ACCENT);
       drawText(
         this.page,
@@ -287,12 +286,16 @@ class ReportLayout {
     };
 
     if (titleLines.length === 0) titleLines.push(title);
-    titleLines.forEach((line, index) => drawTitleLine(line, index > 0));
+    titleLines.forEach((line, index) => {
+      const pageChanged = this.ensureLine(24);
+      drawTitleLine(line, pageChanged && index > 0);
+    });
 
     for (const line of subtitleLines) {
       const pageChanged = this.ensureLine(12);
       if (pageChanged) {
-        drawTitleLine(this.continuedLabel(title), false);
+        this.ensure(24);
+        drawTitleLine(title, true);
       }
       drawText(this.page, line, MARGIN + 12, this.y, 8, 'F1', MUTED);
       this.y -= 12;
@@ -610,6 +613,21 @@ export class CanonicalInspectionPdfRenderer implements PdfPort {
     const layout = new ReportLayout(view.inspectionCode);
 
     layout.renderCover(view);
+
+    layout.sectionTitle(
+      'Property & Unit identity',
+      'Full frozen identity captured in the immutable final snapshot.',
+    );
+    layout.card('Property', [
+      view.propertyName,
+      ...(view.propertyCode ? [`Code: ${view.propertyCode}`] : []),
+      ...(view.propertyAddress ? [`Address: ${view.propertyAddress}`] : []),
+    ]);
+    layout.card('Unit', [
+      view.unitTitle,
+      ...(view.unitCode ? [`Code: ${view.unitCode}`] : []),
+      view.unitDetails,
+    ]);
 
     layout.sectionTitle('Inspection responses');
     if (view.sections.length === 0) {
