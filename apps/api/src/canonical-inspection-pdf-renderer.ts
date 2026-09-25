@@ -533,7 +533,10 @@ class ReportLayout {
       { size: 8.5, color: MUTED },
     );
     if (view.scheduledFor) {
-      this.paragraph(`Scheduled for ${view.scheduledFor}`, { size: 8, color: MUTED });
+      this.paragraph(`Scheduled for ${formatSwissDate(view.scheduledFor)}`, {
+        size: 8,
+        color: MUTED,
+      });
     }
     this.gap(8);
   }
