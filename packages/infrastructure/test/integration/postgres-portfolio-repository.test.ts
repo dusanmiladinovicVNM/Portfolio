@@ -1993,6 +1993,7 @@ describe('PostgreSQL infrastructure', () => {
       finalizeInspectionCommand(
         {
           inspectionRepository,
+          portfolioRepository,
           documentRepository,
           fileStorage: evidenceFileStorage,
           idGenerator: ids,
@@ -2145,6 +2146,7 @@ describe('PostgreSQL infrastructure', () => {
     const finalized = await finalizeInspectionCommand(
       {
         inspectionRepository,
+        portfolioRepository,
         documentRepository,
         fileStorage: evidenceFileStorage,
         idGenerator: ids,
