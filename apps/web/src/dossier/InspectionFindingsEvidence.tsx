@@ -803,7 +803,9 @@ export function InspectionFindingsEvidence({
                   {finding.description ? <span>{finding.description}</span> : null}
                   <small>
                     {finding.itemId
-                      ? `Item ${finding.itemId}`
+                      ? activeSection.items.find(
+                          (item) => item.id === finding.itemId,
+                        )?.label ?? 'Inspection item'
                       : 'Section-level Finding'}
                   </small>
                 </li>
