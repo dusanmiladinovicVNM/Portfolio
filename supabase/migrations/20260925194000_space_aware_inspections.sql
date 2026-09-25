@@ -235,8 +235,15 @@ alter table public.inspection_section_states
 alter table public.inspection_responses
   add column section_instance_id uuid;
 
+-- This is an ownership-only backfill for pre-existing rows. Both response
+-- triggers reject UPDATEs for locked/finalized Inspections by design, so
+-- suspend both guards only around this migration-owned rewrite. They are
+-- restored immediately before constraints and the new immutable identity
+-- trigger are installed.
 alter table public.inspection_responses
   disable trigger inspection_responses_validate_trg;
+alter table public.inspection_responses
+  disable trigger inspection_responses_editable_trg;
 
 update public.inspection_responses response
 set section_instance_id = instance.id
@@ -244,6 +251,8 @@ from public.inspection_section_instances instance
 where instance.inspection_id = response.inspection_id
   and instance.section_id = response.section_id;
 
+alter table public.inspection_responses
+  enable trigger inspection_responses_editable_trg;
 alter table public.inspection_responses
   enable trigger inspection_responses_validate_trg;
 
