@@ -315,7 +315,7 @@ function Amendments({
           <dl className="detail-list">
             <div><dt>Status</dt><dd>{formatDetailKey(amendment.status)}</dd></div>
             <div><dt>Effective</dt><dd>{amendment.effectiveFrom}</dd></div>
-            <div><dt>Signed</dt><dd>{amendment.signedAt ?? '—'}</dd></div>
+            <div><dt>Signed</dt><dd>{formatSwissDate(amendment.signedAt)}</dd></div>
           </dl>
         </WorkspaceLink>
       ))}
@@ -749,9 +749,27 @@ export function UnitContracts({
                       <span className="status-chip">{agreement.status}</span>
                     </div>
                     <dl className="detail-list">
-                      <div><dt>Effective</dt><dd>{agreement.effectiveFrom} → {agreement.effectiveTo ?? 'open'}</dd></div>
-                      <div><dt>Signed</dt><dd>{agreement.signedAt ?? '—'}</dd></div>
-                      <div><dt>Predecessor</dt><dd>{agreement.predecessorAgreementId ?? '—'}</dd></div>
+                      <div>
+                        <dt>Effective</dt>
+                        <dd>
+                          {formatSwissDate(agreement.effectiveFrom)} →{' '}
+                          {agreement.effectiveTo
+                            ? formatSwissDate(agreement.effectiveTo)
+                            : 'open'}
+                        </dd>
+                      </div>
+                      <div><dt>Signed</dt><dd>{formatSwissDate(agreement.signedAt)}</dd></div>
+                      <div>
+                        <dt>Predecessor</dt>
+                        <dd>
+                          {agreement.predecessorAgreementId
+                            ? agreements?.find(
+                                (candidate) =>
+                                  candidate.id === agreement.predecessorAgreementId,
+                              )?.code ?? 'Previous agreement'
+                            : '—'}
+                        </dd>
+                      </div>
                       <div><dt>Parties</dt><dd>{agreement.parties.length}</dd></div>
                     </dl>
                     {agreement.parties.length > 0 ? (
