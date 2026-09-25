@@ -80,9 +80,32 @@ export interface InspectionSnapshotSignature {
   readonly documentVersion: DocumentVersion;
 }
 
+export interface InspectionFinalReportContext {
+  readonly property: {
+    readonly id: string;
+    readonly code: string;
+    readonly name: string;
+    readonly street: string;
+    readonly houseNumber: string;
+    readonly postalCode: string;
+    readonly city: string;
+    readonly countryCode: string;
+  };
+  readonly unit: {
+    readonly id: string;
+    readonly code: string;
+    readonly unitNumber: string;
+    readonly unitType: string;
+    readonly floor: string | null;
+    readonly areaM2: number | null;
+    readonly rooms: number | null;
+  };
+}
+
 export interface InspectionFinalSnapshotPayload {
   readonly inspection: Inspection;
   readonly schema: InspectionSchemaVersion;
+  readonly reportContext?: InspectionFinalReportContext | null;
   readonly responses: readonly InspectionResponse[];
   readonly findings: readonly InspectionFinding[];
   readonly evidence: readonly InspectionSnapshotEvidence[];
@@ -291,6 +314,7 @@ export function createInspectionFinalSnapshot(
     readonly id: InspectionFinalSnapshotId;
     readonly createdByUserId: UserId;
     readonly createdAt: string;
+    readonly reportContext?: InspectionFinalReportContext | null;
   },
 ): InspectionFinalSnapshot {
   if (sourceInspection.status !== 'locked') {
@@ -324,6 +348,17 @@ export function createInspectionFinalSnapshot(
     payload: {
       inspection: { ...finalizedInspection },
       schema,
+      ...(input.reportContext === undefined
+        ? {}
+        : {
+            reportContext:
+              input.reportContext === null
+                ? null
+                : {
+                    property: { ...input.reportContext.property },
+                    unit: { ...input.reportContext.unit },
+                  },
+          }),
       responses: responses.map((response) => ({ ...response })),
       findings: findings.map((finding) => ({ ...finding })),
       evidence: evidenceItems.map((item) => ({

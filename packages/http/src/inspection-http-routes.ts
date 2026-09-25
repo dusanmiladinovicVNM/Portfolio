@@ -596,6 +596,7 @@ export async function handleInspectionHttp(
     const result = await finalizeInspectionCommand(
       {
         inspectionRepository: deps.inspectionRepository,
+        portfolioRepository: deps.portfolioRepository,
         documentRepository: deps.documentRepository,
         fileStorage: deps.fileStorage,
         idGenerator: deps.idGenerator,

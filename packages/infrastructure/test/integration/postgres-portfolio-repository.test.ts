@@ -1993,6 +1993,7 @@ describe('PostgreSQL infrastructure', () => {
       finalizeInspectionCommand(
         {
           inspectionRepository,
+          portfolioRepository,
           documentRepository,
           fileStorage: evidenceFileStorage,
           idGenerator: ids,
@@ -2145,6 +2146,7 @@ describe('PostgreSQL infrastructure', () => {
     const finalized = await finalizeInspectionCommand(
       {
         inspectionRepository,
+        portfolioRepository,
         documentRepository,
         fileStorage: evidenceFileStorage,
         idGenerator: ids,
@@ -2155,6 +2157,27 @@ describe('PostgreSQL infrastructure', () => {
       beforeFinalize.version,
     );
     expect(finalized.inspection.status).toBe('finalized');
+    expect(finalized.snapshot.payload.reportContext).toEqual({
+      property: {
+        id: property.id,
+        code: 'PROP-EVIDENCE',
+        name: 'Evidence Property',
+        street: 'Evidence',
+        houseNumber: '13',
+        postalCode: '18000',
+        city: 'Niš',
+        countryCode: 'RS',
+      },
+      unit: {
+        id: unit.id,
+        code: 'UNIT-EVIDENCE',
+        unitNumber: 'E-1',
+        unitType: 'apartment',
+        floor: null,
+        areaM2: null,
+        rooms: null,
+      },
+    });
     expect(finalized.snapshot.payload.evidence).toHaveLength(1);
     expect(finalized.snapshot.payload.evidence[0]).toMatchObject({
       documentVersion: {
