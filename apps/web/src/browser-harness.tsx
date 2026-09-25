@@ -65,6 +65,16 @@ const inspectionSchemaVersionId = 'a1000000-0000-4000-8000-000000000002';
 const inspectionSectionId = 'a1000000-0000-4000-8000-000000000003';
 const inspectionSectionInstanceId =
   'a1000000-0000-4000-8000-000000000024';
+const inspectionRoomSectionId =
+  'a9000000-0000-4000-8000-000000000001';
+const inspectionRoomItemId =
+  'a9000000-0000-4000-8000-000000000002';
+const inspectionHallwayInstanceId =
+  'a9000000-0000-4000-8000-000000000003';
+const inspectionLivingRoomInstanceId =
+  'a9000000-0000-4000-8000-000000000004';
+const inspectionBedroomInstanceId =
+  'a9000000-0000-4000-8000-000000000005';
 const inspectionConditionItemId = 'a1000000-0000-4000-8000-000000000004';
 const inspectionNotesItemId = 'a1000000-0000-4000-8000-000000000005';
 const inspectionUserId = 'a1000000-0000-4000-8000-000000000006';
@@ -747,6 +757,29 @@ const inspectionSchema = {
         },
       ],
     },
+    {
+      id: inspectionRoomSectionId,
+      key: 'room',
+      title: 'Room condition',
+      description: 'Record room-specific observations.',
+      sortOrder: 1,
+      scope: 'space' as const,
+      spaceTypes: ['hall', 'living_room', 'bedroom'] as const,
+      items: [
+        {
+          id: inspectionRoomItemId,
+          sectionId: inspectionRoomSectionId,
+          key: 'room_note',
+          type: 'text',
+          label: 'Room note',
+          required: false,
+          sortOrder: 0,
+          options: [],
+          visibleWhen: null,
+          requiredWhen: null,
+        },
+      ],
+    },
   ],
 };
 
@@ -862,12 +895,60 @@ function inspectionBundle() {
         spaceType: null,
         spaceSortOrder: null,
       },
+      {
+        id: inspectionHallwayInstanceId,
+        inspectionId,
+        sectionId: inspectionRoomSectionId,
+        scope: 'space' as const,
+        spaceId: 'a9000000-0000-4000-8000-000000000011',
+        spaceCode: 'SP-HALL',
+        spaceName: 'Hallway',
+        spaceType: 'hall' as const,
+        spaceSortOrder: 1,
+      },
+      {
+        id: inspectionLivingRoomInstanceId,
+        inspectionId,
+        sectionId: inspectionRoomSectionId,
+        scope: 'space' as const,
+        spaceId: 'a9000000-0000-4000-8000-000000000012',
+        spaceCode: 'SP-LIVING',
+        spaceName: 'Living room',
+        spaceType: 'living_room' as const,
+        spaceSortOrder: 2,
+      },
+      {
+        id: inspectionBedroomInstanceId,
+        inspectionId,
+        sectionId: inspectionRoomSectionId,
+        scope: 'space' as const,
+        spaceId: 'a9000000-0000-4000-8000-000000000013',
+        spaceCode: 'SP-BED-1',
+        spaceName: 'Bedroom 1',
+        spaceType: 'bedroom' as const,
+        spaceSortOrder: 3,
+      },
     ],
     sectionStates: [
       {
         sectionInstanceId: inspectionSectionInstanceId,
         sectionId: inspectionSectionId,
         revision: inspectionSectionRevision,
+      },
+      {
+        sectionInstanceId: inspectionHallwayInstanceId,
+        sectionId: inspectionRoomSectionId,
+        revision: 0,
+      },
+      {
+        sectionInstanceId: inspectionLivingRoomInstanceId,
+        sectionId: inspectionRoomSectionId,
+        revision: 0,
+      },
+      {
+        sectionInstanceId: inspectionBedroomInstanceId,
+        sectionId: inspectionRoomSectionId,
+        revision: 0,
       },
     ],
     responses: inspectionResponses,

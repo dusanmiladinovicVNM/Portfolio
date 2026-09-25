@@ -385,6 +385,60 @@ export function createInspectionSchemaVersion(
     ),
   );
 
+  const fieldContext = new Map(
+    sections.flatMap((section) =>
+      section.items.map((item) => [
+        item.key.toLowerCase(),
+        {
+          scope: section.scope,
+          spaceTypes: section.spaceTypes,
+        },
+      ] as const),
+    ),
+  );
+
+  const assertConditionContext = (
+    section: InspectionSchemaSection,
+    condition: InspectionCondition | null,
+  ): void => {
+    if (condition === null) return;
+    if ('all' in condition) {
+      condition.all.forEach((child) => assertConditionContext(section, child));
+      return;
+    }
+    if ('any' in condition) {
+      condition.any.forEach((child) => assertConditionContext(section, child));
+      return;
+    }
+
+    const source = fieldContext.get(condition.fieldKey.toLowerCase());
+    if (!source) return;
+
+    if (section.scope === 'unit' && source.scope === 'space') {
+      throw new DomainError(
+        'INSPECTION_SCHEMA_CONDITION_CONTEXT_INVALID',
+        `Unit section '${section.key}' cannot depend on Space field '${condition.fieldKey}'.`,
+      );
+    }
+
+    if (section.scope === 'space' && source.scope === 'space') {
+      const sourceTypes = new Set(source.spaceTypes);
+      if (section.spaceTypes.some((spaceType) => !sourceTypes.has(spaceType))) {
+        throw new DomainError(
+          'INSPECTION_SCHEMA_CONDITION_CONTEXT_INVALID',
+          `Space section '${section.key}' depends on field '${condition.fieldKey}' that is not available for every target Space type.`,
+        );
+      }
+    }
+  };
+
+  for (const section of sections) {
+    for (const item of section.items) {
+      assertConditionContext(section, item.visibleWhen);
+      assertConditionContext(section, item.requiredWhen);
+    }
+  }
+
   return {
     id: input.id,
     schemaCode: requiredText(input.schemaCode, 'schemaCode'),

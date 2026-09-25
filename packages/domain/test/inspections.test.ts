@@ -248,6 +248,64 @@ describe('Inspection schema and lifecycle', () => {
     ]);
   });
 
+  it('rejects schema conditions that cannot exist in the target section context', () => {
+    expect(() =>
+      createInspectionSchemaVersion({
+        id: asInspectionSchemaVersionId(
+          '74500000-0000-4000-8000-000000000001',
+        ),
+        schemaCode: 'INVALID-CONTEXT',
+        versionNumber: 1,
+        inspectionType: 'move_in',
+        title: 'Invalid condition context',
+        sections: [
+          {
+            id: asInspectionSchemaSectionId(
+              '74500000-0000-4000-8000-000000000002',
+            ),
+            key: 'room',
+            title: 'Room',
+            sortOrder: 0,
+            scope: 'space',
+            spaceTypes: ['bedroom'],
+            items: [{
+              id: asInspectionSchemaItemId(
+                '74500000-0000-4000-8000-000000000003',
+              ),
+              key: 'room_condition',
+              type: 'text',
+              label: 'Room condition',
+              sortOrder: 0,
+            }],
+          },
+          {
+            id: asInspectionSchemaSectionId(
+              '74500000-0000-4000-8000-000000000004',
+            ),
+            key: 'general',
+            title: 'General',
+            sortOrder: 1,
+            scope: 'unit',
+            items: [{
+              id: asInspectionSchemaItemId(
+                '74500000-0000-4000-8000-000000000005',
+              ),
+              key: 'general_note',
+              type: 'text',
+              label: 'General note',
+              sortOrder: 0,
+              requiredWhen: {
+                fieldKey: 'room_condition',
+                operator: 'equals',
+                value: 'damaged',
+              },
+            }],
+          },
+        ],
+      }),
+    ).toThrowError(/cannot depend on Space field/i);
+  });
+
   it('keeps repeated room templates independent and prevents conditional bleed', () => {
     const roomSchema = createInspectionSchemaVersion({
       id: asInspectionSchemaVersionId(

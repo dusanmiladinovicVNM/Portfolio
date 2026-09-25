@@ -11,7 +11,7 @@ create or replace function public.inspection_space_types_valid(space_types_input
 returns boolean
 language sql
 immutable
-as $
+as $$
   select
     coalesce(cardinality(space_types_input), 0) =
       (select count(distinct value) from unnest(space_types_input) value)

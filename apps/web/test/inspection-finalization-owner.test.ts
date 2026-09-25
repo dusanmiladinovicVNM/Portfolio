@@ -81,6 +81,7 @@ function bundle(
       requiredSignatureRoles: ['tenant', 'landlord'],
       sections: [],
     },
+    sectionInstances: [],
     sectionStates: [],
     responses: [],
     findings: [],

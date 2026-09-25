@@ -23,6 +23,12 @@ const inspectionSectionInstanceId =
   'a1000000-0000-4000-8000-000000000024';
 const setupOrchestrationInspectionSectionInstanceId =
   'b1000000-0000-4000-8000-000000000062';
+const inspectionHallwayInstanceId =
+  'a9000000-0000-4000-8000-000000000003';
+const inspectionLivingRoomInstanceId =
+  'a9000000-0000-4000-8000-000000000004';
+const inspectionBedroomInstanceId =
+  'a9000000-0000-4000-8000-000000000005';
 const inspectionNotesItemId = 'a1000000-0000-4000-8000-000000000005';
 const inspectionUserId = 'a1000000-0000-4000-8000-000000000006';
 const setupPropertyId = 'b1000000-0000-4000-8000-000000000001';
@@ -3407,6 +3413,7 @@ try {
 
   const inspectionUrl =
     `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${inspectionSectionInstanceId}&asOf=2025-06-30`;
+
   await clickXpath(
     sessionId,
     "//button[contains(@class,'inspection-assigned-work-card')][.//strong[normalize-space()='INS-BRW-001']]",
@@ -3425,6 +3432,42 @@ try {
     await currentUrl(sessionId),
     inspectionUrl,
     'Assigned-work queue navigates with canonical cross-Unit Property owner',
+  );
+
+  for (const [label, instanceId] of [
+    ['Hallway', inspectionHallwayInstanceId],
+    ['Living room', inspectionLivingRoomInstanceId],
+    ['Bedroom 1', inspectionBedroomInstanceId],
+  ]) {
+    await clickXpath(
+      sessionId,
+      `//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='${label}']`,
+    );
+    await waitForElement(
+      sessionId,
+      'xpath',
+      `//form[contains(@class,'inspection-section-form')]//h3[normalize-space()='${label}']`,
+    );
+    assertEqual(
+      await currentUrl(sessionId),
+      `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${instanceId}&asOf=2025-06-30`,
+      `Inspection ${label} section-instance deep-link`,
+    );
+  }
+
+  await clickXpath(
+    sessionId,
+    "//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='General condition']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[contains(@class,'inspection-section-form')]//h3[normalize-space()='General condition']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'Inspection returns to General section-instance deep-link',
   );
 
   await clickXpath(
