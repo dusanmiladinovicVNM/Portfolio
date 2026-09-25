@@ -301,7 +301,7 @@ export function StaffAdministration({
                           className="button-secondary"
                           disabled={busyLabel !== null}
                           onClick={() => {
-                            void runWrite('Resending staff invite…', () =>
+                            void runWrite('Sending staff access email…', () =>
                               api.post(
                                 staffInvitePath(item.userId),
                                 { expectedRevision: item.revision },
@@ -311,7 +311,7 @@ export function StaffAdministration({
                           }}
                           type="button"
                         >
-                          Resend invite
+                          Send access email
                         </button>
                       ) : null}
 
