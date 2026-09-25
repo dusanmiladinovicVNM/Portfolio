@@ -40,6 +40,7 @@ import {
 import {
   formatDetailKey,
   formatExactMoney,
+  formatSwissDate,
 } from '../presentation/format.js';
 import {
   partyDisplayName,
