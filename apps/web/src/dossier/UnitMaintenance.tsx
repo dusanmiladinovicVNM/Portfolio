@@ -159,10 +159,10 @@ function assigneeLabel(
 ): string {
   const assignee = entry.workOrder.assignee;
   if (assignee === null) return 'Unassigned';
-  if (assignee.kind === 'user') return `Internal user · ${assignee.userId}`;
+  if (assignee.kind === 'user') return 'Internal user';
   return (
     parties.find((party) => party.id === assignee.partyId)?.displayName ??
-    `Party · ${assignee.partyId}`
+    'External party'
   );
 }
 
@@ -183,7 +183,7 @@ function CreateIssueForm({
   readonly propertyId: string;
   readonly unitId: string;
   readonly spaces: readonly SpaceResponse[];
-  readonly issueAssetsById: ReadonlyMap<string, AssetResponse>;
+  readonly assets: readonly AssetResponse[];
   readonly findings: readonly FindingOption[];
   readonly existingIssues: readonly MaintenanceIssueResponse[];
   readonly linkedFindingIds: ReadonlySet<string>;
@@ -458,7 +458,7 @@ function IssueAdministration({
   readonly selectedWorkOrderId?: string | undefined;
   readonly parties: readonly PartyResponse[];
   readonly spaces: readonly SpaceResponse[];
-  readonly assets: readonly AssetResponse[];
+  readonly issueAssetsById: ReadonlyMap<string, AssetResponse>;
   readonly findings: readonly FindingOption[];
   readonly serviceEvents: readonly ServiceEventResponse[];
   readonly writeGate: MaintenanceWriteGate;
