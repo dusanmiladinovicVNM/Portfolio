@@ -1,7 +1,11 @@
-import type {
-  InspectionAnswerValue,
-  InspectionFinalSnapshot,
-} from '@portfolio/domain';
+import type { PdfPort } from '@portfolio/application';
+
+type InspectionFinalSnapshot = Parameters<
+  PdfPort['renderInspectionFinalReport']
+>[0];
+
+type InspectionAnswerValue =
+  InspectionFinalSnapshot['payload']['responses'][number]['value'];
 
 export interface InspectionReportItemView {
   readonly label: string;
