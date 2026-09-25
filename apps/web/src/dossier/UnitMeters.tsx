@@ -725,10 +725,7 @@ function MeterAdministration({
         <div>
           <dt>Space</dt>
           <dd>
-            {meter.spaceId
-              ? spaces.find((space) => space.id === meter.spaceId)?.name ??
-                'Assigned space'
-              : 'Unit level'}
+            {meter.spaceId ? 'Assigned space' : 'Unit level'}
           </dd>
         </div>
         <div><dt>Installed</dt><dd>{formatSwissDateTime(meter.installedAt)}</dd></div>
