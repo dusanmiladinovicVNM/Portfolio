@@ -1,6 +1,7 @@
 import {
   assignMaintenanceWorkOrderRequestSchema,
   assetListResponseSchema,
+  assetResponseSchema,
   changeMaintenanceIssueStatusRequestSchema,
   changeMaintenanceWorkOrderStatusRequestSchema,
   createMaintenanceIssueRequestSchema,
@@ -42,6 +43,7 @@ import {
   useState,
 } from 'react';
 import {
+  assetPath,
   assetServiceEventsPath,
   inspectionPath,
   maintenanceIssuePath,
@@ -181,7 +183,7 @@ function CreateIssueForm({
   readonly propertyId: string;
   readonly unitId: string;
   readonly spaces: readonly SpaceResponse[];
-  readonly assets: readonly AssetResponse[];
+  readonly issueAssetsById: ReadonlyMap<string, AssetResponse>;
   readonly findings: readonly FindingOption[];
   readonly existingIssues: readonly MaintenanceIssueResponse[];
   readonly linkedFindingIds: ReadonlySet<string>;
@@ -442,7 +444,7 @@ function IssueAdministration({
   selectedWorkOrderId,
   parties,
   spaces,
-  assets,
+  issueAssetsById,
   findings,
   serviceEvents,
   writeGate,
@@ -978,7 +980,7 @@ function IssueAdministration({
           <dt>Asset</dt>
           <dd>
             {issue.assetId
-              ? assets.find((asset) => asset.id === issue.assetId)?.code ??
+              ? issueAssetsById.get(issue.assetId)?.code ??
                 'Assigned asset'
               : '—'}
           </dd>
@@ -1509,6 +1511,8 @@ export function UnitMaintenance({
     useState<readonly SpaceResponse[] | null>(null);
   const [assets, setAssets] =
     useState<readonly AssetResponse[] | null>(null);
+  const [issueAssetsById, setIssueAssetsById] =
+    useState<ReadonlyMap<string, AssetResponse>>(() => new Map());
   const [parties, setParties] =
     useState<readonly PartyResponse[] | null>(null);
   const [findings, setFindings] =
@@ -1549,6 +1553,7 @@ export function UnitMaintenance({
     setIssues(null);
     setSpaces(null);
     setAssets(null);
+    setIssueAssetsById(new Map());
     setParties(null);
     setFindings(null);
     setLoadError(null);
@@ -1615,9 +1620,43 @@ export function UnitMaintenance({
             }));
           });
 
+          const issueAssetIds = [
+            ...new Set(
+              issueResponse.items
+                .map((issue) => issue.assetId)
+                .filter((assetId): assetId is string => assetId !== null),
+            ),
+          ];
+          const currentAssetById = new Map(
+            assetResponse.items.map((asset) => [asset.id, asset] as const),
+          );
+          const historicalAssets = await Promise.all(
+            issueAssetIds
+              .filter((assetId) => !currentAssetById.has(assetId))
+              .map(async (assetId) => {
+                const asset = await api.get(
+                  assetPath(assetId),
+                  assetResponseSchema,
+                  { signal: controller.signal },
+                );
+                if (asset.id !== assetId) {
+                  throw new Error(
+                    'Maintenance historical Asset lookup crossed its identity boundary.',
+                  );
+                }
+                return [assetId, asset] as const;
+              }),
+          );
+          if (controller.signal.aborted) return;
+          const issueAssetMap = new Map(currentAssetById);
+          for (const [assetId, asset] of historicalAssets) {
+            issueAssetMap.set(assetId, asset);
+          }
+
           setIssues(issueResponse.items);
           setSpaces(spaceResponse.items);
           setAssets(assetResponse.items);
+          setIssueAssetsById(issueAssetMap);
           setParties(partyResponse.items);
           setFindings(findingOptions);
         },
@@ -1824,7 +1863,7 @@ export function UnitMaintenance({
                     <dt>Asset</dt>
                     <dd>
                       {issue.assetId
-                        ? assets?.find((asset) => asset.id === issue.assetId)?.code ??
+                        ? issueAssetsById.get(issue.assetId)?.code ??
                           'Assigned asset'
                         : '—'}
                     </dd>
@@ -1903,7 +1942,7 @@ export function UnitMaintenance({
           }
           parties={parties}
           spaces={spaces ?? []}
-          assets={assets ?? []}
+          issueAssetsById={issueAssetsById}
           findings={findings ?? []}
           selectedWorkOrderId={workOrderId}
           serviceEvents={serviceEvents}
