@@ -1756,6 +1756,9 @@ describe('PostgreSQL infrastructure', () => {
 
     const section = published.sections[0]!;
     const item = section.items[0]!;
+    const sectionInstance = (
+      await inspectionRepository.listSectionInstances(inspection.id)
+    ).find((instance) => instance.sectionId === section.id)!;
     await saveInspectionSectionCommand(
       {
         inspectionRepository,
@@ -1764,7 +1767,7 @@ describe('PostgreSQL infrastructure', () => {
       },
       actor,
       inspection.id,
-      section.id,
+      sectionInstance.id,
       0,
       {
         set: [{ itemId: item.id, value: 'Good' }],
@@ -1848,7 +1851,7 @@ describe('PostgreSQL infrastructure', () => {
       {
         documentVersionId: 'a3000000-0000-4000-8000-000000000001',
         kind: 'photo',
-        sectionId: section.id,
+        sectionInstanceId: sectionInstance.id,
         itemId: item.id,
         caption: 'Entrance condition',
       },
@@ -3569,7 +3572,7 @@ describe('PostgreSQL infrastructure', () => {
         },
         actor,
         inspection.id,
-        section.id,
+        sectionInstance.id,
         0,
         {
           set: [{ itemId: conditionItem.id, value: 'damaged' }],
@@ -7585,6 +7588,9 @@ describe('PostgreSQL infrastructure', () => {
       inspection.id,
       inspection.version,
     );
+    const inspectionSectionInstance = (
+      await inspectionRepository.listSectionInstances(inspection.id)
+    )[0]!;
     const finding = await createInspectionFindingCommand(
       {
         inspectionRepository,
@@ -7594,7 +7600,7 @@ describe('PostgreSQL infrastructure', () => {
       actor,
       inspection.id,
       {
-        sectionId: published.sections[0]!.id,
+        sectionInstanceId: inspectionSectionInstance.id,
         itemId: published.sections[0]!.items[0]!.id,
         severity: 'major',
         title: 'Historical maintenance finding',
