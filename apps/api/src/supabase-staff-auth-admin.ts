@@ -6,6 +6,7 @@ import {
 interface SupabaseAuthUser {
   readonly id?: unknown;
   readonly email?: unknown;
+  readonly email_confirmed_at?: unknown;
 }
 
 export interface SupabaseStaffAuthAdminOptions {
@@ -79,7 +80,14 @@ export class SupabaseStaffAuthAdmin implements StaffAuthAdminPort {
           typeof user.email === 'string' &&
           user.email.trim().toLowerCase() === email,
       );
-      if (exact) return this.normalizeUser(exact, email);
+      if (exact) {
+        return {
+          ...this.normalizeUser(exact, email),
+          emailConfirmed:
+            typeof exact.email_confirmed_at === 'string' &&
+            exact.email_confirmed_at.length > 0,
+        };
+      }
       if (users.length < perPage) return null;
     }
 
@@ -92,7 +100,9 @@ export class SupabaseStaffAuthAdmin implements StaffAuthAdminPort {
   async ensureInvitedUser(rawEmail: string) {
     const email = rawEmail.trim().toLowerCase();
     const existing = await this.findByExactEmail(email);
-    if (existing) return existing;
+    if (existing?.emailConfirmed) {
+      return { subject: existing.subject, email: existing.email };
+    }
 
     const inviteUrl = new URL(this.authBaseUrl + '/invite');
     inviteUrl.searchParams.set('redirect_to', this.options.webOrigin);
@@ -106,7 +116,9 @@ export class SupabaseStaffAuthAdmin implements StaffAuthAdminPort {
       });
     } catch {
       const reconciled = await this.findByExactEmail(email).catch(() => null);
-      if (reconciled) return reconciled;
+      if (!existing && reconciled) {
+        return { subject: reconciled.subject, email: reconciled.email };
+      }
       throw new ApplicationError(
         'STAFF_AUTH_RECONCILIATION_REQUIRED',
         'Supabase Auth invitation outcome is unknown. Retry to reconcile before creating another identity.',
@@ -123,7 +135,9 @@ export class SupabaseStaffAuthAdmin implements StaffAuthAdminPort {
     }
 
     const reconciled = await this.findByExactEmail(email).catch(() => null);
-    if (reconciled) return reconciled;
+    if (!existing && reconciled) {
+      return { subject: reconciled.subject, email: reconciled.email };
+    }
 
     if (response.status >= 500) {
       throw new ApplicationError(
