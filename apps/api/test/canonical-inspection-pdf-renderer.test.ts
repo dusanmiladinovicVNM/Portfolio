@@ -220,6 +220,7 @@ describe('CanonicalInspectionPdfRenderer', () => {
           unit: { unitNumber: string };
         };
         schema: {
+          title: string;
           sections: Array<{
             description: string | null;
           }>;
@@ -251,6 +252,9 @@ describe('CanonicalInspectionPdfRenderer', () => {
     snapshot.payload.reportContext.unit.unitNumber =
       `UNIT_START ${'unit identity '.repeat(70)} UNIT_MIDDLE ${'unit continuation '.repeat(70)} UNIT_END`;
 
+    snapshot.payload.schema.title =
+      `SCHEMA_TITLE_START ${'schema title detail '.repeat(120)} SCHEMA_TITLE_MIDDLE ${'schema title continuation '.repeat(120)} SCHEMA_TITLE_END`;
+
     snapshot.payload.schema.sections[0]!.description =
       `SCHEMA_START ${'schema detail '.repeat(700)} SCHEMA_MIDDLE ${'schema continuation '.repeat(700)} SCHEMA_END`;
 
@@ -279,6 +283,9 @@ describe('CanonicalInspectionPdfRenderer', () => {
       'UNIT_START',
       'UNIT_MIDDLE',
       'UNIT_END',
+      'SCHEMA_TITLE_START',
+      'SCHEMA_TITLE_MIDDLE',
+      'SCHEMA_TITLE_END',
       'SCHEMA_START',
       'SCHEMA_MIDDLE',
       'SCHEMA_END',
