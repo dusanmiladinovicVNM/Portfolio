@@ -214,31 +214,34 @@ describe('CanonicalInspectionPdfRenderer', () => {
   });
 
   it('renders repeated schema sections by frozen Space instance without merging their answers', async () => {
-    const snapshot = snapshotFixture() as unknown as {
-      payload: {
-        schema: InspectionFinalSnapshot['payload']['schema'];
-        sectionInstances: Array<{
+    const snapshot = snapshotFixture();
+    const mutablePayload = snapshot.payload as unknown as {
+      schema: {
+        sections: Array<{
           id: string;
-          inspectionId: string;
-          sectionId: string;
-          scope: 'space';
-          spaceId: string;
-          spaceCode: string;
-          spaceName: string;
-          spaceType: 'bedroom';
-          spaceSortOrder: number;
+          scope: 'unit' | 'space';
+          spaceTypes: string[];
         }>;
-        responses: Array<InspectionFinalSnapshot['payload']['responses'][number]>;
-        findings: [];
-        evidence: [];
       };
-    } & InspectionFinalSnapshot;
+      sectionInstances: Array<{
+        id: string;
+        inspectionId: string;
+        sectionId: string;
+        scope: 'space';
+        spaceId: string;
+        spaceCode: string;
+        spaceName: string;
+        spaceType: 'bedroom';
+        spaceSortOrder: number;
+      }>;
+      responses: Array<Record<string, unknown>>;
+      findings: unknown[];
+      evidence: unknown[];
+    };
 
-    const section = snapshot.payload.schema.sections[0]!;
-    (section as { scope: 'unit' | 'space'; spaceTypes: string[] }).scope = 'space';
-    (section as { scope: 'unit' | 'space'; spaceTypes: string[] }).spaceTypes = [
-      'bedroom',
-    ];
+    const section = mutablePayload.schema.sections[0]!;
+    section.scope = 'space';
+    section.spaceTypes = ['bedroom'];
     const first = {
       id: '12111111-1111-4111-8111-111111111111',
       inspectionId: snapshot.inspectionId,
@@ -258,9 +261,9 @@ describe('CanonicalInspectionPdfRenderer', () => {
       spaceName: 'Bedroom 2',
       spaceSortOrder: 2,
     };
-    snapshot.payload.sectionInstances = [first, second];
-    const base = snapshot.payload.responses[0]!;
-    snapshot.payload.responses = [
+    mutablePayload.sectionInstances = [first, second];
+    const base = mutablePayload.responses[0]!;
+    mutablePayload.responses = [
       { ...base, sectionInstanceId: first.id, value: 'Good' },
       {
         ...base,
@@ -269,8 +272,8 @@ describe('CanonicalInspectionPdfRenderer', () => {
         value: 'Damaged',
       },
     ];
-    snapshot.payload.findings = [];
-    snapshot.payload.evidence = [];
+    mutablePayload.findings = [];
+    mutablePayload.evidence = [];
 
     const rendered = await new CanonicalInspectionPdfRenderer()
       .renderInspectionFinalReport(snapshot);
