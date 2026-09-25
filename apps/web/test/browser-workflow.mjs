@@ -2742,12 +2742,12 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Moved']][.//span[contains(normalize-space(),'2027-10-01T09:00:00.000Z') and contains(normalize-space(),'2027-10-01T10:00:00.000Z')]][.//dd[normalize-space()='Moved into bedroom']]",
+    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Moved']][.//span[contains(normalize-space(),'01.10.2027 11:00') and contains(normalize-space(),'01.10.2027 12:00')]][.//dd[normalize-space()='Moved into bedroom']]",
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Moved']][.//span[contains(normalize-space(),'current')]][.//dt[normalize-space()='Property']/following-sibling::dd[normalize-space()='" + setupRecoveryPropertyId + "']][.//dt[normalize-space()='Unit']/following-sibling::dd[normalize-space()='" + setupRecoveryUnitId + "']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='" + setupRecoverySpaceId + "']][.//dd[normalize-space()='Concurrent cross-Property move']]",
+    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Moved']][.//span[contains(normalize-space(),'current')]][.//dt[normalize-space()='Property']/following-sibling::dd[normalize-space()='Current property']][.//dt[normalize-space()='Unit']/following-sibling::dd[normalize-space()='UNIT-RECOVERY-BRW']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='Assigned space']][.//dd[normalize-space()='Concurrent cross-Property move']]",
   );
 
   const assetReplacementForm = "//form[@data-asset-form='replace']";
