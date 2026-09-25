@@ -1820,10 +1820,30 @@ export function UnitMaintenance({
                 <dl className="detail-list compact-detail-list">
                   <div><dt>Priority</dt><dd>{issue.priority}</dd></div>
                   <div><dt>Reported</dt><dd>{formatSwissDateTime(issue.reportedAt)}</dd></div>
-                  <div><dt>Asset</dt><dd>{issue.assetId ?? '—'}</dd></div>
+                  <div>
+                    <dt>Asset</dt>
+                    <dd>
+                      {issue.assetId
+                        ? assets?.find((asset) => asset.id === issue.assetId)?.code ??
+                          'Assigned asset'
+                        : '—'}
+                    </dd>
+                  </div>
                   <div>
                     <dt>Inspection origin</dt>
-                    <dd>{issue.inspectionFindingId ?? '—'}</dd>
+                    <dd>
+                      {issue.inspectionFindingId
+                        ? (() => {
+                            const option = findings?.find(
+                              ({ finding }) =>
+                                finding.id === issue.inspectionFindingId,
+                            );
+                            return option
+                              ? `${option.inspectionCode} · ${option.finding.title}`
+                              : 'Linked finding';
+                          })()
+                        : '—'}
+                    </dd>
                   </div>
                 </dl>
               </WorkspaceLink>
