@@ -2413,7 +2413,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[contains(@class,'maintenance-admin-panel')]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='" + setupSpaceId + "']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='" + setupAssetId + "']][.//dt[normalize-space()='Inspection Finding']/following-sibling::dd[normalize-space()='" + setupInspectionFindingId + "']]",
+    "//section[contains(@class,'maintenance-admin-panel')]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='BED-SETUP']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='AST-SETUP-BRW']][.//dt[normalize-space()='Inspection Finding']/following-sibling::dd[contains(normalize-space(),'INS-MAINT-BRW') and contains(normalize-space(),'Washer leak observed')]]",
   );
 
   const issueUpdateForm =
