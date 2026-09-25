@@ -610,6 +610,23 @@ export class PostgresInspectionRepository implements InspectionRepository {
   ): Promise<void> {
     await translated(async () => {
       await this.sql.begin(async (tx) => {
+        // Acquire the strongest per-Unit coordination lock before the first
+        // FK write that references Unit. This avoids KEY SHARE -> UPDATE lock
+        // upgrades when two Inspection creates race for the same Unit, while
+        // still serializing concurrent Space creation behind this transaction.
+        const unitRows = await tx<{ id: string }[]>`
+          select id
+          from public.units
+          where id = ${inspection.unitId}
+          for update
+        `;
+        if (unitRows.length !== 1) {
+          throw new DomainError(
+            'INSPECTION_UNIT_NOT_FOUND',
+            'Inspection Unit no longer exists.',
+          );
+        }
+
         await tx`
           insert into public.inspections (
             id, code, inspection_type, unit_id, tenancy_id, schema_version_id,
@@ -626,23 +643,6 @@ export class PostgresInspectionRepository implements InspectionRepository {
             ${inspection.version}, ${inspection.contentRevision}
           )
         `;
-
-        // Freeze Unit membership against concurrent Space creation. A new
-        // Space must acquire a FK KEY SHARE lock on its parent Unit, which
-        // conflicts with this row lock and therefore serializes after this
-        // Inspection creation transaction.
-        const unitRows = await tx<{ id: string }[]>`
-          select id
-          from public.units
-          where id = ${inspection.unitId}
-          for update
-        `;
-        if (unitRows.length !== 1) {
-          throw new DomainError(
-            'INSPECTION_UNIT_NOT_FOUND',
-            'Inspection Unit no longer exists.',
-          );
-        }
 
         // Lock every existing Space row, not only currently matching rows.
         // This prevents active/type/ownership changes from moving a Space into

@@ -4584,6 +4584,95 @@ describe('PostgreSQL infrastructure', () => {
         (space) => space.code,
       ),
     ).toEqual(['BED-A1', 'BED-A2', 'BED-A3']);
+
+    // Two legitimate creates for the same Unit must serialize on the Unit lock
+    // instead of both taking FK KEY SHARE first and then deadlocking while
+    // upgrading to FOR UPDATE.
+    const freshSpaces = (
+      await portfolioRepository.listSpacesByUnit(unit.id)
+    ).filter((space) => space.active);
+    const concurrentInspectionA = createInspection({
+      id: asInspectionId(ids.next()),
+      code: 'INS-SPACE-CONCURRENT-A',
+      inspectionType: 'move_in',
+      unitId: unit.id,
+      schemaVersionId: schema.id,
+      assignedToUserId: actor.userId,
+      createdByUserId: actor.userId,
+    });
+    const concurrentInspectionB = createInspection({
+      id: asInspectionId(ids.next()),
+      code: 'INS-SPACE-CONCURRENT-B',
+      inspectionType: 'move_in',
+      unitId: unit.id,
+      schemaVersionId: schema.id,
+      assignedToUserId: actor.userId,
+      createdByUserId: actor.userId,
+    });
+    const materializeFreshInstances = (
+      candidate: ReturnType<typeof createInspection>,
+    ) =>
+      schema.sections.flatMap((section) =>
+        freshSpaces
+          .filter(
+            (space) =>
+              section.scope === 'space' &&
+              section.spaceTypes.includes(space.spaceType),
+          )
+          .map((space) =>
+            createInspectionSectionInstance(candidate, section, {
+              id: asInspectionSectionInstanceId(ids.next()),
+              space,
+            }),
+          ),
+      );
+    const instancesA = materializeFreshInstances(concurrentInspectionA);
+    const instancesB = materializeFreshInstances(concurrentInspectionB);
+
+    const concurrentSqlA = postgres(connectionString, { max: 1 });
+    const concurrentSqlB = postgres(connectionString, { max: 1 });
+    const concurrentRepositoryA = new PostgresInspectionRepository(
+      concurrentSqlA,
+    );
+    const concurrentRepositoryB = new PostgresInspectionRepository(
+      concurrentSqlB,
+    );
+    try {
+      // Establish both sessions first so the actual create calls start from
+      // equivalent connection state and exercise the same-Unit race.
+      await Promise.all([concurrentSqlA`select 1`, concurrentSqlB`select 1`]);
+      await Promise.all([
+        concurrentRepositoryA.insert(
+          concurrentInspectionA,
+          schema,
+          instancesA,
+        ),
+        concurrentRepositoryB.insert(
+          concurrentInspectionB,
+          schema,
+          instancesB,
+        ),
+      ]);
+    } finally {
+      await Promise.all([concurrentSqlA.end(), concurrentSqlB.end()]);
+    }
+
+    expect(
+      await inspectionRepository.getById(concurrentInspectionA.id),
+    ).not.toBeNull();
+    expect(
+      await inspectionRepository.getById(concurrentInspectionB.id),
+    ).not.toBeNull();
+    expect(
+      await inspectionRepository.listSectionInstances(
+        concurrentInspectionA.id,
+      ),
+    ).toHaveLength(3);
+    expect(
+      await inspectionRepository.listSectionInstances(
+        concurrentInspectionB.id,
+      ),
+    ).toHaveLength(3);
   });
 
 
