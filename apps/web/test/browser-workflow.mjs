@@ -2330,7 +2330,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Asset created']][.//span[contains(normalize-space(),'2027-10-01T09:00:00.000Z')]]",
+    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Asset created']][.//span[contains(normalize-space(),'01.10.2027 10:00')]]",
   );
   await waitForElement(
     sessionId,
