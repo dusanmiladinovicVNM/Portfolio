@@ -1,4 +1,5 @@
 import type { PdfPort, PdfRenderResult } from '@portfolio/application';
+import { buildInspectionReportViewModel } from './inspection-report-view-model.js';
 
 type InspectionFinalSnapshot = Parameters<
   PdfPort['renderInspectionFinalReport']
@@ -6,111 +7,455 @@ type InspectionFinalSnapshot = Parameters<
 
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
-const MARGIN_X = 36;
-const START_Y = 806;
-const FONT_SIZE = 8;
-const LEADING = 10;
-const MAX_COLUMNS = 88;
-const MAX_LINES_PER_PAGE = 72;
+const MARGIN = 42;
+const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
+const FOOTER_Y = 34;
 
-function asciiPreserving(value: string): string {
+const TEXT = '0.12 0.14 0.12';
+const MUTED = '0.38 0.40 0.37';
+const DARK = '0.12 0.16 0.12';
+const ACCENT = '0.88 0.91 0.86';
+const PANEL = '0.97 0.97 0.95';
+const BORDER = '0.82 0.82 0.78';
+const WHITE = '1 1 1';
+
+type FontName = 'F1' | 'F2';
+
+interface PdfPage {
+  readonly commands: string[];
+}
+
+function ascii(value: string): string {
+  const replaced = value
+    .replaceAll('Đ', 'D')
+    .replaceAll('đ', 'd')
+    .replaceAll('Ł', 'L')
+    .replaceAll('ł', 'l')
+    .replaceAll('–', '-')
+    .replaceAll('—', '-')
+    .replaceAll('−', '-')
+    .replaceAll('→', '->')
+    .replaceAll('←', '<-')
+    .replaceAll('“', '"')
+    .replaceAll('”', '"')
+    .replaceAll('„', '"')
+    .replaceAll('’', "'")
+    .replaceAll('‘', "'")
+    .replaceAll('•', '*')
+    .replaceAll(' ', ' ')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/gu, '');
+
   let result = '';
-  for (const char of value) {
-    const codePoint = char.codePointAt(0)!;
-    if (codePoint >= 0x20 && codePoint <= 0x7e) {
+  for (const char of replaced) {
+    const code = char.charCodeAt(0);
+    if (char === '\n' || (code >= 0x20 && code <= 0x7e)) {
       result += char;
-    } else if (char === '\n' || char === '\r' || char === '\t') {
-      result += char;
-    } else if (codePoint <= 0xffff) {
-      result += `\\u${codePoint.toString(16).padStart(4, '0')}`;
     } else {
-      result += `\\u{${codePoint.toString(16)}}`;
+      result += '?';
     }
   }
   return result;
 }
 
 function pdfString(value: string): string {
-  return value
+  return ascii(value)
     .replaceAll('\\', '\\\\')
     .replaceAll('(', '\\(')
     .replaceAll(')', '\\)');
 }
 
-function wrappedLines(value: string): string[] {
+function textWidth(value: string, size: number, bold: boolean): number {
+  let units = 0;
+  for (const char of ascii(value)) {
+    if (char === ' ') units += 0.28;
+    else if ('ilI.,:;!|'.includes(char)) units += 0.28;
+    else if ('MW@%'.includes(char)) units += 0.82;
+    else if (/[A-Z0-9]/u.test(char)) units += 0.62;
+    else units += bold ? 0.56 : 0.52;
+  }
+  return units * size;
+}
+
+function splitLongWord(
+  word: string,
+  maxWidth: number,
+  size: number,
+  bold: boolean,
+): string[] {
+  const parts: string[] = [];
+  let current = '';
+  for (const char of word) {
+    const candidate = current + char;
+    if (current && textWidth(candidate, size, bold) > maxWidth) {
+      parts.push(current);
+      current = char;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) parts.push(current);
+  return parts;
+}
+
+function wrapText(
+  value: string,
+  maxWidth: number,
+  size: number,
+  bold = false,
+): string[] {
   const result: string[] = [];
-  for (const rawLine of value.split(/\r?\n/u)) {
-    if (rawLine.length === 0) {
+  for (const paragraph of ascii(value).split(/\n/u)) {
+    if (!paragraph.trim()) {
       result.push('');
       continue;
     }
-    for (let offset = 0; offset < rawLine.length; offset += MAX_COLUMNS) {
-      result.push(rawLine.slice(offset, offset + MAX_COLUMNS));
+
+    const words = paragraph.trim().split(/\s+/u);
+    let current = '';
+    for (const rawWord of words) {
+      const pieces =
+        textWidth(rawWord, size, bold) <= maxWidth
+          ? [rawWord]
+          : splitLongWord(rawWord, maxWidth, size, bold);
+      for (const word of pieces) {
+        const candidate = current ? `${current} ${word}` : word;
+        if (current && textWidth(candidate, size, bold) > maxWidth) {
+          result.push(current);
+          current = word;
+        } else {
+          current = candidate;
+        }
+      }
     }
+    if (current) result.push(current);
   }
   return result;
 }
 
-function canonicalReportLines(snapshot: InspectionFinalSnapshot): string[] {
-  const payload = asciiPreserving(JSON.stringify(snapshot, null, 2));
-  return [
-    'PORTFOLIO INSPECTION FINAL REPORT',
-    '',
-    `Inspection ID: ${snapshot.inspectionId}`,
-    `Snapshot ID: ${snapshot.id}`,
-    `Snapshot version: ${snapshot.snapshotVersion}`,
-    `Inspection version: ${snapshot.inspectionVersion}`,
-    `Content revision: ${snapshot.contentRevision}`,
-    `Created at: ${snapshot.createdAt}`,
-    `Created by user: ${snapshot.createdByUserId}`,
-    '',
-    'Canonical final snapshot:',
-    ...wrappedLines(payload),
-  ];
-}
-
-function pageContent(lines: readonly string[]): string {
-  return [
+function drawText(
+  page: PdfPage,
+  value: string,
+  x: number,
+  y: number,
+  size: number,
+  font: FontName = 'F1',
+  color = TEXT,
+): void {
+  page.commands.push(
     'BT',
-    `/F1 ${FONT_SIZE} Tf`,
-    `${MARGIN_X} ${START_Y} Td`,
-    `${LEADING} TL`,
-    ...lines.flatMap((line, index) =>
-      index === 0
-        ? [`(${pdfString(line)}) Tj`]
-        : ['T*', `(${pdfString(line)}) Tj`],
-    ),
+    `${color} rg`,
+    `/${font} ${size} Tf`,
+    `${x} ${y} Td`,
+    `(${pdfString(value)}) Tj`,
     'ET',
-  ].join('\n');
+  );
 }
 
-function buildPdf(pages: readonly (readonly string[])[]): Uint8Array {
+function fillRect(
+  page: PdfPage,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  color: string,
+): void {
+  page.commands.push(`${color} rg`, `${x} ${y} ${width} ${height} re f`);
+}
+
+function strokeRect(
+  page: PdfPage,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  color = BORDER,
+): void {
+  page.commands.push(
+    `${color} RG`,
+    '0.6 w',
+    `${x} ${y} ${width} ${height} re S`,
+  );
+}
+
+function rule(
+  page: PdfPage,
+  x1: number,
+  y: number,
+  x2: number,
+  color = BORDER,
+): void {
+  page.commands.push(`${color} RG`, '0.5 w', `${x1} ${y} m ${x2} ${y} l S`);
+}
+
+class ReportLayout {
+  readonly pages: PdfPage[] = [];
+  private page!: PdfPage;
+  private y = 0;
+  private readonly inspectionCode: string;
+
+  constructor(inspectionCode: string) {
+    this.inspectionCode = inspectionCode;
+    this.newPage(false);
+  }
+
+  private newPage(continuation: boolean): void {
+    this.page = { commands: [] };
+    this.pages.push(this.page);
+    if (continuation) {
+      drawText(this.page, 'PORTFOLIO', MARGIN, 810, 8, 'F2', MUTED);
+      drawText(this.page, 'INSPECTION REPORT', MARGIN + 66, 810, 8, 'F1', MUTED);
+      rule(this.page, MARGIN, 799, PAGE_WIDTH - MARGIN);
+      this.y = 780;
+    } else {
+      this.y = 800;
+    }
+  }
+
+  ensure(height: number): void {
+    if (this.y - height < 62) this.newPage(true);
+  }
+
+  gap(height: number): void {
+    this.y -= height;
+  }
+
+  paragraph(
+    value: string,
+    options: {
+      readonly size?: number;
+      readonly bold?: boolean;
+      readonly color?: string;
+      readonly x?: number;
+      readonly width?: number;
+      readonly lineHeight?: number;
+    } = {},
+  ): void {
+    const size = options.size ?? 9;
+    const bold = options.bold ?? false;
+    const color = options.color ?? TEXT;
+    const x = options.x ?? MARGIN;
+    const width = options.width ?? CONTENT_WIDTH;
+    const lineHeight = options.lineHeight ?? size + 3;
+    const lines = wrapText(value, width, size, bold);
+    for (const line of lines) {
+      this.ensure(lineHeight);
+      drawText(this.page, line, x, this.y, size, bold ? 'F2' : 'F1', color);
+      this.y -= lineHeight;
+    }
+  }
+
+  sectionTitle(title: string, subtitle: string | null = null): void {
+    const subtitleLines = subtitle
+      ? wrapText(subtitle, CONTENT_WIDTH - 24, 8, false)
+      : [];
+    const height = 28 + subtitleLines.length * 10;
+    this.ensure(height + 8);
+    fillRect(this.page, MARGIN, this.y - height + 8, CONTENT_WIDTH, height, ACCENT);
+    drawText(this.page, title, MARGIN + 12, this.y - 10, 12, 'F2', DARK);
+    let lineY = this.y - 24;
+    for (const line of subtitleLines) {
+      drawText(this.page, line, MARGIN + 12, lineY, 8, 'F1', MUTED);
+      lineY -= 10;
+    }
+    this.y -= height + 8;
+  }
+
+  item(label: string, answer: string, comment: string | null): void {
+    const answerLines = wrapText(answer || 'Not recorded', CONTENT_WIDTH - 24, 10, true);
+    const commentLines = comment
+      ? wrapText(`Comment: ${comment}`, CONTENT_WIDTH - 24, 8, false)
+      : [];
+    const height = 16 + answerLines.length * 13 + commentLines.length * 10 + 10;
+    this.ensure(height);
+
+    drawText(this.page, label, MARGIN + 4, this.y, 8, 'F2', MUTED);
+    this.y -= 14;
+    for (const line of answerLines) {
+      drawText(this.page, line, MARGIN + 4, this.y, 10, 'F2', TEXT);
+      this.y -= 13;
+    }
+    for (const line of commentLines) {
+      drawText(this.page, line, MARGIN + 4, this.y, 8, 'F1', MUTED);
+      this.y -= 10;
+    }
+    this.y -= 4;
+    rule(this.page, MARGIN + 4, this.y, PAGE_WIDTH - MARGIN - 4, '0.90 0.90 0.87');
+    this.y -= 8;
+  }
+
+  card(
+    heading: string,
+    bodyLines: readonly string[],
+    accent: string | null = null,
+  ): void {
+    const wrapped = bodyLines.flatMap((line) => wrapText(line, CONTENT_WIDTH - 28, 8.5));
+    const height = 30 + wrapped.length * 11;
+    this.ensure(height + 8);
+    fillRect(this.page, MARGIN, this.y - height + 8, CONTENT_WIDTH, height, PANEL);
+    strokeRect(this.page, MARGIN, this.y - height + 8, CONTENT_WIDTH, height);
+    if (accent) {
+      fillRect(this.page, MARGIN, this.y - height + 8, 4, height, accent);
+    }
+    drawText(this.page, heading, MARGIN + 14, this.y - 10, 10, 'F2', TEXT);
+    let lineY = this.y - 27;
+    for (const line of wrapped) {
+      drawText(this.page, line, MARGIN + 14, lineY, 8.5, 'F1', MUTED);
+      lineY -= 11;
+    }
+    this.y -= height + 8;
+  }
+
+  renderCover(view: ReturnType<typeof buildInspectionReportViewModel>): void {
+    fillRect(this.page, 0, 750, PAGE_WIDTH, 92, DARK);
+    drawText(this.page, 'PORTFOLIO', MARGIN, 814, 9, 'F2', WHITE);
+    drawText(this.page, view.title.toUpperCase(), MARGIN, 780, 23, 'F2', WHITE);
+    fillRect(this.page, PAGE_WIDTH - MARGIN - 64, 776, 64, 24, '0.30 0.40 0.30');
+    drawText(this.page, view.status, PAGE_WIDTH - MARGIN - 48, 784, 10, 'F2', WHITE);
+    this.y = 726;
+
+    const panelHeight = 92;
+    fillRect(this.page, MARGIN, this.y - panelHeight, CONTENT_WIDTH, panelHeight, PANEL);
+    strokeRect(this.page, MARGIN, this.y - panelHeight, CONTENT_WIDTH, panelHeight);
+    const mid = MARGIN + CONTENT_WIDTH / 2;
+    rule(this.page, mid, this.y - panelHeight + 12, mid, BORDER);
+
+    drawText(this.page, 'PROPERTY', MARGIN + 14, this.y - 18, 7.5, 'F2', MUTED);
+    drawText(this.page, view.propertyName, MARGIN + 14, this.y - 36, 12, 'F2', TEXT);
+    if (view.propertyCode) {
+      drawText(this.page, view.propertyCode, MARGIN + 14, this.y - 52, 8, 'F1', MUTED);
+    }
+    if (view.propertyAddress) {
+      const addressLines = wrapText(view.propertyAddress, CONTENT_WIDTH / 2 - 30, 8);
+      let addressY = this.y - 68;
+      for (const line of addressLines.slice(0, 2)) {
+        drawText(this.page, line, MARGIN + 14, addressY, 8, 'F1', MUTED);
+        addressY -= 10;
+      }
+    }
+
+    drawText(this.page, 'UNIT', mid + 14, this.y - 18, 7.5, 'F2', MUTED);
+    drawText(this.page, view.unitTitle, mid + 14, this.y - 36, 12, 'F2', TEXT);
+    if (view.unitCode) {
+      drawText(this.page, view.unitCode, mid + 14, this.y - 52, 8, 'F1', MUTED);
+    }
+    const unitLines = wrapText(view.unitDetails, CONTENT_WIDTH / 2 - 30, 8);
+    let unitY = this.y - 68;
+    for (const line of unitLines.slice(0, 2)) {
+      drawText(this.page, line, mid + 14, unitY, 8, 'F1', MUTED);
+      unitY -= 10;
+    }
+    this.y -= panelHeight + 18;
+
+    const gap = 8;
+    const tileWidth = (CONTENT_WIDTH - gap * 3) / 4;
+    const tiles = [
+      ['TYPE', view.inspectionType],
+      ['FINDINGS', String(view.findingsCount)],
+      ['EVIDENCE', String(view.evidenceCount)],
+      ['SIGNATURES', String(view.signaturesCount)],
+    ] as const;
+    for (let index = 0; index < tiles.length; index += 1) {
+      const x = MARGIN + index * (tileWidth + gap);
+      fillRect(this.page, x, this.y - 54, tileWidth, 54, '0.94 0.95 0.92');
+      strokeRect(this.page, x, this.y - 54, tileWidth, 54);
+      drawText(this.page, tiles[index]![0], x + 10, this.y - 16, 7, 'F2', MUTED);
+      const value = wrapText(tiles[index]![1], tileWidth - 20, 11, true)[0] ?? '';
+      drawText(this.page, value, x + 10, this.y - 37, 11, 'F2', TEXT);
+    }
+    this.y -= 72;
+
+    drawText(this.page, view.schemaTitle, MARGIN, this.y, 13, 'F2', TEXT);
+    this.y -= 18;
+    this.paragraph(
+      `${view.inspectionCode} - Finalized ${view.finalizedAt}`,
+      { size: 8.5, color: MUTED },
+    );
+    if (view.scheduledFor) {
+      this.paragraph(`Scheduled for ${view.scheduledFor}`, { size: 8, color: MUTED });
+    }
+    this.gap(8);
+  }
+
+  addFooter(pageNumber: number, pageCount: number, view: ReturnType<typeof buildInspectionReportViewModel>): void {
+    rule(this.pageFor(pageNumber - 1), MARGIN, FOOTER_Y + 18, PAGE_WIDTH - MARGIN);
+    const page = this.pageFor(pageNumber - 1);
+    drawText(page, view.inspectionCode, MARGIN, FOOTER_Y, 7, 'F1', MUTED);
+    drawText(
+      page,
+      `Immutable final snapshot v${view.snapshotVersion} - content revision ${view.contentRevision}`,
+      178,
+      FOOTER_Y,
+      7,
+      'F1',
+      MUTED,
+    );
+    drawText(
+      page,
+      `Page ${pageNumber} of ${pageCount}`,
+      PAGE_WIDTH - MARGIN - 58,
+      FOOTER_Y,
+      7,
+      'F1',
+      MUTED,
+    );
+  }
+
+  private pageFor(index: number): PdfPage {
+    const page = this.pages[index];
+    if (!page) throw new Error('PDF page index out of range.');
+    return page;
+  }
+
+  finish(view: ReturnType<typeof buildInspectionReportViewModel>): readonly PdfPage[] {
+    const total = this.pages.length;
+    for (let index = 0; index < total; index += 1) {
+      const current = this.page;
+      this.page = this.pageFor(index);
+      this.addFooter(index + 1, total, view);
+      this.page = current;
+    }
+    return this.pages;
+  }
+}
+
+function buildPdf(pages: readonly PdfPage[]): Uint8Array {
   const objects = new Map<number, string>();
   const pageObjectNumbers: number[] = [];
 
   objects.set(1, '<< /Type /Catalog /Pages 2 0 R >>');
-  objects.set(3, '<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>');
+  objects.set(
+    3,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+  );
+  objects.set(
+    4,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
+  );
 
-  let nextObject = 4;
-  for (const lines of pages) {
+  let nextObject = 5;
+  for (const page of pages) {
     const pageObject = nextObject++;
     const contentObject = nextObject++;
     pageObjectNumbers.push(pageObject);
+    const stream = page.commands.join('\n');
+    const byteLength = new TextEncoder().encode(stream).byteLength;
 
-    const stream = pageContent(lines);
     objects.set(
       contentObject,
-      `<< /Length ${new TextEncoder().encode(stream).byteLength} >>\nstream\n${stream}\nendstream`,
+      `<< /Length ${byteLength} >>\nstream\n${stream}\nendstream`,
     );
     objects.set(
       pageObject,
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentObject} 0 R >>`,
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentObject} 0 R >>`,
     );
   }
 
   objects.set(
     2,
-    `<< /Type /Pages /Count ${pageObjectNumbers.length} /Kids [${pageObjectNumbers.map((n) => `${n} 0 R`).join(' ')}] >>`,
+    `<< /Type /Pages /Count ${pageObjectNumbers.length} /Kids [${pageObjectNumbers
+      .map((number) => `${number} 0 R`)
+      .join(' ')}] >>`,
   );
 
   const maxObject = nextObject - 1;
@@ -139,13 +484,98 @@ export class CanonicalInspectionPdfRenderer implements PdfPort {
   async renderInspectionFinalReport(
     snapshot: InspectionFinalSnapshot,
   ): Promise<PdfRenderResult> {
-    const lines = canonicalReportLines(snapshot);
-    const pages: string[][] = [];
-    for (let offset = 0; offset < lines.length; offset += MAX_LINES_PER_PAGE) {
-      pages.push(lines.slice(offset, offset + MAX_LINES_PER_PAGE));
+    const view = buildInspectionReportViewModel(snapshot);
+    const layout = new ReportLayout(view.inspectionCode);
+
+    layout.renderCover(view);
+
+    layout.sectionTitle('Inspection responses');
+    if (view.sections.length === 0) {
+      layout.paragraph('No recorded inspection responses.', { color: MUTED });
+      layout.gap(8);
+    } else {
+      for (const section of view.sections) {
+        layout.sectionTitle(section.title, section.description);
+        for (const item of section.items) {
+          layout.item(item.label, item.answer, item.comment);
+        }
+      }
     }
 
-    const content = buildPdf(pages.length > 0 ? pages : [['']]);
+    layout.sectionTitle('Findings');
+    if (view.findings.length === 0) {
+      layout.paragraph('No findings were recorded.', { color: MUTED });
+      layout.gap(8);
+    } else {
+      for (const finding of view.findings) {
+        const context = [finding.sectionTitle, finding.itemLabel]
+          .filter((value): value is string => value !== null)
+          .join(' - ');
+        layout.card(
+          `${finding.severity.toUpperCase()} - ${finding.title}`,
+          [
+            context,
+            ...(finding.description ? [finding.description] : []),
+          ],
+          finding.severity === 'Critical' || finding.severity === 'Major'
+            ? '0.65 0.24 0.20'
+            : '0.55 0.55 0.48',
+        );
+      }
+    }
+
+    layout.sectionTitle('Evidence');
+    if (view.evidence.length === 0) {
+      layout.paragraph('No photo or attachment evidence was recorded.', { color: MUTED });
+      layout.gap(8);
+    } else {
+      for (const evidence of view.evidence) {
+        const context = [evidence.sectionTitle, evidence.itemLabel]
+          .filter((value): value is string => value !== null)
+          .join(' - ');
+        layout.card(
+          `${evidence.kind} - ${evidence.fileName}`,
+          [
+            ...(context ? [context] : []),
+            ...(evidence.caption ? [evidence.caption] : []),
+          ],
+        );
+      }
+    }
+
+    layout.sectionTitle('Signatures');
+    if (view.signatures.length === 0) {
+      layout.paragraph('No active signatures are present in the final snapshot.', {
+        color: MUTED,
+      });
+    } else {
+      for (const signature of view.signatures) {
+        layout.card(signature.role, [
+          signature.signerName,
+          `Signed ${signature.signedAt}`,
+          `Evidence: ${signature.documentFileName}`,
+        ]);
+      }
+    }
+    if (view.invalidatedSignaturesCount > 0 || view.unlockCount > 0) {
+      layout.paragraph(
+        `Audit note: ${view.invalidatedSignaturesCount} invalidated signature(s), ${view.unlockCount} unlock event(s) retained in canonical history.`,
+        { size: 8, color: MUTED },
+      );
+      layout.gap(8);
+    }
+
+    layout.sectionTitle('Final report integrity');
+    layout.card('Immutable final snapshot', [
+      `Inspection ID: ${view.inspectionId}`,
+      `Snapshot ID: ${view.snapshotId}`,
+      `Snapshot version: ${view.snapshotVersion}`,
+      `Inspection version at snapshot: ${view.inspectionVersion}`,
+      `Content revision: ${view.contentRevision}`,
+      `Snapshot created: ${view.createdAt}`,
+    ]);
+
+    const content = buildPdf(layout.finish(view));
     return {
       fileName: `inspection-${snapshot.inspectionId}-final.pdf`,
       content,
