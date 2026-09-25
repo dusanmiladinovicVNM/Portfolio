@@ -77,10 +77,14 @@ type LegalDocumentReference =
 
 function tenancyPeriod(tenancy: TenancyResponse): string {
   if (tenancy.actualStart) {
-    return `${tenancy.actualStart} → ${tenancy.actualEnd ?? 'open'}`;
+    return `${formatSwissDate(tenancy.actualStart)} → ${
+      tenancy.actualEnd ? formatSwissDate(tenancy.actualEnd) : 'open'
+    }`;
   }
   if (tenancy.plannedStart) {
-    return `${tenancy.plannedStart} → ${tenancy.plannedEnd ?? 'open'}`;
+    return `${formatSwissDate(tenancy.plannedStart)} → ${
+      tenancy.plannedEnd ? formatSwissDate(tenancy.plannedEnd) : 'open'
+    }`;
   }
   return 'Not scheduled';
 }

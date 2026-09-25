@@ -759,7 +759,7 @@ export function UnitTenancies({
           </div>
           <div className="tenancy-heading-actions">
             <span className="section-note">
-              Current records · reporting context {asOf} is preserved for
+              Current records · reporting context {formatSwissDate(asOf)} is preserved for
               drill-down
             </span>
             <button

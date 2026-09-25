@@ -112,7 +112,7 @@ export function UnitOverview({
             <article className="metric-card metric-card-primary">
               <span>Occupancy</span>
               <strong className="text-metric">{overview.occupancyStatus}</strong>
-              <small>as of {overview.asOf}</small>
+              <small>as of {formatSwissDate(overview.asOf)}</small>
             </article>
             <article className="metric-card">
               <span>Contract coverage</span>

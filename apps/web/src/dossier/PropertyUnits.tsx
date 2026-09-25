@@ -18,6 +18,7 @@ import {
   unitRoute,
 } from '../navigation/workspace-route.js';
 import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
+import { formatSwissDate } from '../presentation/format.js';
 
 interface PropertyUnitsProps {
   readonly api: PortfolioApi;
@@ -85,7 +86,7 @@ export function PropertyUnits({
           </p>
           <h1>{data?.property.name ?? 'Property'}</h1>
           <p className="header-note">
-            Current Unit inventory. Reporting context remains {asOf}, so opening
+            Current Unit inventory. Reporting context remains {formatSwissDate(asOf)}, so opening
             a Unit dossier starts from the same historical business date.
           </p>
         </div>
