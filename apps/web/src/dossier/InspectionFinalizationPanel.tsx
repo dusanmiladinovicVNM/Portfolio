@@ -53,6 +53,8 @@ interface InspectionFinalizationPanelProps {
   readonly api: PortfolioApi;
   readonly bundle: InspectionBundleResponse;
   readonly blockedByDirtySection: boolean;
+  readonly missingRequiredResponses: number;
+  readonly requiredResponsesComplete: boolean;
   readonly writeGate: InspectionWriteGate;
   readonly onCanonicalBundle: (
     targetInspectionId: string,
@@ -125,6 +127,8 @@ export function InspectionFinalizationPanel({
   api,
   bundle,
   blockedByDirtySection,
+  missingRequiredResponses,
+  requiredResponsesComplete,
   writeGate,
   onCanonicalBundle,
 }: InspectionFinalizationPanelProps) {
@@ -220,7 +224,16 @@ export function InspectionFinalizationPanel({
   }
 
   async function lockInspection() {
-    if (inspection.status !== 'in_progress' || !begin('lock')) return;
+    if (inspection.status !== 'in_progress') return;
+    if (!requiredResponsesComplete) {
+      setError(
+        `Complete and save ${missingRequiredResponses} missing required ${
+          missingRequiredResponses === 1 ? 'response' : 'responses'
+        } before locking the Inspection.`,
+      );
+      return;
+    }
+    if (!begin('lock')) return;
     const before = inspection;
     let acknowledged = false;
     let ambiguous = false;
@@ -640,10 +653,29 @@ export function InspectionFinalizationPanel({
             <p className="muted">
               Lock validates required responses with lifecycle + content-revision CAS.
             </p>
+            <p
+              className={
+                requiredResponsesComplete
+                  ? 'inspection-completeness-note inspection-completeness-note-complete'
+                  : 'inspection-completeness-note inspection-completeness-note-missing'
+              }
+            >
+              {requiredResponsesComplete
+                ? 'Canonical required responses are complete.'
+                : `${missingRequiredResponses} required ${
+                    missingRequiredResponses === 1
+                      ? 'response remains'
+                      : 'responses remain'
+                  } to be completed and saved.`}
+            </p>
           </div>
           <button
             className="button-primary"
-            disabled={blocked || blockedByDirtySection}
+            disabled={
+              blocked ||
+              blockedByDirtySection ||
+              !requiredResponsesComplete
+            }
             onClick={lockInspection}
             type="button"
           >

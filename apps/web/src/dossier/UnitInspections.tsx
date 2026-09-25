@@ -44,6 +44,11 @@ import { InspectionFinalizationPanel } from './InspectionFinalizationPanel.js';
 import { InspectionFindingsEvidence } from './InspectionFindingsEvidence.js';
 import { InspectionOrchestrationPanel } from './InspectionOrchestrationPanel.js';
 import { assertInspectionBundleOwner } from './inspection-content-owner.js';
+import {
+  buildInspectionRequiredProgress,
+  inspectionAnswerPresent,
+  inspectionValuesByFieldKey,
+} from './inspection-progress.js';
 import type { InspectionWriteGate } from './inspection-write-gate.js';
 import { assertUnitInspectionListOwner } from './inspection-orchestration-owner.js';
 
@@ -134,29 +139,9 @@ function valuesByFieldKey(
   sectionInstance: SectionInstance,
   draft: DraftByItem,
 ): ReadonlyMap<string, InspectionAnswerValue> {
-  const itemById = new Map(
-    bundle.schema.sections.flatMap((candidate) =>
-      candidate.items.map((item) => [item.id, item] as const),
-    ),
+  const values = new Map(
+    inspectionValuesByFieldKey(bundle, sectionInstance),
   );
-  const instanceById = new Map(
-    bundle.sectionInstances.map((instance) => [instance.id, instance] as const),
-  );
-  const values = new Map<string, InspectionAnswerValue>();
-
-  for (const response of bundle.responses) {
-    const item = itemById.get(response.itemId);
-    const sourceInstance = instanceById.get(response.sectionInstanceId);
-    if (!item || !sourceInstance) continue;
-    const sameInstance = sourceInstance.id === sectionInstance.id;
-    const unitContext = sourceInstance.scope === 'unit';
-    const sameSpaceContext =
-      sectionInstance.spaceId !== null &&
-      sourceInstance.spaceId === sectionInstance.spaceId;
-    if (sameInstance || unitContext || sameSpaceContext) {
-      values.set(item.key.toLowerCase(), response.value);
-    }
-  }
 
   for (const item of section.items) {
     const value = normalizedInspectionAnswer(item, draft[item.id]?.value);
@@ -637,6 +622,24 @@ export function UnitInspections({
       );
     });
   }, [routeBundle]);
+
+  const requiredProgress = useMemo(
+    () =>
+      routeBundle
+        ? buildInspectionRequiredProgress(routeBundle)
+        : null,
+    [routeBundle],
+  );
+  const requiredProgressBySectionInstance = useMemo(
+    () =>
+      new Map(
+        (requiredProgress?.sections ?? []).map((section) => [
+          section.sectionInstanceId,
+          section,
+        ] as const),
+      ),
+    [requiredProgress],
+  );
 
   const selectedSectionInstance = useMemo(() => {
     if (!routeBundle) return null;
@@ -1180,6 +1183,47 @@ export function UnitInspections({
             </div>
           ) : null}
 
+          {requiredProgress ? (
+            <div
+              className={`inspection-progress-card ${
+                requiredProgress.complete
+                  ? 'inspection-progress-card-complete'
+                  : 'inspection-progress-card-incomplete'
+              }`}
+              data-inspection-required-progress
+            >
+              <div className="inspection-progress-heading">
+                <div>
+                  <strong>Required response progress</strong>
+                  <small>Canonical saved responses only</small>
+                </div>
+                <span className="inspection-progress-count">
+                  {requiredProgress.requiredAnswered} / {requiredProgress.requiredTotal} saved
+                </span>
+              </div>
+              <progress
+                aria-label="Saved required Inspection responses"
+                max={requiredProgress.requiredTotal === 0 ? 1 : requiredProgress.requiredTotal}
+                value={
+                  requiredProgress.requiredTotal === 0
+                    ? 1
+                    : requiredProgress.requiredAnswered
+                }
+              />
+              <small>
+                {requiredProgress.complete
+                  ? requiredProgress.requiredTotal === 0
+                    ? 'This Inspection schema has no required responses.'
+                    : 'All saved required responses are complete.'
+                  : `${requiredProgress.missingRequired} required ${
+                      requiredProgress.missingRequired === 1
+                        ? 'response is'
+                        : 'responses are'
+                    } still missing from canonical saved state.`}
+              </small>
+            </div>
+          ) : null}
+
           <div className="inspection-layout">
             <nav
               aria-label="Inspection sections"
@@ -1191,6 +1235,14 @@ export function UnitInspections({
                 );
                 if (!section) return null;
                 const title = sectionInstanceTitle(section, instance);
+                const progress =
+                  requiredProgressBySectionInstance.get(instance.id);
+                const progressState =
+                  progress?.requiredTotal === 0
+                    ? 'optional'
+                    : progress?.complete
+                      ? 'complete'
+                      : 'missing';
                 return (
                   <WorkspaceLink
                     ariaCurrent={
@@ -1217,6 +1269,15 @@ export function UnitInspections({
                     )}
                   >
                     <strong>{title}</strong>
+                    <span
+                      className={`inspection-section-progress inspection-section-progress-${progressState}`}
+                    >
+                      {progress?.requiredTotal === 0
+                        ? 'No required responses'
+                        : progress?.complete
+                          ? `${progress.requiredAnswered}/${progress.requiredTotal} required · complete`
+                          : `${progress?.requiredAnswered ?? 0}/${progress?.requiredTotal ?? 0} required · ${progress?.missingRequired ?? 0} missing`}
+                    </span>
                     <small>
                       {instance.scope === 'space'
                         ? `${formatDetailKey(instance.spaceType ?? 'space')} · `
@@ -1275,9 +1336,19 @@ export function UnitInspections({
                       ));
                   const entry =
                     draft[item.id] ?? { value: undefined, comment: '' };
+                  const requiredMissing =
+                    required &&
+                    !inspectionAnswerPresent(
+                      normalizedInspectionAnswer(item, entry.value),
+                    );
 
                   return (
-                    <div className="inspection-item" key={item.id}>
+                    <div
+                      className={`inspection-item ${
+                        requiredMissing ? 'inspection-item-missing' : ''
+                      }`}
+                      key={item.id}
+                    >
                       <label className="inspection-item-label">
                         <span>
                           {item.label}
@@ -1298,6 +1369,11 @@ export function UnitInspections({
                         item={item}
                         onChange={(next) => changeItem(item.id, next)}
                       />
+                      {requiredMissing ? (
+                        <small className="inspection-required-message">
+                          Required response missing
+                        </small>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -1370,6 +1446,8 @@ export function UnitInspections({
             blockedByDirtySection={hasUnsavedChanges}
             bundle={routeBundle}
             key={`${routeBundle.inspection.id}:finalization`}
+            missingRequiredResponses={requiredProgress?.missingRequired ?? 0}
+            requiredResponsesComplete={requiredProgress?.complete ?? false}
             onCanonicalBundle={(targetInspectionId, canonical) => {
               if (activeInspectionIdRef.current !== targetInspectionId) return;
               assertInspectionBundleOwner(targetInspectionId, unitId, canonical);
