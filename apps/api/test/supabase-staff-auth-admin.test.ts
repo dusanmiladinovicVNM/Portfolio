@@ -17,7 +17,11 @@ describe('SupabaseStaffAuthAdmin', () => {
       expect(request.headers.get('apikey')).toBe('server-secret');
       expect(request.headers.get('authorization')).toBe('Bearer server-secret');
       return Response.json({
-        users: [{ id: 'auth-existing', email: 'staff@example.test' }],
+        users: [{
+          id: 'auth-existing',
+          email: 'staff@example.test',
+          email_confirmed_at: '2026-09-25T06:00:00.000Z',
+        }],
       });
     }) as unknown as typeof fetch;
 
@@ -26,6 +30,37 @@ describe('SupabaseStaffAuthAdmin', () => {
       email: 'staff@example.test',
     });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('resends an invite for an existing unconfirmed exact-email user and preserves its subject', async () => {
+    const requests: Request[] = [];
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      requests.push(request);
+      if (request.method === 'GET') {
+        return Response.json({
+          users: [{
+            id: 'auth-unconfirmed',
+            email: 'staff@example.test',
+            email_confirmed_at: null,
+          }],
+        });
+      }
+      return Response.json({
+        id: 'auth-unconfirmed',
+        email: 'staff@example.test',
+        email_confirmed_at: null,
+      });
+    }) as unknown as typeof fetch;
+
+    await expect(client(fetchImpl).ensureInvitedUser('staff@example.test')).resolves.toEqual({
+      subject: 'auth-unconfirmed',
+      email: 'staff@example.test',
+    });
+    expect(requests).toHaveLength(2);
+    expect(requests[1]!.method).toBe('POST');
+    expect(requests[1]!.url).toContain('/auth/v1/invite');
+    expect(await requests[1]!.json()).toEqual({ email: 'staff@example.test' });
   });
 
   it('invites a missing user and returns the exact external subject', async () => {
