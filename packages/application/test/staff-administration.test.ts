@@ -167,14 +167,24 @@ describe('Staff Administration application boundary', () => {
       identities: [{ provider: 'supabase', subject: 'supabase-inspector' }],
     });
 
+    let resendCalls = 0;
+    const resendAuthAdmin: StaffAuthAdminPort = {
+      async ensureInvitedUser(email) {
+        resendCalls += 1;
+        return { subject: 'supabase-inspector', email };
+      },
+    };
+
     await expect(
       inviteStaffCommand(
-        { staffRepository: repository, authAdmin },
+        { staffRepository: repository, authAdmin: resendAuthAdmin },
         admin,
         otherId,
         2,
       ),
     ).resolves.toEqual(invited);
+    expect(resendCalls).toBe(1);
+    expect(repository.staff.get(otherId)).toEqual(invited);
   });
 
   it('prevents self-demotion and self-deactivation before persistence', async () => {
