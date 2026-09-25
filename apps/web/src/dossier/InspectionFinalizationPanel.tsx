@@ -33,7 +33,10 @@ import {
   requiredString,
 } from '../admin/form-utils.js';
 import { DocumentBinaryActions } from '../documents/DocumentBinaryActions.js';
-import { formatDetailKey } from '../presentation/format.js';
+import {
+  formatDetailKey,
+  formatSwissDateTime,
+} from '../presentation/format.js';
 import { assertInspectionBundleOwner } from './inspection-content-owner.js';
 import {
   assertInspectionFinalizeTransition,
@@ -681,7 +684,11 @@ export function InspectionFinalizationPanel({
                           ? 'active'
                           : `invalidated · ${signature.invalidationReason ?? 'no reason'}`}
                       </small>
-                      <small>Version {signature.signatureDocumentVersionId}</small>
+                      <small>
+                        {signature.invalidatedAt === null
+                          ? `Signed ${formatSwissDateTime(signature.signedAt)}`
+                          : `Invalidated ${formatSwissDateTime(signature.invalidatedAt)}`}
+                      </small>
                     </li>
                   ))}
                 </ul>
@@ -716,7 +723,6 @@ export function InspectionFinalizationPanel({
                 <strong>
                   v{signatureVersion.versionNumber} · {signatureVersion.fileName}
                 </strong>
-                <small>{signatureVersion.id}</small>
                 <DocumentBinaryActions
                   api={api}
                   fileName={signatureVersion.fileName}
@@ -822,7 +828,7 @@ export function InspectionFinalizationPanel({
                   source lifecycle v{bundle.finalSnapshot.inspectionVersion} ·
                   content r{bundle.finalSnapshot.contentRevision}
                 </small>
-                <small>{bundle.finalSnapshot.createdAt}</small>
+                <small>{formatSwissDateTime(bundle.finalSnapshot.createdAt)}</small>
               </>
             ) : (
               <p className="form-error">
@@ -849,7 +855,6 @@ export function InspectionFinalizationPanel({
               <div className="document-version-box">
                 <span>Canonical final report</span>
                 <strong>{reportVersion.fileName}</strong>
-                <small>{reportVersion.id}</small>
                 <DocumentBinaryActions
                   api={api}
                   fileName={reportVersion.fileName}
