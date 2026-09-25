@@ -56,7 +56,11 @@ import {
   contractErrorMessage,
   requiredString,
 } from '../admin/form-utils.js';
-import { formatDetailKey } from '../presentation/format.js';
+import {
+  formatDetailKey,
+  formatSwissDateTime,
+  swissLocalDateTimeToInstant,
+} from '../presentation/format.js';
 import {
   assertAssetServiceEventsOwner,
   assertAssetServicePlansOwner,
@@ -95,14 +99,6 @@ function optionalPositiveInt(form: FormData, name: string): number | null {
   if (value === '') return null;
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : Number.NaN;
-}
-
-function utcInstant(date: string, time: string): string | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) {
-    return null;
-  }
-  const value = new Date(`${date}T${time}:00.000Z`);
-  return Number.isNaN(value.getTime()) ? null : value.toISOString();
 }
 
 function errorMessage(cause: unknown, fallback: string): string {
@@ -571,7 +567,7 @@ export function AssetServiceAdministration({
     event.preventDefault();
     const element = event.currentTarget;
     const form = new FormData(element);
-    const performedAt = utcInstant(
+    const performedAt = swissLocalDateTimeToInstant(
       requiredString(form, 'performedDate'),
       requiredString(form, 'performedTime'),
     );
@@ -793,7 +789,7 @@ export function AssetServiceAdministration({
                   <input disabled={pending} name="performedDate" required type="date" />
                 </label>
                 <label>
-                  Performed time (UTC)
+                  Performed time (Zürich)
                   <input disabled={pending} name="performedTime" required type="time" />
                 </label>
               </div>
@@ -1055,13 +1051,17 @@ export function AssetServiceAdministration({
                   <article className="maintenance-service-card" key={serviceEvent.id}>
                     <div className="record-heading">
                       <strong>{formatDetailKey(serviceEvent.eventType)}</strong>
-                      <span>{serviceEvent.performedAt}</span>
+                      <span>{formatSwissDateTime(serviceEvent.performedAt)}</span>
                     </div>
                     <p>{serviceEvent.description}</p>
                     <small>
                       {serviceEvent.reference ?? 'No reference'}
-                      {serviceEvent.servicePlanId ? ` · plan ${serviceEvent.servicePlanId}` : ''}
-                      {serviceEvent.warrantyClaimId ? ` · claim ${serviceEvent.warrantyClaimId}` : ''}
+                      {serviceEvent.servicePlanId
+                        ? ` · plan ${plans?.find((plan) => plan.id === serviceEvent.servicePlanId)?.name ?? 'linked'}`
+                        : ''}
+                      {serviceEvent.warrantyClaimId
+                        ? ` · warranty claim ${claims.find((claim) => claim.id === serviceEvent.warrantyClaimId)?.status ?? 'linked'}`
+                        : ''}
                     </small>
                   </article>
                 ))}
