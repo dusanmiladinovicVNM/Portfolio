@@ -170,8 +170,11 @@ describe('CanonicalInspectionPdfRenderer', () => {
     expect(source).toContain('INSPECTION REPORT');
     expect(source).toContain('Birmensdorferstrasse 123 - Demo');
     expect(source).toContain('(Portfolio) Tj');
+    expect(source).toContain('Property & Unit identity');
     expect(source).toContain('Birmensdorferstrasse 123, 8003 Zurich, CH');
+    expect(source).toContain('Code: ZH-BIR-123');
     expect(source).toContain('Unit 3.01');
+    expect(source).toContain('Code: ZH-BIR123-301');
     expect(source).toContain('Periodic Unit Inspection');
     expect(source).toContain('Condition');
     expect(source).toContain('Good');
@@ -206,7 +209,14 @@ describe('CanonicalInspectionPdfRenderer', () => {
     const snapshot = snapshotFixture() as unknown as {
       payload: {
         reportContext: {
-          property: { name: string };
+          property: {
+            name: string;
+            street: string;
+            houseNumber: string;
+            postalCode: string;
+            city: string;
+            countryCode: string;
+          };
           unit: { unitNumber: string };
         };
         schema: {
@@ -228,9 +238,18 @@ describe('CanonicalInspectionPdfRenderer', () => {
     } & InspectionFinalSnapshot;
 
     snapshot.payload.reportContext.property.name =
-      'Very Long Zurich Commercial Property Management Holding AG With Extended Building Identity';
+      `PROPERTY_START ${'property identity '.repeat(60)} PROPERTY_MIDDLE ${'property continuation '.repeat(60)} PROPERTY_END`;
+    snapshot.payload.reportContext.property.street =
+      `ADDRESS_START ${'very long street identity '.repeat(45)} ADDRESS_MIDDLE`;
+    snapshot.payload.reportContext.property.houseNumber =
+      '123-ADDRESS-HOUSE';
+    snapshot.payload.reportContext.property.postalCode =
+      '8003-ADDRESS-POSTAL';
+    snapshot.payload.reportContext.property.city =
+      `${'address city continuation '.repeat(45)} ADDRESS_END`;
+    snapshot.payload.reportContext.property.countryCode = 'CH';
     snapshot.payload.reportContext.unit.unitNumber =
-      '3.01 - Long Internal Commercial Unit Reference';
+      `UNIT_START ${'unit identity '.repeat(70)} UNIT_MIDDLE ${'unit continuation '.repeat(70)} UNIT_END`;
 
     snapshot.payload.schema.sections[0]!.description =
       `SCHEMA_START ${'schema detail '.repeat(700)} SCHEMA_MIDDLE ${'schema continuation '.repeat(700)} SCHEMA_END`;
@@ -251,6 +270,15 @@ describe('CanonicalInspectionPdfRenderer', () => {
     const source = new TextDecoder().decode(rendered.content);
 
     for (const sentinel of [
+      'PROPERTY_START',
+      'PROPERTY_MIDDLE',
+      'PROPERTY_END',
+      'ADDRESS_START',
+      'ADDRESS_MIDDLE',
+      'ADDRESS_END',
+      'UNIT_START',
+      'UNIT_MIDDLE',
+      'UNIT_END',
       'SCHEMA_START',
       'SCHEMA_MIDDLE',
       'SCHEMA_END',
@@ -289,5 +317,7 @@ describe('CanonicalInspectionPdfRenderer', () => {
     for (const y of textYCoordinates) {
       expect(y === 34 || y >= 62).toBe(true);
     }
+
+    expect(source).not.toContain('(Property & Unit identity (continued)) Tj');
   });
 });
