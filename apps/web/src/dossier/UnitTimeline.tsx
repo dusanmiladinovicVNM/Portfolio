@@ -76,7 +76,7 @@ export function UnitTimeline({ api, unitId }: UnitTimelineProps) {
           <h2>Unit timeline</h2>
         </div>
         <span className="section-note">
-          Date-only events stay date-only; instant events are displayed in UTC
+          Date-only events stay date-only; instant events use Zürich local time
         </span>
       </div>
 
@@ -118,7 +118,7 @@ export function UnitTimeline({ api, unitId }: UnitTimelineProps) {
                 </div>
                 <h3>{formatTimelineEventType(event.eventType)}</h3>
                 <p className="timeline-source">
-                  {event.sourceType} · {event.sourceId}
+                  {formatDetailKey(event.sourceType)}
                 </p>
                 <EventDetails details={event.details} />
               </article>
