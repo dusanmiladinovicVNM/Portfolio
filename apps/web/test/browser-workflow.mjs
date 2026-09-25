@@ -3479,6 +3479,23 @@ try {
     'xpath',
     "//span[contains(@class,'status-chip')][normalize-space()='in_progress']",
   );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-required-progress]//*[contains(normalize-space(),'0 / 1 saved')]",
+  );
+  const lockButton =
+    "//button[normalize-space()='Lock Inspection']";
+  assertEqual(
+    await elementDisabledXpath(sessionId, lockButton),
+    true,
+    'Incomplete canonical required responses disable Inspection lock',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//div[contains(@class,'inspection-item-missing')][.//span[contains(normalize-space(),'Condition')]]//*[normalize-space()='Required response missing']",
+  );
 
   const conditionSelect =
     "//div[contains(@class,'inspection-item')][.//span[contains(normalize-space(),'Condition')]]//select";
@@ -3487,6 +3504,11 @@ try {
   const notesInput =
     "//div[contains(@class,'inspection-item')][.//span[contains(normalize-space(),'Damage notes')]]//input[@type='text']";
   await waitForElement(sessionId, 'xpath', notesInput);
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//div[contains(@class,'inspection-item-missing')][.//span[contains(normalize-space(),'Damage notes')]]//*[normalize-space()='Required response missing']",
+  );
   await typeXpath(sessionId, notesInput, 'Window scratch');
 
   const dirtyCreateForm =
@@ -3613,6 +3635,21 @@ try {
     sessionId,
     'xpath',
     "//a[contains(@class,'inspection-section-link')][.//small[normalize-space()='revision 1']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-required-progress]//*[contains(normalize-space(),'2 / 2 saved')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'inspection-section-link')][.//strong[normalize-space()='General condition']]//*[contains(normalize-space(),'2/2 required · complete')]",
+  );
+  assertEqual(
+    await elementDisabledXpath(sessionId, lockButton),
+    false,
+    'Canonical required completeness enables Inspection lock',
   );
 
   await selectOptionXpath(
@@ -4178,7 +4215,7 @@ try {
   await waitForBinaryReads(sessionId, readsBeforeFinalReport + 1);
 
   process.stdout.write(
-    'Browser workflow PASS: Core setup + route-owner guards → Contracts/documents → Inspection field evidence → lock/sign/unlock/finalize/report\n',
+    'Browser workflow PASS: Core setup + route-owner guards → Contracts/documents → Inspection progress/completeness → field evidence → lock/sign/unlock/finalize/report\n',
   );
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.stack : error}\n`);
