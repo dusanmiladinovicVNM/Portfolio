@@ -255,42 +255,106 @@ class ReportLayout {
     }
   }
 
+  private ensureLine(height: number): boolean {
+    const before = this.pages.length;
+    this.ensure(height);
+    return this.pages.length !== before;
+  }
+
+  private continuedLabel(value: string): string {
+    return `${value} (continued)`;
+  }
+
   sectionTitle(title: string, subtitle: string | null = null): void {
+    const titleLines = wrapText(title, CONTENT_WIDTH - 24, 12, true);
     const subtitleLines = subtitle
       ? wrapText(subtitle, CONTENT_WIDTH - 24, 8, false)
       : [];
-    const height = 28 + subtitleLines.length * 10;
-    this.ensure(height + 8);
-    fillRect(this.page, MARGIN, this.y - height + 8, CONTENT_WIDTH, height, ACCENT);
-    drawText(this.page, title, MARGIN + 12, this.y - 10, 12, 'F2', DARK);
-    let lineY = this.y - 24;
+
+    const drawTitleLine = (line: string, continued: boolean): void => {
+      this.ensureLine(24);
+      fillRect(this.page, MARGIN, this.y - 16, CONTENT_WIDTH, 24, ACCENT);
+      drawText(
+        this.page,
+        continued ? this.continuedLabel(line) : line,
+        MARGIN + 12,
+        this.y - 8,
+        12,
+        'F2',
+        DARK,
+      );
+      this.y -= 28;
+    };
+
+    if (titleLines.length === 0) titleLines.push(title);
+    titleLines.forEach((line, index) => drawTitleLine(line, index > 0));
+
     for (const line of subtitleLines) {
-      drawText(this.page, line, MARGIN + 12, lineY, 8, 'F1', MUTED);
-      lineY -= 10;
+      const pageChanged = this.ensureLine(12);
+      if (pageChanged) {
+        drawTitleLine(this.continuedLabel(title), false);
+      }
+      drawText(this.page, line, MARGIN + 12, this.y, 8, 'F1', MUTED);
+      this.y -= 12;
     }
-    this.y -= height + 8;
+    this.y -= 4;
   }
 
   item(label: string, answer: string, comment: string | null): void {
-    const answerLines = wrapText(answer || 'Not recorded', CONTENT_WIDTH - 24, 10, true);
+    const labelLines = wrapText(label, CONTENT_WIDTH - 16, 8, true);
+    const answerLines = wrapText(
+      answer || 'Not recorded',
+      CONTENT_WIDTH - 16,
+      10,
+      true,
+    );
     const commentLines = comment
-      ? wrapText(`Comment: ${comment}`, CONTENT_WIDTH - 24, 8, false)
+      ? wrapText(`Comment: ${comment}`, CONTENT_WIDTH - 16, 8, false)
       : [];
-    const height = 16 + answerLines.length * 13 + commentLines.length * 10 + 10;
-    this.ensure(height);
 
-    drawText(this.page, label, MARGIN + 4, this.y, 8, 'F2', MUTED);
-    this.y -= 14;
+    const drawContinuation = (): void => {
+      this.ensure(18);
+      drawText(
+        this.page,
+        this.continuedLabel(label),
+        MARGIN + 4,
+        this.y,
+        8,
+        'F2',
+        MUTED,
+      );
+      this.y -= 14;
+    };
+
+    for (const line of labelLines) {
+      this.ensureLine(14);
+      drawText(this.page, line, MARGIN + 4, this.y, 8, 'F2', MUTED);
+      this.y -= 14;
+    }
+
     for (const line of answerLines) {
+      const pageChanged = this.ensureLine(13);
+      if (pageChanged) drawContinuation();
       drawText(this.page, line, MARGIN + 4, this.y, 10, 'F2', TEXT);
       this.y -= 13;
     }
+
     for (const line of commentLines) {
+      const pageChanged = this.ensureLine(10);
+      if (pageChanged) drawContinuation();
       drawText(this.page, line, MARGIN + 4, this.y, 8, 'F1', MUTED);
       this.y -= 10;
     }
+
+    this.ensureLine(12);
     this.y -= 4;
-    rule(this.page, MARGIN + 4, this.y, PAGE_WIDTH - MARGIN - 4, '0.90 0.90 0.87');
+    rule(
+      this.page,
+      MARGIN + 4,
+      this.y,
+      PAGE_WIDTH - MARGIN - 4,
+      '0.90 0.90 0.87',
+    );
     this.y -= 8;
   }
 
@@ -299,21 +363,51 @@ class ReportLayout {
     bodyLines: readonly string[],
     accent: string | null = null,
   ): void {
-    const wrapped = bodyLines.flatMap((line) => wrapText(line, CONTENT_WIDTH - 28, 8.5));
-    const height = 30 + wrapped.length * 11;
-    this.ensure(height + 8);
-    fillRect(this.page, MARGIN, this.y - height + 8, CONTENT_WIDTH, height, PANEL);
-    strokeRect(this.page, MARGIN, this.y - height + 8, CONTENT_WIDTH, height);
-    if (accent) {
-      fillRect(this.page, MARGIN, this.y - height + 8, 4, height, accent);
-    }
-    drawText(this.page, heading, MARGIN + 14, this.y - 10, 10, 'F2', TEXT);
-    let lineY = this.y - 27;
+    const headingLines = wrapText(heading, CONTENT_WIDTH - 28, 10, true);
+    const wrapped = bodyLines.flatMap((line) =>
+      wrapText(line, CONTENT_WIDTH - 28, 8.5),
+    );
+
+    const drawHeading = (continued: boolean): void => {
+      const line = continued ? this.continuedLabel(heading) : heading;
+      const lines = wrapText(line, CONTENT_WIDTH - 28, 10, true);
+      for (const [index, headingLine] of lines.entries()) {
+        this.ensureLine(22);
+        fillRect(this.page, MARGIN, this.y - 14, CONTENT_WIDTH, 22, PANEL);
+        strokeRect(this.page, MARGIN, this.y - 14, CONTENT_WIDTH, 22);
+        if (accent) {
+          fillRect(this.page, MARGIN, this.y - 14, 4, 22, accent);
+        }
+        drawText(
+          this.page,
+          headingLine,
+          MARGIN + 14,
+          this.y - 6,
+          10,
+          'F2',
+          TEXT,
+        );
+        this.y -= index === lines.length - 1 ? 26 : 22;
+      }
+    };
+
+    // Keep the first heading with at least one body line where possible.
+    this.ensure(headingLines.length * 22 + (wrapped.length > 0 ? 13 : 0));
+    drawHeading(false);
+
     for (const line of wrapped) {
-      drawText(this.page, line, MARGIN + 14, lineY, 8.5, 'F1', MUTED);
-      lineY -= 11;
+      const pageChanged = this.ensureLine(13);
+      if (pageChanged) drawHeading(true);
+      fillRect(this.page, MARGIN, this.y - 9, CONTENT_WIDTH, 13, PANEL);
+      if (accent) {
+        fillRect(this.page, MARGIN, this.y - 9, 4, 13, accent);
+      }
+      drawText(this.page, line, MARGIN + 14, this.y, 8.5, 'F1', MUTED);
+      this.y -= 13;
     }
-    this.y -= height + 8;
+
+    this.ensureLine(8);
+    this.y -= 8;
   }
 
   renderCover(view: ReturnType<typeof buildInspectionReportViewModel>): void {
@@ -336,30 +430,42 @@ class ReportLayout {
       BORDER,
     );
 
+    const columnWidth = CONTENT_WIDTH / 2 - 30;
+
     drawText(this.page, 'PROPERTY', MARGIN + 14, this.y - 18, 7.5, 'F2', MUTED);
-    drawText(this.page, view.propertyName, MARGIN + 14, this.y - 36, 12, 'F2', TEXT);
+    const propertyNameLines = wrapText(view.propertyName, columnWidth, 11, true);
+    let propertyY = this.y - 35;
+    for (const line of propertyNameLines.slice(0, 2)) {
+      drawText(this.page, line, MARGIN + 14, propertyY, 11, 'F2', TEXT);
+      propertyY -= 12;
+    }
     if (view.propertyCode) {
-      drawText(this.page, view.propertyCode, MARGIN + 14, this.y - 52, 8, 'F1', MUTED);
+      drawText(this.page, view.propertyCode, MARGIN + 14, this.y - 61, 8, 'F1', MUTED);
     }
     if (view.propertyAddress) {
-      const addressLines = wrapText(view.propertyAddress, CONTENT_WIDTH / 2 - 30, 8);
-      let addressY = this.y - 68;
+      const addressLines = wrapText(view.propertyAddress, columnWidth, 8);
+      let addressY = this.y - 75;
       for (const line of addressLines.slice(0, 2)) {
         drawText(this.page, line, MARGIN + 14, addressY, 8, 'F1', MUTED);
-        addressY -= 10;
+        addressY -= 9;
       }
     }
 
     drawText(this.page, 'UNIT', mid + 14, this.y - 18, 7.5, 'F2', MUTED);
-    drawText(this.page, view.unitTitle, mid + 14, this.y - 36, 12, 'F2', TEXT);
-    if (view.unitCode) {
-      drawText(this.page, view.unitCode, mid + 14, this.y - 52, 8, 'F1', MUTED);
+    const unitTitleLines = wrapText(view.unitTitle, columnWidth, 11, true);
+    let unitTitleY = this.y - 35;
+    for (const line of unitTitleLines.slice(0, 2)) {
+      drawText(this.page, line, mid + 14, unitTitleY, 11, 'F2', TEXT);
+      unitTitleY -= 12;
     }
-    const unitLines = wrapText(view.unitDetails, CONTENT_WIDTH / 2 - 30, 8);
-    let unitY = this.y - 68;
+    if (view.unitCode) {
+      drawText(this.page, view.unitCode, mid + 14, this.y - 61, 8, 'F1', MUTED);
+    }
+    const unitLines = wrapText(view.unitDetails, columnWidth, 8);
+    let unitY = this.y - 75;
     for (const line of unitLines.slice(0, 2)) {
       drawText(this.page, line, mid + 14, unitY, 8, 'F1', MUTED);
-      unitY -= 10;
+      unitY -= 9;
     }
     this.y -= panelHeight + 18;
 
