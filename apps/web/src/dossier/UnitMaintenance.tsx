@@ -1164,7 +1164,7 @@ function IssueAdministration({
             <div><dt>Assigned</dt><dd>{formatSwissDateTime(selectedOrder.assignedAt)}</dd></div>
             <div><dt>Started</dt><dd>{formatSwissDateTime(selectedOrder.startedAt)}</dd></div>
             <div><dt>Completed</dt><dd>{formatSwissDateTime(selectedOrder.completedAt)}</dd></div>
-            <div><dt>Cancelled</dt><dd>{selectedOrder.cancelledAt ?? '—'}</dd></div>
+            <div><dt>Cancelled</dt><dd>{formatSwissDateTime(selectedOrder.cancelledAt)}</dd></div>
           </dl>
 
           {selectedOrder.status === 'draft' ||
