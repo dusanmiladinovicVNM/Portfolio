@@ -52,7 +52,7 @@ import {
 } from '@portfolio/contracts';
 import {
   asInspectionId,
-  asInspectionSchemaSectionId,
+  asInspectionSectionInstanceId,
   asInspectionSchemaVersionId,
   asTenancyId,
   asUnitId,
@@ -66,6 +66,7 @@ import {
   toInspectionFinalSnapshotResponse,
   toInspectionItemResponse,
   toInspectionResponse,
+  toInspectionSectionInstanceResponse,
   toInspectionSchemaVersionResponse,
   toInspectionSignatureResponse,
   toDocumentVersionResponse,
@@ -129,6 +130,10 @@ export async function handleInspectionHttp(
               ? { description: section.description }
               : {}),
             sortOrder: section.sortOrder,
+            ...(section.scope !== undefined ? { scope: section.scope } : {}),
+            ...(section.spaceTypes !== undefined
+              ? { spaceTypes: [...section.spaceTypes] }
+              : {}),
             items: section.items.map((item) => ({
               key: item.key,
               type: item.type,
@@ -318,7 +323,11 @@ export async function handleInspectionHttp(
       data: {
         inspection: toInspectionResponse(bundle.inspection),
         schema: toInspectionSchemaVersionResponse(bundle.schema),
+        sectionInstances: bundle.sectionInstances.map(
+          toInspectionSectionInstanceResponse,
+        ),
         sectionStates: bundle.sectionStates.map((state) => ({
+          sectionInstanceId: state.sectionInstanceId,
           sectionId: state.sectionId,
           revision: state.revision,
         })),
@@ -362,15 +371,19 @@ export async function handleInspectionHttp(
     }
   }
 
-  const sectionMatch =
-    /^\/inspections\/([^/]+)\/sections\/([^/]+)$/.exec(path);
-  if (method === 'PATCH' && sectionMatch) {
-    const inspectionId = entityIdSchema.safeParse(sectionMatch[1]);
-    const sectionId = entityIdSchema.safeParse(sectionMatch[2]);
+  const sectionInstanceMatch =
+    /^\/inspections\/([^/]+)\/section-instances\/([^/]+)$/.exec(path);
+  if (method === 'PATCH' && sectionInstanceMatch) {
+    const inspectionId = entityIdSchema.safeParse(sectionInstanceMatch[1]);
+    const sectionInstanceId = entityIdSchema.safeParse(sectionInstanceMatch[2]);
     const parsed = saveInspectionSectionRequestSchema.safeParse(
       await requestJson(request),
     );
-    if (!inspectionId.success || !sectionId.success || !parsed.success) {
+    if (
+      !inspectionId.success ||
+      !sectionInstanceId.success ||
+      !parsed.success
+    ) {
       return validationFailure();
     }
 
@@ -382,7 +395,7 @@ export async function handleInspectionHttp(
       },
       actor,
       asInspectionId(inspectionId.data),
-      asInspectionSchemaSectionId(sectionId.data),
+      asInspectionSectionInstanceId(sectionInstanceId.data),
       parsed.data.expectedRevision,
       {
         set: parsed.data.set.map((item) => ({
@@ -421,7 +434,9 @@ export async function handleInspectionHttp(
       actor,
       asInspectionId(parsedId.data),
       {
-        sectionId: asInspectionSchemaSectionId(parsed.data.sectionId),
+        sectionInstanceId: asInspectionSectionInstanceId(
+          parsed.data.sectionInstanceId,
+        ),
         ...(parsed.data.itemId !== undefined
           ? { itemId: parsed.data.itemId }
           : {}),
@@ -458,8 +473,8 @@ export async function handleInspectionHttp(
       {
         documentVersionId: parsed.data.documentVersionId,
         kind: parsed.data.kind,
-        ...(parsed.data.sectionId !== undefined
-          ? { sectionId: parsed.data.sectionId }
+        ...(parsed.data.sectionInstanceId !== undefined
+          ? { sectionInstanceId: parsed.data.sectionInstanceId }
           : {}),
         ...(parsed.data.itemId !== undefined
           ? { itemId: parsed.data.itemId }

@@ -5,6 +5,7 @@ import type {
   InspectionEvidenceId,
   InspectionFinalSnapshotId,
   InspectionId,
+  InspectionSectionInstanceId,
   InspectionSchemaItemId,
   InspectionSchemaSectionId,
   InspectionSignatureId,
@@ -17,6 +18,7 @@ import type {
   Inspection,
   InspectionFinding,
   InspectionResponse,
+  InspectionSectionInstance,
 } from './inspection.js';
 import type {
   InspectionSchemaVersion,
@@ -35,6 +37,7 @@ export type InspectionEvidenceKind =
 export interface InspectionEvidence {
   readonly id: InspectionEvidenceId;
   readonly inspectionId: InspectionId;
+  readonly sectionInstanceId: InspectionSectionInstanceId | null;
   readonly sectionId: InspectionSchemaSectionId | null;
   readonly itemId: InspectionSchemaItemId | null;
   readonly documentVersionId: DocumentVersionId;
@@ -106,6 +109,7 @@ export interface InspectionFinalSnapshotPayload {
   readonly inspection: Inspection;
   readonly schema: InspectionSchemaVersion;
   readonly reportContext?: InspectionFinalReportContext | null;
+  readonly sectionInstances?: readonly InspectionSectionInstance[];
   readonly responses: readonly InspectionResponse[];
   readonly findings: readonly InspectionFinding[];
   readonly evidence: readonly InspectionSnapshotEvidence[];
@@ -164,6 +168,14 @@ export function createInspectionEvidence(
       'Item-level evidence must also identify its section.',
     );
   }
+  if (
+    (input.sectionId === null) !== (input.sectionInstanceId === null)
+  ) {
+    throw new DomainError(
+      'INSPECTION_EVIDENCE_SECTION_INSTANCE_MISMATCH',
+      'Section-scoped evidence must identify both section and section instance.',
+    );
+  }
 
   return {
     ...input,
@@ -193,6 +205,7 @@ export function createInspectionFinalReportEvidence(
   return {
     id: input.id,
     inspectionId: inspection.id,
+    sectionInstanceId: null,
     sectionId: null,
     itemId: null,
     documentVersionId: input.documentVersionId,
@@ -305,6 +318,7 @@ export function createInspectionFinalSnapshot(
   sourceInspection: Inspection,
   finalizedInspection: Inspection,
   schema: InspectionSchemaVersion,
+  sectionInstances: readonly InspectionSectionInstance[],
   responses: readonly InspectionResponse[],
   findings: readonly InspectionFinding[],
   evidenceItems: readonly InspectionSnapshotEvidence[],
@@ -348,6 +362,7 @@ export function createInspectionFinalSnapshot(
     payload: {
       inspection: { ...finalizedInspection },
       schema,
+      sectionInstances: sectionInstances.map((instance) => ({ ...instance })),
       ...(input.reportContext === undefined
         ? {}
         : {

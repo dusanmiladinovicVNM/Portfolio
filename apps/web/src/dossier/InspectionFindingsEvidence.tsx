@@ -55,7 +55,7 @@ import type { InspectionWriteGate } from './inspection-write-gate.js';
 interface InspectionFindingsEvidenceProps {
   readonly api: PortfolioApi;
   readonly bundle: InspectionBundleResponse;
-  readonly selectedSectionId: string;
+  readonly selectedSectionInstanceId: string;
   readonly blockedByDirtySection: boolean;
   readonly writeGate: InspectionWriteGate;
   readonly onCanonicalBundle: (
@@ -99,7 +99,7 @@ function newestVersion(
 export function InspectionFindingsEvidence({
   api,
   bundle,
-  selectedSectionId,
+  selectedSectionInstanceId,
   blockedByDirtySection,
   writeGate,
   onCanonicalBundle,
@@ -125,9 +125,14 @@ export function InspectionFindingsEvidence({
     useState<EvidenceScope>('section');
 
   const inspection = bundle.inspection;
-  const selectedSection = bundle.schema.sections.find(
-    (section) => section.id === selectedSectionId,
+  const selectedSectionInstance = bundle.sectionInstances.find(
+    (instance) => instance.id === selectedSectionInstanceId,
   );
+  const selectedSection = selectedSectionInstance
+    ? bundle.schema.sections.find(
+        (section) => section.id === selectedSectionInstance.sectionId,
+      )
+    : undefined;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -209,22 +214,23 @@ export function InspectionFindingsEvidence({
     [selectedVersionId, versions],
   );
 
-  if (!selectedSection) {
+  if (!selectedSectionInstance || !selectedSection) {
     return (
       <div className="inspection-content-workspace" role="alert">
         <p className="form-error">
-          Selected Inspection section does not belong to the canonical schema.
+          Selected Inspection section instance does not belong to the canonical Inspection.
         </p>
       </div>
     );
   }
+  const activeSectionInstance = selectedSectionInstance;
   const activeSection = selectedSection;
 
   const contentWritable = inspection.status === 'in_progress';
   const blocked =
     writeGate.pending || blockedByDirtySection || !contentWritable;
   const sectionFindings = bundle.findings.filter(
-    (finding) => finding.sectionId === activeSection.id,
+    (finding) => finding.sectionInstanceId === activeSectionInstance.id,
   );
 
   function rejectContentWriteBlocked(): boolean {
@@ -275,7 +281,7 @@ export function InspectionFindingsEvidence({
     const form = new FormData(formElement);
     const rawItemId = requiredString(form, 'itemId');
     const parsed = createInspectionFindingRequestSchema.safeParse({
-      sectionId: activeSection.id,
+      sectionInstanceId: activeSectionInstance.id,
       itemId: rawItemId || null,
       severity: requiredString(form, 'severity'),
       title: requiredString(form, 'title'),
@@ -289,6 +295,7 @@ export function InspectionFindingsEvidence({
 
     const expected: InspectionFindingRegistration = {
       inspectionId: inspection.id,
+      sectionInstanceId: activeSectionInstance.id,
       sectionId: activeSection.id,
       itemId: parsed.data.itemId ?? null,
       severity: parsed.data.severity,
@@ -660,7 +667,7 @@ export function InspectionFindingsEvidence({
       kind: requiredString(form, 'kind'),
       ...(scope === 'inspection'
         ? {}
-        : { sectionId: activeSection.id }),
+        : { sectionInstanceId: activeSectionInstance.id }),
       ...(scope === 'item' ? { itemId: rawItemId } : {}),
       caption: requiredString(form, 'caption') || null,
     };
@@ -673,8 +680,14 @@ export function InspectionFindingsEvidence({
 
     const expected: InspectionEvidenceRegistration = {
       inspectionId: inspection.id,
+      sectionInstanceId:
+        parsed.data.sectionInstanceId === undefined
+          ? null
+          : parsed.data.sectionInstanceId,
       sectionId:
-        parsed.data.sectionId === undefined ? null : parsed.data.sectionId,
+        parsed.data.sectionInstanceId === undefined
+          ? null
+          : activeSection.id,
       itemId: parsed.data.itemId === undefined ? null : parsed.data.itemId,
       documentVersionId: parsed.data.documentVersionId,
       kind: parsed.data.kind,
@@ -789,7 +802,11 @@ export function InspectionFindingsEvidence({
         <div className="inspection-content-card">
           <div className="tenancy-form-heading">
             <strong>Current section Findings</strong>
-            <span>{activeSection.title}</span>
+            <span>
+              {activeSectionInstance.scope === 'space'
+                ? activeSectionInstance.spaceName ?? activeSection.title
+                : activeSection.title}
+            </span>
           </div>
           {sectionFindings.length === 0 ? (
             <p className="muted">No Findings recorded in this section.</p>
@@ -868,16 +885,35 @@ export function InspectionFindingsEvidence({
                   <strong>{formatDetailKey(evidence.kind)}</strong>
                   {evidence.caption ? <span>{evidence.caption}</span> : null}
                   <small>
-                    {evidence.itemId
-                      ? bundle.schema.sections
-                          .flatMap((section) => section.items)
-                          .find((item) => item.id === evidence.itemId)?.label ??
-                        'Inspection item'
-                      : evidence.sectionId
-                        ? bundle.schema.sections.find(
-                            (section) => section.id === evidence.sectionId,
-                          )?.title ?? 'Inspection section'
-                        : 'Inspection-level Evidence'}
+                    {evidence.sectionInstanceId
+                      ? (() => {
+                          const instance = bundle.sectionInstances.find(
+                            (candidate) =>
+                              candidate.id === evidence.sectionInstanceId,
+                          );
+                          const section = instance
+                            ? bundle.schema.sections.find(
+                                (candidate) =>
+                                  candidate.id === instance.sectionId,
+                              )
+                            : null;
+                          const sectionLabel =
+                            instance?.scope === 'space'
+                              ? instance.spaceName ??
+                                section?.title ??
+                                'Inspection space'
+                              : section?.title ?? 'Inspection section';
+                          const itemLabel =
+                            evidence.itemId === null
+                              ? null
+                              : section?.items.find(
+                                  (item) => item.id === evidence.itemId,
+                                )?.label ?? 'Inspection item';
+                          return itemLabel
+                            ? `${sectionLabel} · ${itemLabel}`
+                            : sectionLabel;
+                        })()
+                      : 'Inspection-level Evidence'}
                   </small>
                   <small>Exact evidence version attached</small>
                 </li>

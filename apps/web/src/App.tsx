@@ -230,8 +230,8 @@ function AuthenticatedShell({
                   ...(route.inspectionId
                     ? { inspectionId: route.inspectionId }
                     : {}),
-                  ...(route.inspectionSectionId
-                    ? { inspectionSectionId: route.inspectionSectionId }
+                  ...(route.inspectionSectionInstanceId
+                    ? { inspectionSectionInstanceId: route.inspectionSectionInstanceId }
                     : {}),
                   ...(route.assetId ? { assetId: route.assetId } : {}),
                   ...(route.meterId ? { meterId: route.meterId } : {}),
@@ -315,7 +315,7 @@ function AuthenticatedShell({
             agreementId={route.agreementId}
             amendmentId={route.amendmentId}
             inspectionId={route.inspectionId}
-            inspectionSectionId={route.inspectionSectionId}
+            inspectionSectionInstanceId={route.inspectionSectionInstanceId}
             assetId={route.assetId}
             meterId={route.meterId}
             maintenanceIssueId={route.maintenanceIssueId}

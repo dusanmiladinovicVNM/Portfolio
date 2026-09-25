@@ -586,6 +586,7 @@ export function InspectionFinalizationPanel({
           (item) =>
             item.kind === 'final_report' &&
             item.documentVersionId === version.id &&
+            item.sectionInstanceId === null &&
             item.sectionId === null &&
             item.itemId === null,
         )

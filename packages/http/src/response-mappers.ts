@@ -23,6 +23,7 @@ import type {
   InspectionFinalSnapshotResponse,
   InspectionItemResponse,
   InspectionResponseDto,
+  InspectionSectionInstanceResponse,
   InspectionSchemaVersionResponse,
   InspectionSignatureResponse,
   LeaseAgreementResponse,
@@ -65,6 +66,7 @@ import type {
   InspectionFinding,
   InspectionFinalSnapshot,
   InspectionResponse,
+  InspectionSectionInstance,
   InspectionSchemaVersion,
   InspectionSignature,
   LeaseAgreement,
@@ -349,6 +351,8 @@ export function toInspectionSchemaVersionResponse(
       title: section.title,
       description: section.description,
       sortOrder: section.sortOrder,
+      scope: section.scope,
+      spaceTypes: [...section.spaceTypes],
       items: section.items.map((item) => ({
         id: item.id,
         sectionId: item.sectionId,
@@ -365,12 +369,29 @@ export function toInspectionSchemaVersionResponse(
   };
 }
 
+export function toInspectionSectionInstanceResponse(
+  instance: InspectionSectionInstance,
+): InspectionSectionInstanceResponse {
+  return {
+    id: instance.id,
+    inspectionId: instance.inspectionId,
+    sectionId: instance.sectionId,
+    scope: instance.scope,
+    spaceId: instance.spaceId,
+    spaceCode: instance.spaceCode,
+    spaceName: instance.spaceName,
+    spaceType: instance.spaceType,
+    spaceSortOrder: instance.spaceSortOrder,
+  };
+}
+
 export function toInspectionItemResponse(
   response: InspectionResponse,
 ): InspectionItemResponse {
   return {
     id: response.id,
     inspectionId: response.inspectionId,
+    sectionInstanceId: response.sectionInstanceId,
     sectionId: response.sectionId,
     itemId: response.itemId,
     value:
@@ -390,6 +411,7 @@ export function toInspectionFindingResponse(
   return {
     id: finding.id,
     inspectionId: finding.inspectionId,
+    sectionInstanceId: finding.sectionInstanceId,
     sectionId: finding.sectionId,
     itemId: finding.itemId,
     severity: finding.severity,

@@ -19,6 +19,7 @@ const schemaId = 'a1000000-0000-4000-8000-000000000003';
 const sectionId = 'a1000000-0000-4000-8000-000000000004';
 const itemId = 'a1000000-0000-4000-8000-000000000005';
 const userId = 'a1000000-0000-4000-8000-000000000006';
+const sectionInstanceId = 'a1000000-0000-4000-8000-000000000007';
 
 function baseBundle(): InspectionBundleResponse {
   return {
@@ -54,6 +55,8 @@ function baseBundle(): InspectionBundleResponse {
         title: 'General',
         description: null,
         sortOrder: 0,
+        scope: 'unit',
+        spaceTypes: [],
         items: [{
           id: itemId,
           sectionId,
@@ -68,7 +71,18 @@ function baseBundle(): InspectionBundleResponse {
         }],
       }],
     },
-    sectionStates: [{ sectionId, revision: 0 }],
+    sectionInstances: [{
+      id: sectionInstanceId,
+      inspectionId,
+      sectionId,
+      scope: 'unit',
+      spaceId: null,
+      spaceCode: null,
+      spaceName: null,
+      spaceType: null,
+      spaceSortOrder: null,
+    }],
+    sectionStates: [{ sectionInstanceId, sectionId, revision: 0 }],
     responses: [],
     findings: [],
     evidence: [],
@@ -81,6 +95,7 @@ function finding(id: string): InspectionFindingResponse {
   return {
     id,
     inspectionId,
+    sectionInstanceId,
     sectionId,
     itemId,
     severity: 'major',
@@ -95,6 +110,7 @@ function evidence(id: string, documentVersionId: string): InspectionEvidenceResp
   return {
     id,
     inspectionId,
+    sectionInstanceId,
     sectionId,
     itemId,
     documentVersionId,
@@ -132,6 +148,27 @@ describe('Inspection content ownership and recovery', () => {
     ).toThrow(/another schema section/);
   });
 
+  it('fails closed when a response claims the right section but another section instance', () => {
+    const bundle = baseBundle();
+    expect(() =>
+      assertInspectionBundleOwner(inspectionId, unitId, {
+        ...bundle,
+        responses: [{
+          id: 'a2000000-0000-4000-8000-000000000010',
+          inspectionId,
+          sectionInstanceId:
+            'b1000000-0000-4000-8000-000000000007',
+          sectionId,
+          itemId,
+          value: 'Good',
+          comment: null,
+          updatedByUserId: userId,
+          updatedAt: '2026-09-22T08:25:00.000Z',
+        }],
+      }),
+    ).toThrow(/another Inspection section instance/);
+  });
+
   it('validates returned Finding registration without inventing a uniqueness key', () => {
     const bundle = baseBundle();
     const created = finding('a2000000-0000-4000-8000-000000000011');
@@ -155,6 +192,7 @@ describe('Inspection content ownership and recovery', () => {
         new Set([old.id]),
         {
           inspectionId,
+          sectionInstanceId,
           sectionId,
           itemId,
           documentVersionId: versionId,

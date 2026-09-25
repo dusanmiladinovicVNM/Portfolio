@@ -1,4 +1,5 @@
 import { DomainError } from '../shared/domain-error.js';
+import { SPACE_TYPES, type SpaceType } from '../portfolio/space.js';
 import type {
   InspectionSchemaItemId,
   InspectionSchemaSectionId,
@@ -31,6 +32,8 @@ export const INSPECTION_ITEM_TYPES = [
   'radio',
 ] as const;
 
+export const INSPECTION_SECTION_SCOPES = ['unit', 'space'] as const;
+
 export const INSPECTION_SIGNATURE_ROLES = [
   'landlord',
   'tenant',
@@ -51,6 +54,7 @@ export type InspectionType = (typeof INSPECTION_TYPES)[number];
 export type InspectionSchemaStatus =
   (typeof INSPECTION_SCHEMA_STATUSES)[number];
 export type InspectionItemType = (typeof INSPECTION_ITEM_TYPES)[number];
+export type InspectionSectionScope = (typeof INSPECTION_SECTION_SCOPES)[number];
 export type InspectionSignatureRole =
   (typeof INSPECTION_SIGNATURE_ROLES)[number];
 export type InspectionConditionOperator =
@@ -98,6 +102,8 @@ export interface InspectionSchemaSection {
   readonly title: string;
   readonly description: string | null;
   readonly sortOrder: number;
+  readonly scope: InspectionSectionScope;
+  readonly spaceTypes: readonly SpaceType[];
   readonly items: readonly InspectionSchemaItem[];
 }
 
@@ -125,6 +131,8 @@ export interface CreateInspectionSchemaVersionInput {
     readonly title: string;
     readonly description?: string | null;
     readonly sortOrder: number;
+    readonly scope?: InspectionSectionScope;
+    readonly spaceTypes?: readonly SpaceType[];
     readonly items: readonly {
       readonly id: InspectionSchemaItemId;
       readonly key: string;
@@ -297,6 +305,29 @@ export function createInspectionSchemaVersion(
 
   const sections = input.sections.map((section) => {
     assertNonnegativeInteger(section.sortOrder, 'section.sortOrder');
+    const scope = section.scope ?? 'unit';
+    const spaceTypes = [...(section.spaceTypes ?? [])];
+    if (scope === 'unit' && spaceTypes.length > 0) {
+      throw new DomainError(
+        'INSPECTION_SCHEMA_UNIT_SECTION_SPACE_TYPES_FORBIDDEN',
+        `Unit section '${section.key}' cannot declare Space types.`,
+      );
+    }
+    if (scope === 'space' && spaceTypes.length === 0) {
+      throw new DomainError(
+        'INSPECTION_SCHEMA_SPACE_SECTION_TYPES_REQUIRED',
+        `Space section '${section.key}' must declare at least one Space type.`,
+      );
+    }
+    if (
+      new Set(spaceTypes).size !== spaceTypes.length ||
+      spaceTypes.some((spaceType) => !SPACE_TYPES.includes(spaceType))
+    ) {
+      throw new DomainError(
+        'INSPECTION_SCHEMA_SPACE_TYPES_INVALID',
+        `Space section '${section.key}' contains invalid or duplicate Space types.`,
+      );
+    }
     if (section.items.length === 0) {
       throw new DomainError(
         'INSPECTION_SCHEMA_SECTION_ITEMS_REQUIRED',
@@ -335,6 +366,8 @@ export function createInspectionSchemaVersion(
           ? null
           : requiredText(section.description, 'section.description'),
       sortOrder: section.sortOrder,
+      scope,
+      spaceTypes,
       items,
     };
   });
@@ -351,6 +384,60 @@ export function createInspectionSchemaVersion(
       `Item sortOrder values must be unique in section '${section.key}'.`,
     ),
   );
+
+  const fieldContext = new Map(
+    sections.flatMap((section) =>
+      section.items.map((item) => [
+        item.key.toLowerCase(),
+        {
+          scope: section.scope,
+          spaceTypes: section.spaceTypes,
+        },
+      ] as const),
+    ),
+  );
+
+  const assertConditionContext = (
+    section: InspectionSchemaSection,
+    condition: InspectionCondition | null,
+  ): void => {
+    if (condition === null) return;
+    if ('all' in condition) {
+      condition.all.forEach((child) => assertConditionContext(section, child));
+      return;
+    }
+    if ('any' in condition) {
+      condition.any.forEach((child) => assertConditionContext(section, child));
+      return;
+    }
+
+    const source = fieldContext.get(condition.fieldKey.toLowerCase());
+    if (!source) return;
+
+    if (section.scope === 'unit' && source.scope === 'space') {
+      throw new DomainError(
+        'INSPECTION_SCHEMA_CONDITION_CONTEXT_INVALID',
+        `Unit section '${section.key}' cannot depend on Space field '${condition.fieldKey}'.`,
+      );
+    }
+
+    if (section.scope === 'space' && source.scope === 'space') {
+      const sourceTypes = new Set(source.spaceTypes);
+      if (section.spaceTypes.some((spaceType) => !sourceTypes.has(spaceType))) {
+        throw new DomainError(
+          'INSPECTION_SCHEMA_CONDITION_CONTEXT_INVALID',
+          `Space section '${section.key}' depends on field '${condition.fieldKey}' that is not available for every target Space type.`,
+        );
+      }
+    }
+  };
+
+  for (const section of sections) {
+    for (const item of section.items) {
+      assertConditionContext(section, item.visibleWhen);
+      assertConditionContext(section, item.requiredWhen);
+    }
+  }
 
   return {
     id: input.id,

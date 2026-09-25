@@ -19,6 +19,32 @@ function sectionOwner(
   return bundle.schema.sections.find((section) => section.id === sectionId);
 }
 
+function sectionInstanceOwner(
+  bundle: InspectionBundleResponse,
+  sectionInstanceId: string,
+) {
+  return bundle.sectionInstances.find(
+    (instance) => instance.id === sectionInstanceId,
+  );
+}
+
+function assertInstanceOwner(
+  bundle: InspectionBundleResponse,
+  inspectionId: string,
+  sectionInstanceId: string,
+  sectionId: string,
+  subject: string,
+): void {
+  const instance = sectionInstanceOwner(bundle, sectionInstanceId);
+  if (
+    !instance ||
+    instance.inspectionId !== inspectionId ||
+    instance.sectionId !== sectionId
+  ) {
+    throw new Error(`${subject} belongs to another Inspection section instance.`);
+  }
+}
+
 function assertItemOwner(
   bundle: InspectionBundleResponse,
   sectionId: string,
@@ -33,6 +59,7 @@ function assertItemOwner(
 
 export interface InspectionFindingRegistration {
   readonly inspectionId: string;
+  readonly sectionInstanceId: string;
   readonly sectionId: string;
   readonly itemId: string | null;
   readonly severity: InspectionFindingResponse['severity'];
@@ -42,6 +69,7 @@ export interface InspectionFindingRegistration {
 
 export interface InspectionEvidenceRegistration {
   readonly inspectionId: string;
+  readonly sectionInstanceId: string | null;
   readonly sectionId: string | null;
   readonly itemId: string | null;
   readonly documentVersionId: string;
@@ -64,16 +92,69 @@ export function assertInspectionBundleOwner(
     throw new Error('Inspection bundle returned a different schema owner.');
   }
 
+  for (const instance of bundle.sectionInstances) {
+    if (instance.inspectionId !== inspectionId) {
+      throw new Error(
+        'Inspection SectionInstance belongs to another Inspection.',
+      );
+    }
+    const section = sectionOwner(bundle, instance.sectionId);
+    if (!section || section.scope !== instance.scope) {
+      throw new Error(
+        'Inspection SectionInstance belongs to another schema section.',
+      );
+    }
+    if (
+      (instance.scope === 'unit' &&
+        (instance.spaceId !== null ||
+          instance.spaceCode !== null ||
+          instance.spaceName !== null ||
+          instance.spaceType !== null ||
+          instance.spaceSortOrder !== null)) ||
+      (instance.scope === 'space' &&
+        (instance.spaceId === null ||
+          instance.spaceCode === null ||
+          instance.spaceName === null ||
+          instance.spaceType === null ||
+          instance.spaceSortOrder === null))
+    ) {
+      throw new Error('Inspection SectionInstance has an invalid scope shape.');
+    }
+    if (
+      instance.scope === 'space' &&
+      instance.spaceType !== null &&
+      !section.spaceTypes.includes(instance.spaceType)
+    ) {
+      throw new Error(
+        'Inspection SectionInstance Space type is outside its schema scope.',
+      );
+    }
+  }
+
   for (const state of bundle.sectionStates) {
     if (!sectionOwner(bundle, state.sectionId)) {
       throw new Error('Inspection SectionState belongs to another schema.');
     }
+    assertInstanceOwner(
+      bundle,
+      inspectionId,
+      state.sectionInstanceId,
+      state.sectionId,
+      'Inspection SectionState',
+    );
   }
 
   for (const response of bundle.responses) {
     if (response.inspectionId !== inspectionId) {
       throw new Error('Inspection Response belongs to another Inspection.');
     }
+    assertInstanceOwner(
+      bundle,
+      inspectionId,
+      response.sectionInstanceId,
+      response.sectionId,
+      'Inspection Response',
+    );
     assertItemOwner(
       bundle,
       response.sectionId,
@@ -89,6 +170,13 @@ export function assertInspectionBundleOwner(
     if (!sectionOwner(bundle, finding.sectionId)) {
       throw new Error('Inspection Finding belongs to another schema section.');
     }
+    assertInstanceOwner(
+      bundle,
+      inspectionId,
+      finding.sectionInstanceId,
+      finding.sectionId,
+      'Inspection Finding',
+    );
     if (finding.itemId !== null) {
       assertItemOwner(
         bundle,
@@ -103,13 +191,31 @@ export function assertInspectionBundleOwner(
     if (evidence.inspectionId !== inspectionId) {
       throw new Error('Inspection Evidence belongs to another Inspection.');
     }
+    if (
+      (evidence.sectionId === null) !==
+      (evidence.sectionInstanceId === null)
+    ) {
+      throw new Error(
+        'Inspection Evidence section and section-instance owners must match.',
+      );
+    }
     if (evidence.itemId !== null && evidence.sectionId === null) {
       throw new Error('Inspection Evidence item is missing its section owner.');
     }
-    if (evidence.sectionId !== null) {
+    if (
+      evidence.sectionId !== null &&
+      evidence.sectionInstanceId !== null
+    ) {
       if (!sectionOwner(bundle, evidence.sectionId)) {
         throw new Error('Inspection Evidence belongs to another schema section.');
       }
+      assertInstanceOwner(
+        bundle,
+        inspectionId,
+        evidence.sectionInstanceId,
+        evidence.sectionId,
+        'Inspection Evidence',
+      );
       if (evidence.itemId !== null) {
         assertItemOwner(
           bundle,
@@ -128,6 +234,7 @@ export function assertCreatedInspectionFinding(
 ): void {
   if (
     finding.inspectionId !== expected.inspectionId ||
+    finding.sectionInstanceId !== expected.sectionInstanceId ||
     finding.sectionId !== expected.sectionId ||
     finding.itemId !== expected.itemId ||
     finding.severity !== expected.severity ||
@@ -144,6 +251,7 @@ export function assertAttachedInspectionEvidence(
 ): void {
   if (
     evidence.inspectionId !== expected.inspectionId ||
+    evidence.sectionInstanceId !== expected.sectionInstanceId ||
     evidence.sectionId !== expected.sectionId ||
     evidence.itemId !== expected.itemId ||
     evidence.documentVersionId !== expected.documentVersionId ||

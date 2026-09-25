@@ -63,6 +63,18 @@ const amendmentDocumentLinkId = 'f3333333-3333-4333-8333-333333333333';
 const inspectionId = 'a1000000-0000-4000-8000-000000000001';
 const inspectionSchemaVersionId = 'a1000000-0000-4000-8000-000000000002';
 const inspectionSectionId = 'a1000000-0000-4000-8000-000000000003';
+const inspectionSectionInstanceId =
+  'a1000000-0000-4000-8000-000000000024';
+const inspectionRoomSectionId =
+  'a9000000-0000-4000-8000-000000000001';
+const inspectionRoomItemId =
+  'a9000000-0000-4000-8000-000000000002';
+const inspectionHallwayInstanceId =
+  'a9000000-0000-4000-8000-000000000003';
+const inspectionLivingRoomInstanceId =
+  'a9000000-0000-4000-8000-000000000004';
+const inspectionBedroomInstanceId =
+  'a9000000-0000-4000-8000-000000000005';
 const inspectionConditionItemId = 'a1000000-0000-4000-8000-000000000004';
 const inspectionNotesItemId = 'a1000000-0000-4000-8000-000000000005';
 const inspectionUserId = 'a1000000-0000-4000-8000-000000000006';
@@ -191,6 +203,10 @@ const setupMaintenanceInspectionId =
   'b1000000-0000-4000-8000-000000000048';
 const setupOrchestrationInspectionId =
   'b1000000-0000-4000-8000-000000000049';
+const setupMaintenanceInspectionSectionInstanceId =
+  'b1000000-0000-4000-8000-000000000061';
+const setupOrchestrationInspectionSectionInstanceId =
+  'b1000000-0000-4000-8000-000000000062';
 const setupOrchestrationOtherStaffId =
   'b1000000-0000-4000-8000-000000000050';
 const orchestrationPropertyId =
@@ -332,8 +348,22 @@ function setupOrchestrationInspectionBundle() {
   return {
     inspection: setupOrchestrationInspection,
     schema: inspectionSchema,
+    sectionInstances: [
+      {
+        id: setupOrchestrationInspectionSectionInstanceId,
+        inspectionId: setupOrchestrationInspection.id,
+        sectionId: inspectionSectionId,
+        scope: 'unit' as const,
+        spaceId: null,
+        spaceCode: null,
+        spaceName: null,
+        spaceType: null,
+        spaceSortOrder: null,
+      },
+    ],
     sectionStates: [
       {
+        sectionInstanceId: setupOrchestrationInspectionSectionInstanceId,
         sectionId: inspectionSectionId,
         revision: 0,
       },
@@ -648,6 +678,7 @@ let inspectionSectionRevision = 0;
 let inspectionResponses: Array<{
   id: string;
   inspectionId: string;
+  sectionInstanceId: string;
   sectionId: string;
   itemId: string;
   value: string | boolean | string[];
@@ -686,6 +717,8 @@ const inspectionSchema = {
       title: 'General condition',
       description: 'Record the overall condition before handover.',
       sortOrder: 0,
+      scope: 'unit' as const,
+      spaceTypes: [],
       items: [
         {
           id: inspectionConditionItemId,
@@ -721,6 +754,29 @@ const inspectionSchema = {
             operator: 'equals',
             value: 'damaged',
           },
+        },
+      ],
+    },
+    {
+      id: inspectionRoomSectionId,
+      key: 'room',
+      title: 'Room condition',
+      description: 'Record room-specific observations.',
+      sortOrder: 1,
+      scope: 'space' as const,
+      spaceTypes: ['hall', 'living_room', 'bedroom'] as const,
+      items: [
+        {
+          id: inspectionRoomItemId,
+          sectionId: inspectionRoomSectionId,
+          key: 'room_note',
+          type: 'text',
+          label: 'Room note',
+          required: false,
+          sortOrder: 0,
+          options: [],
+          visibleWhen: null,
+          requiredWhen: null,
         },
       ],
     },
@@ -760,6 +816,7 @@ function inspectionRecord() {
 const setupInspectionFinding: InspectionFindingResponse = {
   id: setupInspectionFindingId,
   inspectionId: setupMaintenanceInspectionId,
+  sectionInstanceId: setupMaintenanceInspectionSectionInstanceId,
   sectionId: inspectionSectionId,
   itemId: inspectionNotesItemId,
   severity: 'major',
@@ -794,8 +851,22 @@ function setupMaintenanceInspectionBundle() {
   return {
     inspection: setupMaintenanceInspectionRecord(),
     schema: inspectionSchema,
+    sectionInstances: [
+      {
+        id: setupMaintenanceInspectionSectionInstanceId,
+        inspectionId: setupMaintenanceInspectionId,
+        sectionId: inspectionSectionId,
+        scope: 'unit' as const,
+        spaceId: null,
+        spaceCode: null,
+        spaceName: null,
+        spaceType: null,
+        spaceSortOrder: null,
+      },
+    ],
     sectionStates: [
       {
+        sectionInstanceId: setupMaintenanceInspectionSectionInstanceId,
         sectionId: inspectionSectionId,
         revision: 0,
       },
@@ -812,10 +883,72 @@ function inspectionBundle() {
   return {
     inspection: inspectionRecord(),
     schema: inspectionSchema,
+    sectionInstances: [
+      {
+        id: inspectionSectionInstanceId,
+        inspectionId,
+        sectionId: inspectionSectionId,
+        scope: 'unit' as const,
+        spaceId: null,
+        spaceCode: null,
+        spaceName: null,
+        spaceType: null,
+        spaceSortOrder: null,
+      },
+      {
+        id: inspectionHallwayInstanceId,
+        inspectionId,
+        sectionId: inspectionRoomSectionId,
+        scope: 'space' as const,
+        spaceId: 'a9000000-0000-4000-8000-000000000011',
+        spaceCode: 'SP-HALL',
+        spaceName: 'Hallway',
+        spaceType: 'hall' as const,
+        spaceSortOrder: 1,
+      },
+      {
+        id: inspectionLivingRoomInstanceId,
+        inspectionId,
+        sectionId: inspectionRoomSectionId,
+        scope: 'space' as const,
+        spaceId: 'a9000000-0000-4000-8000-000000000012',
+        spaceCode: 'SP-LIVING',
+        spaceName: 'Living room',
+        spaceType: 'living_room' as const,
+        spaceSortOrder: 2,
+      },
+      {
+        id: inspectionBedroomInstanceId,
+        inspectionId,
+        sectionId: inspectionRoomSectionId,
+        scope: 'space' as const,
+        spaceId: 'a9000000-0000-4000-8000-000000000013',
+        spaceCode: 'SP-BED-1',
+        spaceName: 'Bedroom 1',
+        spaceType: 'bedroom' as const,
+        spaceSortOrder: 3,
+      },
+    ],
     sectionStates: [
       {
+        sectionInstanceId: inspectionSectionInstanceId,
         sectionId: inspectionSectionId,
         revision: inspectionSectionRevision,
+      },
+      {
+        sectionInstanceId: inspectionHallwayInstanceId,
+        sectionId: inspectionRoomSectionId,
+        revision: 0,
+      },
+      {
+        sectionInstanceId: inspectionLivingRoomInstanceId,
+        sectionId: inspectionRoomSectionId,
+        revision: 0,
+      },
+      {
+        sectionInstanceId: inspectionBedroomInstanceId,
+        sectionId: inspectionRoomSectionId,
+        revision: 0,
       },
     ],
     responses: inspectionResponses,
@@ -4245,10 +4378,14 @@ globalThis.fetch = async (
       );
     }
     const condition = inspectionResponses.find(
-      (response) => response.itemId === inspectionConditionItemId,
+      (response) =>
+        response.sectionInstanceId === inspectionSectionInstanceId &&
+        response.itemId === inspectionConditionItemId,
     );
     const notes = inspectionResponses.find(
-      (response) => response.itemId === inspectionNotesItemId,
+      (response) =>
+        response.sectionInstanceId === inspectionSectionInstanceId &&
+        response.itemId === inspectionNotesItemId,
     );
     if (
       !condition ||
@@ -4500,6 +4637,7 @@ globalThis.fetch = async (
         {
           id: evidenceId,
           inspectionId,
+          sectionInstanceId: null,
           sectionId: null,
           itemId: null,
           documentVersionId: version.id,
@@ -4525,7 +4663,7 @@ globalThis.fetch = async (
 
   if (
     path ===
-      `/inspections/${inspectionId}/sections/${inspectionSectionId}` &&
+      `/inspections/${inspectionId}/section-instances/${inspectionSectionInstanceId}` &&
     init?.method === 'PATCH'
   ) {
     requireInspectionAuth(init);
@@ -4563,7 +4701,9 @@ globalThis.fetch = async (
     inspectionContentRevision += 1;
     for (const itemId of body.clear) {
       inspectionResponses = inspectionResponses.filter(
-        (response) => response.itemId !== itemId,
+        (response) =>
+          response.sectionInstanceId !== inspectionSectionInstanceId ||
+          response.itemId !== itemId,
       );
     }
 
@@ -4575,6 +4715,7 @@ globalThis.fetch = async (
       const response = {
         id: existingId,
         inspectionId,
+        sectionInstanceId: inspectionSectionInstanceId,
         sectionId: inspectionSectionId,
         itemId: item.itemId,
         value: item.value,
@@ -4584,7 +4725,9 @@ globalThis.fetch = async (
       };
       inspectionResponses = [
         ...inspectionResponses.filter(
-          (candidate) => candidate.itemId !== item.itemId,
+          (candidate) =>
+            candidate.sectionInstanceId !== inspectionSectionInstanceId ||
+            candidate.itemId !== item.itemId,
         ),
         response,
       ];
@@ -4605,14 +4748,14 @@ globalThis.fetch = async (
   ) {
     requireInspectionAuth(init);
     const body = JSON.parse(String(init.body)) as {
-      sectionId: string;
+      sectionInstanceId: string;
       itemId?: string | null;
       severity: InspectionFindingResponse['severity'];
       title: string;
       description?: string | null;
     };
     if (
-      body.sectionId !== inspectionSectionId ||
+      body.sectionInstanceId !== inspectionSectionInstanceId ||
       (body.itemId != null &&
         body.itemId !== inspectionConditionItemId &&
         body.itemId !== inspectionNotesItemId)
@@ -4629,7 +4772,8 @@ globalThis.fetch = async (
     const created: InspectionFindingResponse = {
       id,
       inspectionId,
-      sectionId: body.sectionId,
+      sectionInstanceId: body.sectionInstanceId,
+      sectionId: inspectionSectionId,
       itemId: body.itemId ?? null,
       severity: body.severity,
       title: body.title.trim(),
@@ -4660,7 +4804,7 @@ globalThis.fetch = async (
     const body = JSON.parse(String(init.body)) as {
       documentVersionId: string;
       kind: 'photo' | 'attachment';
-      sectionId?: string;
+      sectionInstanceId?: string;
       itemId?: string;
       caption?: string | null;
     };
@@ -4676,8 +4820,8 @@ globalThis.fetch = async (
       );
     }
     if (
-      body.sectionId !== undefined &&
-      body.sectionId !== inspectionSectionId
+      body.sectionInstanceId !== undefined &&
+      body.sectionInstanceId !== inspectionSectionInstanceId
     ) {
       return apiError(
         422,
@@ -4687,7 +4831,7 @@ globalThis.fetch = async (
     }
     if (
       body.itemId !== undefined &&
-      (body.sectionId !== inspectionSectionId ||
+      (body.sectionInstanceId !== inspectionSectionInstanceId ||
         (body.itemId !== inspectionConditionItemId &&
           body.itemId !== inspectionNotesItemId))
     ) {
@@ -4703,7 +4847,9 @@ globalThis.fetch = async (
     const created: InspectionEvidenceResponse = {
       id,
       inspectionId,
-      sectionId: body.sectionId ?? null,
+      sectionInstanceId: body.sectionInstanceId ?? null,
+      sectionId:
+        body.sectionInstanceId === undefined ? null : inspectionSectionId,
       itemId: body.itemId ?? null,
       documentVersionId: body.documentVersionId,
       kind: body.kind,

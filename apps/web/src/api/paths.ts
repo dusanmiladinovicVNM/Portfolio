@@ -357,11 +357,11 @@ export function inspectionStartPath(inspectionId: string): string {
   return `${inspectionPath(inspectionId)}/start`;
 }
 
-export function inspectionSectionPath(
+export function inspectionSectionInstancePath(
   inspectionId: string,
-  sectionId: string,
+  sectionInstanceId: string,
 ): string {
-  return `${inspectionPath(inspectionId)}/sections/${encodeURIComponent(sectionId)}`;
+  return `${inspectionPath(inspectionId)}/section-instances/${encodeURIComponent(sectionInstanceId)}`;
 }
 
 

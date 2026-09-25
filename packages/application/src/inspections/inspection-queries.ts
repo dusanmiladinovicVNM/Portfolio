@@ -157,6 +157,7 @@ export async function listInspectionSchemaVersionsQuery(
 export interface InspectionBundle {
   readonly inspection: Inspection;
   readonly schema: InspectionSchemaVersion;
+  readonly sectionInstances: readonly import('@portfolio/domain').InspectionSectionInstance[];
   readonly sectionStates: readonly InspectionSectionState[];
   readonly responses: readonly InspectionResponse[];
   readonly findings: readonly InspectionFinding[];
@@ -182,6 +183,7 @@ export async function getInspectionBundleQuery(
   }
 
   const [
+    sectionInstances,
     sectionStates,
     responses,
     findings,
@@ -189,6 +191,7 @@ export async function getInspectionBundleQuery(
     signatures,
     finalSnapshot,
   ] = await Promise.all([
+    repository.listSectionInstances(id),
     repository.listSectionStates(id),
     repository.listResponses(id),
     repository.listFindings(id),
@@ -200,6 +203,7 @@ export async function getInspectionBundleQuery(
   return {
     inspection,
     schema,
+    sectionInstances,
     sectionStates,
     responses,
     findings,

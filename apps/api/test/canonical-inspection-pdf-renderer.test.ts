@@ -70,6 +70,8 @@ function snapshotFixture(): InspectionFinalSnapshot {
             title: 'General condition',
             description: 'Overall state of the inspected unit.',
             sortOrder: 0,
+            scope: 'unit',
+            spaceTypes: [],
             items: [
               {
                 id: '88888888-8888-4888-8888-888888888888',
@@ -87,10 +89,22 @@ function snapshotFixture(): InspectionFinalSnapshot {
           },
         ],
       },
+      sectionInstances: [{
+        id: '77777777-7777-4777-8777-777777777778',
+        inspectionId: '22222222-2222-4222-8222-222222222222',
+        sectionId: '77777777-7777-4777-8777-777777777777',
+        scope: 'unit',
+        spaceId: null,
+        spaceCode: null,
+        spaceName: null,
+        spaceType: null,
+        spaceSortOrder: null,
+      }],
       responses: [
         {
           id: '99999999-9999-4999-8999-999999999999',
           inspectionId: '22222222-2222-4222-8222-222222222222',
+          sectionInstanceId: '77777777-7777-4777-8777-777777777778',
           sectionId: '77777777-7777-4777-8777-777777777777',
           itemId: '88888888-8888-4888-8888-888888888888',
           value: 'Good',
@@ -103,6 +117,7 @@ function snapshotFixture(): InspectionFinalSnapshot {
         {
           id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
           inspectionId: '22222222-2222-4222-8222-222222222222',
+          sectionInstanceId: '77777777-7777-4777-8777-777777777778',
           sectionId: '77777777-7777-4777-8777-777777777777',
           itemId: '88888888-8888-4888-8888-888888888888',
           severity: 'minor',
@@ -117,6 +132,7 @@ function snapshotFixture(): InspectionFinalSnapshot {
           evidence: {
             id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
             inspectionId: '22222222-2222-4222-8222-222222222222',
+            sectionInstanceId: '77777777-7777-4777-8777-777777777778',
             sectionId: '77777777-7777-4777-8777-777777777777',
             itemId: '88888888-8888-4888-8888-888888888888',
             documentVersionId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
@@ -197,11 +213,86 @@ describe('CanonicalInspectionPdfRenderer', () => {
     expect(source).not.toContain('"payload"');
   });
 
+  it('renders repeated schema sections by frozen Space instance without merging their answers', async () => {
+    const snapshot = snapshotFixture();
+    const mutablePayload = snapshot.payload as unknown as {
+      schema: {
+        sections: Array<{
+          id: string;
+          scope: 'unit' | 'space';
+          spaceTypes: string[];
+        }>;
+      };
+      sectionInstances: Array<{
+        id: string;
+        inspectionId: string;
+        sectionId: string;
+        scope: 'space';
+        spaceId: string;
+        spaceCode: string;
+        spaceName: string;
+        spaceType: 'bedroom';
+        spaceSortOrder: number;
+      }>;
+      responses: Array<Record<string, unknown>>;
+      findings: unknown[];
+      evidence: unknown[];
+    };
+
+    const section = mutablePayload.schema.sections[0]!;
+    section.scope = 'space';
+    section.spaceTypes = ['bedroom'];
+    const first = {
+      id: '12111111-1111-4111-8111-111111111111',
+      inspectionId: snapshot.inspectionId,
+      sectionId: section.id,
+      scope: 'space' as const,
+      spaceId: '13111111-1111-4111-8111-111111111111',
+      spaceCode: 'BED-1',
+      spaceName: 'Bedroom 1',
+      spaceType: 'bedroom' as const,
+      spaceSortOrder: 1,
+    };
+    const second = {
+      ...first,
+      id: '12111111-1111-4111-8111-111111111112',
+      spaceId: '13111111-1111-4111-8111-111111111112',
+      spaceCode: 'BED-2',
+      spaceName: 'Bedroom 2',
+      spaceSortOrder: 2,
+    };
+    mutablePayload.sectionInstances = [first, second];
+    const base = mutablePayload.responses[0]!;
+    mutablePayload.responses = [
+      { ...base, sectionInstanceId: first.id, value: 'Good' },
+      {
+        ...base,
+        id: '99999999-9999-4999-8999-999999999998',
+        sectionInstanceId: second.id,
+        value: 'Damaged',
+      },
+    ];
+    mutablePayload.findings = [];
+    mutablePayload.evidence = [];
+
+    const rendered = await new CanonicalInspectionPdfRenderer()
+      .renderInspectionFinalReport(snapshot);
+    const source = new TextDecoder().decode(rendered.content);
+
+    expect(source).toContain('Bedroom 1');
+    expect(source).toContain('Bedroom 2');
+    expect(source).toContain('Good');
+    expect(source).toContain('Damaged');
+    expect(source).toContain('BED-1');
+    expect(source).toContain('BED-2');
+  });
+
   it('keeps old snapshots renderable when presentation context is absent', async () => {
     const snapshot = snapshotFixture() as unknown as {
       payload: { reportContext?: unknown };
     } & InspectionFinalSnapshot;
     delete snapshot.payload.reportContext;
+    delete (snapshot.payload as { sectionInstances?: unknown }).sectionInstances;
 
     const rendered = await new CanonicalInspectionPdfRenderer()
       .renderInspectionFinalReport(snapshot);

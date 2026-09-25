@@ -11,6 +11,7 @@ import {
 type Section = InspectionBundleResponse['schema']['sections'][number];
 
 const sectionId = 'a1000000-0000-4000-8000-000000000003';
+const sectionInstanceId = 'a1000000-0000-4000-8000-000000000006';
 const textItemId = 'a1000000-0000-4000-8000-000000000004';
 const booleanItemId = 'a1000000-0000-4000-8000-000000000005';
 
@@ -20,6 +21,8 @@ const section: Section = {
   title: 'General',
   description: null,
   sortOrder: 0,
+  scope: 'unit',
+  spaceTypes: [],
   items: [
     {
       id: textItemId,
@@ -55,6 +58,7 @@ function response(
   return {
     id: 'a2000000-0000-4000-8000-000000000001',
     inspectionId: 'a2000000-0000-4000-8000-000000000002',
+    sectionInstanceId,
     sectionId,
     itemId,
     value,
@@ -68,6 +72,7 @@ describe('Inspection section patch builder', () => {
   it('maps a cleared text answer to PATCH clear[] instead of an empty response', () => {
     const patch = buildInspectionSectionPatch(
       section,
+      sectionInstanceId,
       [response(textItemId, 'Existing note')],
       {
         [textItemId]: { value: '', comment: '' },
@@ -91,6 +96,7 @@ describe('Inspection section patch builder', () => {
 
     const patch = buildInspectionSectionPatch(
       section,
+      sectionInstanceId,
       [],
       {
         [textItemId]: { value: undefined, comment: '' },
@@ -113,6 +119,7 @@ describe('Inspection section patch builder', () => {
     expect(
       buildInspectionSectionPatch(
         section,
+        sectionInstanceId,
         [response(textItemId, 'Same')],
         {
           [textItemId]: { value: 'Same', comment: '' },
@@ -150,6 +157,7 @@ describe('Inspection section patch builder', () => {
     expect(
       buildInspectionSectionPatch(
         multiselectSection,
+        sectionInstanceId,
         [response(multiselectItemId, ['a', 'b'])],
         {
           [multiselectItemId]: {

@@ -46,7 +46,7 @@ export type WorkspaceRoute =
       readonly agreementId?: string;
       readonly amendmentId?: string;
       readonly inspectionId?: string;
-      readonly inspectionSectionId?: string;
+      readonly inspectionSectionInstanceId?: string;
       readonly assetId?: string;
       readonly meterId?: string;
       readonly maintenanceIssueId?: string;
@@ -129,7 +129,7 @@ export interface UnitRouteSelection {
   readonly agreementId?: string;
   readonly amendmentId?: string;
   readonly inspectionId?: string;
-  readonly inspectionSectionId?: string;
+  readonly inspectionSectionInstanceId?: string;
   readonly assetId?: string;
   readonly meterId?: string;
   readonly maintenanceIssueId?: string;
@@ -153,9 +153,9 @@ export function unitRoute(
       : undefined;
   const inspectionId =
     tab === 'inspections' ? selection.inspectionId : undefined;
-  const inspectionSectionId =
+  const inspectionSectionInstanceId =
     tab === 'inspections' && inspectionId
-      ? selection.inspectionSectionId
+      ? selection.inspectionSectionInstanceId
       : undefined;
   const assetId =
     tab === 'assets' ? selection.assetId : undefined;
@@ -178,7 +178,7 @@ export function unitRoute(
     ...(agreementId ? { agreementId } : {}),
     ...(amendmentId ? { amendmentId } : {}),
     ...(inspectionId ? { inspectionId } : {}),
-    ...(inspectionSectionId ? { inspectionSectionId } : {}),
+    ...(inspectionSectionInstanceId ? { inspectionSectionInstanceId } : {}),
     ...(assetId ? { assetId } : {}),
     ...(meterId ? { meterId } : {}),
     ...(maintenanceIssueId ? { maintenanceIssueId } : {}),
@@ -222,9 +222,9 @@ export function parseWorkspaceLocation(
         tab === 'inspections'
           ? readEntityId(search.get('inspectionId') ?? undefined)
           : null;
-      const inspectionSectionId =
+      const inspectionSectionInstanceId =
         tab === 'inspections' && inspectionId
-          ? readEntityId(search.get('sectionId') ?? undefined)
+          ? readEntityId(search.get('sectionInstanceId') ?? undefined)
           : null;
       const assetId =
         tab === 'assets'
@@ -248,7 +248,7 @@ export function parseWorkspaceLocation(
         ...(agreementId ? { agreementId } : {}),
         ...(amendmentId ? { amendmentId } : {}),
         ...(inspectionId ? { inspectionId } : {}),
-        ...(inspectionSectionId ? { inspectionSectionId } : {}),
+        ...(inspectionSectionInstanceId ? { inspectionSectionInstanceId } : {}),
         ...(assetId ? { assetId } : {}),
         ...(meterId ? { meterId } : {}),
         ...(maintenanceIssueId ? { maintenanceIssueId } : {}),
@@ -289,8 +289,8 @@ export function workspaceRouteHref(route: WorkspaceRoute): string {
     }
     if (route.tab === 'inspections' && route.inspectionId) {
       search.set('inspectionId', route.inspectionId);
-      if (route.inspectionSectionId) {
-        search.set('sectionId', route.inspectionSectionId);
+      if (route.inspectionSectionInstanceId) {
+        search.set('sectionInstanceId', route.inspectionSectionInstanceId);
       }
     }
     if (route.tab === 'assets' && route.assetId) {

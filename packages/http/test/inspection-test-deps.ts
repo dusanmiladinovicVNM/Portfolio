@@ -13,6 +13,8 @@ import {
   type InspectionFinding,
   type InspectionId,
   type InspectionResponse,
+  type InspectionSectionInstance,
+  type InspectionSectionInstanceId,
   type InspectionSchemaSectionId,
   type InspectionSchemaVersion,
   type InspectionSchemaVersionId,
@@ -26,6 +28,10 @@ import {
 export class InMemoryInspectionRepository implements InspectionRepository {
   readonly inspections = new Map<InspectionId, Inspection>();
   readonly schemas = new Map<InspectionSchemaVersionId, InspectionSchemaVersion>();
+  readonly sectionInstances = new Map<
+    InspectionSectionInstanceId,
+    InspectionSectionInstance
+  >();
   readonly states = new Map<string, InspectionSectionState>();
   readonly responses = new Map<string, InspectionResponse>();
   readonly findings: InspectionFinding[] = [];
@@ -58,12 +64,18 @@ export class InMemoryInspectionRepository implements InspectionRepository {
     );
   }
 
-  async insert(inspection: Inspection, schema: InspectionSchemaVersion) {
+  async insert(
+    inspection: Inspection,
+    _schema: InspectionSchemaVersion,
+    sectionInstances: readonly InspectionSectionInstance[],
+  ) {
     this.inspections.set(inspection.id, inspection);
-    for (const section of schema.sections) {
-      this.states.set(`${inspection.id}:${section.id}`, {
+    for (const instance of sectionInstances) {
+      this.sectionInstances.set(instance.id, instance);
+      this.states.set(`${inspection.id}:${instance.id}`, {
         inspectionId: inspection.id,
-        sectionId: section.id,
+        sectionInstanceId: instance.id,
+        sectionId: instance.sectionId,
         revision: 0,
       });
     }
@@ -107,11 +119,28 @@ export class InMemoryInspectionRepository implements InspectionRepository {
     this.inspections.set(inspection.id, inspection);
   }
 
+  async getSectionInstanceById(
+    inspectionId: InspectionId,
+    sectionInstanceId: InspectionSectionInstanceId,
+  ) {
+    const instance = this.sectionInstances.get(sectionInstanceId) ?? null;
+    return instance?.inspectionId === inspectionId ? instance : null;
+  }
+
+  async listSectionInstances(inspectionId: InspectionId) {
+    return [...this.sectionInstances.values()].filter(
+      (instance) => instance.inspectionId === inspectionId,
+    );
+  }
+
   async getSectionRevision(
     inspectionId: InspectionId,
-    sectionId: InspectionSchemaSectionId,
+    sectionInstanceId: InspectionSectionInstanceId,
   ) {
-    return this.states.get(`${inspectionId}:${sectionId}`)?.revision ?? null;
+    return (
+      this.states.get(`${inspectionId}:${sectionInstanceId}`)?.revision ??
+      null
+    );
   }
 
   async listSectionStates(inspectionId: InspectionId) {
@@ -122,12 +151,13 @@ export class InMemoryInspectionRepository implements InspectionRepository {
 
   async saveSection(
     inspectionId: InspectionId,
-    sectionId: InspectionSchemaSectionId,
+    sectionInstanceId: InspectionSectionInstanceId,
+    _sectionId: InspectionSchemaSectionId,
     expectedRevision: number,
     responses: readonly InspectionResponse[],
     clearItemIds: readonly import('@portfolio/domain').InspectionSchemaItemId[],
   ): Promise<SaveInspectionSectionResult> {
-    const key = `${inspectionId}:${sectionId}`;
+    const key = `${inspectionId}:${sectionInstanceId}`;
     const current = this.states.get(key);
     if (!current || current.revision !== expectedRevision) {
       throw Object.assign(new Error('revision conflict'), {
@@ -149,10 +179,13 @@ export class InMemoryInspectionRepository implements InspectionRepository {
     this.inspections.set(inspectionId, { ...inspection, contentRevision });
 
     for (const itemId of clearItemIds) {
-      this.responses.delete(`${inspectionId}:${itemId}`);
+      this.responses.delete(`${inspectionId}:${sectionInstanceId}:${itemId}`);
     }
     for (const response of responses) {
-      this.responses.set(`${inspectionId}:${response.itemId}`, response);
+      this.responses.set(
+        `${inspectionId}:${response.sectionInstanceId}:${response.itemId}`,
+        response,
+      );
     }
 
     return {

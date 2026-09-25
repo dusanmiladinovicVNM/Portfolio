@@ -18,7 +18,7 @@ const tenancyId = '33333333-3333-4333-8333-333333333333';
 const agreementId = '44444444-4444-4444-8444-444444444444';
 const amendmentId = '55555555-5555-4555-8555-555555555555';
 const inspectionId = '66666666-6666-4666-8666-666666666666';
-const inspectionSectionId = '77777777-7777-4777-8777-777777777777';
+const inspectionSectionInstanceId = '77777777-7777-4777-8777-777777777777';
 const assetId = '88888888-8888-4888-8888-888888888888';
 const meterId = '99999999-9999-4999-8999-999999999999';
 const maintenanceIssueId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -162,17 +162,17 @@ describe('workspace URL navigation', () => {
       unitId,
       '2025-06-30',
       'inspections',
-      { inspectionId, inspectionSectionId },
+      { inspectionId, inspectionSectionInstanceId },
     );
 
     expect(workspaceRouteHref(selected)).toBe(
-      `/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionId=${inspectionSectionId}&asOf=2025-06-30`,
+      `/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${inspectionSectionInstanceId}&asOf=2025-06-30`,
     );
 
     expect(
       parseWorkspaceLocation(
         `/properties/${propertyId}/units/${unitId}`,
-        `?tab=inspections&inspectionId=${inspectionId}&sectionId=${inspectionSectionId}&asOf=2025-06-30`,
+        `?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${inspectionSectionInstanceId}&asOf=2025-06-30`,
         '2026-09-21',
       ),
     ).toEqual({
@@ -181,7 +181,7 @@ describe('workspace URL navigation', () => {
       unitId,
       tab: 'inspections',
       inspectionId,
-      inspectionSectionId,
+      inspectionSectionInstanceId,
       asOf: '2025-06-30',
     });
 

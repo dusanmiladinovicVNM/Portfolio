@@ -25,6 +25,7 @@ export type InspectionId = EntityId<'Inspection'>;
 export type InspectionSchemaVersionId = EntityId<'InspectionSchemaVersion'>;
 export type InspectionSchemaSectionId = EntityId<'InspectionSchemaSection'>;
 export type InspectionSchemaItemId = EntityId<'InspectionSchemaItem'>;
+export type InspectionSectionInstanceId = EntityId<'InspectionSectionInstance'>;
 export type InspectionResponseId = EntityId<'InspectionResponse'>;
 export type InspectionFindingId = EntityId<'InspectionFinding'>;
 export type InspectionEvidenceId = EntityId<'InspectionEvidence'>;
@@ -78,6 +79,7 @@ export const asInspectionId = (value: string): InspectionId => value as Inspecti
 export const asInspectionSchemaVersionId = (value: string): InspectionSchemaVersionId => value as InspectionSchemaVersionId;
 export const asInspectionSchemaSectionId = (value: string): InspectionSchemaSectionId => value as InspectionSchemaSectionId;
 export const asInspectionSchemaItemId = (value: string): InspectionSchemaItemId => value as InspectionSchemaItemId;
+export const asInspectionSectionInstanceId = (value: string): InspectionSectionInstanceId => value as InspectionSectionInstanceId;
 export const asInspectionResponseId = (value: string): InspectionResponseId => value as InspectionResponseId;
 export const asInspectionFindingId = (value: string): InspectionFindingId => value as InspectionFindingId;
 export const asInspectionEvidenceId = (value: string): InspectionEvidenceId => value as InspectionEvidenceId;

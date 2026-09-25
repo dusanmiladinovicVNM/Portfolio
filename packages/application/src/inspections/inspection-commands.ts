@@ -7,6 +7,7 @@ import {
   asInspectionFindingId,
   asInspectionId,
   asInspectionResponseId,
+  asInspectionSectionInstanceId,
   asInspectionSchemaItemId,
   asInspectionSchemaSectionId,
   asInspectionSchemaVersionId,
@@ -23,6 +24,7 @@ import {
   createInspectionFinding,
   createInspectionResponse,
   createInspectionSchemaVersion,
+  createInspectionSectionInstance,
   finalizeInspection,
   findInspectionSchemaItem,
   findInspectionSchemaSection,
@@ -44,12 +46,14 @@ import {
   type InspectionOption,
   type InspectionCondition,
   type InspectionResponse,
+  type InspectionSectionInstanceId,
   type InspectionSchemaSectionId,
   type InspectionSchemaVersion,
   type InspectionSchemaVersionId,
   type InspectionSignature,
   type InspectionSignatureRole,
   type InspectionType,
+  type SpaceType,
   type TenancyId,
   type UnitId,
   type UserId,
@@ -100,7 +104,7 @@ export interface PatchInspectionSectionInput {
 }
 
 export interface CreateInspectionFindingCommandInput {
-  readonly sectionId: InspectionSchemaSectionId;
+  readonly sectionInstanceId: InspectionSectionInstanceId;
   readonly itemId?: string | null;
   readonly severity: InspectionFindingSeverity;
   readonly title: string;
@@ -110,7 +114,7 @@ export interface CreateInspectionFindingCommandInput {
 export interface AttachInspectionEvidenceCommandInput {
   readonly documentVersionId: string;
   readonly kind: Exclude<InspectionEvidenceKind, 'final_report'>;
-  readonly sectionId?: string | null;
+  readonly sectionInstanceId?: string | null;
   readonly itemId?: string | null;
   readonly caption?: string | null;
 }
@@ -132,6 +136,8 @@ export interface CreateInspectionSchemaVersionCommandInput {
     readonly title: string;
     readonly description?: string | null;
     readonly sortOrder: number;
+    readonly scope?: 'unit' | 'space';
+    readonly spaceTypes?: readonly SpaceType[];
     readonly items: readonly {
       readonly key: string;
       readonly type: InspectionItemType;
@@ -287,7 +293,32 @@ export async function createInspectionCommand(
     );
   }
 
-  await deps.inspectionRepository.insert(inspection, schema);
+  const spaces = (await deps.portfolioRepository.listSpacesByUnit(inspection.unitId))
+    .filter((space) => space.active)
+    .sort((left, right) =>
+      left.sortOrder - right.sortOrder ||
+      left.name.localeCompare(right.name) ||
+      left.id.localeCompare(right.id),
+    );
+  const sectionInstances = schema.sections.flatMap((section) => {
+    if (section.scope === 'unit') {
+      return [
+        createInspectionSectionInstance(inspection, section, {
+          id: asInspectionSectionInstanceId(deps.idGenerator.next()),
+        }),
+      ];
+    }
+    return spaces
+      .filter((space) => section.spaceTypes.includes(space.spaceType))
+      .map((space) =>
+        createInspectionSectionInstance(inspection, section, {
+          id: asInspectionSectionInstanceId(deps.idGenerator.next()),
+          space,
+        }),
+      );
+  });
+
+  await deps.inspectionRepository.insert(inspection, schema, sectionInstances);
   return inspection;
 }
 
@@ -366,7 +397,7 @@ export async function saveInspectionSectionCommand(
   >,
   actor: Actor,
   inspectionId: InspectionId,
-  sectionId: InspectionSchemaSectionId,
+  sectionInstanceId: InspectionSectionInstanceId,
   expectedRevision: number,
   patch: PatchInspectionSectionInput,
 ): Promise<{
@@ -387,11 +418,22 @@ export async function saveInspectionSectionCommand(
     deps.inspectionRepository,
     inspection.schemaVersionId,
   );
-  const section = findInspectionSchemaSection(schema, sectionId);
+  const sectionInstance =
+    await deps.inspectionRepository.getSectionInstanceById(
+      inspection.id,
+      sectionInstanceId,
+    );
+  if (!sectionInstance) {
+    throw new DomainError(
+      'INSPECTION_SECTION_INSTANCE_NOT_FOUND',
+      'Inspection section instance not found.',
+    );
+  }
+  const section = findInspectionSchemaSection(schema, sectionInstance.sectionId);
 
   const currentRevision = await deps.inspectionRepository.getSectionRevision(
     inspection.id,
-    section.id,
+    sectionInstance.id,
   );
   if (currentRevision === null) {
     throw new DomainError(
@@ -454,6 +496,7 @@ export async function saveInspectionSectionCommand(
     return createInspectionResponse({
       id: asInspectionResponseId(deps.idGenerator.next()),
       inspectionId: inspection.id,
+      sectionInstanceId: sectionInstance.id,
       item,
       value: input.value,
       ...(input.comment !== undefined ? { comment: input.comment } : {}),
@@ -464,6 +507,7 @@ export async function saveInspectionSectionCommand(
 
   return deps.inspectionRepository.saveSection(
     inspection.id,
+    sectionInstance.id,
     section.id,
     expectedRevision,
     responses,
@@ -486,13 +530,34 @@ export async function lockInspectionCommand(
     deps.inspectionRepository,
     current.schemaVersionId,
   );
-  const responses = await deps.inspectionRepository.listResponses(current.id);
-  const missing = findMissingRequiredInspectionItems(schema, responses);
+  const [sectionInstances, responses] = await Promise.all([
+    deps.inspectionRepository.listSectionInstances(current.id),
+    deps.inspectionRepository.listResponses(current.id),
+  ]);
+  const missing = findMissingRequiredInspectionItems(
+    schema,
+    sectionInstances,
+    responses,
+  );
   if (missing.length > 0) {
+    const instanceById = new Map(
+      sectionInstances.map((instance) => [instance.id, instance] as const),
+    );
+    const sectionById = new Map(
+      schema.sections.map((section) => [section.id, section] as const),
+    );
     throw new DomainError(
       'INSPECTION_REQUIRED_RESPONSES_MISSING',
       `Missing required inspection responses: ${missing
-        .map((item) => item.itemKey)
+        .map((item) => {
+          const instance = instanceById.get(item.sectionInstanceId);
+          const section = sectionById.get(item.sectionId);
+          const owner =
+            instance?.scope === 'space'
+              ? instance.spaceName ?? instance.spaceCode ?? 'Space'
+              : section?.title ?? 'Section';
+          return `${owner}: ${item.itemKey}`;
+        })
         .join(', ')}.`,
     );
   }
@@ -526,7 +591,18 @@ export async function createInspectionFindingCommand(
     deps.inspectionRepository,
     inspection.schemaVersionId,
   );
-  const section = findInspectionSchemaSection(schema, input.sectionId);
+  const sectionInstance =
+    await deps.inspectionRepository.getSectionInstanceById(
+      inspection.id,
+      input.sectionInstanceId,
+    );
+  if (!sectionInstance) {
+    throw new DomainError(
+      'INSPECTION_SECTION_INSTANCE_NOT_FOUND',
+      'Inspection section instance not found.',
+    );
+  }
+  const section = findInspectionSchemaSection(schema, sectionInstance.sectionId);
 
   let itemId = null;
   if (input.itemId !== undefined && input.itemId !== null) {
@@ -543,6 +619,7 @@ export async function createInspectionFindingCommand(
   const finding = createInspectionFinding(inspection, {
     id: asInspectionFindingId(deps.idGenerator.next()),
     inspectionId: inspection.id,
+    sectionInstanceId: sectionInstance.id,
     sectionId: section.id,
     itemId,
     severity: input.severity,
@@ -588,10 +665,26 @@ export async function attachInspectionEvidenceCommand(
     inspection.schemaVersionId,
   );
 
+  let sectionInstanceId: InspectionSectionInstanceId | null = null;
   let sectionId: InspectionSchemaSectionId | null = null;
   let itemId: import('@portfolio/domain').InspectionSchemaItemId | null = null;
-  if (input.sectionId !== undefined && input.sectionId !== null) {
-    sectionId = asInspectionSchemaSectionId(input.sectionId);
+  if (
+    input.sectionInstanceId !== undefined &&
+    input.sectionInstanceId !== null
+  ) {
+    sectionInstanceId = asInspectionSectionInstanceId(input.sectionInstanceId);
+    const sectionInstance =
+      await deps.inspectionRepository.getSectionInstanceById(
+        inspection.id,
+        sectionInstanceId,
+      );
+    if (!sectionInstance) {
+      throw new DomainError(
+        'INSPECTION_SECTION_INSTANCE_NOT_FOUND',
+        'Inspection section instance not found.',
+      );
+    }
+    sectionId = sectionInstance.sectionId;
     const section = findInspectionSchemaSection(schema, sectionId);
 
     if (input.itemId !== undefined && input.itemId !== null) {
@@ -606,13 +699,14 @@ export async function attachInspectionEvidenceCommand(
   } else if (input.itemId !== undefined && input.itemId !== null) {
     throw new DomainError(
       'INSPECTION_EVIDENCE_SECTION_REQUIRED',
-      'Item-level evidence requires a section.',
+      'Item-level evidence requires a section instance.',
     );
   }
 
   const evidence = createInspectionEvidence(inspection, {
     id: asInspectionEvidenceId(deps.idGenerator.next()),
     inspectionId: inspection.id,
+    sectionInstanceId,
     sectionId,
     itemId,
     documentVersionId: version.id,
@@ -827,8 +921,15 @@ export async function finalizeInspectionCommand(
     current.schemaVersionId,
   );
 
-  const [responses, findings, evidence, signatures, unlockHistory] =
-    await Promise.all([
+  const [
+    sectionInstances,
+    responses,
+    findings,
+    evidence,
+    signatures,
+    unlockHistory,
+  ] = await Promise.all([
+      deps.inspectionRepository.listSectionInstances(id),
       deps.inspectionRepository.listResponses(id),
       deps.inspectionRepository.listFindings(id),
       deps.inspectionRepository.listEvidence(id),
@@ -891,6 +992,7 @@ export async function finalizeInspectionCommand(
     current,
     updated,
     schema,
+    sectionInstances,
     responses,
     findings,
     evidenceManifest,
@@ -958,6 +1060,10 @@ export async function createInspectionSchemaVersionCommand(
         ? { description: section.description }
         : {}),
       sortOrder: section.sortOrder,
+      ...(section.scope !== undefined ? { scope: section.scope } : {}),
+      ...(section.spaceTypes !== undefined
+        ? { spaceTypes: [...section.spaceTypes] }
+        : {}),
       items: section.items.map((item) => ({
         id: asInspectionSchemaItemId(deps.idGenerator.next()),
         key: item.key,

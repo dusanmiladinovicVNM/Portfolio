@@ -5,9 +5,11 @@ import {
   INSPECTION_FINDING_SEVERITIES,
   INSPECTION_ITEM_TYPES,
   INSPECTION_SCHEMA_STATUSES,
+  INSPECTION_SECTION_SCOPES,
   INSPECTION_SIGNATURE_ROLES,
   INSPECTION_STATUSES,
   INSPECTION_TYPES,
+  SPACE_TYPES,
   type InspectionCondition,
 } from '@portfolio/domain';
 import { instantSchema } from './api.js';
@@ -59,6 +61,8 @@ const schemaSectionRequestSchema = z.object({
   title: z.string().trim().min(1),
   description: z.string().trim().min(1).nullable().optional(),
   sortOrder: z.number().int().nonnegative(),
+  scope: z.enum(INSPECTION_SECTION_SCOPES).optional(),
+  spaceTypes: z.array(z.enum(SPACE_TYPES)).optional(),
   items: z.array(schemaItemRequestSchema).min(1),
 });
 
@@ -108,7 +112,7 @@ export const saveInspectionSectionRequestSchema = z
   });
 
 export const createInspectionFindingRequestSchema = z.object({
-  sectionId: entityIdSchema,
+  sectionInstanceId: entityIdSchema,
   itemId: entityIdSchema.nullable().optional(),
   severity: z.enum(INSPECTION_FINDING_SEVERITIES),
   title: z.string().trim().min(1),
@@ -153,6 +157,8 @@ const schemaSectionResponseSchema = z.object({
   title: z.string(),
   description: z.string().nullable(),
   sortOrder: z.number().int().nonnegative(),
+  scope: z.enum(INSPECTION_SECTION_SCOPES),
+  spaceTypes: z.array(z.enum(SPACE_TYPES)),
   items: z.array(schemaItemResponseSchema),
 });
 
@@ -167,9 +173,22 @@ export const inspectionSchemaVersionResponseSchema = z.object({
   sections: z.array(schemaSectionResponseSchema),
 });
 
+export const inspectionSectionInstanceResponseSchema = z.object({
+  id: entityIdSchema,
+  inspectionId: entityIdSchema,
+  sectionId: entityIdSchema,
+  scope: z.enum(INSPECTION_SECTION_SCOPES),
+  spaceId: entityIdSchema.nullable(),
+  spaceCode: z.string().nullable(),
+  spaceName: z.string().nullable(),
+  spaceType: z.enum(SPACE_TYPES).nullable(),
+  spaceSortOrder: z.number().int().nonnegative().nullable(),
+});
+
 export const inspectionItemResponseSchema = z.object({
   id: entityIdSchema,
   inspectionId: entityIdSchema,
+  sectionInstanceId: entityIdSchema,
   sectionId: entityIdSchema,
   itemId: entityIdSchema,
   value: z.union([z.string(), z.boolean(), z.array(z.string())]),
@@ -181,6 +200,7 @@ export const inspectionItemResponseSchema = z.object({
 export const inspectionFindingResponseSchema = z.object({
   id: entityIdSchema,
   inspectionId: entityIdSchema,
+  sectionInstanceId: entityIdSchema,
   sectionId: entityIdSchema,
   itemId: entityIdSchema.nullable(),
   severity: z.enum(INSPECTION_FINDING_SEVERITIES),
@@ -191,6 +211,7 @@ export const inspectionFindingResponseSchema = z.object({
 });
 
 export const inspectionSectionStateResponseSchema = z.object({
+  sectionInstanceId: entityIdSchema,
   sectionId: entityIdSchema,
   revision: z.number().int().nonnegative(),
 });
@@ -206,6 +227,9 @@ export type InspectionResponseDto = z.infer<typeof inspectionResponseSchema>;
 export type InspectionSchemaVersionResponse = z.infer<
   typeof inspectionSchemaVersionResponseSchema
 >;
+export type InspectionSectionInstanceResponse = z.infer<
+  typeof inspectionSectionInstanceResponseSchema
+>;
 export type InspectionItemResponse = z.infer<typeof inspectionItemResponseSchema>;
 export type InspectionFindingResponse = z.infer<
   typeof inspectionFindingResponseSchema
@@ -216,7 +240,7 @@ export const attachInspectionEvidenceRequestSchema = z.object({
   kind: z.enum(INSPECTION_EVIDENCE_KINDS).refine(
     (value) => value !== 'final_report',
   ),
-  sectionId: entityIdSchema.nullable().optional(),
+  sectionInstanceId: entityIdSchema.nullable().optional(),
   itemId: entityIdSchema.nullable().optional(),
   caption: z.string().nullable().optional(),
 });
@@ -246,6 +270,7 @@ export const finalizeInspectionRequestSchema = z.object({
 export const inspectionEvidenceResponseSchema = z.object({
   id: entityIdSchema,
   inspectionId: entityIdSchema,
+  sectionInstanceId: entityIdSchema.nullable(),
   sectionId: entityIdSchema.nullable(),
   itemId: entityIdSchema.nullable(),
   documentVersionId: entityIdSchema,
@@ -336,6 +361,7 @@ export const assignedInspectionWorkListResponseSchema = z.object({
 export const inspectionBundleResponseSchema = z.object({
   inspection: inspectionResponseSchema,
   schema: inspectionSchemaVersionResponseSchema,
+  sectionInstances: z.array(inspectionSectionInstanceResponseSchema),
   sectionStates: z.array(inspectionSectionStateResponseSchema),
   responses: z.array(inspectionItemResponseSchema),
   findings: z.array(inspectionFindingResponseSchema),

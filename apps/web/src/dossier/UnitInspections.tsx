@@ -22,7 +22,7 @@ import {
 } from 'react';
 import {
   inspectionPath,
-  inspectionSectionPath,
+  inspectionSectionInstancePath,
   inspectionStartPath,
   unitInspectionsPath,
 } from '../api/paths.js';
@@ -48,6 +48,7 @@ import type { InspectionWriteGate } from './inspection-write-gate.js';
 import { assertUnitInspectionListOwner } from './inspection-orchestration-owner.js';
 
 type SchemaSection = InspectionBundleResponse['schema']['sections'][number];
+type SectionInstance = InspectionBundleResponse['sectionInstances'][number];
 type SchemaItem = SchemaSection['items'][number];
 
 interface DraftEntry {
@@ -64,7 +65,7 @@ interface UnitInspectionsProps {
   readonly unitId: string;
   readonly asOf: string;
   readonly inspectionId?: string | undefined;
-  readonly inspectionSectionId?: string | undefined;
+  readonly inspectionSectionInstanceId?: string | undefined;
   readonly navigate: NavigateWorkspace;
   readonly setNavigationBlocker: SetNavigationBlocker;
 }
@@ -96,15 +97,23 @@ export function normalizedInspectionAnswer(
 
 function responseByItem(
   responses: readonly InspectionItemResponse[],
+  sectionInstanceId: string,
 ): ReadonlyMap<string, InspectionItemResponse> {
-  return new Map(responses.map((response) => [response.itemId, response]));
+  return new Map(
+    responses
+      .filter(
+        (response) => response.sectionInstanceId === sectionInstanceId,
+      )
+      .map((response) => [response.itemId, response]),
+  );
 }
 
 function createDraft(
   section: SchemaSection,
+  sectionInstanceId: string,
   responses: readonly InspectionItemResponse[],
 ): DraftByItem {
-  const canonical = responseByItem(responses);
+  const canonical = responseByItem(responses, sectionInstanceId);
   return Object.fromEntries(
     section.items.map((item) => {
       const response = canonical.get(item.id);
@@ -122,6 +131,7 @@ function createDraft(
 function valuesByFieldKey(
   bundle: InspectionBundleResponse,
   section: SchemaSection,
+  sectionInstance: SectionInstance,
   draft: DraftByItem,
 ): ReadonlyMap<string, InspectionAnswerValue> {
   const itemById = new Map(
@@ -129,11 +139,23 @@ function valuesByFieldKey(
       candidate.items.map((item) => [item.id, item] as const),
     ),
   );
+  const instanceById = new Map(
+    bundle.sectionInstances.map((instance) => [instance.id, instance] as const),
+  );
   const values = new Map<string, InspectionAnswerValue>();
 
   for (const response of bundle.responses) {
     const item = itemById.get(response.itemId);
-    if (item) values.set(item.key.toLowerCase(), response.value);
+    const sourceInstance = instanceById.get(response.sectionInstanceId);
+    if (!item || !sourceInstance) continue;
+    const sameInstance = sourceInstance.id === sectionInstance.id;
+    const unitContext = sourceInstance.scope === 'unit';
+    const sameSpaceContext =
+      sectionInstance.spaceId !== null &&
+      sourceInstance.spaceId === sectionInstance.spaceId;
+    if (sameInstance || unitContext || sameSpaceContext) {
+      values.set(item.key.toLowerCase(), response.value);
+    }
   }
 
   for (const item of section.items) {
@@ -148,14 +170,24 @@ function valuesByFieldKey(
   return values;
 }
 
+function sectionInstanceTitle(
+  section: SchemaSection,
+  instance: SectionInstance,
+): string {
+  return instance.scope === 'space'
+    ? instance.spaceName ?? 'Space'
+    : section.title;
+}
+
 export function buildInspectionSectionPatch(
   section: SchemaSection,
+  sectionInstanceId: string,
   responses: readonly InspectionItemResponse[],
   draft: DraftByItem,
   touched: TouchedByItem,
   expectedRevision: number,
 ): SaveInspectionSectionRequest | null {
-  const canonical = responseByItem(responses);
+  const canonical = responseByItem(responses, sectionInstanceId);
   const set: SaveInspectionSectionRequest['set'] = [];
   const clear: string[] = [];
 
@@ -196,26 +228,27 @@ export function buildInspectionSectionPatch(
 
 function sectionRevision(
   bundle: InspectionBundleResponse,
-  sectionId: string,
+  sectionInstanceId: string,
 ): number {
   return (
-    bundle.sectionStates.find((state) => state.sectionId === sectionId)
-      ?.revision ?? 0
+    bundle.sectionStates.find(
+      (state) => state.sectionInstanceId === sectionInstanceId,
+    )?.revision ?? 0
   );
 }
 
 export function inspectionDraftResetKey(
   bundle: InspectionBundleResponse,
-  sectionId: string,
+  sectionInstanceId: string,
 ): string {
-  return `${bundle.inspection.id}:${sectionId}:${sectionRevision(bundle, sectionId)}`;
+  return `${bundle.inspection.id}:${sectionInstanceId}:${sectionRevision(bundle, sectionInstanceId)}`;
 }
 
 export function inspectionSectionOperationKey(
   inspectionId: string,
-  sectionId: string,
+  sectionInstanceId: string,
 ): string {
-  return `${inspectionId}:${sectionId}`;
+  return `${inspectionId}:${sectionInstanceId}`;
 }
 
 export function withInspectionOperationStarted(
@@ -275,13 +308,13 @@ export function mergeInspectionStart(
 export function mergeInspectionSectionSave(
   current: InspectionBundleResponse,
   targetInspectionId: string,
-  targetSectionId: string,
+  targetSectionInstanceId: string,
   expectedRevision: number,
   saved: SaveInspectionSectionResponse,
 ): InspectionBundleResponse {
   if (
     current.inspection.id !== targetInspectionId ||
-    sectionRevision(current, targetSectionId) !== expectedRevision
+    sectionRevision(current, targetSectionInstanceId) !== expectedRevision
   ) {
     return current;
   }
@@ -289,7 +322,7 @@ export function mergeInspectionSectionSave(
   for (const response of saved.responses) {
     if (
       response.inspectionId !== targetInspectionId ||
-      response.sectionId !== targetSectionId
+      response.sectionInstanceId !== targetSectionInstanceId
     ) {
       throw new Error(
         'Inspection section save response crossed its aggregate ownership boundary.',
@@ -312,13 +345,15 @@ export function mergeInspectionSectionSave(
       ),
     },
     sectionStates: current.sectionStates.map((state) =>
-      state.sectionId === targetSectionId
+      state.sectionInstanceId === targetSectionInstanceId
         ? { ...state, revision: saved.revision }
         : state,
     ),
     responses: [
       ...current.responses.filter(
-        (response) => !changedIds.has(response.itemId),
+        (response) =>
+          response.sectionInstanceId !== targetSectionInstanceId ||
+          !changedIds.has(response.itemId),
       ),
       ...saved.responses,
     ],
@@ -477,7 +512,7 @@ export function UnitInspections({
   unitId,
   asOf,
   inspectionId,
-  inspectionSectionId,
+  inspectionSectionInstanceId,
   navigate,
   setNavigationBlocker,
 }: UnitInspectionsProps) {
@@ -586,38 +621,73 @@ export function UnitInspections({
     [inspectionId, routeInspections],
   );
 
-  const selectedSection = useMemo(() => {
+  const orderedSectionInstances = useMemo(() => {
+    if (!routeBundle) return [];
+    const sectionById = new Map(
+      routeBundle.schema.sections.map((section) => [section.id, section] as const),
+    );
+    return [...routeBundle.sectionInstances].sort((left, right) => {
+      const leftSection = sectionById.get(left.sectionId);
+      const rightSection = sectionById.get(right.sectionId);
+      return (
+        (leftSection?.sortOrder ?? 0) - (rightSection?.sortOrder ?? 0) ||
+        (left.spaceSortOrder ?? -1) - (right.spaceSortOrder ?? -1) ||
+        (left.spaceName ?? '').localeCompare(right.spaceName ?? '') ||
+        left.id.localeCompare(right.id)
+      );
+    });
+  }, [routeBundle]);
+
+  const selectedSectionInstance = useMemo(() => {
     if (!routeBundle) return null;
     return (
-      routeBundle.schema.sections.find(
-        (section) => section.id === inspectionSectionId,
+      orderedSectionInstances.find(
+        (instance) => instance.id === inspectionSectionInstanceId,
       ) ??
-      routeBundle.schema.sections[0] ??
+      orderedSectionInstances[0] ??
       null
     );
-  }, [inspectionSectionId, routeBundle]);
+  }, [inspectionSectionInstanceId, orderedSectionInstances, routeBundle]);
 
-  const activeSectionIdRef = useRef<string | undefined>(selectedSection?.id);
-  activeSectionIdRef.current = selectedSection?.id;
+  const selectedSection = useMemo(() => {
+    if (!routeBundle || !selectedSectionInstance) return null;
+    return (
+      routeBundle.schema.sections.find(
+        (section) => section.id === selectedSectionInstance.sectionId,
+      ) ?? null
+    );
+  }, [routeBundle, selectedSectionInstance]);
+
+  const activeSectionIdRef = useRef<string | undefined>(
+    selectedSectionInstance?.id,
+  );
+  activeSectionIdRef.current = selectedSectionInstance?.id;
 
   const selectedSectionRevision =
-    routeBundle && selectedSection
-      ? sectionRevision(routeBundle, selectedSection.id)
+    routeBundle && selectedSectionInstance
+      ? sectionRevision(routeBundle, selectedSectionInstance.id)
       : null;
 
   const draftResetKey =
-    routeBundle && selectedSection
-      ? inspectionDraftResetKey(routeBundle, selectedSection.id)
+    routeBundle && selectedSectionInstance
+      ? inspectionDraftResetKey(routeBundle, selectedSectionInstance.id)
       : null;
 
   useEffect(() => {
-    if (!routeBundle || !inspectionId || !selectedSection) return;
-    if (inspectionSectionId === selectedSection.id) return;
+    if (
+      !routeBundle ||
+      !inspectionId ||
+      !selectedSectionInstance ||
+      !selectedSection
+    ) {
+      return;
+    }
+    if (inspectionSectionInstanceId === selectedSectionInstance.id) return;
 
     navigate(
       unitRoute(propertyId, unitId, asOf, 'inspections', {
         inspectionId,
-        inspectionSectionId: selectedSection.id,
+        inspectionSectionInstanceId: selectedSectionInstance.id,
       }),
       { replace: true },
     );
@@ -625,20 +695,32 @@ export function UnitInspections({
     asOf,
     routeBundle,
     inspectionId,
-    inspectionSectionId,
+    inspectionSectionInstanceId,
     navigate,
     propertyId,
     selectedSection,
+    selectedSectionInstance,
     unitId,
   ]);
 
   useEffect(() => {
-    if (!routeBundle || !selectedSection || draftResetKey === null) {
+    if (
+      !routeBundle ||
+      !selectedSection ||
+      !selectedSectionInstance ||
+      draftResetKey === null
+    ) {
       setDraft({});
       setTouched({});
       return;
     }
-    setDraft(createDraft(selectedSection, routeBundle.responses));
+    setDraft(
+      createDraft(
+        selectedSection,
+        selectedSectionInstance.id,
+        routeBundle.responses,
+      ),
+    );
     setTouched({});
     setSaveError(null);
     setConflict(false);
@@ -646,18 +728,24 @@ export function UnitInspections({
 
   const localValues = useMemo(
     () =>
-      routeBundle && selectedSection
-        ? valuesByFieldKey(routeBundle, selectedSection, draft)
+      routeBundle && selectedSection && selectedSectionInstance
+        ? valuesByFieldKey(
+            routeBundle,
+            selectedSection,
+            selectedSectionInstance,
+            draft,
+          )
         : new Map<string, InspectionAnswerValue>(),
-    [draft, routeBundle, selectedSection],
+    [draft, routeBundle, selectedSection, selectedSectionInstance],
   );
 
   const currentRevision = selectedSectionRevision ?? 0;
 
   const patch =
-    routeBundle && selectedSection
+    routeBundle && selectedSection && selectedSectionInstance
       ? buildInspectionSectionPatch(
           selectedSection,
+          selectedSectionInstance.id,
           routeBundle.responses,
           draft,
           touched,
@@ -666,7 +754,7 @@ export function UnitInspections({
       : null;
 
   const currentInspectionId = routeBundle?.inspection.id;
-  const currentSectionId = selectedSection?.id;
+  const currentSectionId = selectedSectionInstance?.id;
   const currentSectionOperationKey =
     currentInspectionId !== undefined && currentSectionId !== undefined
       ? inspectionSectionOperationKey(
@@ -812,10 +900,17 @@ export function UnitInspections({
 
   async function saveSection(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!routeBundle || !selectedSection || !patch) return;
+    if (
+      !routeBundle ||
+      !selectedSection ||
+      !selectedSectionInstance ||
+      !patch
+    ) {
+      return;
+    }
 
     const targetInspectionId = routeBundle.inspection.id;
-    const targetSectionId = selectedSection.id;
+    const targetSectionId = selectedSectionInstance.id;
     const targetKey = inspectionSectionOperationKey(
       targetInspectionId,
       targetSectionId,
@@ -837,7 +932,7 @@ export function UnitInspections({
 
     try {
       const saved = await api.patch(
-        inspectionSectionPath(targetInspectionId, targetSectionId),
+        inspectionSectionInstancePath(targetInspectionId, targetSectionId),
         requestPatch,
         saveInspectionSectionResponseSchema,
       );
@@ -880,10 +975,10 @@ export function UnitInspections({
   }
 
   async function reloadAfterConflict() {
-    if (!inspectionId || !selectedSection) return;
+    if (!inspectionId || !selectedSection || !selectedSectionInstance) return;
 
     const targetInspectionId = inspectionId;
-    const targetSectionId = selectedSection.id;
+    const targetSectionId = selectedSectionInstance.id;
     const targetKey = inspectionSectionOperationKey(
       targetInspectionId,
       targetSectionId,
@@ -900,12 +995,17 @@ export function UnitInspections({
       const fresh = await loadBundle(targetInspectionId);
       if (!isActiveEditorTarget(targetInspectionId, targetSectionId)) return;
 
-      const freshSection = fresh.schema.sections.find(
-        (section) => section.id === targetSectionId,
+      const freshInstance = fresh.sectionInstances.find(
+        (instance) => instance.id === targetSectionId,
       );
-      if (!freshSection) {
+      const freshSection = freshInstance
+        ? fresh.schema.sections.find(
+            (section) => section.id === freshInstance.sectionId,
+          )
+        : null;
+      if (!freshInstance || !freshSection) {
         throw new Error(
-          'Canonical Inspection schema no longer contains the active section.',
+          'Canonical Inspection no longer contains the active section instance.',
         );
       }
 
@@ -913,7 +1013,7 @@ export function UnitInspections({
       // draftResetKey changing: a rejected CAS write can legitimately reread
       // the same server section revision while the local draft is still dirty.
       setBundle(fresh);
-      setDraft(createDraft(freshSection, fresh.responses));
+      setDraft(createDraft(freshSection, freshInstance.id, fresh.responses));
       setTouched({});
       setConflict(false);
     } catch (cause) {
@@ -1085,35 +1185,47 @@ export function UnitInspections({
               aria-label="Inspection sections"
               className="inspection-sections"
             >
-              {routeBundle.schema.sections.map((section) => (
-                <WorkspaceLink
-                  ariaCurrent={
-                    selectedSection?.id === section.id ? 'page' : undefined
-                  }
-                  className={`inspection-section-link ${
-                    selectedSection?.id === section.id
-                      ? 'inspection-section-link-active'
-                      : ''
-                  }`}
-                  key={section.id}
-                  navigate={navigate}
-                  route={unitRoute(
-                    propertyId,
-                    unitId,
-                    asOf,
-                    'inspections',
-                    {
-                      inspectionId: routeBundle.inspection.id,
-                      inspectionSectionId: section.id,
-                    },
-                  )}
-                >
-                  <strong>{section.title}</strong>
-                  <small>
-                    revision {sectionRevision(routeBundle, section.id)}
-                  </small>
-                </WorkspaceLink>
-              ))}
+              {orderedSectionInstances.map((instance) => {
+                const section = routeBundle.schema.sections.find(
+                  (candidate) => candidate.id === instance.sectionId,
+                );
+                if (!section) return null;
+                const title = sectionInstanceTitle(section, instance);
+                return (
+                  <WorkspaceLink
+                    ariaCurrent={
+                      selectedSectionInstance?.id === instance.id
+                        ? 'page'
+                        : undefined
+                    }
+                    className={`inspection-section-link ${
+                      selectedSectionInstance?.id === instance.id
+                        ? 'inspection-section-link-active'
+                        : ''
+                    }`}
+                    key={instance.id}
+                    navigate={navigate}
+                    route={unitRoute(
+                      propertyId,
+                      unitId,
+                      asOf,
+                      'inspections',
+                      {
+                        inspectionId: routeBundle.inspection.id,
+                        inspectionSectionInstanceId: instance.id,
+                      },
+                    )}
+                  >
+                    <strong>{title}</strong>
+                    <small>
+                      {instance.scope === 'space'
+                        ? `${formatDetailKey(instance.spaceType ?? 'space')} · `
+                        : ''}
+                      revision {sectionRevision(routeBundle, instance.id)}
+                    </small>
+                  </WorkspaceLink>
+                );
+              })}
             </nav>
 
             {selectedSection ? (
@@ -1123,7 +1235,22 @@ export function UnitInspections({
                     <p className="eyebrow">
                       Section revision {currentRevision}
                     </p>
-                    <h3>{selectedSection.title}</h3>
+                    <h3>
+                      {selectedSectionInstance
+                        ? sectionInstanceTitle(
+                            selectedSection,
+                            selectedSectionInstance,
+                          )
+                        : selectedSection.title}
+                    </h3>
+                    {selectedSectionInstance?.scope === 'space' ? (
+                      <p className="muted">
+                        {selectedSection.title}
+                        {selectedSectionInstance.spaceCode
+                          ? ` · ${selectedSectionInstance.spaceCode}`
+                          : ''}
+                      </p>
+                    ) : null}
                     {selectedSection.description ? (
                       <p className="muted">{selectedSection.description}</p>
                     ) : null}
@@ -1215,12 +1342,12 @@ export function UnitInspections({
             )}
           </div>
 
-          {selectedSection ? (
+          {selectedSection && selectedSectionInstance ? (
             <InspectionFindingsEvidence
               api={api}
               blockedByDirtySection={hasUnsavedChanges}
               bundle={routeBundle}
-              key={`${routeBundle.inspection.id}:${selectedSection.id}`}
+              key={`${routeBundle.inspection.id}:${selectedSectionInstance.id}`}
               onCanonicalBundle={(targetInspectionId, canonical) => {
                 if (activeInspectionIdRef.current !== targetInspectionId) return;
                 assertInspectionBundleOwner(targetInspectionId, unitId, canonical);
@@ -1233,7 +1360,7 @@ export function UnitInspections({
                   ) ?? current,
                 );
               }}
-              selectedSectionId={selectedSection.id}
+              selectedSectionInstanceId={selectedSectionInstance.id}
               writeGate={inspectionWriteGate}
             />
           ) : null}
