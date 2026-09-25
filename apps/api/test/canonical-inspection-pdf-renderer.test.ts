@@ -184,6 +184,7 @@ describe('CanonicalInspectionPdfRenderer', () => {
     expect(source).toContain('Dusan Miladinovic');
     expect(source).toContain('Immutable final snapshot');
     expect(source).toContain('Finalized 25.09.2026 11:00');
+    expect(source).toContain('Scheduled for 25.09.2026');
     expect(source).toContain('Signed 25.09.2026 10:45');
     expect(source).toContain('Snapshot created: 25.09.2026 11:00');
     expect(source).not.toMatch(
@@ -208,7 +209,11 @@ describe('CanonicalInspectionPdfRenderer', () => {
 
     expect(source).toContain('Property context unavailable');
     expect(source).toContain('(Unit) Tj');
-    expect(source).toContain('Unit ID 55555555-5555-4555-8555-555555555555');
+    expect(source).toContain('Unit context unavailable');
+    expect(source).not.toContain('55555555-5555-4555-8555-555555555555');
+    expect(source).not.toMatch(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/iu,
+    );
   });
 
   it('paginates arbitrarily long canonical content without clipping it below the content floor', async () => {
