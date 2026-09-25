@@ -559,7 +559,7 @@ export async function createInspectionFindingCommand(
 export async function attachInspectionEvidenceCommand(
   deps: Pick<
     InspectionDependencies,
-    'inspectionRepository' | 'idGenerator' | 'clock'
+    'inspectionRepository' | 'portfolioRepository' | 'idGenerator' | 'clock'
   > & {
     readonly documentRepository: DocumentRepository;
     readonly fileStorage: Pick<FileStorageWritePort, 'stat'>;
@@ -876,6 +876,15 @@ export async function finalizeInspectionCommand(
     }),
   );
 
+  const unit = await deps.portfolioRepository.getUnitById(current.unitId);
+  if (!unit) {
+    throw new DomainError('UNIT_NOT_FOUND', 'Inspection unit not found.');
+  }
+  const property = await deps.portfolioRepository.getPropertyById(unit.propertyId);
+  if (!property) {
+    throw new DomainError('PROPERTY_NOT_FOUND', 'Inspection property not found.');
+  }
+
   const now = deps.clock.now();
   const updated = finalizeInspection(current, now);
   const snapshot = createInspectionFinalSnapshot(
@@ -891,6 +900,27 @@ export async function finalizeInspectionCommand(
       id: asInspectionFinalSnapshotId(deps.idGenerator.next()),
       createdByUserId: actor.userId,
       createdAt: now,
+      reportContext: {
+        property: {
+          id: property.id,
+          code: property.code,
+          name: property.name,
+          street: property.street,
+          houseNumber: property.houseNumber,
+          postalCode: property.postalCode,
+          city: property.city,
+          countryCode: property.countryCode,
+        },
+        unit: {
+          id: unit.id,
+          code: unit.code,
+          unitNumber: unit.unitNumber,
+          unitType: unit.unitType,
+          floor: unit.floor,
+          areaM2: unit.areaM2,
+          rooms: unit.rooms,
+        },
+      },
     },
   );
 
