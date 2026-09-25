@@ -171,7 +171,7 @@ export function buildInspectionReportViewModel(
 
   const unitTitle = context
     ? `Unit ${context.unit.unitNumber}`
-    : `Unit ${inspection.unitId}`;
+    : 'Unit';
   const unitDetails = context
     ? [
         displayEnum(context.unit.unitType),
@@ -179,7 +179,7 @@ export function buildInspectionReportViewModel(
         context.unit.areaM2 === null ? null : `${context.unit.areaM2} m2`,
         context.unit.rooms === null ? null : `${context.unit.rooms} rooms`,
       ].filter((value): value is string => value !== null).join(' - ')
-    : `Unit ID ${inspection.unitId}`;
+    : 'Unit context unavailable';
 
   return {
     title: 'Inspection Report',
