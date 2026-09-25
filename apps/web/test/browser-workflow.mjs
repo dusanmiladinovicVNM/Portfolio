@@ -998,6 +998,11 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
+    "//a[contains(@class,'selection-card')][.//strong[normalize-space()='TEN-SETUP-BRW']][.//small[normalize-space()='01.10.2026 → open']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
     "//section[contains(@class,'contract-terms-panel')]//h3[contains(normalize-space(),'terms from 01.10.2026')]",
   );
 
@@ -3033,6 +3038,11 @@ try {
     await currentUrl(sessionId),
     unitOverviewUrl,
     'Unit overview URL',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'metric-card-primary')]//small[normalize-space()='as of 30.06.2025']",
   );
   await clearXpath(
     sessionId,
