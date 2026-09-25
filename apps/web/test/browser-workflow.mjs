@@ -3976,7 +3976,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[contains(normalize-space(),'Section matches canonical server state')]",
+    "//*[@data-inspection-autosave-status][contains(normalize-space(),'All section changes saved')]",
   );
   assertEqual(
     await elementValueXpath(sessionId, notesInput),
