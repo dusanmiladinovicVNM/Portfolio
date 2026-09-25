@@ -2,6 +2,7 @@ import { staffResponseSchema, type StaffResponse } from '@portfolio/contracts';
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortfolioApi } from './api/portfolio-api.js';
 import type { AuthSession, SessionGateway } from './auth/session-gateway.js';
+import { AccountSecurity } from './auth/AccountSecurity.js';
 import { PartyDirectory } from './admin/PartyDirectory.js';
 import { StaffAdministration } from './admin/StaffAdministration.js';
 import { currentStaffPath } from './api/paths.js';
@@ -251,6 +252,7 @@ function AuthenticatedShell({
         </nav>
         <div className="session-card">
           <span>{session.email ?? 'Authenticated user'}</span>
+          <AccountSecurity sessionGateway={sessionGateway} />
           <button className="button-secondary" onClick={signOut} type="button">
             Sign out
           </button>
