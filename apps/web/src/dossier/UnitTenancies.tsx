@@ -75,7 +75,7 @@ function partyName(
   parties: readonly PartyResponse[] | null,
   partyId: string,
 ): string {
-  return parties?.find((party) => party.id === partyId)?.displayName ?? partyId;
+  return parties?.find((party) => party.id === partyId)?.displayName ?? 'Unknown party';
 }
 
 function mutationError(cause: unknown, fallback: string): string {
