@@ -6,7 +6,10 @@ import { useEffect, useState } from 'react';
 import { unitOverviewPath } from '../api/paths.js';
 import type { PortfolioApi } from '../api/portfolio-api.js';
 import { isWorkspaceAsOf } from '../navigation/workspace-route.js';
-import { formatExactMoney } from '../presentation/format.js';
+import {
+  formatExactMoney,
+  formatSwissDate,
+} from '../presentation/format.js';
 
 interface UnitOverviewProps {
   readonly api: PortfolioApi;
@@ -137,10 +140,10 @@ export function UnitOverview({
               {overview.tenancy ? (
                 <dl className="detail-list">
                   <div><dt>Status</dt><dd>{overview.tenancy.currentStatus}</dd></div>
-                  <div><dt>Actual start</dt><dd>{overview.tenancy.actualStart ?? '—'}</dd></div>
-                  <div><dt>Actual end</dt><dd>{overview.tenancy.actualEnd ?? '—'}</dd></div>
-                  <div><dt>Planned start</dt><dd>{overview.tenancy.plannedStart ?? '—'}</dd></div>
-                  <div><dt>Planned end</dt><dd>{overview.tenancy.plannedEnd ?? '—'}</dd></div>
+                  <div><dt>Actual start</dt><dd>{formatSwissDate(overview.tenancy.actualStart)}</dd></div>
+                  <div><dt>Actual end</dt><dd>{formatSwissDate(overview.tenancy.actualEnd)}</dd></div>
+                  <div><dt>Planned start</dt><dd>{formatSwissDate(overview.tenancy.plannedStart)}</dd></div>
+                  <div><dt>Planned end</dt><dd>{formatSwissDate(overview.tenancy.plannedEnd)}</dd></div>
                 </dl>
               ) : (
                 <p className="muted">
@@ -157,9 +160,9 @@ export function UnitOverview({
                 <div><dt>Status</dt><dd>{overview.contract.agreementCurrentStatus ?? '—'}</dd></div>
                 <div>
                   <dt>Effective</dt>
-                  <dd>{overview.contract.effectiveFrom ?? '—'} → {overview.contract.effectiveTo ?? 'open'}</dd>
+                  <dd>{formatSwissDate(overview.contract.effectiveFrom)} → {overview.contract.effectiveTo ? formatSwissDate(overview.contract.effectiveTo) : 'open'}</dd>
                 </div>
-                <div><dt>Signed</dt><dd>{overview.contract.signedAt ?? '—'}</dd></div>
+                <div><dt>Signed</dt><dd>{formatSwissDate(overview.contract.signedAt)}</dd></div>
                 <div><dt>Other drafts</dt><dd>{overview.contract.currentDraftAgreementCount}</dd></div>
               </dl>
               {overview.contract.effectiveTerms ? (
@@ -196,7 +199,7 @@ export function UnitOverview({
 
           <section className="panel">
             <div className="section-heading">
-              <div><p className="eyebrow">Attributed cost ledger</p><h2>Costs through {overview.asOf}</h2></div>
+              <div><p className="eyebrow">Attributed cost ledger</p><h2>Costs through {formatSwissDate(overview.asOf)}</h2></div>
               <span className="section-note">Currencies stay separate</span>
             </div>
             {overview.unitAttributedCostsByCurrency.length === 0 ? (

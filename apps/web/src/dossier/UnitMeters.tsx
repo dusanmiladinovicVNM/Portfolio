@@ -58,7 +58,12 @@ import type {
   NavigateWorkspace,
   SetNavigationBlocker,
 } from '../navigation/use-workspace-navigation.js';
-import { formatDetailKey } from '../presentation/format.js';
+import {
+  formatDetailKey,
+  formatSwissDate,
+  formatSwissDateTime,
+  swissLocalDateTimeToInstant,
+} from '../presentation/format.js';
 import {
   assertCreatedMeter,
   assertMeterBoundaryMutationOwner,
@@ -100,13 +105,6 @@ function utilityUnits(
     case 'gas':
       return METER_MEASUREMENT_UNITS;
   }
-}
-
-function utcInstant(date: string, time: string): string | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
-  if (!/^\d{2}:\d{2}$/.test(time)) return null;
-  const value = `${date}T${time}:00.000Z`;
-  return Number.isNaN(Date.parse(value)) ? null : value;
 }
 
 function meterError(cause: unknown, fallback: string): string {
@@ -175,7 +173,7 @@ function CreateMeterForm({
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const installedAt = utcInstant(
+    const installedAt = swissLocalDateTimeToInstant(
       requiredString(form, 'installedDate'),
       requiredString(form, 'installedTime'),
     );
@@ -340,7 +338,7 @@ function CreateMeterForm({
           />
         </label>
         <label>
-          Installed time (UTC)
+          Installed time (Zürich)
           <input
             disabled={writeGate.pending}
             name="installedTime"
@@ -525,7 +523,7 @@ function MeterAdministration({
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const readAt = utcInstant(
+    const readAt = swissLocalDateTimeToInstant(
       requiredString(form, 'readDate'),
       requiredString(form, 'readTime'),
     );
@@ -640,7 +638,7 @@ function MeterAdministration({
   async function submitRetirement(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const retiredAt = utcInstant(
+    const retiredAt = swissLocalDateTimeToInstant(
       requiredString(form, 'retiredDate'),
       requiredString(form, 'retiredTime'),
     );
@@ -724,9 +722,14 @@ function MeterAdministration({
         <div><dt>Serial</dt><dd>{meter.serialNumber}</dd></div>
         <div><dt>Utility</dt><dd>{formatDetailKey(meter.utilityType)}</dd></div>
         <div><dt>Unit</dt><dd>{meter.measurementUnit}</dd></div>
-        <div><dt>Space</dt><dd>{meter.spaceId ?? 'Unit level'}</dd></div>
-        <div><dt>Installed</dt><dd>{meter.installedAt}</dd></div>
-        <div><dt>Recorded</dt><dd>{meter.recordedAt}</dd></div>
+        <div>
+          <dt>Space</dt>
+          <dd>
+            {meter.spaceId ? 'Assigned space' : 'Unit level'}
+          </dd>
+        </div>
+        <div><dt>Installed</dt><dd>{formatSwissDateTime(meter.installedAt)}</dd></div>
+        <div><dt>Recorded</dt><dd>{formatSwissDateTime(meter.recordedAt)}</dd></div>
       </dl>
 
       <div className="meter-admin-grid">
@@ -786,7 +789,7 @@ function MeterAdministration({
               />
             </label>
             <label>
-              Read time (UTC)
+              Read time (Zürich)
               <input
                 disabled={writeGate.pending}
                 name="readTime"
@@ -835,7 +838,7 @@ function MeterAdministration({
                 />
               </label>
               <label>
-                Retired time (UTC)
+                Retired time (Zürich)
                 <input
                   disabled={writeGate.pending}
                   name="retiredTime"
@@ -867,11 +870,11 @@ function MeterAdministration({
               <span>Terminal and immutable</span>
             </div>
             <dl className="detail-list compact-detail-list">
-              <div><dt>Retired at</dt><dd>{meter.retiredAt}</dd></div>
+              <div><dt>Retired at</dt><dd>{formatSwissDateTime(meter.retiredAt)}</dd></div>
               <div><dt>Reason</dt><dd>{meter.retirementReason}</dd></div>
               <div>
                 <dt>Recorded at</dt>
-                <dd>{meter.retirementRecordedAt}</dd>
+                <dd>{formatSwissDateTime(meter.retirementRecordedAt)}</dd>
               </div>
             </dl>
           </div>
@@ -897,7 +900,7 @@ function MeterAdministration({
               <article className="meter-reading-card" key={reading.id}>
                 <div className="record-heading">
                   <div>
-                    <span className="eyebrow">{reading.readAt}</span>
+                    <span className="eyebrow">{formatSwissDateTime(reading.readAt)}</span>
                     <h4>
                       {formatReadingValue(
                         reading.value,
@@ -906,7 +909,7 @@ function MeterAdministration({
                     </h4>
                   </div>
                   <span className="section-note">
-                    recorded {reading.recordedAt}
+                    recorded {formatSwissDateTime(reading.recordedAt)}
                   </span>
                 </div>
                 <p className="muted">{reading.note ?? 'No note'}</p>
@@ -918,7 +921,7 @@ function MeterAdministration({
                           {formatDetailKey(boundary.type)} ·{' '}
                           {tenancies.find(
                             (tenancy) => tenancy.id === boundary.tenancyId,
-                          )?.code ?? boundary.tenancyId}
+                          )?.code ?? 'Tenancy unavailable'}
                         </li>
                       ),
                     )}
@@ -988,7 +991,7 @@ function MeterAdministration({
             >
               {detail.readings.map((reading) => (
                 <option key={reading.id} value={reading.id}>
-                  {reading.readAt} ·{' '}
+                  {formatSwissDateTime(reading.readAt)} ·{' '}
                   {formatReadingValue(
                     reading.value,
                     meter.measurementUnit,
@@ -1277,7 +1280,7 @@ export function UnitMeters({
             <h2>Meters</h2>
           </div>
           <span className="section-note">
-            Current physical registry · reporting date {asOf} preserved
+            Current physical registry · reporting date {formatSwissDate(asOf)} preserved
           </span>
         </div>
 

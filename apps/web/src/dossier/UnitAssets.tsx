@@ -54,7 +54,10 @@ import type {
   NavigateWorkspace,
   SetNavigationBlocker,
 } from '../navigation/use-workspace-navigation.js';
-import { formatDetailKey } from '../presentation/format.js';
+import {
+  formatDetailKey,
+  formatSwissDateTime,
+} from '../presentation/format.js';
 import { AssetServiceAdministration } from './AssetServiceAdministration.js';
 import {
   assertAssetDestinationSpacesOwner,
@@ -440,8 +443,12 @@ function CreateAssetForm({
 
 function LocationHistory({
   history,
+  units,
+  currentPropertyId,
 }: {
   readonly history: readonly AssetLocationHistoryResponse[] | null;
+  readonly units: readonly UnitResponse[];
+  readonly currentPropertyId: string;
 }) {
   if (history === null) {
     return <p className="muted" aria-live="polite">Loading location history…</p>;
@@ -454,13 +461,30 @@ function LocationHistory({
           <div>
             <strong>{formatDetailKey(item.changeType)}</strong>
             <span>
-              {item.validFrom} → {item.validTo ?? 'current'}
+              {formatSwissDateTime(item.validFrom)} → {item.validTo ? formatSwissDateTime(item.validTo) : 'current'}
             </span>
           </div>
           <dl className="detail-list compact-detail-list">
-            <div><dt>Property</dt><dd>{item.propertyId}</dd></div>
-            <div><dt>Unit</dt><dd>{item.unitId ?? '—'}</dd></div>
-            <div><dt>Space</dt><dd>{item.spaceId ?? 'Unit level'}</dd></div>
+            <div>
+              <dt>Property</dt>
+              <dd>
+                {item.propertyId === currentPropertyId
+                  ? 'Current property'
+                  : 'Previous property'}
+              </dd>
+            </div>
+            <div>
+              <dt>Unit</dt>
+              <dd>
+                {item.unitId
+                  ? units.find((unit) => unit.id === item.unitId)?.code ??
+                    (item.propertyId === currentPropertyId
+                      ? 'Assigned unit'
+                      : 'Previous unit')
+                  : 'Property level'}
+              </dd>
+            </div>
+            <div><dt>Space</dt><dd>{item.spaceId ? 'Assigned space' : 'Unit level'}</dd></div>
             <div><dt>Reason</dt><dd>{item.reason ?? '—'}</dd></div>
           </dl>
         </article>
@@ -1078,7 +1102,11 @@ function AssetAdministration({
         {historyError ? (
           <p className="form-error" role="alert">{historyError}</p>
         ) : (
-          <LocationHistory history={history} />
+          <LocationHistory
+          currentPropertyId={propertyId}
+          history={history}
+          units={units}
+        />
         )}
       </div>
 
@@ -1107,13 +1135,13 @@ function AssetAdministration({
             <div>
               <dt>Predecessor</dt>
               <dd>
-                {replacementLinks.predecessor?.replacedAssetId ?? '—'}
+                {replacementLinks.predecessor ? 'Linked predecessor asset' : '—'}
               </dd>
             </div>
             <div>
               <dt>Successor</dt>
               <dd>
-                {replacementLinks.successor?.replacementAssetId ?? '—'}
+                {replacementLinks.successor ? 'Linked successor asset' : '—'}
               </dd>
             </div>
           </dl>

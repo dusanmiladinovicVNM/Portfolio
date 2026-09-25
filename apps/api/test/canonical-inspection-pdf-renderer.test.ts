@@ -162,7 +162,7 @@ describe('CanonicalInspectionPdfRenderer', () => {
     const source = new TextDecoder().decode(rendered.content);
 
     expect(rendered.fileName).toBe(
-      'inspection-22222222-2222-4222-8222-222222222222-final.pdf',
+      'inspection-INSP-ZH-301-001-final.pdf',
     );
     expect(source.startsWith('%PDF-1.4\n')).toBe(true);
     expect(source.endsWith('%%EOF\n')).toBe(true);
@@ -183,6 +183,13 @@ describe('CanonicalInspectionPdfRenderer', () => {
     expect(source).toContain('entrance-wall.jpg');
     expect(source).toContain('Dusan Miladinovic');
     expect(source).toContain('Immutable final snapshot');
+    expect(source).toContain('Finalized 25.09.2026 11:00');
+    expect(source).toContain('Scheduled for 25.09.2026');
+    expect(source).toContain('Signed 25.09.2026 10:45');
+    expect(source).toContain('Snapshot created: 25.09.2026 11:00');
+    expect(source).not.toMatch(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/iu,
+    );
     expect(source).toContain('Page 1 of');
 
     expect(source).not.toContain('Canonical final snapshot');
@@ -202,7 +209,11 @@ describe('CanonicalInspectionPdfRenderer', () => {
 
     expect(source).toContain('Property context unavailable');
     expect(source).toContain('(Unit) Tj');
-    expect(source).toContain('Unit ID 55555555-5555-4555-8555-555555555555');
+    expect(source).toContain('Unit context unavailable');
+    expect(source).not.toContain('55555555-5555-4555-8555-555555555555');
+    expect(source).not.toMatch(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/iu,
+    );
   });
 
   it('paginates arbitrarily long canonical content without clipping it below the content floor', async () => {

@@ -44,7 +44,10 @@ import {
 } from '../admin/form-utils.js';
 import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
 import { unitRoute } from '../navigation/workspace-route.js';
-import { formatDetailKey } from '../presentation/format.js';
+import {
+  formatDetailKey,
+  formatSwissDate,
+} from '../presentation/format.js';
 import {
   assertAgreementMutationOwner,
   assertAmendmentMutationOwner,
@@ -283,7 +286,7 @@ function AgreementCreateForm({
               <option value="">Select signed predecessor…</option>
               {availablePredecessors.map((candidate) => (
                 <option key={candidate.id} value={candidate.id}>
-                  {candidate.code} · {candidate.effectiveFrom}
+                  {candidate.code} · {formatSwissDate(candidate.effectiveFrom)}
                 </option>
               ))}
             </select>

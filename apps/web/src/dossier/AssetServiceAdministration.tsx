@@ -56,7 +56,12 @@ import {
   contractErrorMessage,
   requiredString,
 } from '../admin/form-utils.js';
-import { formatDetailKey } from '../presentation/format.js';
+import {
+  formatDetailKey,
+  formatSwissDate,
+  formatSwissDateTime,
+  swissLocalDateTimeToInstant,
+} from '../presentation/format.js';
 import {
   assertAssetServiceEventsOwner,
   assertAssetServicePlansOwner,
@@ -97,14 +102,6 @@ function optionalPositiveInt(form: FormData, name: string): number | null {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : Number.NaN;
 }
 
-function utcInstant(date: string, time: string): string | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) {
-    return null;
-  }
-  const value = new Date(`${date}T${time}:00.000Z`);
-  return Number.isNaN(value.getTime()) ? null : value.toISOString();
-}
-
 function errorMessage(cause: unknown, fallback: string): string {
   return cause instanceof Error ? cause.message : fallback;
 }
@@ -120,7 +117,7 @@ function allClaims(claimsByWarranty: ClaimMap): readonly WarrantyClaimResponse[]
 }
 
 function claimLabel(claim: WarrantyClaimResponse): string {
-  return `${claim.incidentOn} · ${claim.status} · ${claim.description}`;
+  return `${formatSwissDate(claim.incidentOn)} · ${claim.status} · ${claim.description}`;
 }
 
 export function AssetServiceAdministration({
@@ -571,7 +568,7 @@ export function AssetServiceAdministration({
     event.preventDefault();
     const element = event.currentTarget;
     const form = new FormData(element);
-    const performedAt = utcInstant(
+    const performedAt = swissLocalDateTimeToInstant(
       requiredString(form, 'performedDate'),
       requiredString(form, 'performedTime'),
     );
@@ -793,7 +790,7 @@ export function AssetServiceAdministration({
                   <input disabled={pending} name="performedDate" required type="date" />
                 </label>
                 <label>
-                  Performed time (UTC)
+                  Performed time (Zürich)
                   <input disabled={pending} name="performedTime" required type="time" />
                 </label>
               </div>
@@ -861,7 +858,10 @@ export function AssetServiceAdministration({
                         <strong>{formatDetailKey(warranty.warrantyType)}</strong>
                         <span>{warranty.reference ?? 'No reference'}</span>
                       </div>
-                      <span>{warranty.validFrom} → {warranty.validTo ?? 'open'}</span>
+                      <span>
+                        {formatSwissDate(warranty.validFrom)} →{' '}
+                        {warranty.validTo ? formatSwissDate(warranty.validTo) : 'open'}
+                      </span>
                     </div>
                     <p className="muted">{warranty.terms ?? 'No terms recorded.'}</p>
 
@@ -889,7 +889,7 @@ export function AssetServiceAdministration({
                       <div className="asset-service-claim" key={claim.id}>
                         <div className="record-heading">
                           <div>
-                            <strong>{claim.incidentOn} · {claim.description}</strong>
+                            <strong>{formatSwissDate(claim.incidentOn)} · {claim.description}</strong>
                             <span>CAS v{claim.version}</span>
                           </div>
                           <span className={'status-chip status-' + claim.status}>
@@ -983,7 +983,7 @@ export function AssetServiceAdministration({
                       <div>
                         <strong>{plan.name}</strong>
                         <span>
-                          {formatDetailKey(plan.scheduleKind)} · due {plan.firstDueOn}
+                          {formatDetailKey(plan.scheduleKind)} · due {formatSwissDate(plan.firstDueOn)}
                           {plan.intervalMonths ? ` · every ${plan.intervalMonths} months` : ''}
                         </span>
                       </div>
@@ -1055,13 +1055,17 @@ export function AssetServiceAdministration({
                   <article className="maintenance-service-card" key={serviceEvent.id}>
                     <div className="record-heading">
                       <strong>{formatDetailKey(serviceEvent.eventType)}</strong>
-                      <span>{serviceEvent.performedAt}</span>
+                      <span>{formatSwissDateTime(serviceEvent.performedAt)}</span>
                     </div>
                     <p>{serviceEvent.description}</p>
                     <small>
                       {serviceEvent.reference ?? 'No reference'}
-                      {serviceEvent.servicePlanId ? ` · plan ${serviceEvent.servicePlanId}` : ''}
-                      {serviceEvent.warrantyClaimId ? ` · claim ${serviceEvent.warrantyClaimId}` : ''}
+                      {serviceEvent.servicePlanId
+                        ? ` · plan ${plans?.find((plan) => plan.id === serviceEvent.servicePlanId)?.name ?? 'linked'}`
+                        : ''}
+                      {serviceEvent.warrantyClaimId
+                        ? ` · warranty claim ${claims.find((claim) => claim.id === serviceEvent.warrantyClaimId)?.status ?? 'linked'}`
+                        : ''}
                     </small>
                   </article>
                 ))}

@@ -803,7 +803,9 @@ export function InspectionFindingsEvidence({
                   {finding.description ? <span>{finding.description}</span> : null}
                   <small>
                     {finding.itemId
-                      ? `Item ${finding.itemId}`
+                      ? activeSection.items.find(
+                          (item) => item.id === finding.itemId,
+                        )?.label ?? 'Inspection item'
                       : 'Section-level Finding'}
                   </small>
                 </li>
@@ -867,12 +869,17 @@ export function InspectionFindingsEvidence({
                   {evidence.caption ? <span>{evidence.caption}</span> : null}
                   <small>
                     {evidence.itemId
-                      ? `Item ${evidence.itemId}`
+                      ? bundle.schema.sections
+                          .flatMap((section) => section.items)
+                          .find((item) => item.id === evidence.itemId)?.label ??
+                        'Inspection item'
                       : evidence.sectionId
-                        ? `Section ${evidence.sectionId}`
+                        ? bundle.schema.sections.find(
+                            (section) => section.id === evidence.sectionId,
+                          )?.title ?? 'Inspection section'
                         : 'Inspection-level Evidence'}
                   </small>
-                  <small>Version {evidence.documentVersionId}</small>
+                  <small>Exact evidence version attached</small>
                 </li>
               ))}
             </ul>

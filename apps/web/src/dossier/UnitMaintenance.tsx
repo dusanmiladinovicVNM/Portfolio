@@ -1,6 +1,7 @@
 import {
   assignMaintenanceWorkOrderRequestSchema,
   assetListResponseSchema,
+  assetResponseSchema,
   changeMaintenanceIssueStatusRequestSchema,
   changeMaintenanceWorkOrderStatusRequestSchema,
   createMaintenanceIssueRequestSchema,
@@ -42,6 +43,7 @@ import {
   useState,
 } from 'react';
 import {
+  assetPath,
   assetServiceEventsPath,
   inspectionPath,
   maintenanceIssuePath,
@@ -74,7 +76,11 @@ import type {
   NavigateWorkspace,
   SetNavigationBlocker,
 } from '../navigation/use-workspace-navigation.js';
-import { formatDetailKey } from '../presentation/format.js';
+import {
+  formatDetailKey,
+  formatSwissDateTime,
+  swissLocalDateTimeToInstant,
+} from '../presentation/format.js';
 import {
   assertCreatedMaintenanceIssue,
   assertCreatedMaintenanceWorkOrder,
@@ -115,12 +121,9 @@ interface FindingOption {
   readonly finding: InspectionFindingResponse;
 }
 
-function utcInstant(date: string, time: string): string | undefined {
+function swissInstant(date: string, time: string): string | undefined {
   if (date === '' && time === '') return undefined;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return undefined;
-  if (!/^\d{2}:\d{2}$/.test(time)) return undefined;
-  const value = `${date}T${time}:00.000Z`;
-  return Number.isNaN(Date.parse(value)) ? undefined : value;
+  return swissLocalDateTimeToInstant(date, time) ?? undefined;
 }
 
 function nullableString(form: FormData, name: string): string | null {
@@ -156,10 +159,10 @@ function assigneeLabel(
 ): string {
   const assignee = entry.workOrder.assignee;
   if (assignee === null) return 'Unassigned';
-  if (assignee.kind === 'user') return `Internal user · ${assignee.userId}`;
+  if (assignee.kind === 'user') return 'Internal user';
   return (
     parties.find((party) => party.id === assignee.partyId)?.displayName ??
-    `Party · ${assignee.partyId}`
+    'External party'
   );
 }
 
@@ -210,10 +213,10 @@ function CreateIssueForm({
     const form = new FormData(formElement);
     const date = requiredString(form, 'reportedDate');
     const time = requiredString(form, 'reportedTime');
-    const reportedAt = utcInstant(date, time);
+    const reportedAt = swissInstant(date, time);
 
     if ((date !== '' || time !== '') && reportedAt === undefined) {
-      setError('Reported date and time must either both be empty or form a valid UTC instant.');
+      setError('Reported date and time must either both be empty or form one valid Zürich local time.');
       return;
     }
 
@@ -392,7 +395,7 @@ function CreateIssueForm({
           </select>
         </label>
         <label>
-          Reported date (UTC)
+          Reported date (Zürich)
           <input
             disabled={writeGate.pending}
             name="reportedDate"
@@ -400,7 +403,7 @@ function CreateIssueForm({
           />
         </label>
         <label>
-          Reported time (UTC)
+          Reported time (Zürich)
           <input
             disabled={writeGate.pending}
             name="reportedTime"
@@ -414,9 +417,12 @@ function CreateIssueForm({
       </label>
       {selectedAsset ? (
         <p className="setup-hint">
-          Asset scope uses its current canonical placement: Unit {unitId}
+          Asset scope uses its current canonical placement: current Unit
           {selectedAsset.spaceId
-            ? ` / Space ${selectedAsset.spaceId}`
+            ? ` / Space ${
+                spaces.find((space) => space.id === selectedAsset.spaceId)
+                  ?.code ?? 'assigned'
+              }`
             : ' / Unit level'}. For historical problems at an older Asset
           location, create a Unit/Finding-scoped Issue instead of falsifying
           Asset scope.
@@ -440,6 +446,9 @@ function IssueAdministration({
   workOrders,
   selectedWorkOrderId,
   parties,
+  spaces,
+  issueAssetsById,
+  findings,
   serviceEvents,
   writeGate,
   onCanonicalWrite,
@@ -451,6 +460,9 @@ function IssueAdministration({
   readonly workOrders: readonly MaintenanceWorkOrderEntryResponse[];
   readonly selectedWorkOrderId?: string | undefined;
   readonly parties: readonly PartyResponse[];
+  readonly spaces: readonly SpaceResponse[];
+  readonly issueAssetsById: ReadonlyMap<string, AssetResponse>;
+  readonly findings: readonly FindingOption[];
   readonly serviceEvents: readonly ServiceEventResponse[];
   readonly writeGate: MaintenanceWriteGate;
   readonly onCanonicalWrite: () => void;
@@ -831,7 +843,7 @@ function IssueAdministration({
     if (!selectedOrder || !issue.assetId) return;
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const performedAt = utcInstant(
+    const performedAt = swissInstant(
       requiredString(form, 'performedDate'),
       requiredString(form, 'performedTime'),
     );
@@ -956,15 +968,42 @@ function IssueAdministration({
       </div>
 
       <dl className="detail-list maintenance-scope-grid">
-        <div><dt>Property</dt><dd>{issue.propertyId}</dd></div>
-        <div><dt>Unit</dt><dd>{issue.unitId}</dd></div>
-        <div><dt>Space</dt><dd>{issue.spaceId ?? 'Unit level'}</dd></div>
-        <div><dt>Asset</dt><dd>{issue.assetId ?? '—'}</dd></div>
+        <div><dt>Property</dt><dd>Current property</dd></div>
+        <div><dt>Unit</dt><dd>Current unit</dd></div>
+        <div>
+          <dt>Space</dt>
+          <dd>
+            {issue.spaceId
+              ? spaces.find((space) => space.id === issue.spaceId)?.code ??
+                'Assigned space'
+              : 'Unit level'}
+          </dd>
+        </div>
+        <div>
+          <dt>Asset</dt>
+          <dd>
+            {issue.assetId
+              ? issueAssetsById.get(issue.assetId)?.code ??
+                'Assigned asset'
+              : '—'}
+          </dd>
+        </div>
         <div>
           <dt>Inspection Finding</dt>
-          <dd>{issue.inspectionFindingId ?? '—'}</dd>
+          <dd>
+            {issue.inspectionFindingId
+              ? (() => {
+                  const option = findings.find(
+                    ({ finding }) => finding.id === issue.inspectionFindingId,
+                  );
+                  return option
+                    ? `${option.inspectionCode} · ${option.finding.title}`
+                    : 'Linked finding';
+                })()
+              : '—'}
+          </dd>
         </div>
-        <div><dt>Reported</dt><dd>{issue.reportedAt}</dd></div>
+        <div><dt>Reported</dt><dd>{formatSwissDateTime(issue.reportedAt)}</dd></div>
       </dl>
 
       {error ? <p className="setup-form-error" role="alert">{error}</p> : null}
@@ -1124,11 +1163,11 @@ function IssueAdministration({
 
           <dl className="detail-list compact-detail-list">
             <div><dt>Assignee</dt><dd>{assigneeLabel(selectedEntry, parties)}</dd></div>
-            <div><dt>Created</dt><dd>{selectedOrder.createdAt}</dd></div>
-            <div><dt>Assigned</dt><dd>{selectedOrder.assignedAt ?? '—'}</dd></div>
-            <div><dt>Started</dt><dd>{selectedOrder.startedAt ?? '—'}</dd></div>
-            <div><dt>Completed</dt><dd>{selectedOrder.completedAt ?? '—'}</dd></div>
-            <div><dt>Cancelled</dt><dd>{selectedOrder.cancelledAt ?? '—'}</dd></div>
+            <div><dt>Created</dt><dd>{formatSwissDateTime(selectedOrder.createdAt)}</dd></div>
+            <div><dt>Assigned</dt><dd>{formatSwissDateTime(selectedOrder.assignedAt)}</dd></div>
+            <div><dt>Started</dt><dd>{formatSwissDateTime(selectedOrder.startedAt)}</dd></div>
+            <div><dt>Completed</dt><dd>{formatSwissDateTime(selectedOrder.completedAt)}</dd></div>
+            <div><dt>Cancelled</dt><dd>{formatSwissDateTime(selectedOrder.cancelledAt)}</dd></div>
           </dl>
 
           {selectedOrder.status === 'draft' ||
@@ -1303,7 +1342,7 @@ function IssueAdministration({
                     </select>
                   </label>
                   <label>
-                    Performed date (UTC)
+                    Performed date (Zürich)
                     <input
                       disabled={writeGate.pending}
                       name="performedDate"
@@ -1312,7 +1351,7 @@ function IssueAdministration({
                     />
                   </label>
                   <label>
-                    Performed time (UTC)
+                    Performed time (Zürich)
                     <input
                       disabled={writeGate.pending}
                       name="performedTime"
@@ -1372,7 +1411,7 @@ function IssueAdministration({
                     <option value="">Select ServiceEvent…</option>
                     {linkableEvents.map((serviceEvent) => (
                       <option key={serviceEvent.id} value={serviceEvent.id}>
-                        {serviceEvent.performedAt} ·{' '}
+                        {formatSwissDateTime(serviceEvent.performedAt)} ·{' '}
                         {formatDetailKey(serviceEvent.eventType)} ·{' '}
                         {serviceEvent.description}
                       </option>
@@ -1403,7 +1442,7 @@ function IssueAdministration({
                         <strong>
                           {formatDetailKey(serviceEvent.eventType)}
                         </strong>
-                        <span>{serviceEvent.performedAt}</span>
+                        <span>{formatSwissDateTime(serviceEvent.performedAt)}</span>
                       </div>
                       <p>{serviceEvent.description}</p>
                       <small>
@@ -1475,6 +1514,8 @@ export function UnitMaintenance({
     useState<readonly SpaceResponse[] | null>(null);
   const [assets, setAssets] =
     useState<readonly AssetResponse[] | null>(null);
+  const [issueAssetsById, setIssueAssetsById] =
+    useState<ReadonlyMap<string, AssetResponse>>(() => new Map());
   const [parties, setParties] =
     useState<readonly PartyResponse[] | null>(null);
   const [findings, setFindings] =
@@ -1515,6 +1556,7 @@ export function UnitMaintenance({
     setIssues(null);
     setSpaces(null);
     setAssets(null);
+    setIssueAssetsById(new Map());
     setParties(null);
     setFindings(null);
     setLoadError(null);
@@ -1581,9 +1623,43 @@ export function UnitMaintenance({
             }));
           });
 
+          const issueAssetIds = [
+            ...new Set(
+              issueResponse.items
+                .map((issue) => issue.assetId)
+                .filter((assetId): assetId is string => assetId !== null),
+            ),
+          ];
+          const currentAssetById = new Map(
+            assetResponse.items.map((asset) => [asset.id, asset] as const),
+          );
+          const historicalAssets = await Promise.all(
+            issueAssetIds
+              .filter((assetId) => !currentAssetById.has(assetId))
+              .map(async (assetId) => {
+                const asset = await api.get(
+                  assetPath(assetId),
+                  assetResponseSchema,
+                  { signal: controller.signal },
+                );
+                if (asset.id !== assetId) {
+                  throw new Error(
+                    'Maintenance historical Asset lookup crossed its identity boundary.',
+                  );
+                }
+                return [assetId, asset] as const;
+              }),
+          );
+          if (controller.signal.aborted) return;
+          const issueAssetMap = new Map(currentAssetById);
+          for (const [assetId, asset] of historicalAssets) {
+            issueAssetMap.set(assetId, asset);
+          }
+
           setIssues(issueResponse.items);
           setSpaces(spaceResponse.items);
           setAssets(assetResponse.items);
+          setIssueAssetsById(issueAssetMap);
           setParties(partyResponse.items);
           setFindings(findingOptions);
         },
@@ -1785,11 +1861,31 @@ export function UnitMaintenance({
                 </div>
                 <dl className="detail-list compact-detail-list">
                   <div><dt>Priority</dt><dd>{issue.priority}</dd></div>
-                  <div><dt>Reported</dt><dd>{issue.reportedAt}</dd></div>
-                  <div><dt>Asset</dt><dd>{issue.assetId ?? '—'}</dd></div>
+                  <div><dt>Reported</dt><dd>{formatSwissDateTime(issue.reportedAt)}</dd></div>
+                  <div>
+                    <dt>Asset</dt>
+                    <dd>
+                      {issue.assetId
+                        ? issueAssetsById.get(issue.assetId)?.code ??
+                          'Assigned asset'
+                        : '—'}
+                    </dd>
+                  </div>
                   <div>
                     <dt>Inspection origin</dt>
-                    <dd>{issue.inspectionFindingId ?? '—'}</dd>
+                    <dd>
+                      {issue.inspectionFindingId
+                        ? (() => {
+                            const option = findings?.find(
+                              ({ finding }) =>
+                                finding.id === issue.inspectionFindingId,
+                            );
+                            return option
+                              ? `${option.inspectionCode} · ${option.finding.title}`
+                              : 'Linked finding';
+                          })()
+                        : '—'}
+                    </dd>
                   </div>
                 </dl>
               </WorkspaceLink>
@@ -1848,6 +1944,9 @@ export function UnitMaintenance({
             )
           }
           parties={parties}
+          spaces={spaces ?? []}
+          issueAssetsById={issueAssetsById}
+          findings={findings ?? []}
           selectedWorkOrderId={workOrderId}
           serviceEvents={serviceEvents}
           workOrders={workOrders}

@@ -998,7 +998,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[contains(@class,'contract-terms-panel')]//h3[contains(normalize-space(),'terms from 2026-10-01')]",
+    "//section[contains(@class,'contract-terms-panel')]//h3[contains(normalize-space(),'terms from 01.10.2026')]",
   );
 
   const amendmentCreateForm =
@@ -1207,7 +1207,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[contains(@class,'contract-terms-panel')]//h3[contains(normalize-space(),'terms from 2027-01-01')]",
+    "//section[contains(@class,'contract-terms-panel')]//h3[contains(normalize-space(),'terms from 01.01.2027')]",
   );
 
   await selectOptionXpath(
@@ -1740,7 +1740,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//article[contains(@class,'meter-reading-card')][.//span[normalize-space()='2026-10-01T08:00:00.000Z']][.//h4[normalize-space()='100 kwh']][.//p[normalize-space()='Move in reading']]",
+    "//article[contains(@class,'meter-reading-card')][.//span[normalize-space()='01.10.2026 08:00']][.//h4[normalize-space()='100 kwh']][.//p[normalize-space()='Move in reading']]",
   );
 
   const meterBoundaryForm = "//form[@data-meter-form='boundary']";
@@ -1781,7 +1781,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//article[contains(@class,'meter-reading-card')][.//span[normalize-space()='2026-10-01T08:00:00.000Z']]//li[normalize-space()='Move in · TEN-SETUP-BRW']",
+    "//article[contains(@class,'meter-reading-card')][.//span[normalize-space()='01.10.2026 08:00']]//li[normalize-space()='Move in · TEN-SETUP-BRW']",
   );
 
   await typeXpath(
@@ -1811,7 +1811,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//article[contains(@class,'meter-reading-card')][.//span[normalize-space()='2027-09-30T08:00:00.000Z']][.//h4[normalize-space()='140 kwh']][.//p[normalize-space()='Move out reading']]",
+    "//article[contains(@class,'meter-reading-card')][.//span[normalize-space()='30.09.2027 08:00']][.//h4[normalize-space()='140 kwh']][.//p[normalize-space()='Move out reading']]",
   );
   await waitForElement(
     sessionId,
@@ -1849,7 +1849,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//article[contains(@class,'meter-reading-card')][.//span[normalize-space()='2027-09-30T08:00:00.000Z']]//li[normalize-space()='Move out · TEN-SETUP-BRW']",
+    "//article[contains(@class,'meter-reading-card')][.//span[normalize-space()='30.09.2027 08:00']]//li[normalize-space()='Move out · TEN-SETUP-BRW']",
   );
 
   const meterRetireForm = "//form[@data-meter-form='retire']";
@@ -2298,11 +2298,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//article[contains(@class,'maintenance-service-card')][.//p[normalize-space()='Warranty motor replacement completed']][.//small[contains(normalize-space(),'" +
-      setupServicePlanId +
-      "') and contains(normalize-space(),'" +
-      setupWarrantyClaimId +
-      "')]]",
+    "//article[contains(@class,'maintenance-service-card')][.//p[normalize-space()='Warranty motor replacement completed']][.//small[contains(normalize-space(),'plan Annual washer service') and contains(normalize-space(),'warranty claim closed')]]",
   );
 
   const assetMoveForm = "//form[@data-asset-form='move']";
@@ -2334,7 +2330,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Asset created']][.//span[contains(normalize-space(),'2027-10-01T09:00:00.000Z')]]",
+    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Asset created']][.//span[contains(normalize-space(),'01.10.2027 10:00')]]",
   );
   await waitForElement(
     sessionId,
@@ -2417,7 +2413,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[contains(@class,'maintenance-admin-panel')]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='" + setupSpaceId + "']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='" + setupAssetId + "']][.//dt[normalize-space()='Inspection Finding']/following-sibling::dd[normalize-space()='" + setupInspectionFindingId + "']]",
+    "//section[contains(@class,'maintenance-admin-panel')]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='BED-SETUP']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='AST-SETUP-BRW']][.//dt[normalize-space()='Inspection Finding']/following-sibling::dd[contains(normalize-space(),'INS-MAINT-BRW') and contains(normalize-space(),'Washer leak observed')]]",
   );
 
   const issueUpdateForm =
@@ -2583,7 +2579,7 @@ try {
   await setInputValueXpath(
     sessionId,
     serviceForm + "//input[@name='performedTime']",
-    '09:32',
+    '11:32',
   );
   await typeXpath(
     sessionId,
@@ -2746,12 +2742,12 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Moved']][.//span[contains(normalize-space(),'2027-10-01T09:00:00.000Z') and contains(normalize-space(),'2027-10-01T10:00:00.000Z')]][.//dd[normalize-space()='Moved into bedroom']]",
+    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Moved']][.//span[contains(normalize-space(),'01.10.2027 11:00') and contains(normalize-space(),'01.10.2027 12:00')]][.//dd[normalize-space()='Moved into bedroom']]",
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Moved']][.//span[contains(normalize-space(),'current')]][.//dt[normalize-space()='Property']/following-sibling::dd[normalize-space()='" + setupRecoveryPropertyId + "']][.//dt[normalize-space()='Unit']/following-sibling::dd[normalize-space()='" + setupRecoveryUnitId + "']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='" + setupRecoverySpaceId + "']][.//dd[normalize-space()='Concurrent cross-Property move']]",
+    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Moved']][.//span[contains(normalize-space(),'current')]][.//dt[normalize-space()='Property']/following-sibling::dd[normalize-space()='Current property']][.//dt[normalize-space()='Unit']/following-sibling::dd[normalize-space()='UNIT-RECOVERY-BRW']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='Assigned space']][.//dd[normalize-space()='Concurrent cross-Property move']]",
   );
 
   const assetReplacementForm = "//form[@data-asset-form='replace']";
@@ -2813,12 +2809,12 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Replacement created']][.//span[contains(normalize-space(),'current')]][.//dt[normalize-space()='Property']/following-sibling::dd[normalize-space()='" + setupRecoveryPropertyId + "']][.//dt[normalize-space()='Unit']/following-sibling::dd[normalize-space()='" + setupRecoveryUnitId + "']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='" + setupRecoverySpaceId + "']]",
+    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Replacement created']][.//span[contains(normalize-space(),'current')]][.//dt[normalize-space()='Property']/following-sibling::dd[normalize-space()='Current property']][.//dt[normalize-space()='Unit']/following-sibling::dd[normalize-space()='UNIT-RECOVERY-BRW']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='Assigned space']]",
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[contains(@class,'asset-admin-panel')]//dl[contains(@class,'detail-list')]//dd[normalize-space()='" + setupAssetId + "']",
+    "//section[contains(@class,'asset-admin-panel')]//dl[contains(@class,'detail-list')]//dd[normalize-space()='Linked predecessor asset']",
   );
   assertEqual(
     await elementExistsXpath(
@@ -2849,7 +2845,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[contains(@class,'maintenance-admin-panel')]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Property']/following-sibling::dd[normalize-space()='" + setupPropertyId + "']][.//dt[normalize-space()='Unit']/following-sibling::dd[normalize-space()='" + setupUnitId + "']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='" + setupSpaceId + "']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='" + setupAssetId + "']]",
+    "//section[contains(@class,'maintenance-admin-panel')]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Property']/following-sibling::dd[normalize-space()='Current property']][.//dt[normalize-space()='Unit']/following-sibling::dd[normalize-space()='Current unit']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='BED-SETUP']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='AST-SETUP-BRW']]",
   );
 
   await navigateWithPopState(

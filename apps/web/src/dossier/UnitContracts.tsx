@@ -40,6 +40,7 @@ import {
 import {
   formatDetailKey,
   formatExactMoney,
+  formatSwissDate,
 } from '../presentation/format.js';
 import {
   partyDisplayName,
@@ -96,7 +97,7 @@ function TermsPanel({
   if (state.kind === 'loading') {
     return (
       <section className="panel contract-terms-panel" aria-live="polite">
-        <p className="eyebrow">Effective terms · {asOf}</p>
+        <p className="eyebrow">Effective terms · {formatSwissDate(asOf)}</p>
         <p className="muted">Loading effective terms…</p>
       </section>
     );
@@ -105,7 +106,7 @@ function TermsPanel({
   if (state.kind === 'missing') {
     return (
       <section className="panel contract-terms-panel">
-        <p className="eyebrow">Effective terms · {asOf}</p>
+        <p className="eyebrow">Effective terms · {formatSwissDate(asOf)}</p>
         <h3>No effective terms at this business date</h3>
         <p className="muted">
           This is a valid legal-history state, not a transport error.
@@ -117,7 +118,7 @@ function TermsPanel({
   if (state.kind === 'error') {
     return (
       <section className="panel contract-terms-panel" role="alert">
-        <p className="eyebrow">Effective terms · {asOf}</p>
+        <p className="eyebrow">Effective terms · {formatSwissDate(asOf)}</p>
         <p className="form-error">{state.message}</p>
       </section>
     );
@@ -128,9 +129,10 @@ function TermsPanel({
     <section className="panel contract-terms-panel">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Effective terms · {asOf}</p>
+          <p className="eyebrow">Effective terms · {formatSwissDate(asOf)}</p>
           <h3>
-            {formatDetailKey(terms.sourceType)} terms from {terms.effectiveFrom}
+            {formatDetailKey(terms.sourceType)} terms from{' '}
+            {formatSwissDate(terms.effectiveFrom)}
           </h3>
         </div>
         <span className="section-note">
@@ -170,8 +172,8 @@ function TermsPanel({
         <div><dt>Tenant notice</dt><dd>{terms.noticePeriodTenantDays} days</dd></div>
         <div><dt>Landlord notice</dt><dd>{terms.noticePeriodLandlordDays} days</dd></div>
         <div>
-          <dt>Source identity</dt>
-          <dd>{terms.sourceAgreementId ?? terms.sourceAmendmentId ?? '—'}</dd>
+          <dt>Source</dt>
+          <dd>{formatDetailKey(terms.sourceType)}</dd>
         </div>
       </dl>
     </section>
@@ -314,8 +316,8 @@ function Amendments({
           </div>
           <dl className="detail-list">
             <div><dt>Status</dt><dd>{formatDetailKey(amendment.status)}</dd></div>
-            <div><dt>Effective</dt><dd>{amendment.effectiveFrom}</dd></div>
-            <div><dt>Signed</dt><dd>{amendment.signedAt ?? '—'}</dd></div>
+            <div><dt>Effective</dt><dd>{formatSwissDate(amendment.effectiveFrom)}</dd></div>
+            <div><dt>Signed</dt><dd>{formatSwissDate(amendment.signedAt)}</dd></div>
           </dl>
         </WorkspaceLink>
       ))}
@@ -749,9 +751,27 @@ export function UnitContracts({
                       <span className="status-chip">{agreement.status}</span>
                     </div>
                     <dl className="detail-list">
-                      <div><dt>Effective</dt><dd>{agreement.effectiveFrom} → {agreement.effectiveTo ?? 'open'}</dd></div>
-                      <div><dt>Signed</dt><dd>{agreement.signedAt ?? '—'}</dd></div>
-                      <div><dt>Predecessor</dt><dd>{agreement.predecessorAgreementId ?? '—'}</dd></div>
+                      <div>
+                        <dt>Effective</dt>
+                        <dd>
+                          {formatSwissDate(agreement.effectiveFrom)} →{' '}
+                          {agreement.effectiveTo
+                            ? formatSwissDate(agreement.effectiveTo)
+                            : 'open'}
+                        </dd>
+                      </div>
+                      <div><dt>Signed</dt><dd>{formatSwissDate(agreement.signedAt)}</dd></div>
+                      <div>
+                        <dt>Predecessor</dt>
+                        <dd>
+                          {agreement.predecessorAgreementId
+                            ? agreements?.find(
+                                (candidate) =>
+                                  candidate.id === agreement.predecessorAgreementId,
+                              )?.code ?? 'Previous agreement'
+                            : '—'}
+                        </dd>
+                      </div>
                       <div><dt>Parties</dt><dd>{agreement.parties.length}</dd></div>
                     </dl>
                     {agreement.parties.length > 0 ? (

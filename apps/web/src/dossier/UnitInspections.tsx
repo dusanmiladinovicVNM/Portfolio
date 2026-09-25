@@ -36,7 +36,10 @@ import type {
   NavigateWorkspace,
   SetNavigationBlocker,
 } from '../navigation/use-workspace-navigation.js';
-import { formatDetailKey } from '../presentation/format.js';
+import {
+  formatDetailKey,
+  formatSwissDate,
+} from '../presentation/format.js';
 import { InspectionFinalizationPanel } from './InspectionFinalizationPanel.js';
 import { InspectionFindingsEvidence } from './InspectionFindingsEvidence.js';
 import { InspectionOrchestrationPanel } from './InspectionOrchestrationPanel.js';
@@ -1023,7 +1026,7 @@ export function UnitInspections({
                 </div>
                 <div>
                   <span className="status-chip">{inspection.status}</span>
-                  <small>{inspection.scheduledFor ?? 'Unscheduled'}</small>
+                  <small>{inspection.scheduledFor ? formatSwissDate(inspection.scheduledFor) : 'Unscheduled'}</small>
                 </div>
               </WorkspaceLink>
             ))}
