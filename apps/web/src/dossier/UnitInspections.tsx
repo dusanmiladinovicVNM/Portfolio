@@ -64,6 +64,8 @@ interface DraftEntry {
 type DraftByItem = Readonly<Record<string, DraftEntry>>;
 type TouchedByItem = Readonly<Record<string, boolean>>;
 
+export const INSPECTION_AUTOSAVE_DELAY_MS = 1500;
+
 interface UnitInspectionsProps {
   readonly api: PortfolioApi;
   readonly propertyId: string;
@@ -520,6 +522,11 @@ export function UnitInspections({
   const inFlightStartsRef = useRef<Set<string>>(new Set());
   const [saveError, setSaveError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
+  const [draftChangeRevision, setDraftChangeRevision] = useState(0);
+  const [
+    autosaveBlockedChangeRevision,
+    setAutosaveBlockedChangeRevision,
+  ] = useState<number | null>(null);
   const [inspectionWritePending, setInspectionWritePending] = useState(false);
   const inspectionWritePendingRef = useRef(false);
   const activeInspectionIdRef = useRef(inspectionId);
@@ -727,6 +734,7 @@ export function UnitInspections({
     setTouched({});
     setSaveError(null);
     setConflict(false);
+    setAutosaveBlockedChangeRevision(null);
   }, [draftResetKey]);
 
   const localValues = useMemo(
@@ -744,17 +752,27 @@ export function UnitInspections({
 
   const currentRevision = selectedSectionRevision ?? 0;
 
-  const patch =
-    routeBundle && selectedSection && selectedSectionInstance
-      ? buildInspectionSectionPatch(
-          selectedSection,
-          selectedSectionInstance.id,
-          routeBundle.responses,
-          draft,
-          touched,
-          currentRevision,
-        )
-      : null;
+  const patch = useMemo(
+    () =>
+      routeBundle && selectedSection && selectedSectionInstance
+        ? buildInspectionSectionPatch(
+            selectedSection,
+            selectedSectionInstance.id,
+            routeBundle.responses,
+            draft,
+            touched,
+            currentRevision,
+          )
+        : null,
+    [
+      currentRevision,
+      draft,
+      routeBundle,
+      selectedSection,
+      selectedSectionInstance,
+      touched,
+    ],
+  );
 
   const currentInspectionId = routeBundle?.inspection.id;
   const currentSectionId = selectedSectionInstance?.id;
@@ -782,6 +800,7 @@ export function UnitInspections({
       currentSectionId,
     );
   const hasUnsavedChanges = patch !== null;
+  const sectionWritePending = inFlightSectionSaves.size > 0;
 
   const inspectionWriteGate: InspectionWriteGate = {
     pending: inspectionWritePending,
@@ -820,7 +839,7 @@ export function UnitInspections({
   }
 
   useEffect(() => {
-    if (inspectionWritePending) {
+    if (inspectionWritePending || sectionWritePending) {
       setNavigationBlocker(() => false);
       return () => setNavigationBlocker(null);
     }
@@ -840,13 +859,15 @@ export function UnitInspections({
   }, [
     hasUnsavedChanges,
     inspectionWritePending,
+    sectionWritePending,
     setNavigationBlocker,
   ]);
 
   function changeItem(itemId: string, entry: DraftEntry) {
     setDraft((current) => ({ ...current, [itemId]: entry }));
     setTouched((current) => ({ ...current, [itemId]: true }));
-    setSaveError(null);
+    setDraftChangeRevision((current) => current + 1);
+    if (!conflict) setSaveError(null);
   }
 
   async function startInspection() {
@@ -901,16 +922,11 @@ export function UnitInspections({
     }
   }
 
-  async function saveSection(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (
-      !routeBundle ||
-      !selectedSection ||
-      !selectedSectionInstance ||
-      !patch
-    ) {
-      return;
-    }
+  async function persistSection(
+    requestPatch: SaveInspectionSectionRequest,
+    requestChangeRevision: number,
+  ) {
+    if (!routeBundle || !selectedSectionInstance) return;
 
     const targetInspectionId = routeBundle.inspection.id;
     const targetSectionId = selectedSectionInstance.id;
@@ -925,13 +941,13 @@ export function UnitInspections({
       return;
     }
 
-    const requestPatch = patch;
     inFlightSectionSavesRef.current.add(targetKey);
     setInFlightSectionSaves((current) =>
       withInspectionOperationStarted(current, targetKey),
     );
     setSaveError(null);
     setConflict(false);
+    setAutosaveBlockedChangeRevision(null);
 
     try {
       const saved = await api.patch(
@@ -954,6 +970,7 @@ export function UnitInspections({
     } catch (cause) {
       if (!isActiveEditorTarget(targetInspectionId, targetSectionId)) return;
 
+      setAutosaveBlockedChangeRevision(requestChangeRevision);
       if (
         cause instanceof PortfolioApiError &&
         cause.code === 'INSPECTION_SECTION_REVISION_CONFLICT'
@@ -976,6 +993,41 @@ export function UnitInspections({
       );
     }
   }
+
+  async function saveSection(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!patch || conflict) return;
+    await persistSection(patch, draftChangeRevision);
+  }
+
+  useEffect(() => {
+    if (
+      !patch ||
+      !editable ||
+      saving ||
+      inspectionWritePending ||
+      conflict ||
+      autosaveBlockedChangeRevision === draftChangeRevision
+    ) {
+      return;
+    }
+
+    const requestPatch = patch;
+    const requestChangeRevision = draftChangeRevision;
+    const timeout = window.setTimeout(() => {
+      void persistSection(requestPatch, requestChangeRevision);
+    }, INSPECTION_AUTOSAVE_DELAY_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [
+    autosaveBlockedChangeRevision,
+    conflict,
+    draftChangeRevision,
+    editable,
+    inspectionWritePending,
+    patch,
+    saving,
+  ]);
 
   async function reloadAfterConflict() {
     if (!inspectionId || !selectedSection || !selectedSectionInstance) return;
@@ -1019,6 +1071,7 @@ export function UnitInspections({
       setDraft(createDraft(freshSection, freshInstance.id, fresh.responses));
       setTouched({});
       setConflict(false);
+      setAutosaveBlockedChangeRevision(null);
     } catch (cause) {
       if (!isActiveEditorTarget(targetInspectionId, targetSectionId)) return;
       setSaveError(
@@ -1091,7 +1144,7 @@ export function UnitInspections({
             <h2>Inspections</h2>
           </div>
           <span className="section-note">
-            Online explicit save · offline comes later
+            Debounced autosave · explicit retry · offline comes later
           </span>
         </div>
 
@@ -1364,7 +1417,7 @@ export function UnitInspections({
                         <small>{formatDetailKey(item.type)}</small>
                       </label>
                       <Field
-                        disabled={!editable || saving || inspectionWritePending}
+                        disabled={!editable || saving || inspectionWritePending || conflict}
                         entry={entry}
                         item={item}
                         onChange={(next) => changeItem(item.id, next)}
@@ -1395,21 +1448,32 @@ export function UnitInspections({
                 ) : null}
 
                 <div className="inspection-save-bar">
-                  <span className="muted">
-                    {patch
-                      ? 'Unsaved section changes'
-                      : 'Section matches canonical server state'}
+                  <span
+                    className="muted"
+                    data-inspection-autosave-status
+                  >
+                    {conflict
+                      ? 'Autosave paused · resolve the server conflict'
+                      : saveError &&
+                          autosaveBlockedChangeRevision === draftChangeRevision
+                        ? 'Autosave paused after save failure · use Save now to retry'
+                        : saving
+                          ? 'Saving section…'
+                          : patch
+                            ? 'Unsaved changes · autosave pending'
+                            : 'All section changes saved'}
                   </span>
                   <button
                     disabled={
                       !editable ||
                       !patch ||
                       saving ||
-                      inspectionWritePending
+                      inspectionWritePending ||
+                      conflict
                     }
                     type="submit"
                   >
-                    {saving ? 'Saving…' : 'Save section'}
+                    {saving ? 'Saving…' : 'Save now'}
                   </button>
                 </div>
               </form>
