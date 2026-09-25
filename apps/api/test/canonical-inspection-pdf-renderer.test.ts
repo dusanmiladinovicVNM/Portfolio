@@ -168,7 +168,8 @@ describe('CanonicalInspectionPdfRenderer', () => {
     expect(source.endsWith('%%EOF\n')).toBe(true);
 
     expect(source).toContain('INSPECTION REPORT');
-    expect(source).toContain('Birmensdorferstrasse 123 - Demo Portfolio');
+    expect(source).toContain('Birmensdorferstrasse 123 - Demo');
+    expect(source).toContain('(Portfolio) Tj');
     expect(source).toContain('Birmensdorferstrasse 123, 8003 Zurich, CH');
     expect(source).toContain('Unit 3.01');
     expect(source).toContain('Periodic Unit Inspection');
@@ -197,7 +198,8 @@ describe('CanonicalInspectionPdfRenderer', () => {
     const source = new TextDecoder().decode(rendered.content);
 
     expect(source).toContain('Property context unavailable');
-    expect(source).toContain('Unit 55555555-5555-4555-8555-555555555555');
+    expect(source).toContain('(Unit) Tj');
+    expect(source).toContain('Unit ID 55555555-5555-4555-8555-555555555555');
   });
 
   it('paginates arbitrarily long canonical content without clipping it below the content floor', async () => {
