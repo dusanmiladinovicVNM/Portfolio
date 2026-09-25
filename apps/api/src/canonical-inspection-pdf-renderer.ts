@@ -490,8 +490,12 @@ class ReportLayout {
     }
     this.y -= 72;
 
-    drawText(this.page, view.schemaTitle, MARGIN, this.y, 13, 'F2', TEXT);
-    this.y -= 18;
+    this.paragraph(view.schemaTitle, {
+      size: 13,
+      bold: true,
+      lineHeight: 16,
+    });
+    this.gap(2);
     this.paragraph(
       `${view.inspectionCode} - Finalized ${view.finalizedAt}`,
       { size: 8.5, color: MUTED },
