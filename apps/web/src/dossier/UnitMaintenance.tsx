@@ -77,6 +77,7 @@ import type {
 import {
   formatDetailKey,
   formatSwissDateTime,
+  swissLocalDateTimeToInstant,
 } from '../presentation/format.js';
 import {
   assertCreatedMaintenanceIssue,
@@ -118,12 +119,9 @@ interface FindingOption {
   readonly finding: InspectionFindingResponse;
 }
 
-function utcInstant(date: string, time: string): string | undefined {
+function swissInstant(date: string, time: string): string | undefined {
   if (date === '' && time === '') return undefined;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return undefined;
-  if (!/^\d{2}:\d{2}$/.test(time)) return undefined;
-  const value = `${date}T${time}:00.000Z`;
-  return Number.isNaN(Date.parse(value)) ? undefined : value;
+  return swissLocalDateTimeToInstant(date, time) ?? undefined;
 }
 
 function nullableString(form: FormData, name: string): string | null {
@@ -213,10 +211,10 @@ function CreateIssueForm({
     const form = new FormData(formElement);
     const date = requiredString(form, 'reportedDate');
     const time = requiredString(form, 'reportedTime');
-    const reportedAt = utcInstant(date, time);
+    const reportedAt = swissInstant(date, time);
 
     if ((date !== '' || time !== '') && reportedAt === undefined) {
-      setError('Reported date and time must either both be empty or form a valid UTC instant.');
+      setError('Reported date and time must either both be empty or form one valid Zürich local time.');
       return;
     }
 
@@ -395,7 +393,7 @@ function CreateIssueForm({
           </select>
         </label>
         <label>
-          Reported date (UTC)
+          Reported date (Zürich)
           <input
             disabled={writeGate.pending}
             name="reportedDate"
@@ -403,7 +401,7 @@ function CreateIssueForm({
           />
         </label>
         <label>
-          Reported time (UTC)
+          Reported time (Zürich)
           <input
             disabled={writeGate.pending}
             name="reportedTime"
@@ -834,7 +832,7 @@ function IssueAdministration({
     if (!selectedOrder || !issue.assetId) return;
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const performedAt = utcInstant(
+    const performedAt = swissInstant(
       requiredString(form, 'performedDate'),
       requiredString(form, 'performedTime'),
     );
@@ -1306,7 +1304,7 @@ function IssueAdministration({
                     </select>
                   </label>
                   <label>
-                    Performed date (UTC)
+                    Performed date (Zürich)
                     <input
                       disabled={writeGate.pending}
                       name="performedDate"
@@ -1315,7 +1313,7 @@ function IssueAdministration({
                     />
                   </label>
                   <label>
-                    Performed time (UTC)
+                    Performed time (Zürich)
                     <input
                       disabled={writeGate.pending}
                       name="performedTime"
