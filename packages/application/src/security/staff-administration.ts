@@ -149,13 +149,6 @@ export async function inviteStaffCommand(
   const linked = staff.identities.find(
     (identity) => identity.provider.toLowerCase() === 'supabase',
   );
-  if (linked) {
-    if (staff.status === 'active') return staff;
-    throw new ApplicationError(
-      'STAFF_IDENTITY_ALREADY_LINKED',
-      'This staff user already has a Supabase identity. Activate it instead of sending another invite.',
-    );
-  }
 
   if (!staff.email) {
     throw new ApplicationError(
@@ -170,6 +163,16 @@ export async function inviteStaffCommand(
       'STAFF_AUTH_IDENTITY_MISMATCH',
       'Supabase returned an identity for a different email address.',
     );
+  }
+
+  if (linked) {
+    if (invited.subject !== linked.subject) {
+      throw new ApplicationError(
+        'STAFF_AUTH_IDENTITY_MISMATCH',
+        'Supabase returned a different subject for an already linked staff user.',
+      );
+    }
+    return staff;
   }
 
   const updated = await deps.staffRepository.linkSupabaseIdentityAndActivate(
