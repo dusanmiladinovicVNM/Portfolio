@@ -1740,7 +1740,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//article[contains(@class,'meter-reading-card')][.//span[normalize-space()='2026-10-01T08:00:00.000Z']][.//h4[normalize-space()='100 kwh']][.//p[normalize-space()='Move in reading']]",
+    "//article[contains(@class,'meter-reading-card')][.//span[normalize-space()='01.10.2026 10:00']][.//h4[normalize-space()='100 kwh']][.//p[normalize-space()='Move in reading']]",
   );
 
   const meterBoundaryForm = "//form[@data-meter-form='boundary']";
@@ -1781,7 +1781,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//article[contains(@class,'meter-reading-card')][.//span[normalize-space()='2026-10-01T08:00:00.000Z']]//li[normalize-space()='Move in · TEN-SETUP-BRW']",
+    "//article[contains(@class,'meter-reading-card')][.//span[normalize-space()='01.10.2026 10:00']]//li[normalize-space()='Move in · TEN-SETUP-BRW']",
   );
 
   await typeXpath(
@@ -1811,7 +1811,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//article[contains(@class,'meter-reading-card')][.//span[normalize-space()='2027-09-30T08:00:00.000Z']][.//h4[normalize-space()='140 kwh']][.//p[normalize-space()='Move out reading']]",
+    "//article[contains(@class,'meter-reading-card')][.//span[normalize-space()='30.09.2027 10:00']][.//h4[normalize-space()='140 kwh']][.//p[normalize-space()='Move out reading']]",
   );
   await waitForElement(
     sessionId,
@@ -1849,7 +1849,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//article[contains(@class,'meter-reading-card')][.//span[normalize-space()='2027-09-30T08:00:00.000Z']]//li[normalize-space()='Move out · TEN-SETUP-BRW']",
+    "//article[contains(@class,'meter-reading-card')][.//span[normalize-space()='30.09.2027 10:00']]//li[normalize-space()='Move out · TEN-SETUP-BRW']",
   );
 
   const meterRetireForm = "//form[@data-meter-form='retire']";
