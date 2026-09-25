@@ -7,6 +7,8 @@ import type {
   InspectionSignature,
   InspectionUnlockRecord,
   InspectionResponse,
+  InspectionSectionInstance,
+  InspectionSectionInstanceId,
   InspectionSectionState,
   InspectionSchemaSectionId,
   InspectionSchemaVersion,
@@ -30,6 +32,7 @@ export interface InspectionRepository {
   insert(
     inspection: Inspection,
     schema: InspectionSchemaVersion,
+    sectionInstances: readonly InspectionSectionInstance[],
   ): Promise<void>;
   updateLifecycle(
     inspection: Inspection,
@@ -41,15 +44,23 @@ export interface InspectionRepository {
     expectedVersion: number,
   ): Promise<void>;
 
+  getSectionInstanceById(
+    inspectionId: InspectionId,
+    sectionInstanceId: InspectionSectionInstanceId,
+  ): Promise<InspectionSectionInstance | null>;
+  listSectionInstances(
+    inspectionId: InspectionId,
+  ): Promise<readonly InspectionSectionInstance[]>;
   getSectionRevision(
     inspectionId: InspectionId,
-    sectionId: InspectionSchemaSectionId,
+    sectionInstanceId: InspectionSectionInstanceId,
   ): Promise<number | null>;
   listSectionStates(
     inspectionId: InspectionId,
   ): Promise<readonly InspectionSectionState[]>;
   saveSection(
     inspectionId: InspectionId,
+    sectionInstanceId: InspectionSectionInstanceId,
     sectionId: InspectionSchemaSectionId,
     expectedRevision: number,
     responses: readonly InspectionResponse[],

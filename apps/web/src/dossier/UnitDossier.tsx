@@ -37,7 +37,7 @@ interface UnitDossierProps {
   readonly agreementId?: string | undefined;
   readonly amendmentId?: string | undefined;
   readonly inspectionId?: string | undefined;
-  readonly inspectionSectionId?: string | undefined;
+  readonly inspectionSectionInstanceId?: string | undefined;
   readonly assetId?: string | undefined;
   readonly meterId?: string | undefined;
   readonly maintenanceIssueId?: string | undefined;
@@ -56,7 +56,7 @@ export function UnitDossier({
   agreementId,
   amendmentId,
   inspectionId,
-  inspectionSectionId,
+  inspectionSectionInstanceId,
   assetId,
   meterId,
   maintenanceIssueId,
@@ -176,8 +176,8 @@ export function UnitDossier({
               navigate={navigate}
               route={unitRoute(propertyId, unitId, asOf, 'inspections', {
                 ...(inspectionId ? { inspectionId } : {}),
-                ...(inspectionSectionId
-                  ? { inspectionSectionId }
+                ...(inspectionSectionInstanceId
+                  ? { inspectionSectionInstanceId }
                   : {}),
               })}
             >
@@ -278,7 +278,7 @@ export function UnitDossier({
               api={api}
               asOf={asOf}
               inspectionId={inspectionId}
-              inspectionSectionId={inspectionSectionId}
+              inspectionSectionInstanceId={inspectionSectionInstanceId}
               navigate={navigate}
               propertyId={propertyId}
               setNavigationBlocker={setNavigationBlocker}

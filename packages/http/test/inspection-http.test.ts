@@ -670,7 +670,11 @@ describe('Inspection HTTP backbone', () => {
     );
     expect(inspectorPublishedSchema.status).toBe(200);
     expect(await inspectorPublishedSchema.json()).toMatchObject({
-      data: { id: schema.id, status: 'published' },
+      data: {
+        id: schema.id,
+        status: 'published',
+        sections: [{ scope: 'unit', spaceTypes: [] }],
+      },
     });
 
     const property = await handler(
@@ -790,10 +794,20 @@ describe('Inspection HTTP backbone', () => {
     const sectionId = schema.sections[0]!.id;
     const conditionItemId = schema.sections[0]!.items[0]!.id;
     const damageItemId = schema.sections[0]!.items[1]!.id;
+    const startedBundle = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      inspectorIdentity,
+    );
+    const startedBundleData = (await startedBundle.json()).data as {
+      sectionInstances: Array<{ id: string; sectionId: string }>;
+    };
+    const sectionInstanceId = startedBundleData.sectionInstances.find(
+      (instance) => instance.sectionId === sectionId,
+    )!.id;
 
     const firstSave = await handler(
       new Request(
-        `https://portfolio.test/inspections/${inspection.id}/sections/${sectionId}`,
+        `https://portfolio.test/inspections/${inspection.id}/section-instances/${sectionInstanceId}`,
         {
           method: 'PATCH',
           body: JSON.stringify({
@@ -813,7 +827,7 @@ describe('Inspection HTTP backbone', () => {
 
     const staleSave = await handler(
       new Request(
-        `https://portfolio.test/inspections/${inspection.id}/sections/${sectionId}`,
+        `https://portfolio.test/inspections/${inspection.id}/section-instances/${sectionInstanceId}`,
         {
           method: 'PATCH',
           body: JSON.stringify({
@@ -848,7 +862,7 @@ describe('Inspection HTTP backbone', () => {
 
     const secondSave = await handler(
       new Request(
-        `https://portfolio.test/inspections/${inspection.id}/sections/${sectionId}`,
+        `https://portfolio.test/inspections/${inspection.id}/section-instances/${sectionInstanceId}`,
         {
           method: 'PATCH',
           body: JSON.stringify({
@@ -872,7 +886,7 @@ describe('Inspection HTTP backbone', () => {
 
     const cleared = await handler(
       new Request(
-        `https://portfolio.test/inspections/${inspection.id}/sections/${sectionId}`,
+        `https://portfolio.test/inspections/${inspection.id}/section-instances/${sectionInstanceId}`,
         {
           method: 'PATCH',
           body: JSON.stringify({
@@ -895,7 +909,7 @@ describe('Inspection HTTP backbone', () => {
 
     const restored = await handler(
       new Request(
-        `https://portfolio.test/inspections/${inspection.id}/sections/${sectionId}`,
+        `https://portfolio.test/inspections/${inspection.id}/section-instances/${sectionInstanceId}`,
         {
           method: 'PATCH',
           body: JSON.stringify({
@@ -920,7 +934,7 @@ describe('Inspection HTTP backbone', () => {
         {
           method: 'POST',
           body: JSON.stringify({
-            sectionId,
+            sectionInstanceId,
             itemId: damageItemId,
             severity: 'minor',
             title: 'Wall scratch',
@@ -949,7 +963,7 @@ describe('Inspection HTTP backbone', () => {
 
     const saveAfterLock = await handler(
       new Request(
-        `https://portfolio.test/inspections/${inspection.id}/sections/${sectionId}`,
+        `https://portfolio.test/inspections/${inspection.id}/section-instances/${sectionInstanceId}`,
         {
           method: 'PATCH',
           body: JSON.stringify({
@@ -978,12 +992,13 @@ describe('Inspection HTTP backbone', () => {
           contentRevision: 5,
         },
         schema: { id: schema.id, status: 'published' },
-        sectionStates: [{ sectionId, revision: 4 }],
+        sectionInstances: [{ id: sectionInstanceId, sectionId, scope: 'unit' }],
+        sectionStates: [{ sectionInstanceId, sectionId, revision: 4 }],
         responses: [
-          { itemId: conditionItemId, value: 'damaged' },
-          { itemId: damageItemId, value: 'Scratch on wall' },
+          { sectionInstanceId, itemId: conditionItemId, value: 'damaged' },
+          { sectionInstanceId, itemId: damageItemId, value: 'Scratch on wall' },
         ],
-        findings: [{ title: 'Wall scratch', severity: 'minor' }],
+        findings: [{ sectionInstanceId, title: 'Wall scratch', severity: 'minor' }],
       },
     });
 
@@ -1309,9 +1324,19 @@ describe('Inspection HTTP backbone', () => {
 
     const sectionId = schema.sections[0]!.id;
     const itemId = schema.sections[0]!.items[0]!.id;
+    const contentBundle = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      inspectorIdentity,
+    );
+    const contentBundleData = (await contentBundle.json()).data as {
+      sectionInstances: Array<{ id: string; sectionId: string }>;
+    };
+    const sectionInstanceId = contentBundleData.sectionInstances.find(
+      (instance) => instance.sectionId === sectionId,
+    )!.id;
     await handler(
       new Request(
-        `https://portfolio.test/inspections/${inspection.id}/sections/${sectionId}`,
+        `https://portfolio.test/inspections/${inspection.id}/section-instances/${sectionInstanceId}`,
         {
           method: 'PATCH',
           body: JSON.stringify({
@@ -1331,7 +1356,7 @@ describe('Inspection HTTP backbone', () => {
           body: JSON.stringify({
             documentVersionId: '83000000-0000-4000-8000-000000000001',
             kind: 'photo',
-            sectionId,
+            sectionInstanceId,
             itemId,
           }),
         },
@@ -1578,6 +1603,7 @@ describe('Inspection HTTP backbone', () => {
           {
             kind: 'final_report',
             documentVersionId: firstReportVersion.id,
+            sectionInstanceId: null,
             sectionId: null,
             itemId: null,
           },

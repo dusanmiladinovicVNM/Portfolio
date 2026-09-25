@@ -11,6 +11,7 @@ import {
   asInspectionFindingId,
   asInspectionId,
   asInspectionResponseId,
+  asInspectionSectionInstanceId,
   asInspectionSchemaItemId,
   asInspectionSchemaSectionId,
   asInspectionSchemaVersionId,
@@ -18,6 +19,7 @@ import {
   asInspectionUnlockId,
   asDocumentVersionId,
   asPartyId,
+  asSpaceId,
   asTenancyId,
   asUnitId,
   asUserId,
@@ -34,15 +36,19 @@ import {
   type InspectionItemType,
   type InspectionOption,
   type InspectionResponse,
+  type InspectionSectionInstance,
+  type InspectionSectionInstanceId,
   type InspectionSectionState,
   type InspectionSchemaStatus,
   type InspectionSchemaVersion,
+  type InspectionSectionScope,
   type InspectionSignature,
   type InspectionSignatureRole,
   type InspectionUnlockRecord,
   type InspectionSchemaVersionId,
   type InspectionStatus,
   type InspectionType,
+  type SpaceType,
   type UnitId,
   type UserId,
 } from '@portfolio/domain';
@@ -90,6 +96,20 @@ interface SectionRow {
   title: string;
   description: string | null;
   sort_order: number;
+  scope: InspectionSectionScope;
+  space_types: SpaceType[];
+}
+
+interface SectionInstanceRow {
+  id: string;
+  inspection_id: string;
+  section_id: string;
+  scope: InspectionSectionScope;
+  space_id: string | null;
+  space_code: string | null;
+  space_name: string | null;
+  space_type: SpaceType | null;
+  space_sort_order: number | null;
 }
 
 interface ItemRow {
@@ -110,6 +130,7 @@ interface ItemRow {
 interface EvidenceRow {
   id: string;
   inspection_id: string;
+  section_instance_id: string | null;
   section_id: string | null;
   item_id: string | null;
   document_version_id: string;
@@ -159,6 +180,7 @@ interface SnapshotRow {
 interface ResponseRow {
   id: string;
   inspection_id: string;
+  section_instance_id: string;
   section_id: string;
   item_id: string;
   value: InspectionAnswerValue;
@@ -170,6 +192,7 @@ interface ResponseRow {
 interface FindingRow {
   id: string;
   inspection_id: string;
+  section_instance_id: string;
   section_id: string;
   item_id: string | null;
   severity: InspectionFindingSeverity;
@@ -292,6 +315,10 @@ function mapEvidence(row: EvidenceRow): InspectionEvidence {
   return {
     id: asInspectionEvidenceId(row.id),
     inspectionId: asInspectionId(row.inspection_id),
+    sectionInstanceId:
+      row.section_instance_id === null
+        ? null
+        : asInspectionSectionInstanceId(row.section_instance_id),
     sectionId:
       row.section_id === null
         ? null
@@ -356,6 +383,7 @@ function mapResponse(row: ResponseRow): InspectionResponse {
   return {
     id: asInspectionResponseId(row.id),
     inspectionId: asInspectionId(row.inspection_id),
+    sectionInstanceId: asInspectionSectionInstanceId(row.section_instance_id),
     sectionId: asInspectionSchemaSectionId(row.section_id),
     itemId: asInspectionSchemaItemId(row.item_id),
     value: row.value,
@@ -365,10 +393,25 @@ function mapResponse(row: ResponseRow): InspectionResponse {
   };
 }
 
+function mapSectionInstance(row: SectionInstanceRow): InspectionSectionInstance {
+  return {
+    id: asInspectionSectionInstanceId(row.id),
+    inspectionId: asInspectionId(row.inspection_id),
+    sectionId: asInspectionSchemaSectionId(row.section_id),
+    scope: row.scope,
+    spaceId: row.space_id === null ? null : asSpaceId(row.space_id),
+    spaceCode: row.space_code,
+    spaceName: row.space_name,
+    spaceType: row.space_type,
+    spaceSortOrder: row.space_sort_order,
+  };
+}
+
 function mapFinding(row: FindingRow): InspectionFinding {
   return {
     id: asInspectionFindingId(row.id),
     inspectionId: asInspectionId(row.inspection_id),
+    sectionInstanceId: asInspectionSectionInstanceId(row.section_instance_id),
     sectionId: asInspectionSchemaSectionId(row.section_id),
     itemId:
       row.item_id === null ? null : asInspectionSchemaItemId(row.item_id),
@@ -563,6 +606,7 @@ export class PostgresInspectionRepository implements InspectionRepository {
   async insert(
     inspection: Inspection,
     schema: InspectionSchemaVersion,
+    sectionInstances: readonly InspectionSectionInstance[],
   ): Promise<void> {
     await translated(async () => {
       await this.sql.begin(async (tx) => {
@@ -583,12 +627,26 @@ export class PostgresInspectionRepository implements InspectionRepository {
           )
         `;
 
-        for (const section of schema.sections) {
+        for (const instance of sectionInstances) {
+          await tx`
+            insert into public.inspection_section_instances (
+              id, inspection_id, schema_version_id, section_id, scope,
+              space_id, space_code, space_name, space_type, space_sort_order
+            ) values (
+              ${instance.id}, ${inspection.id}, ${inspection.schemaVersionId},
+              ${instance.sectionId}, ${instance.scope}, ${instance.spaceId},
+              ${instance.spaceCode}, ${instance.spaceName},
+              ${instance.spaceType}, ${instance.spaceSortOrder}
+            )
+          `;
+
           await tx`
             insert into public.inspection_section_states (
-              inspection_id, schema_version_id, section_id, revision
+              inspection_id, schema_version_id, section_instance_id, section_id,
+              revision
             ) values (
-              ${inspection.id}, ${inspection.schemaVersionId}, ${section.id}, 0
+              ${inspection.id}, ${inspection.schemaVersionId}, ${instance.id},
+              ${instance.sectionId}, 0
             )
           `;
         }
@@ -670,15 +728,57 @@ export class PostgresInspectionRepository implements InspectionRepository {
     }
   }
 
+  async getSectionInstanceById(
+    inspectionId: InspectionId,
+    sectionInstanceId: InspectionSectionInstanceId,
+  ): Promise<InspectionSectionInstance | null> {
+    const rows = await this.sql<SectionInstanceRow[]>`
+      select
+        id, inspection_id, section_id, scope, space_id, space_code,
+        space_name, space_type, space_sort_order
+      from public.inspection_section_instances
+      where inspection_id = ${inspectionId}
+        and id = ${sectionInstanceId}
+      limit 1
+    `;
+    return rows.length === 0 ? null : mapSectionInstance(rows[0]!);
+  }
+
+  async listSectionInstances(
+    inspectionId: InspectionId,
+  ): Promise<readonly InspectionSectionInstance[]> {
+    const rows = await this.sql<SectionInstanceRow[]>`
+      select
+        instance.id, instance.inspection_id, instance.section_id, instance.scope,
+        instance.space_id, instance.space_code, instance.space_name,
+        instance.space_type, instance.space_sort_order
+      from public.inspection_section_instances instance
+      join public.inspection_schema_sections section
+        on section.id = instance.section_id
+       and section.schema_version_id = (
+         select schema_version_id
+         from public.inspections
+         where id = ${inspectionId}
+       )
+      where instance.inspection_id = ${inspectionId}
+      order by
+        section.sort_order,
+        coalesce(instance.space_sort_order, -1),
+        coalesce(instance.space_name, ''),
+        instance.id
+    `;
+    return rows.map(mapSectionInstance);
+  }
+
   async getSectionRevision(
     inspectionId: InspectionId,
-    sectionId: import('@portfolio/domain').InspectionSchemaSectionId,
+    sectionInstanceId: InspectionSectionInstanceId,
   ): Promise<number | null> {
     const rows = await this.sql<{ revision: number }[]>`
       select revision
       from public.inspection_section_states
       where inspection_id = ${inspectionId}
-        and section_id = ${sectionId}
+        and section_instance_id = ${sectionInstanceId}
       limit 1
     `;
     return rows[0]?.revision ?? null;
@@ -689,16 +789,18 @@ export class PostgresInspectionRepository implements InspectionRepository {
   ): Promise<readonly InspectionSectionState[]> {
     const rows = await this.sql<{
       inspection_id: string;
+      section_instance_id: string;
       section_id: string;
       revision: number;
     }[]>`
-      select inspection_id, section_id, revision
+      select inspection_id, section_instance_id, section_id, revision
       from public.inspection_section_states
       where inspection_id = ${inspectionId}
-      order by section_id
+      order by section_instance_id
     `;
     return rows.map((row) => ({
       inspectionId: asInspectionId(row.inspection_id),
+      sectionInstanceId: asInspectionSectionInstanceId(row.section_instance_id),
       sectionId: asInspectionSchemaSectionId(row.section_id),
       revision: row.revision,
     }));
@@ -706,6 +808,7 @@ export class PostgresInspectionRepository implements InspectionRepository {
 
   async saveSection(
     inspectionId: InspectionId,
+    sectionInstanceId: InspectionSectionInstanceId,
     sectionId: import('@portfolio/domain').InspectionSchemaSectionId,
     expectedRevision: number,
     responses: readonly InspectionResponse[],
@@ -735,7 +838,7 @@ export class PostgresInspectionRepository implements InspectionRepository {
           update public.inspection_section_states
           set revision = revision + 1
           where inspection_id = ${inspectionId}
-            and section_id = ${sectionId}
+            and section_instance_id = ${sectionInstanceId}
             and revision = ${expectedRevision}
           returning revision
         `;
@@ -752,6 +855,7 @@ export class PostgresInspectionRepository implements InspectionRepository {
           await tx`
             delete from public.inspection_responses
             where inspection_id = ${inspectionId}
+              and section_instance_id = ${sectionInstanceId}
               and item_id = ${itemId}
           `;
         }
@@ -760,13 +864,14 @@ export class PostgresInspectionRepository implements InspectionRepository {
         for (const response of responses) {
           const rows = await tx<ResponseRow[]>`
             insert into public.inspection_responses (
-              id, inspection_id, schema_version_id, section_id, item_id,
-              value, comment, updated_by_user_id, updated_at
+              id, inspection_id, schema_version_id, section_instance_id,
+              section_id, item_id, value, comment, updated_by_user_id, updated_at
             )
             select
               ${response.id},
               ${response.inspectionId},
               i.schema_version_id,
+              ${response.sectionInstanceId},
               ${response.sectionId},
               ${response.itemId},
               ${this.sql.json(answerToJson(response.value))},
@@ -775,15 +880,15 @@ export class PostgresInspectionRepository implements InspectionRepository {
               ${response.updatedAt}
             from public.inspections i
             where i.id = ${response.inspectionId}
-            on conflict (inspection_id, item_id)
+            on conflict (inspection_id, section_instance_id, item_id)
             do update set
               value = excluded.value,
               comment = excluded.comment,
               updated_by_user_id = excluded.updated_by_user_id,
               updated_at = excluded.updated_at
             returning
-              id, inspection_id, section_id, item_id, value,
-              comment, updated_by_user_id, updated_at
+              id, inspection_id, section_instance_id, section_id, item_id,
+              value, comment, updated_by_user_id, updated_at
           `;
           persisted.push(mapResponse(rows[0]!));
         }
@@ -803,11 +908,11 @@ export class PostgresInspectionRepository implements InspectionRepository {
   ): Promise<readonly InspectionResponse[]> {
     const rows = await this.sql<ResponseRow[]>`
       select
-        id, inspection_id, section_id, item_id, value,
+        id, inspection_id, section_instance_id, section_id, item_id, value,
         comment, updated_by_user_id, updated_at
       from public.inspection_responses
       where inspection_id = ${inspectionId}
-      order by section_id, item_id
+      order by section_instance_id, item_id
     `;
     return rows.map(mapResponse);
   }
@@ -838,11 +943,13 @@ export class PostgresInspectionRepository implements InspectionRepository {
 
         await tx`
           insert into public.inspection_findings (
-            id, inspection_id, schema_version_id, section_id, item_id,
-            severity, title, description, created_by_user_id, created_at
+            id, inspection_id, schema_version_id, section_instance_id,
+            section_id, item_id, severity, title, description,
+            created_by_user_id, created_at
           ) values (
             ${finding.id}, ${finding.inspectionId}, ${row.schema_version_id},
-            ${finding.sectionId}, ${finding.itemId}, ${finding.severity},
+            ${finding.sectionInstanceId}, ${finding.sectionId},
+            ${finding.itemId}, ${finding.severity},
             ${finding.title}, ${finding.description},
             ${finding.createdByUserId}, ${finding.createdAt}
           )
@@ -858,7 +965,7 @@ export class PostgresInspectionRepository implements InspectionRepository {
   ): Promise<InspectionFinding | null> {
     const rows = await this.sql<FindingRow[]>`
       select
-        id, inspection_id, section_id, item_id, severity,
+        id, inspection_id, section_instance_id, section_id, item_id, severity,
         title, description, created_by_user_id, created_at
       from public.inspection_findings
       where id = ${id}
@@ -872,7 +979,7 @@ export class PostgresInspectionRepository implements InspectionRepository {
   ): Promise<readonly InspectionFinding[]> {
     const rows = await this.sql<FindingRow[]>`
       select
-        id, inspection_id, section_id, item_id, severity,
+        id, inspection_id, section_instance_id, section_id, item_id, severity,
         title, description, created_by_user_id, created_at
       from public.inspection_findings
       where inspection_id = ${inspectionId}
@@ -904,12 +1011,14 @@ export class PostgresInspectionRepository implements InspectionRepository {
 
         await tx`
           insert into public.inspection_evidence (
-            id, inspection_id, schema_version_id, section_id, item_id,
-            document_version_id, kind, caption, created_by_user_id, created_at
+            id, inspection_id, schema_version_id, section_instance_id,
+            section_id, item_id, document_version_id, kind, caption,
+            created_by_user_id, created_at
           ) values (
             ${evidence.id}, ${evidence.inspectionId},
-            ${inspection.schema_version_id}, ${evidence.sectionId},
-            ${evidence.itemId}, ${evidence.documentVersionId},
+            ${inspection.schema_version_id}, ${evidence.sectionInstanceId},
+            ${evidence.sectionId}, ${evidence.itemId},
+            ${evidence.documentVersionId},
             ${evidence.kind}, ${evidence.caption},
             ${evidence.createdByUserId}, ${evidence.createdAt}
           )
@@ -945,11 +1054,12 @@ export class PostgresInspectionRepository implements InspectionRepository {
     await translated(async () => {
       await this.sql`
         insert into public.inspection_evidence (
-          id, inspection_id, schema_version_id, section_id, item_id,
-          document_version_id, kind, caption, created_by_user_id, created_at
+          id, inspection_id, schema_version_id, section_instance_id,
+          section_id, item_id, document_version_id, kind, caption,
+          created_by_user_id, created_at
         ) values (
           ${evidence.id}, ${evidence.inspectionId},
-          ${inspection.schema_version_id}, null, null,
+          ${inspection.schema_version_id}, null, null, null,
           ${evidence.documentVersionId}, 'final_report', null,
           ${evidence.createdByUserId}, ${evidence.createdAt}
         )
@@ -962,8 +1072,8 @@ export class PostgresInspectionRepository implements InspectionRepository {
   ): Promise<readonly InspectionEvidence[]> {
     const rows = await this.sql<EvidenceRow[]>`
       select
-        id, inspection_id, section_id, item_id, document_version_id,
-        kind, caption, created_by_user_id, created_at
+        id, inspection_id, section_instance_id, section_id, item_id,
+        document_version_id, kind, caption, created_by_user_id, created_at
       from public.inspection_evidence
       where inspection_id = ${inspectionId}
       order by created_at, id
@@ -1158,7 +1268,9 @@ export class PostgresInspectionRepository implements InspectionRepository {
     if (!schema) return null;
 
     const sections = await this.sql<SectionRow[]>`
-      select id, schema_version_id, section_key, title, description, sort_order
+      select
+        id, schema_version_id, section_key, title, description, sort_order,
+        scope, space_types
       from public.inspection_schema_sections
       where schema_version_id = ${id}
       order by sort_order, id
@@ -1187,6 +1299,8 @@ export class PostgresInspectionRepository implements InspectionRepository {
         title: section.title,
         description: section.description,
         sortOrder: section.sort_order,
+        scope: section.scope,
+        spaceTypes: section.space_types,
         items: items
           .filter((item) => item.section_id === section.id)
           .map((item) => ({
@@ -1247,10 +1361,12 @@ export class PostgresInspectionRepository implements InspectionRepository {
         for (const section of schema.sections) {
           await tx`
             insert into public.inspection_schema_sections (
-              id, schema_version_id, section_key, title, description, sort_order
+              id, schema_version_id, section_key, title, description, sort_order,
+              scope, space_types
             ) values (
               ${section.id}, ${schema.id}, ${section.key},
-              ${section.title}, ${section.description}, ${section.sortOrder}
+              ${section.title}, ${section.description}, ${section.sortOrder},
+              ${section.scope}, ${section.spaceTypes}
             )
           `;
 

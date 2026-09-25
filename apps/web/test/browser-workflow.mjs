@@ -19,6 +19,10 @@ const amendmentId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const inspectionId = 'a1000000-0000-4000-8000-000000000001';
 const inspectionSchemaVersionId = 'a1000000-0000-4000-8000-000000000002';
 const inspectionSectionId = 'a1000000-0000-4000-8000-000000000003';
+const inspectionSectionInstanceId =
+  'a1000000-0000-4000-8000-000000000024';
+const setupOrchestrationInspectionSectionInstanceId =
+  'b1000000-0000-4000-8000-000000000062';
 const inspectionNotesItemId = 'a1000000-0000-4000-8000-000000000005';
 const inspectionUserId = 'a1000000-0000-4000-8000-000000000006';
 const setupPropertyId = 'b1000000-0000-4000-8000-000000000001';
@@ -3298,7 +3302,7 @@ try {
     '/units/' + orchestrationUnitId +
     '?tab=inspections&inspectionId=' +
     setupOrchestrationInspectionId +
-    '&sectionId=' + inspectionSectionId +
+    '&sectionInstanceId=' + setupOrchestrationInspectionSectionInstanceId +
     '&asOf=2025-06-30';
   await waitForElement(
     sessionId,
@@ -3402,7 +3406,7 @@ try {
   );
 
   const inspectionUrl =
-    `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionId=${inspectionSectionId}&asOf=2025-06-30`;
+    `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${inspectionSectionInstanceId}&asOf=2025-06-30`;
   await clickXpath(
     sessionId,
     "//button[contains(@class,'inspection-assigned-work-card')][.//strong[normalize-space()='INS-BRW-001']]",

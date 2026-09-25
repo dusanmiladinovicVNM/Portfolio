@@ -4,7 +4,7 @@ import type {
   InspectionResponseDto,
   SaveInspectionSectionResponse,
 } from '@portfolio/contracts';
-import { inspectionSectionPath } from '../src/api/paths.js';
+import { inspectionSectionInstancePath } from '../src/api/paths.js';
 import {
   canEditInspectionSection,
   inspectionDraftResetKey,
@@ -20,6 +20,8 @@ const inspectionB = 'b1000000-0000-4000-8000-000000000002';
 const schemaId = 'b1000000-0000-4000-8000-000000000003';
 const section1 = 'b1000000-0000-4000-8000-000000000004';
 const section2 = 'b1000000-0000-4000-8000-000000000005';
+const instance1 = 'b1000000-0000-4000-8000-000000000008';
+const instance2 = 'b1000000-0000-4000-8000-000000000009';
 const unitId = 'b1000000-0000-4000-8000-000000000006';
 const userId = 'b1000000-0000-4000-8000-000000000007';
 
@@ -66,6 +68,8 @@ function bundle(
           title: 'One',
           description: null,
           sortOrder: 0,
+          scope: 'unit',
+          spaceTypes: [],
           items: [],
         },
         {
@@ -74,13 +78,39 @@ function bundle(
           title: 'Two',
           description: null,
           sortOrder: 1,
+          scope: 'unit',
+          spaceTypes: [],
           items: [],
         },
       ],
     },
+    sectionInstances: [
+      {
+        id: instance1,
+        inspectionId: id,
+        sectionId: section1,
+        scope: 'unit',
+        spaceId: null,
+        spaceCode: null,
+        spaceName: null,
+        spaceType: null,
+        spaceSortOrder: null,
+      },
+      {
+        id: instance2,
+        inspectionId: id,
+        sectionId: section2,
+        scope: 'unit',
+        spaceId: null,
+        spaceCode: null,
+        spaceName: null,
+        spaceType: null,
+        spaceSortOrder: null,
+      },
+    ],
     sectionStates: [
-      { sectionId: section1, revision: revisions[0] },
-      { sectionId: section2, revision: revisions[1] },
+      { sectionInstanceId: instance1, sectionId: section1, revision: revisions[0] },
+      { sectionInstanceId: instance2, sectionId: section2, revision: revisions[1] },
     ],
     responses: [],
     findings: [],
@@ -115,26 +145,28 @@ describe('Inspection async ownership', () => {
     await completion;
 
     expect(current.inspection.id).toBe(inspectionB);
-    expect(inspectionSectionPath(current.inspection.id, section1)).toBe(
-      `/inspections/${inspectionB}/sections/${section1}`,
+    expect(
+      inspectionSectionInstancePath(current.inspection.id, instance1),
+    ).toBe(
+      `/inspections/${inspectionB}/section-instances/${instance1}`,
     );
   });
 
   it('keeps the active S2 draft identity stable when a delayed S1 save completes', async () => {
     let current = bundle(inspectionA, [0, 4]);
     let localSection2Draft = 'local S2 edit';
-    const section2KeyBefore = inspectionDraftResetKey(current, section2);
+    const section2KeyBefore = inspectionDraftResetKey(current, instance2);
     const pending = deferred<SaveInspectionSectionResponse>();
 
     const completion = pending.promise.then((saved) => {
       current = mergeInspectionSectionSave(
         current,
         inspectionA,
-        section1,
+        instance1,
         0,
         saved,
       );
-      if (inspectionDraftResetKey(current, section2) !== section2KeyBefore) {
+      if (inspectionDraftResetKey(current, instance2) !== section2KeyBefore) {
         localSection2Draft = 'RESET';
       }
     });
@@ -147,14 +179,14 @@ describe('Inspection async ownership', () => {
     });
     await completion;
 
-    expect(inspectionDraftResetKey(current, section2)).toBe(section2KeyBefore);
+    expect(inspectionDraftResetKey(current, instance2)).toBe(section2KeyBefore);
     expect(localSection2Draft).toBe('local S2 edit');
     expect(
-      current.sectionStates.find((state) => state.sectionId === section1)
+      current.sectionStates.find((state) => state.sectionInstanceId === instance1)
         ?.revision,
     ).toBe(1);
     expect(
-      current.sectionStates.find((state) => state.sectionId === section2)
+      current.sectionStates.find((state) => state.sectionInstanceId === instance2)
         ?.revision,
     ).toBe(4);
   });
@@ -171,7 +203,7 @@ describe('Inspection async ownership', () => {
     current = mergeInspectionSectionSave(
       current,
       inspectionA,
-      section1,
+      instance1,
       0,
       {
         revision: 1,
@@ -183,7 +215,7 @@ describe('Inspection async ownership', () => {
 
     expect(current.inspection.contentRevision).toBe(2);
     expect(
-      current.sectionStates.find((state) => state.sectionId === section1)
+      current.sectionStates.find((state) => state.sectionInstanceId === instance1)
         ?.revision,
     ).toBe(1);
   });
@@ -218,7 +250,7 @@ describe('Inspection async ownership', () => {
     const merged = mergeInspectionSectionSave(
       current,
       inspectionA,
-      section1,
+      instance1,
       0,
       {
         revision: 1,
@@ -230,15 +262,15 @@ describe('Inspection async ownership', () => {
 
     expect(merged).toBe(current);
     expect(
-      merged.sectionStates.find((state) => state.sectionId === section1)
+      merged.sectionStates.find((state) => state.sectionInstanceId === instance1)
         ?.revision,
     ).toBe(2);
   });
 
 
   it('keeps S1 locked while S1 and S2 saves are concurrently in flight', () => {
-    const s1Key = inspectionSectionOperationKey(inspectionA, section1);
-    const s2Key = inspectionSectionOperationKey(inspectionA, section2);
+    const s1Key = inspectionSectionOperationKey(inspectionA, instance1);
+    const s2Key = inspectionSectionOperationKey(inspectionA, instance2);
 
     let inFlight: ReadonlySet<string> = new Set();
     inFlight = withInspectionOperationStarted(inFlight, s1Key);
@@ -249,7 +281,7 @@ describe('Inspection async ownership', () => {
         'in_progress',
         inFlight,
         inspectionA,
-        section1,
+        instance1,
       ),
     ).toBe(false);
     expect(
@@ -257,7 +289,7 @@ describe('Inspection async ownership', () => {
         'in_progress',
         inFlight,
         inspectionA,
-        section2,
+        instance2,
       ),
     ).toBe(false);
 
@@ -268,7 +300,7 @@ describe('Inspection async ownership', () => {
         'in_progress',
         inFlight,
         inspectionA,
-        section1,
+        instance1,
       ),
     ).toBe(true);
     expect(
@@ -276,14 +308,14 @@ describe('Inspection async ownership', () => {
         'in_progress',
         inFlight,
         inspectionA,
-        section2,
+        instance2,
       ),
     ).toBe(false);
   });
 
   it('finishing S1 never clears the independently pending S2 operation', () => {
-    const s1Key = inspectionSectionOperationKey(inspectionA, section1);
-    const s2Key = inspectionSectionOperationKey(inspectionA, section2);
+    const s1Key = inspectionSectionOperationKey(inspectionA, instance1);
+    const s2Key = inspectionSectionOperationKey(inspectionA, instance2);
 
     let inFlight: ReadonlySet<string> = new Set();
     inFlight = withInspectionOperationStarted(inFlight, s1Key);

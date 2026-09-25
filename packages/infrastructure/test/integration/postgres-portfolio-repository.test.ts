@@ -232,6 +232,7 @@ async function resetAndMigrate(): Promise<void> {
       public.inspection_findings,
       public.inspection_responses,
       public.inspection_section_states,
+      public.inspection_section_instances,
       public.inspections,
       public.inspection_schema_items,
       public.inspection_schema_sections,
@@ -345,6 +346,7 @@ afterAll(async () => {
       public.inspection_findings,
       public.inspection_responses,
       public.inspection_section_states,
+      public.inspection_section_instances,
       public.inspections,
       public.inspection_schema_items,
       public.inspection_schema_sections,
@@ -3506,12 +3508,24 @@ describe('PostgreSQL infrastructure', () => {
       },
     );
 
+    const initialInstances =
+      await inspectionRepository.listSectionInstances(inspection.id);
+    expect(initialInstances).toHaveLength(1);
+    const sectionInstance = initialInstances[0]!;
+    expect(sectionInstance).toMatchObject({
+      inspectionId: inspection.id,
+      sectionId: section.id,
+      scope: 'unit',
+      spaceId: null,
+    });
+
     const initialStates = await inspectionRepository.listSectionStates(
       inspection.id,
     );
     expect(initialStates).toEqual([
       {
         inspectionId: inspection.id,
+        sectionInstanceId: sectionInstance.id,
         sectionId: section.id,
         revision: 0,
       },
@@ -3536,7 +3550,7 @@ describe('PostgreSQL infrastructure', () => {
       },
       actor,
       inspection.id,
-      section.id,
+      sectionInstance.id,
       0,
       {
         set: [{ itemId: conditionItem.id, value: 'good' }],
@@ -3569,12 +3583,13 @@ describe('PostgreSQL infrastructure', () => {
     await expect(
       sql`
         insert into public.inspection_responses (
-          id, inspection_id, schema_version_id, section_id, item_id,
-          value, updated_by_user_id, updated_at
+          id, inspection_id, schema_version_id, section_instance_id,
+          section_id, item_id, value, updated_by_user_id, updated_at
         ) values (
           '92000000-0000-4000-8000-000000000001',
           ${inspection.id},
           ${publishedV1.id},
+          ${sectionInstance.id},
           ${section.id},
           ${meterItem.id},
           'true'::jsonb,
@@ -3590,12 +3605,13 @@ describe('PostgreSQL infrastructure', () => {
     await expect(
       sql`
         insert into public.inspection_responses (
-          id, inspection_id, schema_version_id, section_id, item_id,
-          value, updated_by_user_id, updated_at
+          id, inspection_id, schema_version_id, section_instance_id,
+          section_id, item_id, value, updated_by_user_id, updated_at
         ) values (
           '92000000-0000-4000-8000-000000000010',
           ${inspection.id},
           ${publishedV1.id},
+          ${sectionInstance.id},
           ${section.id},
           ${tagsItem.id},
           '["a","a"]'::jsonb,
@@ -3617,7 +3633,7 @@ describe('PostgreSQL infrastructure', () => {
             if (!injectedAutosave && inspectionId === inspection.id) {
               const revision = await target.getSectionRevision(
                 inspection.id,
-                section.id,
+                sectionInstance.id,
               );
               expect(revision).toBe(1);
               const response = createInspectionResponse({
@@ -3625,6 +3641,7 @@ describe('PostgreSQL infrastructure', () => {
                   '92000000-0000-4000-8000-000000000011',
                 ),
                 inspectionId: inspection.id,
+                sectionInstanceId: sectionInstance.id,
                 item: conditionItem,
                 value: 'damaged',
                 updatedByUserId: actor.userId,
@@ -3632,6 +3649,7 @@ describe('PostgreSQL infrastructure', () => {
               });
               await target.saveSection(
                 inspection.id,
+                sectionInstance.id,
                 section.id,
                 revision!,
                 [response],
@@ -3674,7 +3692,7 @@ describe('PostgreSQL infrastructure', () => {
       },
       actor,
       inspection.id,
-      section.id,
+      sectionInstance.id,
       2,
       {
         set: [
@@ -3698,7 +3716,7 @@ describe('PostgreSQL infrastructure', () => {
       },
       actor,
       inspection.id,
-      section.id,
+      sectionInstance.id,
       3,
       {
         set: [],
@@ -3723,7 +3741,7 @@ describe('PostgreSQL infrastructure', () => {
       actor,
       inspection.id,
       {
-        sectionId: section.id,
+        sectionInstanceId: sectionInstance.id,
         itemId: conditionItem.id,
         severity: 'minor',
         title: 'Minor observation',
@@ -3782,12 +3800,13 @@ describe('PostgreSQL infrastructure', () => {
     await expect(
       sql`
         insert into public.inspection_findings (
-          id, inspection_id, schema_version_id, section_id,
-          severity, title, created_by_user_id, created_at
+          id, inspection_id, schema_version_id, section_instance_id,
+          section_id, severity, title, created_by_user_id, created_at
         ) values (
           '92000000-0000-4000-8000-000000000002',
           ${inspection.id},
           ${publishedV1.id},
+          ${sectionInstance.id},
           ${section.id},
           'major',
           'Late mutation',
@@ -4042,6 +4061,365 @@ describe('PostgreSQL infrastructure', () => {
 
     const persistedInspection = await inspectionRepository.getById(inspection.id);
     expect(persistedInspection?.schemaVersionId).toBe(publishedV1.id);
+  });
+
+
+  it('materializes frozen Space section instances and stores the same item independently per bedroom', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+    const ids = new SequenceIds(
+      Array.from({ length: 40 }, (_, index) =>
+        `9a000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      ),
+    );
+
+    const schemaDraft = await createInspectionSchemaVersionCommand(
+      { inspectionRepository, idGenerator: ids },
+      actor,
+      {
+        schemaCode: 'SPACE-MOVE-IN-INT',
+        inspectionType: 'move_in',
+        title: 'Space-aware move-in',
+        requiredSignatureRoles: [],
+        sections: [
+          {
+            key: 'general',
+            title: 'General',
+            sortOrder: 0,
+            scope: 'unit',
+            items: [{
+              key: 'overall',
+              type: 'text',
+              label: 'Overall condition',
+              required: true,
+              sortOrder: 0,
+            }],
+          },
+          {
+            key: 'room',
+            title: 'Room condition',
+            sortOrder: 1,
+            scope: 'space',
+            spaceTypes: ['bedroom'],
+            items: [
+              {
+                key: 'room_condition',
+                type: 'select',
+                label: 'Condition',
+                required: true,
+                sortOrder: 0,
+                options: [
+                  { value: 'good', label: 'Good' },
+                  { value: 'damaged', label: 'Damaged' },
+                ],
+              },
+              {
+                key: 'room_damage_note',
+                type: 'textarea',
+                label: 'Damage note',
+                sortOrder: 1,
+                requiredWhen: {
+                  fieldKey: 'room_condition',
+                  operator: 'equals',
+                  value: 'damaged',
+                },
+              },
+            ],
+          },
+        ],
+      },
+    );
+    const schema = await publishInspectionSchemaVersionCommand(
+      inspectionRepository,
+      actor,
+      schemaDraft.id,
+    );
+
+    const property = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-SPACE-INS',
+        name: 'Space Inspection',
+        propertyType: 'apartment_building',
+        street: 'Room Street',
+        houseNumber: '2',
+        postalCode: '8003',
+        city: 'Zürich',
+        countryCode: 'CH',
+      },
+    );
+    const unit = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-SPACE-INS',
+        unitNumber: '3.5',
+        unitType: 'apartment',
+      },
+    );
+    const bedroom1 = await createSpaceCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        unitId: unit.id,
+        code: 'BED-1',
+        name: 'Bedroom 1',
+        spaceType: 'bedroom',
+        sortOrder: 1,
+      },
+    );
+    const bedroom2 = await createSpaceCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        unitId: unit.id,
+        code: 'BED-2',
+        name: 'Bedroom 2',
+        spaceType: 'bedroom',
+        sortOrder: 2,
+      },
+    );
+
+    const inspection = await createInspectionCommand(
+      {
+        inspectionRepository,
+        portfolioRepository,
+        tenancyRepository,
+        staffDirectoryRepository: accessRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-25T10:00:00.000Z' },
+      },
+      actor,
+      {
+        code: 'INS-SPACE-INT',
+        inspectionType: 'move_in',
+        unitId: unit.id,
+        schemaVersionId: schema.id,
+        assignedToUserId:
+          'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' as import('@portfolio/domain').UserId,
+      },
+    );
+
+    const instances =
+      await inspectionRepository.listSectionInstances(inspection.id);
+    expect(instances).toHaveLength(3);
+    const generalInstance = instances.find((item) => item.scope === 'unit')!;
+    const bedroom1Instance = instances.find(
+      (item) => item.spaceId === bedroom1.id,
+    )!;
+    const bedroom2Instance = instances.find(
+      (item) => item.spaceId === bedroom2.id,
+    )!;
+    expect(bedroom1Instance).toMatchObject({
+      spaceCode: 'BED-1',
+      spaceName: 'Bedroom 1',
+      spaceType: 'bedroom',
+      spaceSortOrder: 1,
+    });
+    expect(bedroom2Instance).toMatchObject({
+      spaceCode: 'BED-2',
+      spaceName: 'Bedroom 2',
+      spaceType: 'bedroom',
+      spaceSortOrder: 2,
+    });
+
+    await createSpaceCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        unitId: unit.id,
+        code: 'BED-3',
+        name: 'Bedroom 3 added later',
+        spaceType: 'bedroom',
+        sortOrder: 3,
+      },
+    );
+    expect(
+      await inspectionRepository.listSectionInstances(inspection.id),
+    ).toHaveLength(3);
+
+    await sql`
+      update public.spaces
+      set name = 'Bedroom 1 renamed later', code = 'BED-1-NEW'
+      where id = ${bedroom1.id}
+    `;
+    expect(
+      await inspectionRepository.getSectionInstanceById(
+        inspection.id,
+        bedroom1Instance.id,
+      ),
+    ).toMatchObject({
+      spaceCode: 'BED-1',
+      spaceName: 'Bedroom 1',
+    });
+
+    const started = await startInspectionCommand(
+      {
+        inspectionRepository,
+        clock: { now: () => '2026-09-25T10:05:00.000Z' },
+      },
+      actor,
+      inspection.id,
+      inspection.version,
+    );
+    expect(started.status).toBe('in_progress');
+
+    const generalSection = schema.sections.find(
+      (section) => section.id === generalInstance.sectionId,
+    )!;
+    const roomSection = schema.sections.find(
+      (section) => section.id === bedroom1Instance.sectionId,
+    )!;
+    const overallItem = generalSection.items[0]!;
+    const roomCondition = roomSection.items[0]!;
+    const roomDamageNote = roomSection.items[1]!;
+
+    await saveInspectionSectionCommand(
+      {
+        inspectionRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-25T10:10:00.000Z' },
+      },
+      actor,
+      inspection.id,
+      generalInstance.id,
+      0,
+      {
+        set: [{ itemId: overallItem.id, value: 'Good overall' }],
+        clearItemIds: [],
+      },
+    );
+    await saveInspectionSectionCommand(
+      {
+        inspectionRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-25T10:11:00.000Z' },
+      },
+      actor,
+      inspection.id,
+      bedroom1Instance.id,
+      0,
+      {
+        set: [{ itemId: roomCondition.id, value: 'good' }],
+        clearItemIds: [],
+      },
+    );
+    await saveInspectionSectionCommand(
+      {
+        inspectionRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-25T10:12:00.000Z' },
+      },
+      actor,
+      inspection.id,
+      bedroom2Instance.id,
+      0,
+      {
+        set: [{ itemId: roomCondition.id, value: 'damaged' }],
+        clearItemIds: [],
+      },
+    );
+
+    const responses = await inspectionRepository.listResponses(inspection.id);
+    expect(
+      responses
+        .filter((response) => response.itemId === roomCondition.id)
+        .map((response) => [
+          response.sectionInstanceId,
+          response.value,
+        ]),
+    ).toEqual([
+      [bedroom1Instance.id, 'good'],
+      [bedroom2Instance.id, 'damaged'],
+    ]);
+
+    const bedroom1Response = responses.find(
+      (response) =>
+        response.sectionInstanceId === bedroom1Instance.id &&
+        response.itemId === roomCondition.id,
+    )!;
+
+    await expect(
+      sql`
+        update public.inspection_responses
+        set section_instance_id = ${bedroom2Instance.id}
+        where id = ${bedroom1Response.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_response_identity_immutable',
+    });
+
+    await expect(
+      sql`
+        update public.inspection_section_states
+        set section_instance_id = ${bedroom2Instance.id}
+        where inspection_id = ${inspection.id}
+          and section_instance_id = ${bedroom1Instance.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_section_state_identity_immutable',
+    });
+
+    await expect(
+      lockInspectionCommand(
+        {
+          inspectionRepository,
+          clock: { now: () => '2026-09-25T10:15:00.000Z' },
+        },
+        actor,
+        inspection.id,
+        started.version,
+      ),
+    ).rejects.toMatchObject({
+      code: 'INSPECTION_REQUIRED_RESPONSES_MISSING',
+    });
+
+    await saveInspectionSectionCommand(
+      {
+        inspectionRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-25T10:16:00.000Z' },
+      },
+      actor,
+      inspection.id,
+      bedroom2Instance.id,
+      1,
+      {
+        set: [{
+          itemId: roomDamageNote.id,
+          value: 'Scratch near window',
+        }],
+        clearItemIds: [],
+      },
+    );
+
+    const locked = await lockInspectionCommand(
+      {
+        inspectionRepository,
+        clock: { now: () => '2026-09-25T10:20:00.000Z' },
+      },
+      actor,
+      inspection.id,
+      started.version,
+    );
+    expect(locked.status).toBe('locked');
+
+    await expect(
+      sql`
+        update public.inspection_section_instances
+        set space_name = 'Rewritten history'
+        where id = ${bedroom1Instance.id}
+      `,
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint_name: 'inspection_section_instance_immutable',
+    });
   });
 
 

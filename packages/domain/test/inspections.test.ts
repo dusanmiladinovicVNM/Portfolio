@@ -6,11 +6,13 @@ import {
   asInspectionFindingId,
   asInspectionId,
   asInspectionResponseId,
+  asInspectionSectionInstanceId,
   asInspectionSchemaItemId,
   asInspectionSchemaSectionId,
   asInspectionSchemaVersionId,
   asInspectionSignatureId,
   asInspectionUnlockId,
+  asSpaceId,
   asTenancyId,
   asUnitId,
   asUserId,
@@ -20,6 +22,8 @@ import {
   createInspectionFinding,
   createInspectionResponse,
   createInspectionSchemaVersion,
+  createInspectionSectionInstance,
+  createSpace,
   createInspectionSignature,
   createInspectionUnlockRecord,
   finalizeInspection,
@@ -105,6 +109,18 @@ const inspection = createInspection({
   createdByUserId: asUserId('72000000-0000-4000-8000-000000000005'),
 });
 
+const unitSectionInstance = createInspectionSectionInstance(
+  inspection,
+  schema.sections[0]!,
+  {
+    id: asInspectionSectionInstanceId(
+      '72000000-0000-4000-8000-000000000010',
+    ),
+  },
+);
+
+
+
 describe('Inspection schema and lifecycle', () => {
   it('publishes an immutable schema-shaped version without changing its identity', () => {
     const published = publishInspectionSchemaVersion(schema);
@@ -179,6 +195,7 @@ describe('Inspection schema and lifecycle', () => {
       createInspectionFinding(locked, {
         id: asInspectionFindingId('72000000-0000-4000-8000-000000000006'),
         inspectionId: locked.id,
+        sectionInstanceId: unitSectionInstance.id,
         sectionId: schema.sections[0]!.id,
         severity: 'minor',
         title: 'Scratch',
@@ -194,6 +211,7 @@ describe('Inspection schema and lifecycle', () => {
       createInspectionResponse({
         id: asInspectionResponseId('72000000-0000-4000-8000-000000000007'),
         inspectionId: inspection.id,
+        sectionInstanceId: unitSectionInstance.id,
         item,
         value: true,
         updatedByUserId: inspection.createdByUserId,
@@ -206,17 +224,162 @@ describe('Inspection schema and lifecycle', () => {
     const condition = createInspectionResponse({
       id: asInspectionResponseId('72000000-0000-4000-8000-000000000008'),
       inspectionId: inspection.id,
+      sectionInstanceId: unitSectionInstance.id,
       item: schema.sections[0]!.items[0]!,
       value: 'damaged',
       updatedByUserId: inspection.createdByUserId,
       updatedAt: '2026-09-18T20:00:00.000Z',
     });
 
-    expect(findMissingRequiredInspectionItems(schema, [condition])).toEqual([
+    expect(
+      findMissingRequiredInspectionItems(
+        schema,
+        [unitSectionInstance],
+        [condition],
+      ),
+    ).toEqual([
       {
+        sectionInstanceId: unitSectionInstance.id,
         sectionId: schema.sections[0]!.id,
         itemId: schema.sections[0]!.items[1]!.id,
         itemKey: 'damage_note',
+        label: 'Damage note',
+      },
+    ]);
+  });
+
+  it('keeps repeated room templates independent and prevents conditional bleed', () => {
+    const roomSchema = createInspectionSchemaVersion({
+      id: asInspectionSchemaVersionId(
+        '74000000-0000-4000-8000-000000000001',
+      ),
+      schemaCode: 'ROOMS',
+      versionNumber: 1,
+      inspectionType: 'move_in',
+      title: 'Room inspection',
+      sections: [{
+        id: asInspectionSchemaSectionId(
+          '74000000-0000-4000-8000-000000000002',
+        ),
+        key: 'room',
+        title: 'Room condition',
+        sortOrder: 0,
+        scope: 'space',
+        spaceTypes: ['bedroom'],
+        items: [
+          {
+            id: asInspectionSchemaItemId(
+              '74000000-0000-4000-8000-000000000003',
+            ),
+            key: 'room_condition',
+            type: 'select',
+            label: 'Condition',
+            required: true,
+            sortOrder: 0,
+            options: [
+              { value: 'good', label: 'Good' },
+              { value: 'damaged', label: 'Damaged' },
+            ],
+          },
+          {
+            id: asInspectionSchemaItemId(
+              '74000000-0000-4000-8000-000000000004',
+            ),
+            key: 'room_damage_note',
+            type: 'textarea',
+            label: 'Damage note',
+            sortOrder: 1,
+            requiredWhen: {
+              fieldKey: 'room_condition',
+              operator: 'equals',
+              value: 'damaged',
+            },
+          },
+        ],
+      }],
+    });
+    const roomInspection = createInspection({
+      id: asInspectionId('74000000-0000-4000-8000-000000000005'),
+      code: 'ROOM-INS',
+      inspectionType: 'move_in',
+      unitId: inspection.unitId,
+      schemaVersionId: roomSchema.id,
+      assignedToUserId: inspection.assignedToUserId,
+      createdByUserId: inspection.createdByUserId,
+    });
+    const bedroom1 = createSpace({
+      id: asSpaceId('74000000-0000-4000-8000-000000000006'),
+      unitId: inspection.unitId,
+      code: 'BED-1',
+      name: 'Bedroom 1',
+      spaceType: 'bedroom',
+      sortOrder: 1,
+    });
+    const bedroom2 = createSpace({
+      id: asSpaceId('74000000-0000-4000-8000-000000000007'),
+      unitId: inspection.unitId,
+      code: 'BED-2',
+      name: 'Bedroom 2',
+      spaceType: 'bedroom',
+      sortOrder: 2,
+    });
+    const section = roomSchema.sections[0]!;
+    const instance1 = createInspectionSectionInstance(
+      roomInspection,
+      section,
+      {
+        id: asInspectionSectionInstanceId(
+          '74000000-0000-4000-8000-000000000008',
+        ),
+        space: bedroom1,
+      },
+    );
+    const instance2 = createInspectionSectionInstance(
+      roomInspection,
+      section,
+      {
+        id: asInspectionSectionInstanceId(
+          '74000000-0000-4000-8000-000000000009',
+        ),
+        space: bedroom2,
+      },
+    );
+    const conditionItem = section.items[0]!;
+    const bedroom1Condition = createInspectionResponse({
+      id: asInspectionResponseId(
+        '74000000-0000-4000-8000-000000000010',
+      ),
+      inspectionId: roomInspection.id,
+      sectionInstanceId: instance1.id,
+      item: conditionItem,
+      value: 'good',
+      updatedByUserId: inspection.createdByUserId,
+      updatedAt: '2026-09-18T20:00:00.000Z',
+    });
+    const bedroom2Condition = createInspectionResponse({
+      id: asInspectionResponseId(
+        '74000000-0000-4000-8000-000000000011',
+      ),
+      inspectionId: roomInspection.id,
+      sectionInstanceId: instance2.id,
+      item: conditionItem,
+      value: 'damaged',
+      updatedByUserId: inspection.createdByUserId,
+      updatedAt: '2026-09-18T20:00:00.000Z',
+    });
+
+    expect(
+      findMissingRequiredInspectionItems(
+        roomSchema,
+        [instance1, instance2],
+        [bedroom1Condition, bedroom2Condition],
+      ),
+    ).toEqual([
+      {
+        sectionInstanceId: instance2.id,
+        sectionId: section.id,
+        itemId: section.items[1]!.id,
+        itemKey: 'room_damage_note',
         label: 'Damage note',
       },
     ]);
@@ -243,6 +406,7 @@ describe('Inspection schema and lifecycle', () => {
         locked,
         finalizeInspection(locked, '2026-09-18T21:10:00.000Z'),
         schema,
+        [unitSectionInstance],
         [],
         [],
         [],
@@ -285,6 +449,7 @@ describe('Inspection schema and lifecycle', () => {
       locked,
       finalizedHeader,
       schema,
+      [unitSectionInstance],
       [],
       [],
       [],

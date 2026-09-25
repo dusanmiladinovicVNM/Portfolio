@@ -5,9 +5,11 @@ import type {
   InspectionFindingId,
   InspectionId,
   InspectionResponseId,
+  InspectionSectionInstanceId,
   InspectionSchemaItemId,
   InspectionSchemaSectionId,
   InspectionSchemaVersionId,
+  SpaceId,
   TenancyId,
   UnitId,
   UserId,
@@ -16,9 +18,12 @@ import type {
   InspectionAnswerValue,
   InspectionCondition,
   InspectionSchemaItem,
+  InspectionSchemaSection,
   InspectionSchemaVersion,
+  InspectionSectionScope,
   InspectionType,
 } from './inspection-schema.js';
+import type { Space, SpaceType } from '../portfolio/space.js';
 
 export const INSPECTION_STATUSES = [
   'draft',
@@ -58,8 +63,89 @@ export interface Inspection {
   readonly contentRevision: number;
 }
 
+export interface InspectionSectionInstance {
+  readonly id: InspectionSectionInstanceId;
+  readonly inspectionId: InspectionId;
+  readonly sectionId: InspectionSchemaSectionId;
+  readonly scope: InspectionSectionScope;
+  readonly spaceId: SpaceId | null;
+  readonly spaceCode: string | null;
+  readonly spaceName: string | null;
+  readonly spaceType: SpaceType | null;
+  readonly spaceSortOrder: number | null;
+}
+
+export function createInspectionSectionInstance(
+  inspection: Inspection,
+  section: InspectionSchemaSection,
+  input: {
+    readonly id: InspectionSectionInstanceId;
+    readonly space?: Space | null;
+  },
+): InspectionSectionInstance {
+  const space = input.space ?? null;
+
+  if (section.scope === 'unit') {
+    if (space !== null) {
+      throw new DomainError(
+        'INSPECTION_UNIT_SECTION_SPACE_FORBIDDEN',
+        'Unit-scoped inspection sections cannot bind a Space.',
+      );
+    }
+    return {
+      id: input.id,
+      inspectionId: inspection.id,
+      sectionId: section.id,
+      scope: 'unit',
+      spaceId: null,
+      spaceCode: null,
+      spaceName: null,
+      spaceType: null,
+      spaceSortOrder: null,
+    };
+  }
+
+  if (space === null) {
+    throw new DomainError(
+      'INSPECTION_SPACE_SECTION_SPACE_REQUIRED',
+      'Space-scoped inspection sections require a Space.',
+    );
+  }
+  if (!space.active) {
+    throw new DomainError(
+      'INSPECTION_SPACE_SECTION_INACTIVE_SPACE',
+      'Space-scoped inspection sections require an active Space.',
+    );
+  }
+  if (space.unitId !== inspection.unitId) {
+    throw new DomainError(
+      'INSPECTION_SPACE_SECTION_UNIT_MISMATCH',
+      'Inspection section Space must belong to the inspection Unit.',
+    );
+  }
+  if (!section.spaceTypes.includes(space.spaceType)) {
+    throw new DomainError(
+      'INSPECTION_SPACE_SECTION_TYPE_MISMATCH',
+      'Inspection section does not apply to this Space type.',
+    );
+  }
+
+  return {
+    id: input.id,
+    inspectionId: inspection.id,
+    sectionId: section.id,
+    scope: 'space',
+    spaceId: space.id,
+    spaceCode: space.code,
+    spaceName: space.name,
+    spaceType: space.spaceType,
+    spaceSortOrder: space.sortOrder,
+  };
+}
+
 export interface InspectionSectionState {
   readonly inspectionId: InspectionId;
+  readonly sectionInstanceId: InspectionSectionInstanceId;
   readonly sectionId: InspectionSchemaSectionId;
   readonly revision: number;
 }
@@ -67,6 +153,7 @@ export interface InspectionSectionState {
 export interface InspectionResponse {
   readonly id: InspectionResponseId;
   readonly inspectionId: InspectionId;
+  readonly sectionInstanceId: InspectionSectionInstanceId;
   readonly sectionId: InspectionSchemaSectionId;
   readonly itemId: InspectionSchemaItemId;
   readonly value: InspectionAnswerValue;
@@ -78,6 +165,7 @@ export interface InspectionResponse {
 export interface InspectionFinding {
   readonly id: InspectionFindingId;
   readonly inspectionId: InspectionId;
+  readonly sectionInstanceId: InspectionSectionInstanceId;
   readonly sectionId: InspectionSchemaSectionId;
   readonly itemId: InspectionSchemaItemId | null;
   readonly severity: InspectionFindingSeverity;
@@ -102,6 +190,7 @@ export interface CreateInspectionInput {
 export interface CreateInspectionResponseInput {
   readonly id: InspectionResponseId;
   readonly inspectionId: InspectionId;
+  readonly sectionInstanceId: InspectionSectionInstanceId;
   readonly item: InspectionSchemaItem;
   readonly value: InspectionAnswerValue;
   readonly comment?: string | null;
@@ -362,6 +451,7 @@ export function createInspectionResponse(
   return {
     id: input.id,
     inspectionId: input.inspectionId,
+    sectionInstanceId: input.sectionInstanceId,
     sectionId: input.item.sectionId,
     itemId: input.item.id,
     value: validateInspectionAnswer(input.item, input.value),
@@ -448,30 +538,79 @@ function answered(value: InspectionAnswerValue | undefined): boolean {
 }
 
 export interface MissingInspectionItem {
+  readonly sectionInstanceId: InspectionSectionInstanceId;
   readonly sectionId: InspectionSchemaSectionId;
   readonly itemId: InspectionSchemaItemId;
   readonly itemKey: string;
   readonly label: string;
 }
 
-export function findMissingRequiredInspectionItems(
+export function inspectionValuesByFieldKeyForInstance(
   schema: InspectionSchemaVersion,
+  sectionInstances: readonly InspectionSectionInstance[],
   responses: readonly InspectionResponse[],
-): readonly MissingInspectionItem[] {
+  targetInstance: InspectionSectionInstance,
+): ReadonlyMap<string, InspectionAnswerValue> {
+  const sectionById = new Map(
+    schema.sections.map((section) => [section.id, section] as const),
+  );
   const itemById = new Map(
     schema.sections.flatMap((section) =>
       section.items.map((item) => [item.id, item] as const),
     ),
   );
+  const instanceById = new Map(
+    sectionInstances.map((instance) => [instance.id, instance] as const),
+  );
+  const values = new Map<string, InspectionAnswerValue>();
 
-  const valuesByFieldKey = new Map<string, InspectionAnswerValue>();
   for (const response of responses) {
+    const sourceInstance = instanceById.get(response.sectionInstanceId);
     const item = itemById.get(response.itemId);
-    if (item) valuesByFieldKey.set(item.key.toLowerCase(), response.value);
+    if (!sourceInstance || !item) continue;
+    if (sourceInstance.sectionId !== response.sectionId) continue;
+    const sourceSection = sectionById.get(sourceInstance.sectionId);
+    if (!sourceSection || item.sectionId !== sourceSection.id) continue;
+
+    const sameInstance = sourceInstance.id === targetInstance.id;
+    const unitContext = sourceInstance.scope === 'unit';
+    const sameSpaceContext =
+      targetInstance.spaceId !== null &&
+      sourceInstance.spaceId === targetInstance.spaceId;
+
+    if (sameInstance || unitContext || sameSpaceContext) {
+      values.set(item.key.toLowerCase(), response.value);
+    }
   }
 
+  return values;
+}
+
+export function findMissingRequiredInspectionItems(
+  schema: InspectionSchemaVersion,
+  sectionInstances: readonly InspectionSectionInstance[],
+  responses: readonly InspectionResponse[],
+): readonly MissingInspectionItem[] {
+  const sectionById = new Map(
+    schema.sections.map((section) => [section.id, section] as const),
+  );
+
   const missing: MissingInspectionItem[] = [];
-  for (const section of schema.sections) {
+  for (const instance of sectionInstances) {
+    const section = sectionById.get(instance.sectionId);
+    if (!section) {
+      throw new DomainError(
+        'INSPECTION_SECTION_INSTANCE_SCHEMA_MISMATCH',
+        'Inspection section instance references a missing schema section.',
+      );
+    }
+    const valuesByFieldKey = inspectionValuesByFieldKeyForInstance(
+      schema,
+      sectionInstances,
+      responses,
+      instance,
+    );
+
     for (const item of section.items) {
       const visible =
         item.visibleWhen === null ||
@@ -486,6 +625,7 @@ export function findMissingRequiredInspectionItems(
 
       if (!answered(valuesByFieldKey.get(item.key.toLowerCase()))) {
         missing.push({
+          sectionInstanceId: instance.id,
           sectionId: section.id,
           itemId: item.id,
           itemKey: item.key,
@@ -500,6 +640,7 @@ export function findMissingRequiredInspectionItems(
 export interface CreateInspectionFindingInput {
   readonly id: InspectionFindingId;
   readonly inspectionId: InspectionId;
+  readonly sectionInstanceId: InspectionSectionInstanceId;
   readonly sectionId: InspectionSchemaSectionId;
   readonly itemId?: InspectionSchemaItemId | null;
   readonly severity: InspectionFindingSeverity;
@@ -517,6 +658,7 @@ export function createInspectionFinding(
   return {
     id: input.id,
     inspectionId: input.inspectionId,
+    sectionInstanceId: input.sectionInstanceId,
     sectionId: input.sectionId,
     itemId: input.itemId ?? null,
     severity: input.severity,
