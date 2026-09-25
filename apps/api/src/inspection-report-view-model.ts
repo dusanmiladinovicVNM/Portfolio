@@ -83,8 +83,8 @@ function displayEnum(value: string): string {
 
 function displayAnswer(value: InspectionAnswerValue): string {
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  if (Array.isArray(value)) return value.join(', ');
-  return value;
+  if (typeof value === 'string') return value;
+  return [...value].join(', ');
 }
 
 function propertyAddress(
