@@ -74,7 +74,10 @@ import type {
   NavigateWorkspace,
   SetNavigationBlocker,
 } from '../navigation/use-workspace-navigation.js';
-import { formatDetailKey } from '../presentation/format.js';
+import {
+  formatDetailKey,
+  formatSwissDateTime,
+} from '../presentation/format.js';
 import {
   assertCreatedMaintenanceIssue,
   assertCreatedMaintenanceWorkOrder,
@@ -964,7 +967,7 @@ function IssueAdministration({
           <dt>Inspection Finding</dt>
           <dd>{issue.inspectionFindingId ?? '—'}</dd>
         </div>
-        <div><dt>Reported</dt><dd>{issue.reportedAt}</dd></div>
+        <div><dt>Reported</dt><dd>{formatSwissDateTime(issue.reportedAt)}</dd></div>
       </dl>
 
       {error ? <p className="setup-form-error" role="alert">{error}</p> : null}
@@ -1124,10 +1127,10 @@ function IssueAdministration({
 
           <dl className="detail-list compact-detail-list">
             <div><dt>Assignee</dt><dd>{assigneeLabel(selectedEntry, parties)}</dd></div>
-            <div><dt>Created</dt><dd>{selectedOrder.createdAt}</dd></div>
-            <div><dt>Assigned</dt><dd>{selectedOrder.assignedAt ?? '—'}</dd></div>
-            <div><dt>Started</dt><dd>{selectedOrder.startedAt ?? '—'}</dd></div>
-            <div><dt>Completed</dt><dd>{selectedOrder.completedAt ?? '—'}</dd></div>
+            <div><dt>Created</dt><dd>{formatSwissDateTime(selectedOrder.createdAt)}</dd></div>
+            <div><dt>Assigned</dt><dd>{formatSwissDateTime(selectedOrder.assignedAt)}</dd></div>
+            <div><dt>Started</dt><dd>{formatSwissDateTime(selectedOrder.startedAt)}</dd></div>
+            <div><dt>Completed</dt><dd>{formatSwissDateTime(selectedOrder.completedAt)}</dd></div>
             <div><dt>Cancelled</dt><dd>{selectedOrder.cancelledAt ?? '—'}</dd></div>
           </dl>
 
@@ -1372,7 +1375,7 @@ function IssueAdministration({
                     <option value="">Select ServiceEvent…</option>
                     {linkableEvents.map((serviceEvent) => (
                       <option key={serviceEvent.id} value={serviceEvent.id}>
-                        {serviceEvent.performedAt} ·{' '}
+                        {formatSwissDateTime(serviceEvent.performedAt)} ·{' '}
                         {formatDetailKey(serviceEvent.eventType)} ·{' '}
                         {serviceEvent.description}
                       </option>
@@ -1403,7 +1406,7 @@ function IssueAdministration({
                         <strong>
                           {formatDetailKey(serviceEvent.eventType)}
                         </strong>
-                        <span>{serviceEvent.performedAt}</span>
+                        <span>{formatSwissDateTime(serviceEvent.performedAt)}</span>
                       </div>
                       <p>{serviceEvent.description}</p>
                       <small>
@@ -1785,7 +1788,7 @@ export function UnitMaintenance({
                 </div>
                 <dl className="detail-list compact-detail-list">
                   <div><dt>Priority</dt><dd>{issue.priority}</dd></div>
-                  <div><dt>Reported</dt><dd>{issue.reportedAt}</dd></div>
+                  <div><dt>Reported</dt><dd>{formatSwissDateTime(issue.reportedAt)}</dd></div>
                   <div><dt>Asset</dt><dd>{issue.assetId ?? '—'}</dd></div>
                   <div>
                     <dt>Inspection origin</dt>
