@@ -152,6 +152,9 @@ describe('Staff Administration application boundary', () => {
         expect(email).toBe('inspector@example.test');
         return { subject: 'supabase-inspector', email };
       },
+      async sendAccessEmail() {
+        throw new Error('not linked yet');
+      },
     };
 
     const invited = await inviteStaffCommand(
@@ -167,11 +170,15 @@ describe('Staff Administration application boundary', () => {
       identities: [{ provider: 'supabase', subject: 'supabase-inspector' }],
     });
 
-    let resendCalls = 0;
+    let accessEmailCalls = 0;
     const resendAuthAdmin: StaffAuthAdminPort = {
-      async ensureInvitedUser(email) {
-        resendCalls += 1;
-        return { subject: 'supabase-inspector', email };
+      async ensureInvitedUser() {
+        throw new Error('linked staff must not be re-invited through initial provisioning');
+      },
+      async sendAccessEmail(email, expectedSubject) {
+        accessEmailCalls += 1;
+        expect(email).toBe('inspector@example.test');
+        expect(expectedSubject).toBe('supabase-inspector');
       },
     };
 
@@ -183,7 +190,7 @@ describe('Staff Administration application boundary', () => {
         2,
       ),
     ).resolves.toEqual(invited);
-    expect(resendCalls).toBe(1);
+    expect(accessEmailCalls).toBe(1);
     expect(repository.staff.get(otherId)).toEqual(invited);
   });
 

@@ -79,6 +79,7 @@ describe('Staff HTTP routes', () => {
       staffRepository: repo,
       authAdmin: {
         ensureInvitedUser: async (email: string) => ({ subject: 'unused', email }),
+        sendAccessEmail: async () => {},
       },
       idGenerator: { next: () => newId },
     };
@@ -105,6 +106,7 @@ describe('Staff HTTP routes', () => {
           subject: 'supabase-new',
           email,
         }),
+        sendAccessEmail: async () => {},
       },
       idGenerator: { next: () => newId },
     };
@@ -149,7 +151,7 @@ describe('Staff HTTP routes', () => {
     });
   });
 
-  it('resends an invite for linked active staff without changing canonical status or revision', async () => {
+  it('sends an access-recovery email for linked active staff without changing canonical status or revision', async () => {
     const repo = new StaffRepo();
     repo.rows.set(adminId, account(adminId, 'admin'));
     repo.rows.set(newId, {
@@ -158,13 +160,17 @@ describe('Staff HTTP routes', () => {
       revision: 4,
     });
     const admin: Actor = { userId: adminId, role: 'admin' };
-    let inviteCalls = 0;
+    let accessEmailCalls = 0;
     const deps = {
       staffRepository: repo,
       authAdmin: {
-        ensureInvitedUser: async (email: string) => {
-          inviteCalls += 1;
-          return { subject: 'inspector-subject', email };
+        ensureInvitedUser: async () => {
+          throw new Error('linked staff must not use initial invite provisioning');
+        },
+        sendAccessEmail: async (email: string, expectedSubject: string) => {
+          accessEmailCalls += 1;
+          expect(email).toBe('inspector@example.test');
+          expect(expectedSubject).toBe('inspector-subject');
         },
       },
       idGenerator: { next: () => newId },
@@ -180,7 +186,7 @@ describe('Staff HTTP routes', () => {
     );
 
     expect(response?.status).toBe(200);
-    expect(inviteCalls).toBe(1);
+    expect(accessEmailCalls).toBe(1);
     expect(await response?.json()).toMatchObject({
       data: {
         userId: newId,

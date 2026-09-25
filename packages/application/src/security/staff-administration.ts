@@ -51,6 +51,7 @@ export interface StaffAuthAdminPort {
     readonly subject: string;
     readonly email: string;
   }>;
+  sendAccessEmail(email: string, expectedSubject: string): Promise<void>;
 }
 
 function requireStaffAdmin(actor: Actor): void {
@@ -157,22 +158,17 @@ export async function inviteStaffCommand(
     );
   }
 
+  if (linked) {
+    await deps.authAdmin.sendAccessEmail(staff.email, linked.subject);
+    return staff;
+  }
+
   const invited = await deps.authAdmin.ensureInvitedUser(staff.email);
   if (invited.email.trim().toLowerCase() !== staff.email.trim().toLowerCase()) {
     throw new ApplicationError(
       'STAFF_AUTH_IDENTITY_MISMATCH',
       'Supabase returned an identity for a different email address.',
     );
-  }
-
-  if (linked) {
-    if (invited.subject !== linked.subject) {
-      throw new ApplicationError(
-        'STAFF_AUTH_IDENTITY_MISMATCH',
-        'Supabase returned a different subject for an already linked staff user.',
-      );
-    }
-    return staff;
   }
 
   const updated = await deps.staffRepository.linkSupabaseIdentityAndActivate(
