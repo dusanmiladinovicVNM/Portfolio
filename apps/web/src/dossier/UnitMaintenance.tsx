@@ -441,6 +441,9 @@ function IssueAdministration({
   workOrders,
   selectedWorkOrderId,
   parties,
+  spaces,
+  assets,
+  findings,
   serviceEvents,
   writeGate,
   onCanonicalWrite,
@@ -452,6 +455,9 @@ function IssueAdministration({
   readonly workOrders: readonly MaintenanceWorkOrderEntryResponse[];
   readonly selectedWorkOrderId?: string | undefined;
   readonly parties: readonly PartyResponse[];
+  readonly spaces: readonly SpaceResponse[];
+  readonly assets: readonly AssetResponse[];
+  readonly findings: readonly FindingOption[];
   readonly serviceEvents: readonly ServiceEventResponse[];
   readonly writeGate: MaintenanceWriteGate;
   readonly onCanonicalWrite: () => void;
@@ -957,13 +963,40 @@ function IssueAdministration({
       </div>
 
       <dl className="detail-list maintenance-scope-grid">
-        <div><dt>Property</dt><dd>{issue.propertyId}</dd></div>
-        <div><dt>Unit</dt><dd>{issue.unitId}</dd></div>
-        <div><dt>Space</dt><dd>{issue.spaceId ?? 'Unit level'}</dd></div>
-        <div><dt>Asset</dt><dd>{issue.assetId ?? '—'}</dd></div>
+        <div><dt>Property</dt><dd>Current property</dd></div>
+        <div><dt>Unit</dt><dd>Current unit</dd></div>
+        <div>
+          <dt>Space</dt>
+          <dd>
+            {issue.spaceId
+              ? spaces.find((space) => space.id === issue.spaceId)?.code ??
+                'Assigned space'
+              : 'Unit level'}
+          </dd>
+        </div>
+        <div>
+          <dt>Asset</dt>
+          <dd>
+            {issue.assetId
+              ? assets.find((asset) => asset.id === issue.assetId)?.code ??
+                'Assigned asset'
+              : '—'}
+          </dd>
+        </div>
         <div>
           <dt>Inspection Finding</dt>
-          <dd>{issue.inspectionFindingId ?? '—'}</dd>
+          <dd>
+            {issue.inspectionFindingId
+              ? (() => {
+                  const option = findings.find(
+                    ({ finding }) => finding.id === issue.inspectionFindingId,
+                  );
+                  return option
+                    ? `${option.inspectionCode} · ${option.finding.title}`
+                    : 'Linked finding';
+                })()
+              : '—'}
+          </dd>
         </div>
         <div><dt>Reported</dt><dd>{formatSwissDateTime(issue.reportedAt)}</dd></div>
       </dl>
@@ -1849,6 +1882,9 @@ export function UnitMaintenance({
             )
           }
           parties={parties}
+          spaces={spaces ?? []}
+          assets={assets ?? []}
+          findings={findings ?? []}
           selectedWorkOrderId={workOrderId}
           serviceEvents={serviceEvents}
           workOrders={workOrders}
