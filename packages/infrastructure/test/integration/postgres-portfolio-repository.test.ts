@@ -107,7 +107,9 @@ import {
   asCostReversalId,
   asDocumentVersionId,
   asLeaseAmendmentId,
+  asInspectionId,
   asInspectionResponseId,
+  asInspectionSectionInstanceId,
   asOwnershipPeriodId,
   asPropertyId,
   asPartyAddressId,
@@ -115,7 +117,9 @@ import {
   asTenancyId,
   createCost,
   createCostReversal,
+  createInspection,
   createInspectionResponse,
+  createInspectionSectionInstance,
   createOwnershipPeriod,
   createTenancy,
   planTenancy,
@@ -4433,6 +4437,153 @@ describe('PostgreSQL infrastructure', () => {
       code: '23514',
       constraint_name: 'inspection_section_instance_immutable',
     });
+  });
+
+
+  it('rejects stale Space materialization when a matching Space appears after the pre-read', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+    const ids = new SequenceIds(
+      Array.from({ length: 30 }, (_, index) =>
+        `9b000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      ),
+    );
+
+    const schemaDraft = await createInspectionSchemaVersionCommand(
+      { inspectionRepository, idGenerator: ids },
+      actor,
+      {
+        schemaCode: 'SPACE-ATOMIC-INT',
+        inspectionType: 'move_in',
+        title: 'Atomic Space materialization',
+        requiredSignatureRoles: [],
+        sections: [{
+          key: 'room',
+          title: 'Room condition',
+          sortOrder: 0,
+          scope: 'space',
+          spaceTypes: ['bedroom'],
+          items: [{
+            key: 'condition',
+            type: 'text',
+            label: 'Condition',
+            required: true,
+            sortOrder: 0,
+          }],
+        }],
+      },
+    );
+    const schema = await publishInspectionSchemaVersionCommand(
+      inspectionRepository,
+      actor,
+      schemaDraft.id,
+    );
+
+    const property = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-SPACE-ATOMIC',
+        name: 'Atomic Space Inspection',
+        propertyType: 'apartment_building',
+        street: 'Atomic Street',
+        houseNumber: '1',
+        postalCode: '8003',
+        city: 'Zürich',
+        countryCode: 'CH',
+      },
+    );
+    const unit = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-SPACE-ATOMIC',
+        unitNumber: 'A-1',
+        unitType: 'apartment',
+      },
+    );
+    await createSpaceCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        unitId: unit.id,
+        code: 'BED-A1',
+        name: 'Bedroom 1',
+        spaceType: 'bedroom',
+        sortOrder: 1,
+      },
+    );
+    await createSpaceCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        unitId: unit.id,
+        code: 'BED-A2',
+        name: 'Bedroom 2',
+        spaceType: 'bedroom',
+        sortOrder: 2,
+      },
+    );
+
+    const staleSpaces = (
+      await portfolioRepository.listSpacesByUnit(unit.id)
+    ).filter((space) => space.active);
+    expect(staleSpaces.map((space) => space.code)).toEqual([
+      'BED-A1',
+      'BED-A2',
+    ]);
+
+    const inspection = createInspection({
+      id: asInspectionId(ids.next()),
+      code: 'INS-SPACE-STALE',
+      inspectionType: 'move_in',
+      unitId: unit.id,
+      schemaVersionId: schema.id,
+      assignedToUserId: actor.userId,
+      createdByUserId: actor.userId,
+    });
+    const staleInstances = schema.sections.flatMap((section) =>
+      staleSpaces
+        .filter((space) => section.spaceTypes.includes(space.spaceType))
+        .map((space) =>
+          createInspectionSectionInstance(inspection, section, {
+            id: asInspectionSectionInstanceId(ids.next()),
+            space,
+          }),
+        ),
+    );
+
+    // Simulate the concurrency window from the reviewer finding: BED-A3
+    // becomes canonical after the application pre-read but before the
+    // Inspection transaction tries to persist the stale instance set.
+    await createSpaceCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        unitId: unit.id,
+        code: 'BED-A3',
+        name: 'Bedroom 3',
+        spaceType: 'bedroom',
+        sortOrder: 3,
+      },
+    );
+
+    await expect(
+      inspectionRepository.insert(inspection, schema, staleInstances),
+    ).rejects.toMatchObject({
+      code: 'INSPECTION_SECTION_INSTANCE_SET_STALE',
+    });
+
+    // The mismatch aborts the whole transaction, not only instance inserts.
+    expect(await inspectionRepository.getById(inspection.id)).toBeNull();
+    expect(
+      (await portfolioRepository.listSpacesByUnit(unit.id)).map(
+        (space) => space.code,
+      ),
+    ).toEqual(['BED-A1', 'BED-A2', 'BED-A3']);
   });
 
 

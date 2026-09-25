@@ -627,6 +627,74 @@ export class PostgresInspectionRepository implements InspectionRepository {
           )
         `;
 
+        // Freeze Unit membership against concurrent Space creation. A new
+        // Space must acquire a FK KEY SHARE lock on its parent Unit, which
+        // conflicts with this row lock and therefore serializes after this
+        // Inspection creation transaction.
+        const unitRows = await tx<{ id: string }[]>`
+          select id
+          from public.units
+          where id = ${inspection.unitId}
+          for update
+        `;
+        if (unitRows.length !== 1) {
+          throw new DomainError(
+            'INSPECTION_UNIT_NOT_FOUND',
+            'Inspection Unit no longer exists.',
+          );
+        }
+
+        // Lock every existing Space row, not only currently matching rows.
+        // This prevents active/type/ownership changes from moving a Space into
+        // or out of the expected materialization set while we validate it.
+        const spaceRows = await tx<{
+          id: string;
+          space_type: SpaceType;
+          active: boolean;
+        }[]>`
+          select id, space_type, active
+          from public.spaces
+          where unit_id = ${inspection.unitId}
+          order by id
+          for update
+        `;
+
+        const expectedKeys = new Set<string>();
+        for (const section of schema.sections) {
+          if (section.scope === 'unit') {
+            expectedKeys.add(`${section.id}:unit:`);
+            continue;
+          }
+
+          for (const space of spaceRows) {
+            if (
+              space.active &&
+              section.spaceTypes.includes(space.space_type)
+            ) {
+              expectedKeys.add(
+                `${section.id}:space:${space.id}`,
+              );
+            }
+          }
+        }
+
+        const actualKeys = sectionInstances.map(
+          (instance) =>
+            `${instance.sectionId}:${instance.scope}:${instance.spaceId ?? ''}`,
+        );
+        const actualKeySet = new Set(actualKeys);
+        const exactMaterialization =
+          actualKeySet.size === actualKeys.length &&
+          actualKeySet.size === expectedKeys.size &&
+          [...expectedKeys].every((key) => actualKeySet.has(key));
+
+        if (!exactMaterialization) {
+          throw new DomainError(
+            'INSPECTION_SECTION_INSTANCE_SET_STALE',
+            'Unit Spaces changed while the Inspection was being created. Retry with the current Space structure.',
+          );
+        }
+
         for (const instance of sectionInstances) {
           await tx`
             insert into public.inspection_section_instances (
