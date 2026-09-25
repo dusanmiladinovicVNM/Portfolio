@@ -149,6 +149,58 @@ export class SupabaseStaffAuthAdmin implements StaffAuthAdminPort {
     }
   }
 
+  async sendAccessEmail(rawEmail: string, expectedSubject: string): Promise<void> {
+    const email = rawEmail.trim().toLowerCase();
+    const existing = await this.findByExactEmail(email);
+    if (!existing || existing.subject !== expectedSubject) {
+      throw new ApplicationError(
+        'STAFF_AUTH_IDENTITY_MISMATCH',
+        'Supabase Auth identity no longer matches the linked Portfolio staff user.',
+      );
+    }
+
+    if (!existing.emailConfirmed) {
+      const invited = await this.ensureInvitedUser(email);
+      if (invited.subject !== expectedSubject) {
+        throw new ApplicationError(
+          'STAFF_AUTH_IDENTITY_MISMATCH',
+          'Supabase Auth returned a different subject while resending the staff invite.',
+        );
+      }
+      return;
+    }
+
+    const recoveryUrl = new URL(this.authBaseUrl + '/recover');
+    recoveryUrl.searchParams.set('redirect_to', this.options.webOrigin);
+
+    let response: Response;
+    try {
+      response = await this.fetchImpl(recoveryUrl, {
+        method: 'POST',
+        headers: this.headers(true),
+        body: JSON.stringify({ email }),
+      });
+    } catch {
+      throw new ApplicationError(
+        'STAFF_AUTH_RECONCILIATION_REQUIRED',
+        'Supabase Auth recovery email outcome is unknown. Verify delivery before retrying.',
+      );
+    }
+
+    if (!response.ok) {
+      if (response.status >= 500) {
+        throw new ApplicationError(
+          'STAFF_AUTH_RECONCILIATION_REQUIRED',
+          'Supabase Auth recovery email may have completed without a usable acknowledgement. Verify delivery before retrying.',
+        );
+      }
+      throw new ApplicationError(
+        'STAFF_AUTH_RECOVERY_FAILED',
+        `Supabase Auth rejected the password recovery request with HTTP ${response.status}.`,
+      );
+    }
+  }
+
   async ensureInvitedUser(rawEmail: string) {
     const email = rawEmail.trim().toLowerCase();
     const existing = await this.findByExactEmail(email);
