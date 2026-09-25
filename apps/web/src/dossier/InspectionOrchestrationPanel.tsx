@@ -42,7 +42,10 @@ import {
 } from '../admin/form-utils.js';
 import { unitRoute } from '../navigation/workspace-route.js';
 import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
-import { formatDetailKey } from '../presentation/format.js';
+import {
+  formatDetailKey,
+  formatSwissDate,
+} from '../presentation/format.js';
 import type { InspectionWriteGate } from './inspection-write-gate.js';
 import {
   assertAssignedInspectionWorkList,
@@ -669,7 +672,7 @@ export function InspectionOrchestrationPanel({
                 </span>
                 <small>
                   {formatDetailKey(item.inspection.inspectionType)} ·{' '}
-                  {item.inspection.scheduledFor ?? 'Unscheduled'} ·{' '}
+                  {item.inspection.scheduledFor ? formatSwissDate(item.inspection.scheduledFor) : 'Unscheduled'} ·{' '}
                   {formatDetailKey(item.inspection.status)}
                 </small>
               </button>
