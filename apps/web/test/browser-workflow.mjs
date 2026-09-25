@@ -2809,12 +2809,12 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Replacement created']][.//span[contains(normalize-space(),'current')]][.//dt[normalize-space()='Property']/following-sibling::dd[normalize-space()='" + setupRecoveryPropertyId + "']][.//dt[normalize-space()='Unit']/following-sibling::dd[normalize-space()='" + setupRecoveryUnitId + "']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='" + setupRecoverySpaceId + "']]",
+    "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Replacement created']][.//span[contains(normalize-space(),'current')]][.//dt[normalize-space()='Property']/following-sibling::dd[normalize-space()='Current property']][.//dt[normalize-space()='Unit']/following-sibling::dd[normalize-space()='UNIT-RECOVERY-BRW']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='Assigned space']]",
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[contains(@class,'asset-admin-panel')]//dl[contains(@class,'detail-list')]//dd[normalize-space()='" + setupAssetId + "']",
+    "//section[contains(@class,'asset-admin-panel')]//dl[contains(@class,'detail-list')]//dd[normalize-space()='Linked predecessor asset']",
   );
   assertEqual(
     await elementExistsXpath(
