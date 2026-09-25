@@ -58,6 +58,38 @@ function ascii(value: string): string {
   return result;
 }
 
+function formatSwissDate(value: string | null): string {
+  if (!value) return '—';
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
+  if (!match) return value;
+  return `${match[3]}.${match[2]}.${match[1]}`;
+}
+
+function formatSwissDateTime(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Zurich',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(parsed);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((entry) => entry.type === type)?.value ?? '';
+  return `${part('day')}.${part('month')}.${part('year')} ${part('hour')}:${part('minute')}`;
+}
+
+function safeFileSegment(value: string): string {
+  const normalized = ascii(value)
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/gu, '-')
+    .replace(/^-+|-+$/gu, '');
+  return normalized || 'final';
+}
+
 function pdfString(value: string): string {
   return ascii(value)
     .replaceAll('\\', '\\\\')
@@ -497,7 +529,7 @@ class ReportLayout {
     });
     this.gap(2);
     this.paragraph(
-      `${view.inspectionCode} - Finalized ${view.finalizedAt}`,
+      `${view.inspectionCode} - Finalized ${formatSwissDateTime(view.finalizedAt)}`,
       { size: 8.5, color: MUTED },
     );
     if (view.scheduledFor) {
@@ -696,7 +728,7 @@ export class CanonicalInspectionPdfRenderer implements PdfPort {
       for (const signature of view.signatures) {
         layout.card(signature.role, [
           signature.signerName,
-          `Signed ${signature.signedAt}`,
+          `Signed ${formatSwissDateTime(signature.signedAt)}`,
           `Evidence: ${signature.documentFileName}`,
         ]);
       }
@@ -711,17 +743,16 @@ export class CanonicalInspectionPdfRenderer implements PdfPort {
 
     layout.sectionTitle('Final report integrity');
     layout.card('Immutable final snapshot', [
-      `Inspection ID: ${view.inspectionId}`,
-      `Snapshot ID: ${view.snapshotId}`,
+      `Report code: ${view.inspectionCode}`,
       `Snapshot version: ${view.snapshotVersion}`,
-      `Inspection version at snapshot: ${view.inspectionVersion}`,
+      `Lifecycle version: ${view.inspectionVersion}`,
       `Content revision: ${view.contentRevision}`,
-      `Snapshot created: ${view.createdAt}`,
+      `Snapshot created: ${formatSwissDateTime(view.createdAt)}`,
     ]);
 
     const content = buildPdf(layout.finish(view));
     return {
-      fileName: `inspection-${snapshot.inspectionId}-final.pdf`,
+      fileName: `inspection-${safeFileSegment(view.inspectionCode)}-final.pdf`,
       content,
     };
   }
