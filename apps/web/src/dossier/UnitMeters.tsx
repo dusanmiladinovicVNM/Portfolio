@@ -338,7 +338,7 @@ function CreateMeterForm({
           />
         </label>
         <label>
-          Installed time (UTC)
+          Installed time (Zürich)
           <input
             disabled={writeGate.pending}
             name="installedTime"
@@ -991,7 +991,7 @@ function MeterAdministration({
             >
               {detail.readings.map((reading) => (
                 <option key={reading.id} value={reading.id}>
-                  {reading.readAt} ·{' '}
+                  {formatSwissDateTime(reading.readAt)} ·{' '}
                   {formatReadingValue(
                     reading.value,
                     meter.measurementUnit,
@@ -1280,7 +1280,7 @@ export function UnitMeters({
             <h2>Meters</h2>
           </div>
           <span className="section-note">
-            Current physical registry · reporting date {asOf} preserved
+            Current physical registry · reporting date {formatSwissDate(asOf)} preserved
           </span>
         </div>
 
