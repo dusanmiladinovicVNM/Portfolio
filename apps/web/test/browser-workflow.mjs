@@ -998,7 +998,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[contains(@class,'contract-terms-panel')]//h3[contains(normalize-space(),'terms from 2026-10-01')]",
+    "//section[contains(@class,'contract-terms-panel')]//h3[contains(normalize-space(),'terms from 01.10.2026')]",
   );
 
   const amendmentCreateForm =
@@ -1207,7 +1207,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[contains(@class,'contract-terms-panel')]//h3[contains(normalize-space(),'terms from 2027-01-01')]",
+    "//section[contains(@class,'contract-terms-panel')]//h3[contains(normalize-space(),'terms from 01.01.2027')]",
   );
 
   await selectOptionXpath(
