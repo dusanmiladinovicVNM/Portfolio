@@ -559,7 +559,7 @@ export async function createInspectionFindingCommand(
 export async function attachInspectionEvidenceCommand(
   deps: Pick<
     InspectionDependencies,
-    'inspectionRepository' | 'portfolioRepository' | 'idGenerator' | 'clock'
+    'inspectionRepository' | 'idGenerator' | 'clock'
   > & {
     readonly documentRepository: DocumentRepository;
     readonly fileStorage: Pick<FileStorageWritePort, 'stat'>;
@@ -800,7 +800,7 @@ export async function unlockInspectionCommand(
 export async function finalizeInspectionCommand(
   deps: Pick<
     InspectionDependencies,
-    'inspectionRepository' | 'idGenerator' | 'clock'
+    'inspectionRepository' | 'portfolioRepository' | 'idGenerator' | 'clock'
   > & {
     readonly documentRepository: DocumentRepository;
     readonly fileStorage: Pick<FileStorageWritePort, 'stat'>;
