@@ -44,7 +44,10 @@ import { useCreateSubmissionGuard } from '../admin/use-create-submission-guard.j
 import { WorkspaceLink } from '../navigation/WorkspaceLink.js';
 import { unitRoute } from '../navigation/workspace-route.js';
 import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
-import { formatDetailKey } from '../presentation/format.js';
+import {
+  formatDetailKey,
+  formatSwissDate,
+} from '../presentation/format.js';
 import {
   assertTenancyMutationOwner,
   assertUnitTenanciesOwner,
@@ -60,10 +63,10 @@ interface UnitTenanciesProps {
 
 function period(tenancy: TenancyResponse): string {
   if (tenancy.actualStart) {
-    return `${tenancy.actualStart} → ${tenancy.actualEnd ?? 'open'}`;
+    return `${formatSwissDate(tenancy.actualStart)} → ${tenancy.actualEnd ? formatSwissDate(tenancy.actualEnd) : 'open'}`;
   }
   if (tenancy.plannedStart) {
-    return `${tenancy.plannedStart} → ${tenancy.plannedEnd ?? 'open'}`;
+    return `${formatSwissDate(tenancy.plannedStart)} → ${tenancy.plannedEnd ? formatSwissDate(tenancy.plannedEnd) : 'open'}`;
   }
   return 'Not scheduled';
 }
@@ -804,7 +807,7 @@ export function UnitTenancies({
 
                   <dl className="detail-list">
                     <div><dt>Lifecycle period</dt><dd>{period(tenancy)}</dd></div>
-                    <div><dt>Notice given</dt><dd>{tenancy.noticeGivenAt ?? '—'}</dd></div>
+                    <div><dt>Notice given</dt><dd>{formatSwissDate(tenancy.noticeGivenAt)}</dd></div>
                     <div><dt>Termination effective</dt><dd>{tenancy.terminationEffectiveAt ?? '—'}</dd></div>
                     <div><dt>Parties</dt><dd>{tenancy.parties.length}</dd></div>
                     <div><dt>Version</dt><dd>{tenancy.version}</dd></div>
