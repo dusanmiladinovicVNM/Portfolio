@@ -8,6 +8,7 @@ import { ADDRESS_TYPES } from '@portfolio/domain';
 import { type FormEvent, useEffect, useState } from 'react';
 import { partiesPath } from '../api/paths.js';
 import type { PortfolioApi } from '../api/portfolio-api.js';
+import { formatSwissDate } from '../presentation/format.js';
 import {
   contractErrorMessage,
   optionalString,
@@ -155,7 +156,7 @@ export function PartyDirectory({ api, asOf }: PartyDirectoryProps) {
           <p className="header-note">
             People and companies used by Tenancies, agreements, service,
             ownership and other Portfolio workflows. Reporting context remains
-            {' ' + asOf}.
+            {' ' + formatSwissDate(asOf)}.
           </p>
         </div>
       </header>
