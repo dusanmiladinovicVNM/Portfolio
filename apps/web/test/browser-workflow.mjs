@@ -2845,7 +2845,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[contains(@class,'maintenance-admin-panel')]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Property']/following-sibling::dd[normalize-space()='" + setupPropertyId + "']][.//dt[normalize-space()='Unit']/following-sibling::dd[normalize-space()='" + setupUnitId + "']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='" + setupSpaceId + "']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='" + setupAssetId + "']]",
+    "//section[contains(@class,'maintenance-admin-panel')]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Property']/following-sibling::dd[normalize-space()='Current property']][.//dt[normalize-space()='Unit']/following-sibling::dd[normalize-space()='Current unit']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='BED-SETUP']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='AST-SETUP-BRW']]",
   );
 
   await navigateWithPopState(
