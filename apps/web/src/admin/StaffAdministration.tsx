@@ -296,6 +296,25 @@ export function StaffAdministration({
                         </button>
                       ) : null}
 
+                      {linked ? (
+                        <button
+                          className="button-secondary"
+                          disabled={busyLabel !== null}
+                          onClick={() => {
+                            void runWrite('Resending staff invite…', () =>
+                              api.post(
+                                staffInvitePath(item.userId),
+                                { expectedRevision: item.revision },
+                                staffResponseSchema,
+                              ),
+                            );
+                          }}
+                          type="button"
+                        >
+                          Resend invite
+                        </button>
+                      ) : null}
+
                       {item.status === 'active' && !self ? (
                         <button
                           className="button-secondary"
