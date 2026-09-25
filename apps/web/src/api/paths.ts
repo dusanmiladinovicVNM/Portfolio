@@ -1,3 +1,23 @@
+export function currentStaffPath(): string {
+  return '/me';
+}
+
+export function staffPath(): string {
+  return '/staff';
+}
+
+export function staffInvitePath(userId: string): string {
+  return `/staff/${encodeURIComponent(userId)}/invite`;
+}
+
+export function staffRolePath(userId: string): string {
+  return `/staff/${encodeURIComponent(userId)}/role`;
+}
+
+export function staffStatusPath(userId: string): string {
+  return `/staff/${encodeURIComponent(userId)}/status`;
+}
+
 export function propertiesPath(): string {
   return '/properties';
 }

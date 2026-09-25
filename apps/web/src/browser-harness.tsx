@@ -4812,6 +4812,7 @@ const sessionGateway: SessionGateway = {
     return () => {};
   },
   async signInWithPassword() {},
+  async updatePassword() {},
   async signOut() {},
 };
 

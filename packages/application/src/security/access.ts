@@ -36,6 +36,7 @@ export const CAPABILITIES = [
   'meters:read',
   'meters:write',
   'meter_readings:write',
+  'staff:admin',
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
@@ -55,7 +56,7 @@ export interface UserAccessRepository {
 
 const ROLE_CAPABILITIES: Readonly<Record<StaffRole, ReadonlySet<Capability>>> = {
   admin: new Set<Capability>(CAPABILITIES),
-  manager: new Set<Capability>(CAPABILITIES),
+  manager: new Set<Capability>(CAPABILITIES.filter((capability) => capability !== 'staff:admin')),
   inspector: new Set<Capability>([
     'portfolio:read',
     'parties:read',

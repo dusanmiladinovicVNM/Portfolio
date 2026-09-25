@@ -1,5 +1,7 @@
 export interface RuntimeConfig {
   readonly databaseUrl: string;
+  readonly supabaseUrl: string;
+  readonly serviceRoleKey: string;
   readonly webOrigin: string;
   readonly googleDriveFolderId: string;
   readonly googleClientId: string;
@@ -52,6 +54,8 @@ export function readRuntimeConfig(env: EnvReader): RuntimeConfig {
 
   return {
     databaseUrl: required(env, 'SUPABASE_DB_URL'),
+    supabaseUrl: required(env, 'SUPABASE_URL'),
+    serviceRoleKey: required(env, 'SUPABASE_SERVICE_ROLE_KEY'),
     webOrigin: httpsOrigin(required(env, 'PORTFOLIO_WEB_ORIGIN')),
     googleDriveFolderId: required(env, 'PORTFOLIO_GOOGLE_DRIVE_FOLDER_ID'),
     googleClientId: required(env, 'PORTFOLIO_GOOGLE_CLIENT_ID'),

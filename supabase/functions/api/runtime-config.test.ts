@@ -14,6 +14,8 @@ function env(values: Record<string, string>): EnvReader {
 
 const base = {
   SUPABASE_DB_URL: 'postgresql://example',
+  SUPABASE_URL: 'https://project.supabase.co',
+  SUPABASE_SERVICE_ROLE_KEY: 'service-role-secret',
   PORTFOLIO_WEB_ORIGIN: 'https://portfolio.example.com',
   PORTFOLIO_GOOGLE_DRIVE_FOLDER_ID: 'folder-1',
   PORTFOLIO_GOOGLE_CLIENT_ID: 'client-id',

@@ -38,7 +38,7 @@ Initial staff roles:
 - `manager`
 - `inspector`
 
-Admin and manager receive the complete internal capability set.
+Admin receives the complete internal capability set. Manager receives every business capability but not `staff:admin`; staff provisioning, role changes and activation/deactivation are administrator-only security operations.
 
 Inspector is intentionally read-mostly.
 
