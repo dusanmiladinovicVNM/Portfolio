@@ -4010,7 +4010,7 @@ describe('PostgreSQL infrastructure', () => {
       `,
     ).rejects.toMatchObject({
       code: '23514',
-      constraint_name: 'inspection_content_locked',
+      constraint_name: 'inspection_response_identity_immutable',
     });
 
     await expect(
