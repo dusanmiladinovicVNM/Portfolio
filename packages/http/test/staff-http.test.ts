@@ -148,4 +148,50 @@ describe('Staff HTTP routes', () => {
       },
     });
   });
+
+  it('resends an invite for linked active staff without changing canonical status or revision', async () => {
+    const repo = new StaffRepo();
+    repo.rows.set(adminId, account(adminId, 'admin'));
+    repo.rows.set(newId, {
+      ...account(newId, 'inspector'),
+      email: 'inspector@example.test',
+      revision: 4,
+    });
+    const admin: Actor = { userId: adminId, role: 'admin' };
+    let inviteCalls = 0;
+    const deps = {
+      staffRepository: repo,
+      authAdmin: {
+        ensureInvitedUser: async (email: string) => {
+          inviteCalls += 1;
+          return { subject: 'inspector-subject', email };
+        },
+      },
+      idGenerator: { next: () => newId },
+    };
+
+    const response = await handleStaffHttp(
+      deps,
+      admin,
+      request('/staff/' + newId + '/invite', 'POST', {
+        expectedRevision: 4,
+      }),
+      '/staff/' + newId + '/invite',
+    );
+
+    expect(response?.status).toBe(200);
+    expect(inviteCalls).toBe(1);
+    expect(await response?.json()).toMatchObject({
+      data: {
+        userId: newId,
+        status: 'active',
+        revision: 4,
+        identityProviders: ['supabase'],
+      },
+    });
+    expect(repo.rows.get(newId)).toMatchObject({
+      status: 'active',
+      revision: 4,
+    });
+  });
 });
