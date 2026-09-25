@@ -199,4 +199,93 @@ describe('CanonicalInspectionPdfRenderer', () => {
     expect(source).toContain('Property context unavailable');
     expect(source).toContain('Unit 55555555-5555-4555-8555-555555555555');
   });
+
+  it('paginates arbitrarily long canonical content without clipping it below the content floor', async () => {
+    const snapshot = snapshotFixture() as unknown as {
+      payload: {
+        reportContext: {
+          property: { name: string };
+          unit: { unitNumber: string };
+        };
+        schema: {
+          sections: Array<{
+            description: string | null;
+          }>;
+        };
+        responses: Array<{
+          value: string;
+          comment: string | null;
+        }>;
+        findings: Array<{
+          description: string | null;
+        }>;
+        evidence: Array<{
+          evidence: { caption: string | null };
+        }>;
+      };
+    } & InspectionFinalSnapshot;
+
+    snapshot.payload.reportContext.property.name =
+      'Very Long Zurich Commercial Property Management Holding AG With Extended Building Identity';
+    snapshot.payload.reportContext.unit.unitNumber =
+      '3.01 - Long Internal Commercial Unit Reference';
+
+    snapshot.payload.schema.sections[0]!.description =
+      `SCHEMA_START ${'schema detail '.repeat(700)} SCHEMA_MIDDLE ${'schema continuation '.repeat(700)} SCHEMA_END`;
+
+    snapshot.payload.responses[0]!.value =
+      `ANSWER_START ${'answer detail '.repeat(900)} ANSWER_MIDDLE ${'answer continuation '.repeat(900)} ANSWER_END`;
+    snapshot.payload.responses[0]!.comment =
+      `COMMENT_START ${'comment detail '.repeat(900)} COMMENT_MIDDLE ${'comment continuation '.repeat(900)} COMMENT_END`;
+
+    snapshot.payload.findings[0]!.description =
+      `FINDING_START ${'finding detail '.repeat(900)} FINDING_MIDDLE ${'finding continuation '.repeat(900)} FINDING_END`;
+
+    snapshot.payload.evidence[0]!.evidence.caption =
+      `EVIDENCE_START ${'evidence detail '.repeat(900)} EVIDENCE_MIDDLE ${'evidence continuation '.repeat(900)} EVIDENCE_END`;
+
+    const rendered = await new CanonicalInspectionPdfRenderer()
+      .renderInspectionFinalReport(snapshot);
+    const source = new TextDecoder().decode(rendered.content);
+
+    for (const sentinel of [
+      'SCHEMA_START',
+      'SCHEMA_MIDDLE',
+      'SCHEMA_END',
+      'ANSWER_START',
+      'ANSWER_MIDDLE',
+      'ANSWER_END',
+      'COMMENT_START',
+      'COMMENT_MIDDLE',
+      'COMMENT_END',
+      'FINDING_START',
+      'FINDING_MIDDLE',
+      'FINDING_END',
+      'EVIDENCE_START',
+      'EVIDENCE_MIDDLE',
+      'EVIDENCE_END',
+      'Immutable final snapshot',
+    ]) {
+      expect(source).toContain(sentinel);
+    }
+
+    const pageCountMatch = /\/Count (\d+)/u.exec(source);
+    expect(pageCountMatch).not.toBeNull();
+    const pageCount = Number(pageCountMatch![1]);
+    expect(pageCount).toBeGreaterThan(4);
+
+    const footerMatches = source.match(/\(Page \d+ of \d+\) Tj/gu) ?? [];
+    expect(footerMatches).toHaveLength(pageCount);
+    expect(source).toContain(`Page 1 of ${pageCount}`);
+    expect(source).toContain(`Page ${pageCount} of ${pageCount}`);
+
+    const textYCoordinates = [...source.matchAll(
+      /(?:^|\n)-?\d+(?:\.\d+)? (-?\d+(?:\.\d+)?) Td(?:\n|$)/gu,
+    )].map((match) => Number(match[1]));
+
+    expect(textYCoordinates.length).toBeGreaterThan(0);
+    for (const y of textYCoordinates) {
+      expect(y === 34 || y >= 62).toBe(true);
+    }
+  });
 });
