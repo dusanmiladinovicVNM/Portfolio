@@ -13,7 +13,10 @@ import {
   propertyRoute,
 } from '../navigation/workspace-route.js';
 import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
-import { formatExactMoney } from '../presentation/format.js';
+import {
+  formatExactMoney,
+  formatSwissDate,
+} from '../presentation/format.js';
 
 interface PortfolioDashboardProps {
   readonly api: PortfolioApi;
@@ -187,7 +190,7 @@ export function PortfolioDashboard({
               </span>
             </div>
             {data.portfolioCostsByCurrency.length === 0 ? (
-              <p className="muted">No attributed costs through {data.asOf}.</p>
+              <p className="muted">No attributed costs through {formatSwissDate(data.asOf)}.</p>
             ) : (
               <div className="cost-grid">
                 {data.portfolioCostsByCurrency.map((cost) => (
@@ -211,7 +214,7 @@ export function PortfolioDashboard({
                 <p className="eyebrow">Inventory</p>
                 <h2>Properties</h2>
               </div>
-              <span className="section-note">Snapshot {data.asOf}</span>
+              <span className="section-note">Snapshot {formatSwissDate(data.asOf)}</span>
             </div>
             {data.properties.length === 0 ? (
               <p className="muted">No properties in the Portfolio projection.</p>
