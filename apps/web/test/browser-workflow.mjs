@@ -480,6 +480,16 @@ try {
     "//a[normalize-space()='Skip to main content']",
   );
   await assertActiveHeading(sessionId, 'Portfolio picture', 'Dashboard focus');
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//span[contains(@class,'section-note') and normalize-space()='Snapshot 30.06.2025']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[normalize-space()='No attributed costs through 30.06.2025.']",
+  );
   const dashboardUrl = `${baseUrl}/dashboard?asOf=2025-06-30`;
   assertEqual(
     await currentUrl(sessionId),
@@ -503,6 +513,11 @@ try {
     sessionId,
     'xpath',
     "//article[contains(@class,'party-card')][.//h3[normalize-space()='Browser Landlord Ltd']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//p[contains(@class,'header-note') and contains(normalize-space(),'Reporting context remains 30.06.2025.')]",
   );
   assertEqual(
     await currentUrl(sessionId),
@@ -710,6 +725,11 @@ try {
     await currentUrl(sessionId),
     setupTenancyUrl,
     'Setup Unit Tenancies URL',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//span[contains(@class,'section-note') and contains(normalize-space(),'reporting context 30.06.2025 is preserved')]",
   );
 
   await typeXpath(
@@ -3020,6 +3040,11 @@ try {
     await currentUrl(sessionId),
     `${baseUrl}/properties/${propertyId}?asOf=2025-06-30`,
     'Property URL',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//p[contains(@class,'header-note') and contains(normalize-space(),'Reporting context remains 30.06.2025')]",
   );
 
   await clickXpath(
