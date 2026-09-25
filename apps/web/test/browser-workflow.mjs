@@ -2298,11 +2298,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//article[contains(@class,'maintenance-service-card')][.//p[normalize-space()='Warranty motor replacement completed']][.//small[contains(normalize-space(),'" +
-      setupServicePlanId +
-      "') and contains(normalize-space(),'" +
-      setupWarrantyClaimId +
-      "')]]",
+    "//article[contains(@class,'maintenance-service-card')][.//p[normalize-space()='Warranty motor replacement completed']][.//small[contains(normalize-space(),'plan Annual washer service') and contains(normalize-space(),'warranty claim closed')]]",
   );
 
   const assetMoveForm = "//form[@data-asset-form='move']";
