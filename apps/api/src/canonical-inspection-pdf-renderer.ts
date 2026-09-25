@@ -188,6 +188,16 @@ function rule(
   page.commands.push(`${color} RG`, '0.5 w', `${x1} ${y} m ${x2} ${y} l S`);
 }
 
+function verticalRule(
+  page: PdfPage,
+  x: number,
+  y1: number,
+  y2: number,
+  color = BORDER,
+): void {
+  page.commands.push(`${color} RG`, '0.5 w', `${x} ${y1} m ${x} ${y2} l S`);
+}
+
 class ReportLayout {
   readonly pages: PdfPage[] = [];
   private page!: PdfPage;
@@ -318,7 +328,13 @@ class ReportLayout {
     fillRect(this.page, MARGIN, this.y - panelHeight, CONTENT_WIDTH, panelHeight, PANEL);
     strokeRect(this.page, MARGIN, this.y - panelHeight, CONTENT_WIDTH, panelHeight);
     const mid = MARGIN + CONTENT_WIDTH / 2;
-    rule(this.page, mid, this.y - panelHeight + 12, mid, BORDER);
+    verticalRule(
+      this.page,
+      mid,
+      this.y - panelHeight + 12,
+      this.y - 12,
+      BORDER,
+    );
 
     drawText(this.page, 'PROPERTY', MARGIN + 14, this.y - 18, 7.5, 'F2', MUTED);
     drawText(this.page, view.propertyName, MARGIN + 14, this.y - 36, 12, 'F2', TEXT);
