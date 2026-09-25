@@ -443,8 +443,10 @@ function CreateAssetForm({
 
 function LocationHistory({
   history,
+  units,
 }: {
   readonly history: readonly AssetLocationHistoryResponse[] | null;
+  readonly units: readonly UnitResponse[];
 }) {
   if (history === null) {
     return <p className="muted" aria-live="polite">Loading location history…</p>;
@@ -461,9 +463,17 @@ function LocationHistory({
             </span>
           </div>
           <dl className="detail-list compact-detail-list">
-            <div><dt>Property</dt><dd>{item.propertyId}</dd></div>
-            <div><dt>Unit</dt><dd>{item.unitId ?? '—'}</dd></div>
-            <div><dt>Space</dt><dd>{item.spaceId ?? 'Unit level'}</dd></div>
+            <div><dt>Property</dt><dd>Current property</dd></div>
+            <div>
+              <dt>Unit</dt>
+              <dd>
+                {item.unitId
+                  ? units.find((unit) => unit.id === item.unitId)?.code ??
+                    'Assigned unit'
+                  : 'Property level'}
+              </dd>
+            </div>
+            <div><dt>Space</dt><dd>{item.spaceId ? 'Assigned space' : 'Unit level'}</dd></div>
             <div><dt>Reason</dt><dd>{item.reason ?? '—'}</dd></div>
           </dl>
         </article>
@@ -1081,7 +1091,7 @@ function AssetAdministration({
         {historyError ? (
           <p className="form-error" role="alert">{historyError}</p>
         ) : (
-          <LocationHistory history={history} />
+          <LocationHistory history={history} units={units} />
         )}
       </div>
 
