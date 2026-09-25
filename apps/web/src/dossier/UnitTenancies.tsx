@@ -808,7 +808,10 @@ export function UnitTenancies({
                   <dl className="detail-list">
                     <div><dt>Lifecycle period</dt><dd>{period(tenancy)}</dd></div>
                     <div><dt>Notice given</dt><dd>{formatSwissDate(tenancy.noticeGivenAt)}</dd></div>
-                    <div><dt>Termination effective</dt><dd>{tenancy.terminationEffectiveAt ?? '—'}</dd></div>
+                    <div>
+                        <dt>Termination effective</dt>
+                        <dd>{formatSwissDate(tenancy.terminationEffectiveAt)}</dd>
+                      </div>
                     <div><dt>Parties</dt><dd>{tenancy.parties.length}</dd></div>
                     <div><dt>Version</dt><dd>{tenancy.version}</dd></div>
                   </dl>
