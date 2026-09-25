@@ -417,9 +417,12 @@ function CreateIssueForm({
       </label>
       {selectedAsset ? (
         <p className="setup-hint">
-          Asset scope uses its current canonical placement: Unit {unitId}
+          Asset scope uses its current canonical placement: current Unit
           {selectedAsset.spaceId
-            ? ` / Space ${selectedAsset.spaceId}`
+            ? ` / Space ${
+                spaces.find((space) => space.id === selectedAsset.spaceId)
+                  ?.code ?? 'assigned'
+              }`
             : ' / Unit level'}. For historical problems at an older Asset
           location, create a Unit/Finding-scoped Issue instead of falsifying
           Asset scope.
