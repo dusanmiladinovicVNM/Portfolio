@@ -37,6 +37,11 @@ export function createSupabaseSessionGateway(
       if (error) throw error;
     },
 
+    async updatePassword(password) {
+      const { error } = await client.auth.updateUser({ password });
+      if (error) throw error;
+    },
+
     async signOut() {
       const { error } = await client.auth.signOut();
       if (error) throw error;
