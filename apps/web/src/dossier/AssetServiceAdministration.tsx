@@ -58,6 +58,7 @@ import {
 } from '../admin/form-utils.js';
 import {
   formatDetailKey,
+  formatSwissDate,
   formatSwissDateTime,
   swissLocalDateTimeToInstant,
 } from '../presentation/format.js';
@@ -116,7 +117,7 @@ function allClaims(claimsByWarranty: ClaimMap): readonly WarrantyClaimResponse[]
 }
 
 function claimLabel(claim: WarrantyClaimResponse): string {
-  return `${claim.incidentOn} · ${claim.status} · ${claim.description}`;
+  return `${formatSwissDate(claim.incidentOn)} · ${claim.status} · ${claim.description}`;
 }
 
 export function AssetServiceAdministration({
@@ -857,7 +858,10 @@ export function AssetServiceAdministration({
                         <strong>{formatDetailKey(warranty.warrantyType)}</strong>
                         <span>{warranty.reference ?? 'No reference'}</span>
                       </div>
-                      <span>{warranty.validFrom} → {warranty.validTo ?? 'open'}</span>
+                      <span>
+                        {formatSwissDate(warranty.validFrom)} →{' '}
+                        {warranty.validTo ? formatSwissDate(warranty.validTo) : 'open'}
+                      </span>
                     </div>
                     <p className="muted">{warranty.terms ?? 'No terms recorded.'}</p>
 
@@ -885,7 +889,7 @@ export function AssetServiceAdministration({
                       <div className="asset-service-claim" key={claim.id}>
                         <div className="record-heading">
                           <div>
-                            <strong>{claim.incidentOn} · {claim.description}</strong>
+                            <strong>{formatSwissDate(claim.incidentOn)} · {claim.description}</strong>
                             <span>CAS v{claim.version}</span>
                           </div>
                           <span className={'status-chip status-' + claim.status}>
@@ -979,7 +983,7 @@ export function AssetServiceAdministration({
                       <div>
                         <strong>{plan.name}</strong>
                         <span>
-                          {formatDetailKey(plan.scheduleKind)} · due {plan.firstDueOn}
+                          {formatDetailKey(plan.scheduleKind)} · due {formatSwissDate(plan.firstDueOn)}
                           {plan.intervalMonths ? ` · every ${plan.intervalMonths} months` : ''}
                         </span>
                       </div>
