@@ -54,7 +54,10 @@ import type {
   NavigateWorkspace,
   SetNavigationBlocker,
 } from '../navigation/use-workspace-navigation.js';
-import { formatDetailKey } from '../presentation/format.js';
+import {
+  formatDetailKey,
+  formatSwissDateTime,
+} from '../presentation/format.js';
 import { AssetServiceAdministration } from './AssetServiceAdministration.js';
 import {
   assertAssetDestinationSpacesOwner,
@@ -454,7 +457,7 @@ function LocationHistory({
           <div>
             <strong>{formatDetailKey(item.changeType)}</strong>
             <span>
-              {item.validFrom} → {item.validTo ?? 'current'}
+              {formatSwissDateTime(item.validFrom)} → {item.validTo ? formatSwissDateTime(item.validTo) : 'current'}
             </span>
           </div>
           <dl className="detail-list compact-detail-list">
@@ -1107,13 +1110,13 @@ function AssetAdministration({
             <div>
               <dt>Predecessor</dt>
               <dd>
-                {replacementLinks.predecessor?.replacedAssetId ?? '—'}
+                {replacementLinks.predecessor ? 'Linked predecessor asset' : '—'}
               </dd>
             </div>
             <div>
               <dt>Successor</dt>
               <dd>
-                {replacementLinks.successor?.replacementAssetId ?? '—'}
+                {replacementLinks.successor ? 'Linked successor asset' : '—'}
               </dd>
             </div>
           </dl>
