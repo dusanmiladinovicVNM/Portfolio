@@ -167,6 +167,12 @@ function mapAgreement(row: AgreementRow): LeaseAgreement {
   };
 }
 
+function luzernerFormJson(
+  content: LuzernerLeaseFormContent,
+): ReturnType<typeof JSON.parse> {
+  return JSON.parse(JSON.stringify(content));
+}
+
 function mapLuzernerLeaseForm(
   row: LuzernerLeaseFormRow,
 ): LuzernerLeaseFormDraft {
@@ -559,7 +565,7 @@ export class PostgresLeaseRepository implements LeaseRepository {
           ${form.agreementId},
           ${form.templateCode},
           ${form.revision},
-          ${this.sql.json(form.content)}
+          ${this.sql.json(luzernerFormJson(form.content))}
         )
       `;
     });
@@ -574,7 +580,7 @@ export class PostgresLeaseRepository implements LeaseRepository {
         update public.lease_agreement_luzerner_forms
         set
           revision = ${form.revision},
-          content = ${this.sql.json(form.content)},
+          content = ${this.sql.json(luzernerFormJson(form.content))},
           updated_at = now()
         where agreement_id = ${form.agreementId}
           and revision = ${expectedRevision}
