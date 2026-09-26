@@ -1,4 +1,6 @@
 import { DomainError } from '../shared/domain-error.js';
+import { asDateOnly } from '../shared/date-only.js';
+import { isCanonicalDecimal } from '../shared/canonical-decimal.js';
 import { SPACE_TYPES, type SpaceType } from '../portfolio/space.js';
 import type {
   InspectionSchemaItemId,
@@ -303,6 +305,30 @@ function assertConditionScalarCompatible(
         `references option '${value}' that is not configured on the source field.`,
       );
     }
+    return;
+  }
+
+  if (source.type === 'number') {
+    if (!isCanonicalDecimal(value)) {
+      invalidConditionValue(
+        source,
+        condition,
+        `requires an exact canonical decimal string; received '${value}'.`,
+      );
+    }
+    return;
+  }
+
+  if (source.type === 'date') {
+    try {
+      asDateOnly(value);
+    } catch {
+      invalidConditionValue(
+        source,
+        condition,
+        `requires a valid YYYY-MM-DD calendar date; received '${value}'.`,
+      );
+    }
   }
 }
 
@@ -331,6 +357,13 @@ export function assertInspectionConditionLeafValueCompatible(
         source,
         condition,
         'requires an array of condition values.',
+      );
+    }
+    if (condition.value.length === 0) {
+      invalidConditionValue(
+        source,
+        condition,
+        'requires at least one condition value.',
       );
     }
     for (const value of condition.value) {
