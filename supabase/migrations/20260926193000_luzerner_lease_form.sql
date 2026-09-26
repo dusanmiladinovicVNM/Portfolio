@@ -34,7 +34,7 @@ begin
   into agreement_status
   from public.lease_agreements
   where id = target_agreement_id
-  for key share;
+  for update;
 
   if agreement_status is null then
     raise exception 'Lease agreement not found.'
