@@ -11,6 +11,7 @@ export * from './parties/party.js';
 export * from './ownership/ownership-period.js';
 export * from './tenancy/tenancy.js';
 export * from './contracts/lease-agreement.js';
+export * from './contracts/luzerner-lease-form.js';
 export * from './contracts/lease-amendment.js';
 export * from './contracts/tenancy-term-version.js';
 export * from './documents/document.js';
