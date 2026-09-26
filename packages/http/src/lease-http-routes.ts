@@ -7,6 +7,7 @@ import {
   getEffectiveTenancyTermsQuery,
   getLeaseAgreementQuery,
   getLuzernerLeaseFormQuery,
+  generateLuzernerLeaseFinalDocumentCommand,
   listLeaseAgreementsByTenancyQuery,
   renderLuzernerLeasePdfCommand,
   listLeaseAmendmentsByAgreementQuery,
@@ -15,7 +16,10 @@ import {
   signLeaseAmendmentCommand,
   type Actor,
   type CreateLeaseAgreementCommandInput,
+  type ClockPort,
   type CreateLeaseAmendmentCommandInput,
+  type DocumentRepository,
+  type FileStorageWritePort,
   type IdGenerator,
   type LeaseRepository,
   type LuzernerLeasePdfPort,
@@ -46,6 +50,7 @@ import {
   validationFailure,
 } from './http-utils.js';
 import {
+  toDocumentVersionResponse,
   toLeaseAgreementResponse,
   toLeaseAmendmentResponse,
   toTenancyTermVersionResponse,
@@ -56,6 +61,9 @@ export interface LeaseHttpDependencies {
   readonly tenancyRepository: TenancyRepository;
   readonly partyRepository: PartyRepository;
   readonly portfolioRepository: PortfolioRepository;
+  readonly documentRepository: DocumentRepository;
+  readonly fileStorage: FileStorageWritePort;
+  readonly clock: ClockPort;
   readonly luzernerLeasePdfPort?: LuzernerLeasePdfPort;
   readonly idGenerator: IdGenerator;
 }
@@ -217,6 +225,38 @@ export async function handleLeaseHttp(
         'x-content-type-options': 'nosniff',
       },
     });
+  }
+
+  const luzernerFinalDocumentMatch =
+    /^\/agreements\/([^/]+)\/luzerner-form\/final-document$/.exec(path);
+  if (method === 'POST' && luzernerFinalDocumentMatch) {
+    const parsedId = entityIdSchema.safeParse(luzernerFinalDocumentMatch[1]);
+    if (!parsedId.success) return validationFailure();
+
+    if (!deps.luzernerLeasePdfPort) {
+      throw new ApplicationError(
+        'LUZERNER_PDF_RENDERER_UNAVAILABLE',
+        'Luzerner PDF rendering is not configured.',
+      );
+    }
+
+    const version = await generateLuzernerLeaseFinalDocumentCommand(
+      {
+        leaseRepository: deps.leaseRepository,
+        tenancyRepository: deps.tenancyRepository,
+        portfolioRepository: deps.portfolioRepository,
+        partyRepository: deps.partyRepository,
+        documentRepository: deps.documentRepository,
+        fileStorage: deps.fileStorage,
+        luzernerLeasePdfPort: deps.luzernerLeasePdfPort,
+        idGenerator: deps.idGenerator,
+        clock: deps.clock,
+      },
+      actor,
+      asLeaseAgreementId(parsedId.data),
+    );
+
+    return json({ data: toDocumentVersionResponse(version) });
   }
 
   const luzernerFormMatch =
