@@ -836,6 +836,126 @@ try {
     "//button[contains(@class,'schema-version-card')][.//small[contains(normalize-space(),'v2')]][.//span[normalize-space()='published']]",
   );
 
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Duplicate as new draft']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//h2[normalize-space()='Build Inspection schema']",
+  );
+  await typeXpath(
+    sessionId,
+    "//label[normalize-space()='Title']//input",
+    'Browser move-in inspection acknowledged write',
+  );
+
+  const acknowledgedCreateCountBefore = await executeScript(
+    sessionId,
+    'return window.__portfolioInspectionSchemaCreateCount || 0;',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextInspectionSchemaListRead = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Save draft version']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Schema draft was saved as MOVE-IN-BRW v3, but the version-list refresh failed:')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioInspectionSchemaCreateCount || 0;',
+    ),
+    acknowledgedCreateCountBefore + 1,
+    'Acknowledged Schema Builder create stays exactly one POST when post-write refresh fails',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//button[normalize-space()='Save draft version']",
+    ),
+    false,
+    'Acknowledged create closes the local writable draft before best-effort refresh',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'schema-canonical-heading')][.//h2[normalize-space()='Browser move-in inspection acknowledged write']]//span[normalize-space()='draft']",
+  );
+
+  await clickXpath(
+    sessionId,
+    "//aside[contains(@class,'schema-version-sidebar')]//button[normalize-space()='Refresh']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//button[contains(@class,'schema-version-card')][.//small[contains(normalize-space(),'v3')]][.//span[normalize-space()='draft']]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioInspectionSchemaCreateCount || 0;',
+    ),
+    acknowledgedCreateCountBefore + 1,
+    'Later reconciliation cannot create v4 from the acknowledged v3 save',
+  );
+
+  const acknowledgedPublishCountBefore = await executeScript(
+    sessionId,
+    'return window.__portfolioInspectionSchemaPublishCount || 0;',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextInspectionSchemaListRead = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Publish this draft']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Schema MOVE-IN-BRW v3 was published, but the version-list refresh failed:')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioInspectionSchemaPublishCount || 0;',
+    ),
+    acknowledgedPublishCountBefore + 1,
+    'Acknowledged publish stays exactly one POST when post-write refresh fails',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//button[normalize-space()='Publish this draft']",
+    ),
+    false,
+    'Acknowledged publish immediately replaces local draft status with published',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'schema-canonical-heading')][.//h2[normalize-space()='Browser move-in inspection acknowledged write']]//span[normalize-space()='published']",
+  );
+  await clickXpath(
+    sessionId,
+    "//aside[contains(@class,'schema-version-sidebar')]//button[normalize-space()='Refresh']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//button[contains(@class,'schema-version-card')][.//small[contains(normalize-space(),'v3')]][.//span[normalize-space()='published']]",
+  );
+
   await clickXpath(sessionId, "//aside//a[normalize-space()='Overview']");
   await waitForElement(
     sessionId,
