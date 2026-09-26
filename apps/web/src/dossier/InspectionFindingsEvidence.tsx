@@ -54,6 +54,7 @@ import type { InspectionWriteGate } from './inspection-write-gate.js';
 import {
   INSPECTION_PHOTO_ACCEPT,
   INSPECTION_PHOTO_MAX_EDGE_PX,
+  INSPECTION_PHOTO_MAX_SOURCE_BYTES,
   INSPECTION_PHOTO_RECOMPRESS_THRESHOLD_BYTES,
   prepareInspectionPhoto,
   type PreparedInspectionPhoto,
@@ -389,6 +390,15 @@ export function InspectionFindingsEvidence({
       (purpose !== 'photo' && purpose !== 'attachment')
     ) {
       setError('Choose a non-empty evidence file and a valid evidence kind.');
+      return;
+    }
+    if (
+      purpose === 'photo' &&
+      fileValue.size > INSPECTION_PHOTO_MAX_SOURCE_BYTES
+    ) {
+      setError(
+        'Photo source files are limited to 32 MiB before browser compression.',
+      );
       return;
     }
     if (
