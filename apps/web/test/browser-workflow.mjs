@@ -4331,7 +4331,16 @@ try {
 
   await clickXpath(
     sessionId,
-    "//button[normalize-space()='Lock Inspection']",
+    "//button[normalize-space()='Review before lock']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-pre-lock-review]",
+  );
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Confirm review & lock Inspection']",
   );
   await waitForElement(
     sessionId,
