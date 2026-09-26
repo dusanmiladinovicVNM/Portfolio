@@ -1169,6 +1169,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioHoldInspectionSectionSave?: boolean;
   __portfolioHoldInspectionEvidence?: boolean;
   __portfolioHoldInspectionLifecycle?: boolean;
+  __portfolioHoldInspectionReviewRead?: boolean;
   __portfolioFailNextInspectionCreateAfterCommit?: boolean;
   __portfolioFailNextInspectionFindingAfterCommit?: boolean;
   __portfolioFailNextInspectionEvidenceAfterCommit?: boolean;
@@ -1199,6 +1200,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioPendingInspectionSectionSave?: boolean;
   __portfolioPendingInspectionEvidence?: boolean;
   __portfolioPendingInspectionLifecycle?: boolean;
+  __portfolioPendingInspectionReviewRead?: boolean;
   __portfolioInspectionSectionPatchCount?: number;
   __portfolioFinalReportRenderCount?: number;
   __portfolioReleaseUnitCreate?: () => boolean;
@@ -1212,6 +1214,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioReleaseInspectionSectionSave?: () => boolean;
   __portfolioReleaseInspectionEvidence?: () => boolean;
   __portfolioReleaseInspectionLifecycle?: () => boolean;
+  __portfolioReleaseInspectionReviewRead?: () => boolean;
 };
 
 const browserHarnessWindow = window as BrowserHarnessWindow;
@@ -1251,6 +1254,9 @@ let heldInspectionEvidence:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 let heldInspectionLifecycle:
+  | { readonly response: Response; readonly resolve: (response: Response) => void }
+  | null = null;
+let heldInspectionReviewRead:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 
@@ -1377,6 +1383,17 @@ function maybeHoldInspectionLifecycle(response: Response): Promise<Response> {
   });
 }
 
+function maybeHoldInspectionReviewRead(response: Response): Promise<Response> {
+  if (!browserHarnessWindow.__portfolioHoldInspectionReviewRead) {
+    return Promise.resolve(response);
+  }
+
+  browserHarnessWindow.__portfolioPendingInspectionReviewRead = true;
+  return new Promise<Response>((resolve) => {
+    heldInspectionReviewRead = { response, resolve };
+  });
+}
+
 browserHarnessWindow.__portfolioReleaseUnitCreate = () => {
   if (!heldUnitCreate) return false;
   const held = heldUnitCreate;
@@ -1484,6 +1501,16 @@ browserHarnessWindow.__portfolioReleaseInspectionLifecycle = () => {
   heldInspectionLifecycle = null;
   browserHarnessWindow.__portfolioHoldInspectionLifecycle = false;
   browserHarnessWindow.__portfolioPendingInspectionLifecycle = false;
+  held.resolve(held.response);
+  return true;
+};
+
+browserHarnessWindow.__portfolioReleaseInspectionReviewRead = () => {
+  if (!heldInspectionReviewRead) return false;
+  const held = heldInspectionReviewRead;
+  heldInspectionReviewRead = null;
+  browserHarnessWindow.__portfolioHoldInspectionReviewRead = false;
+  browserHarnessWindow.__portfolioPendingInspectionReviewRead = false;
   held.resolve(held.response);
   return true;
 };
@@ -4254,7 +4281,7 @@ globalThis.fetch = async (
   }
 
   if (path === `/inspections/${inspectionId}`) {
-    return json(inspectionBundle());
+    return maybeHoldInspectionReviewRead(json(inspectionBundle()));
   }
 
   if (

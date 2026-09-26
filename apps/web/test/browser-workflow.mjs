@@ -3517,12 +3517,34 @@ try {
     'xpath',
     "//*[@data-inspection-required-progress]//*[contains(normalize-space(),'0 / 1 saved')]",
   );
-  const lockButton =
-    "//button[normalize-space()='Lock Inspection']";
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Review before lock']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-pre-lock-review]",
+  );
   assertEqual(
-    await elementDisabledXpath(sessionId, lockButton),
+    await elementDisabledXpath(
+      sessionId,
+      "//button[normalize-space()='Confirm review & lock Inspection']",
+    ),
     true,
-    'Incomplete canonical required responses disable Inspection lock',
+    'Incomplete canonical required responses disable lock confirmation inside review',
+  );
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Close review']",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-inspection-pre-lock-review]",
+    ),
+    false,
+    'Incomplete pre-lock review can be closed to resume field work',
   );
   await waitForElement(
     sessionId,
@@ -3719,9 +3741,77 @@ try {
     "//a[contains(@class,'inspection-section-link')][.//strong[normalize-space()='General condition']]//*[contains(normalize-space(),'2/2 required · complete')]",
   );
   assertEqual(
-    await elementDisabledXpath(sessionId, lockButton),
+    await elementDisabledXpath(
+      sessionId,
+      "//button[normalize-space()='Review before lock']",
+    ),
     false,
-    'Canonical required completeness enables Inspection lock',
+    'Canonical required completeness leaves pre-lock review available',
+  );
+
+  await executeScript(
+    sessionId,
+    'window.__portfolioHoldInspectionReviewRead = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Review before lock']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    'return window.__portfolioPendingInspectionReviewRead === true;',
+    'held stale Inspection review read',
+  );
+
+  await typeXpath(
+    sessionId,
+    notesInput,
+    'Window scratch after held review',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-autosave-status][contains(normalize-space(),'All section changes saved')]",
+  );
+  assertEqual(
+    await elementValueXpath(sessionId, notesInput),
+    'Window scratch after held review',
+    'Newer autosave is visible while older review GET remains held',
+  );
+
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioReleaseInspectionReviewRead?.() === true;',
+    ),
+    true,
+    'Held stale Inspection review response releases',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Inspection changed while review was loading. Load a fresh canonical review before locking.')]",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-inspection-pre-lock-review]",
+    ),
+    false,
+    'Late stale review response is discarded instead of becoming current',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//button[normalize-space()='Confirm review & lock Inspection']",
+    ),
+    false,
+    'Discarded stale review cannot expose lock confirmation',
+  );
+  assertEqual(
+    await elementValueXpath(sessionId, notesInput),
+    'Window scratch after held review',
+    'Late stale review response cannot regress newer canonical section content',
   );
 
   await selectOptionXpath(
@@ -4075,8 +4165,83 @@ try {
   );
   assertEqual(
     await elementValueXpath(sessionId, notesInput),
-    'Window scratch',
-    'Conflict reload restores canonical Inspection answer',
+    'Window scratch after held review',
+    'Conflict reload restores newest canonical Inspection answer',
+  );
+
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//button[normalize-space()='Confirm review & lock Inspection']",
+    ),
+    false,
+    'Inspection cannot be locked before canonical pre-lock review is opened',
+  );
+
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Review before lock']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-pre-lock-review]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-pre-lock-review]//*[contains(normalize-space(),'Window scratch photo')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-pre-lock-review]//*[contains(normalize-space(),'Lost acknowledgement relation')]",
+  );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      "//button[normalize-space()='Confirm review & lock Inspection']",
+    ),
+    false,
+    'Current complete canonical review enables lock confirmation',
+  );
+
+  await typeXpath(sessionId, notesInput, 'Window scratch after review');
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-autosave-status][contains(normalize-space(),'All section changes saved')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Inspection content changed after this review was loaded.')]",
+  );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      "//button[normalize-space()='Confirm review & lock Inspection']",
+    ),
+    true,
+    'Canonical content revision change invalidates the loaded pre-lock review',
+  );
+
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Refresh review']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    'return !document.body.innerText.includes("Inspection content changed after this review was loaded.");',
+    'refreshed current Inspection review',
+  );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      "//button[normalize-space()='Confirm review & lock Inspection']",
+    ),
+    false,
+    'Refreshed canonical review re-enables lock confirmation',
   );
 
   await executeScript(
@@ -4085,7 +4250,7 @@ try {
   );
   await clickXpath(
     sessionId,
-    "//button[normalize-space()='Lock Inspection']",
+    "//button[normalize-space()='Confirm review & lock Inspection']",
   );
   await waitForScriptTruthy(
     sessionId,
@@ -4231,7 +4396,16 @@ try {
 
   await clickXpath(
     sessionId,
-    "//button[normalize-space()='Lock Inspection']",
+    "//button[normalize-space()='Review before lock']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-pre-lock-review]",
+  );
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Confirm review & lock Inspection']",
   );
   await waitForElement(
     sessionId,
@@ -4394,7 +4568,7 @@ try {
   await waitForBinaryReads(sessionId, readsBeforeFinalReport + 1);
 
   process.stdout.write(
-    'Browser workflow PASS: Core setup + route-owner guards → Contracts/documents → Inspection progress/completeness → debounced autosave/CAS conflict → field evidence → lock/drawn-signature/file-fallback/unlock/finalize/report\n',
+    'Browser workflow PASS: Core setup + route-owner guards → Contracts/documents → Inspection progress/completeness → debounced autosave/CAS conflict → field evidence → canonical pre-lock review → lock/drawn-signature/file-fallback/unlock/finalize/report\n',
   );
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.stack : error}\n`);

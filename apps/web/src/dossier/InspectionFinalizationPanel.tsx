@@ -49,6 +49,11 @@ import {
 } from './inspection-finalization-owner.js';
 import type { InspectionWriteGate } from './inspection-write-gate.js';
 import { InspectionSignaturePad } from './InspectionSignaturePad.js';
+import { InspectionPreLockReviewPanel } from './InspectionPreLockReviewPanel.js';
+import {
+  buildInspectionPreLockReview,
+  sameInspectionPreLockReviewSource,
+} from './inspection-pre-lock-review.js';
 
 interface InspectionFinalizationPanelProps {
   readonly api: PortfolioApi;
@@ -145,6 +150,22 @@ export function InspectionFinalizationPanel({
   onCanonicalBundle,
 }: InspectionFinalizationPanelProps) {
   const mountedRef = useRef(true);
+  const currentReviewSourceRef = useRef({
+    inspectionId: bundle.inspection.id,
+    unitId: bundle.inspection.unitId,
+    schemaVersionId: bundle.inspection.schemaVersionId,
+    version: bundle.inspection.version,
+    contentRevision: bundle.inspection.contentRevision,
+    blockedByDirtySection,
+  });
+  currentReviewSourceRef.current = {
+    inspectionId: bundle.inspection.id,
+    unitId: bundle.inspection.unitId,
+    schemaVersionId: bundle.inspection.schemaVersionId,
+    version: bundle.inspection.version,
+    contentRevision: bundle.inspection.contentRevision,
+    blockedByDirtySection,
+  };
   const signatureUploadRef = useRef<StableUpload | null>(null);
   const [parties, setParties] = useState<readonly PartyResponse[] | null>(null);
   const [partiesError, setPartiesError] = useState<string | null>(null);
@@ -153,6 +174,9 @@ export function InspectionFinalizationPanel({
   const [reportVersion, setReportVersion] =
     useState<DocumentVersionResponse | null>(null);
   const [signaturePadResetRevision, setSignaturePadResetRevision] = useState(0);
+  const [reviewBundle, setReviewBundle] =
+    useState<InspectionBundleResponse | null>(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -163,6 +187,19 @@ export function InspectionFinalizationPanel({
     () => activeSignatures(bundle.signatures),
     [bundle.signatures],
   );
+  const preLockReview = useMemo(
+    () =>
+      reviewBundle === null
+        ? null
+        : buildInspectionPreLockReview(reviewBundle),
+    [reviewBundle],
+  );
+  const reviewMatchesCurrent =
+    reviewBundle !== null &&
+    sameInspectionPreLockReviewSource(bundle, reviewBundle);
+  const reviewStale =
+    reviewBundle !== null &&
+    (blockedByDirtySection || !reviewMatchesCurrent);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -191,10 +228,17 @@ export function InspectionFinalizationPanel({
   }, [api, inspection.status]);
 
   useEffect(() => {
+    setReviewBundle(null);
+  }, [inspection.id]);
+
+  useEffect(() => {
     if (inspection.status !== 'locked') {
       setSignatureVersion(null);
       signatureUploadRef.current = null;
       setSignaturePadResetRevision((revision) => revision + 1);
+    }
+    if (inspection.status !== 'in_progress') {
+      setReviewBundle(null);
     }
     if (inspection.status !== 'finalized') {
       setReportVersion(null);
@@ -237,22 +281,128 @@ export function InspectionFinalizationPanel({
     onCanonicalBundle(inspection.id, canonical);
   }
 
+  async function openPreLockReview() {
+    if (inspection.status !== 'in_progress') return;
+    if (blockedByDirtySection) {
+      setError(
+        'Save or discard the current section before reviewing the Inspection.',
+      );
+      return;
+    }
+    if (writeGate.pending || reviewLoading) return;
+
+    const requestSource = {
+      inspectionId: inspection.id,
+      unitId: inspection.unitId,
+      schemaVersionId: inspection.schemaVersionId,
+      version: inspection.version,
+      contentRevision: inspection.contentRevision,
+    };
+    setReviewLoading(true);
+    setReviewBundle(null);
+    setError(null);
+    setSuccess(null);
+    try {
+      const canonical = await readCanonical();
+      const current = currentReviewSourceRef.current;
+      if (
+        !mountedRef.current ||
+        current.inspectionId !== requestSource.inspectionId ||
+        current.unitId !== requestSource.unitId
+      ) {
+        return;
+      }
+      if (
+        current.schemaVersionId !== requestSource.schemaVersionId ||
+        current.version !== requestSource.version ||
+        current.contentRevision !== requestSource.contentRevision ||
+        current.blockedByDirtySection
+      ) {
+        setReviewBundle(null);
+        setError(
+          'Inspection changed while review was loading. Load a fresh canonical review before locking.',
+        );
+        return;
+      }
+
+      applyCanonical(canonical);
+      if (canonical.inspection.status !== 'in_progress') {
+        setReviewBundle(null);
+        setError(
+          'Inspection lifecycle changed while review was loading. Use the canonical state now shown.',
+        );
+        return;
+      }
+      setReviewBundle(canonical);
+    } catch (cause) {
+      const current = currentReviewSourceRef.current;
+      if (
+        !mountedRef.current ||
+        current.inspectionId !== requestSource.inspectionId ||
+        current.unitId !== requestSource.unitId
+      ) {
+        return;
+      }
+      setReviewBundle(null);
+      setError(
+        errorMessage(
+          cause,
+          'Canonical Inspection review could not be loaded.',
+        ),
+      );
+    } finally {
+      const current = currentReviewSourceRef.current;
+      if (
+        mountedRef.current &&
+        current.inspectionId === requestSource.inspectionId &&
+        current.unitId === requestSource.unitId
+      ) {
+        setReviewLoading(false);
+      }
+    }
+  }
+
   async function lockInspection() {
     if (inspection.status !== 'in_progress') return;
-    if (!requiredResponsesComplete) {
+    if (!reviewBundle || !preLockReview) {
+      setError('Load and review the canonical Inspection before locking.');
+      return;
+    }
+    if (blockedByDirtySection || !reviewMatchesCurrent) {
       setError(
-        `Complete and save ${missingRequiredResponses} missing required ${
-          missingRequiredResponses === 1 ? 'response' : 'responses'
+        'Inspection changed after this review. Refresh the review before locking.',
+      );
+      return;
+    }
+    if (!preLockReview.complete) {
+      setError(
+        `Complete and save ${preLockReview.missingRequired} missing required ${
+          preLockReview.missingRequired === 1 ? 'response' : 'responses'
         } before locking the Inspection.`,
       );
       return;
     }
     if (!begin('lock')) return;
-    const before = inspection;
+
     let acknowledged = false;
     let ambiguous = false;
-
     try {
+      const canonicalBeforeLock = await readCanonical();
+      if (
+        !sameInspectionPreLockReviewSource(
+          canonicalBeforeLock,
+          reviewBundle,
+        )
+      ) {
+        applyCanonical(canonicalBeforeLock);
+        setReviewBundle(null);
+        setError(
+          'Inspection changed after the review was confirmed. Review the new canonical state before locking.',
+        );
+        return;
+      }
+
+      const before = canonicalBeforeLock.inspection;
       try {
         const locked = await api.post(
           inspectionLockPath(before.id),
@@ -267,6 +417,7 @@ export function InspectionFinalizationPanel({
         const canonical = await readCanonical();
         assertInspectionLockTransition(before, canonical.inspection);
         applyCanonical(canonical);
+        setReviewBundle(null);
         if (mountedRef.current) {
           setSuccess('Inspection lock was recovered from canonical state.');
         }
@@ -276,6 +427,7 @@ export function InspectionFinalizationPanel({
       const canonical = await readCanonical();
       assertInspectionLockTransition(before, canonical.inspection);
       applyCanonical(canonical);
+      setReviewBundle(null);
       if (mountedRef.current) {
         setSuccess('Inspection locked. Content is frozen for signature capture.');
       }
@@ -681,40 +833,85 @@ export function InspectionFinalizationPanel({
       ) : null}
 
       {inspection.status === 'in_progress' ? (
-        <div className="inspection-finalization-card">
-          <div>
-            <strong>Freeze field content</strong>
-            <p className="muted">
-              Lock validates required responses with lifecycle + content-revision CAS.
-            </p>
-            <p
-              className={
-                requiredResponsesComplete
-                  ? 'inspection-completeness-note inspection-completeness-note-complete'
-                  : 'inspection-completeness-note inspection-completeness-note-missing'
+        <div className="inspection-pre-lock-workspace">
+          <div className="inspection-finalization-card inspection-pre-lock-intro">
+            <div>
+              <strong>Review before locking</strong>
+              <p className="muted">
+                Review the canonical saved responses, findings and evidence that
+                will be frozen. Lock still rechecks canonical state and required
+                responses on the server.
+              </p>
+              <p
+                className={
+                  requiredResponsesComplete
+                    ? 'inspection-completeness-note inspection-completeness-note-complete'
+                    : 'inspection-completeness-note inspection-completeness-note-missing'
+                }
+              >
+                {requiredResponsesComplete
+                  ? 'Canonical required responses are complete.'
+                  : `${missingRequiredResponses} required ${
+                      missingRequiredResponses === 1
+                        ? 'response remains'
+                        : 'responses remain'
+                    } to be completed and saved.`}
+              </p>
+            </div>
+            <button
+              className="button-secondary"
+              disabled={
+                blocked ||
+                blockedByDirtySection ||
+                reviewLoading
               }
+              onClick={() => void openPreLockReview()}
+              type="button"
             >
-              {requiredResponsesComplete
-                ? 'Canonical required responses are complete.'
-                : `${missingRequiredResponses} required ${
-                    missingRequiredResponses === 1
-                      ? 'response remains'
-                      : 'responses remain'
-                  } to be completed and saved.`}
-            </p>
+              {reviewLoading
+                ? 'Loading review…'
+                : reviewBundle
+                  ? 'Refresh review'
+                  : 'Review before lock'}
+            </button>
           </div>
-          <button
-            className="button-primary"
-            disabled={
-              blocked ||
-              blockedByDirtySection ||
-              !requiredResponsesComplete
-            }
-            onClick={lockInspection}
-            type="button"
-          >
-            {pendingAction === 'lock' ? 'Locking…' : 'Lock Inspection'}
-          </button>
+
+          {preLockReview && reviewBundle ? (
+            <>
+              <InspectionPreLockReviewPanel
+                review={preLockReview}
+                stale={reviewStale}
+              />
+              <div className="inspection-pre-lock-actions">
+                <button
+                  className="button-secondary"
+                  disabled={blocked}
+                  onClick={() => {
+                    setReviewBundle(null);
+                    setError(null);
+                  }}
+                  type="button"
+                >
+                  Close review
+                </button>
+                <button
+                  className="button-primary"
+                  disabled={
+                    blocked ||
+                    blockedByDirtySection ||
+                    reviewStale ||
+                    !preLockReview.complete
+                  }
+                  onClick={lockInspection}
+                  type="button"
+                >
+                  {pendingAction === 'lock'
+                    ? 'Locking…'
+                    : 'Confirm review & lock Inspection'}
+                </button>
+              </div>
+            </>
+          ) : null}
         </div>
       ) : null}
 
