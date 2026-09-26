@@ -819,6 +819,7 @@ export function UnitContracts({
           <LuzernerLeaseFormEditor
             agreement={selectedAgreement}
             api={api}
+            key={selectedAgreement.id}
           />
 
           <section className="panel">
