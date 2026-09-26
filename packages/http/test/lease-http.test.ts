@@ -25,6 +25,7 @@ import {
   type LeaseAgreementId,
   type LeaseAmendment,
   type LeaseAmendmentId,
+  type LuzernerLeaseFormDraft,
   type OwnershipPeriod,
   type Party,
   type PartyId,
@@ -212,6 +213,7 @@ class InMemoryLeaseRepository implements LeaseRepository {
   readonly agreements = new Map<LeaseAgreementId, LeaseAgreement>();
   readonly amendments = new Map<LeaseAmendmentId, LeaseAmendment>();
   readonly terms: TenancyTermVersion[] = [];
+  readonly luzernerForms = new Map<LeaseAgreementId, LuzernerLeaseFormDraft>();
 
   async getAgreementById(id: LeaseAgreementId): Promise<LeaseAgreement | null> {
     return this.agreements.get(id) ?? null;
@@ -302,6 +304,34 @@ class InMemoryLeaseRepository implements LeaseRepository {
       });
     }
     this.agreements.set(agreement.id, agreement);
+  }
+
+  async getLuzernerLeaseForm(
+    agreementId: LeaseAgreementId,
+  ): Promise<LuzernerLeaseFormDraft | null> {
+    return this.luzernerForms.get(agreementId) ?? null;
+  }
+
+  async insertLuzernerLeaseForm(form: LuzernerLeaseFormDraft): Promise<void> {
+    if (this.luzernerForms.has(form.agreementId)) {
+      throw Object.assign(new Error('already exists'), {
+        code: 'LUZERNER_LEASE_FORM_ALREADY_EXISTS',
+      });
+    }
+    this.luzernerForms.set(form.agreementId, form);
+  }
+
+  async updateLuzernerLeaseForm(
+    form: LuzernerLeaseFormDraft,
+    expectedRevision: number,
+  ): Promise<void> {
+    const current = this.luzernerForms.get(form.agreementId);
+    if (!current || current.revision !== expectedRevision) {
+      throw Object.assign(new Error('revision conflict'), {
+        code: 'LUZERNER_LEASE_FORM_REVISION_CONFLICT',
+      });
+    }
+    this.luzernerForms.set(form.agreementId, form);
   }
 
   async getAmendmentById(id: LeaseAmendmentId): Promise<LeaseAmendment | null> {
