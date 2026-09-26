@@ -12,6 +12,8 @@ import type {
   DocumentVersionResponse,
   LeaseAgreementDocumentReferenceResponse,
   LeaseAgreementResponse,
+  LuzernerLeaseFormProfileResponse,
+  UpsertLuzernerLeaseFormRequest,
   LeaseAmendmentDocumentReferenceResponse,
   LeaseAmendmentResponse,
   MeterReadingBoundaryResponse,
@@ -308,6 +310,7 @@ let setupSpace: SpaceResponse | null = null;
 let setupParty: PartyResponse | null = null;
 let setupTenancy: TenancyResponse | null = null;
 let setupAgreements: LeaseAgreementResponse[] = [];
+let setupLuzernerForms = new Map<string, LuzernerLeaseFormProfileResponse>();
 let heldContractAgreementRead: LeaseAgreementResponse[] | null = null;
 let setupAmendments: LeaseAmendmentResponse[] = [];
 let setupTerms: TenancyTermVersionResponse[] = [];
@@ -3967,6 +3970,51 @@ globalThis.fetch = async (
 
   if (
     setupAgreement &&
+    path === '/agreements/' + setupAgreement.id + '/luzerner-form'
+  ) {
+    if (init?.method === 'PATCH') {
+      requirePortfolioAuth(init);
+      if (setupAgreement.status !== 'draft') {
+        return apiError(
+          422,
+          'LUZERNER_LEASE_FORM_AGREEMENT_NOT_DRAFT',
+          'Luzerner lease form data may only be edited while the Agreement is draft.',
+        );
+      }
+      const body = JSON.parse(
+        String(init.body),
+      ) as UpsertLuzernerLeaseFormRequest;
+      const current = setupLuzernerForms.get(setupAgreement.id) ?? null;
+      if (
+        (body.expectedRevision === 0 && current !== null) ||
+        (body.expectedRevision > 0 &&
+          (current === null || current.revision !== body.expectedRevision))
+      ) {
+        return apiError(
+          409,
+          'LUZERNER_LEASE_FORM_REVISION_CONFLICT',
+          'Luzerner lease form changed since it was last read.',
+        );
+      }
+
+      const saved: LuzernerLeaseFormProfileResponse = {
+        agreementId: setupAgreement.id,
+        templateCode: 'luzerner_mietvertrag_2020',
+        templateDocumentVersionId:
+          body.templateDocumentVersionId === undefined
+            ? current?.templateDocumentVersionId ?? null
+            : body.templateDocumentVersionId,
+        revision: (current?.revision ?? 0) + 1,
+        data: body.data,
+      };
+      setupLuzernerForms.set(setupAgreement.id, saved);
+      return json(saved);
+    }
+    return json(setupLuzernerForms.get(setupAgreement.id) ?? null);
+  }
+
+  if (
+    setupAgreement &&
     path === '/agreements/' + setupAgreement.id + '/amendments'
   ) {
     if (init?.method === 'POST') {
@@ -5135,6 +5183,10 @@ globalThis.fetch = async (
 
   if (path === `/tenancies/${tenancyId}/terms`) {
     return json(terms);
+  }
+
+  if (path === `/agreements/${agreementId}/luzerner-form`) {
+    return json(null);
   }
 
   if (path === `/agreements/${agreementId}/amendments`) {
