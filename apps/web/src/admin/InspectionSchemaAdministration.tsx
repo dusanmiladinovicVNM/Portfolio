@@ -610,6 +610,7 @@ function SectionEditor({
         <label>
           Scope
           <select
+            aria-label="Section scope"
             onChange={(event) => {
               const scope = event.currentTarget.value as 'unit' | 'space';
               update((current) => ({
