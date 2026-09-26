@@ -24,6 +24,7 @@ export * from './contracts/luzerner-lease-form-commands.js';
 export * from './contracts/luzerner-lease-form-queries.js';
 export * from './contracts/luzerner-lease-pdf-port.js';
 export * from './contracts/luzerner-lease-pdf-commands.js';
+export * from './contracts/luzerner-lease-final-document.js';
 export * from './shared/clock.js';
 export * from './documents/document-binary-policy.js';
 export * from './documents/file-storage-port.js';
