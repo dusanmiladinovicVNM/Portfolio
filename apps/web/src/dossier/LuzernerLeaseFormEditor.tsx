@@ -144,7 +144,7 @@ function setCustomSharedUseValue(
   values: readonly string[],
   index: number,
   value: string,
-): readonly string[] {
+): string[] {
   const next = [...values];
   while (next.length <= index) next.push('');
   next[index] = value;
@@ -152,17 +152,17 @@ function setCustomSharedUseValue(
 }
 
 function customAncillaryValue(
-  values: LuzernerLeaseFormContent['customAncillaryCosts'],
+  values: LuzernerLeaseFormContentRequest['customAncillaryCosts'],
   index: number,
 ): { readonly label: string; readonly mode: LuzernerAncillaryCostMode } {
   return values[index] ?? { label: '', mode: 'excluded' };
 }
 
 function setCustomAncillaryValue(
-  values: LuzernerLeaseFormContent['customAncillaryCosts'],
+  values: LuzernerLeaseFormContentRequest['customAncillaryCosts'],
   index: number,
   value: { readonly label: string; readonly mode: LuzernerAncillaryCostMode },
-): LuzernerLeaseFormContent['customAncillaryCosts'] {
+): LuzernerLeaseFormContentRequest['customAncillaryCosts'] {
   const next = [...values];
   while (next.length <= index) {
     next.push({ label: '', mode: 'excluded' });
