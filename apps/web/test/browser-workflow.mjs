@@ -3517,12 +3517,34 @@ try {
     'xpath',
     "//*[@data-inspection-required-progress]//*[contains(normalize-space(),'0 / 1 saved')]",
   );
-  const lockButton =
-    "//button[normalize-space()='Lock Inspection']";
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Review before lock']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-pre-lock-review]",
+  );
   assertEqual(
-    await elementDisabledXpath(sessionId, lockButton),
+    await elementDisabledXpath(
+      sessionId,
+      "//button[normalize-space()='Confirm review & lock Inspection']",
+    ),
     true,
-    'Incomplete canonical required responses disable Inspection lock',
+    'Incomplete canonical required responses disable lock confirmation inside review',
+  );
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Close review']",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-inspection-pre-lock-review]",
+    ),
+    false,
+    'Incomplete pre-lock review can be closed to resume field work',
   );
   await waitForElement(
     sessionId,
