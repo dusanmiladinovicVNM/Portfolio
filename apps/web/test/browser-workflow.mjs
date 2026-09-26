@@ -449,11 +449,15 @@ try {
       inspectionEvidencePhotoPath,
       new Uint8Array([255, 216, 255, 224, 0, 16, 74, 70, 73, 70, 255, 217]),
     ),
-    truncate(
+    writeFile(
       oversizedInspectionEvidencePhotoPath,
-      32 * 1024 * 1024 + 1,
+      new Uint8Array(),
     ),
   ]);
+  await truncate(
+    oversizedInspectionEvidencePhotoPath,
+    32 * 1024 * 1024 + 1,
+  );
 
   await Promise.all([
     waitForHttp(`${baseUrl}/browser-harness.html?asOf=2025-06-30`),
