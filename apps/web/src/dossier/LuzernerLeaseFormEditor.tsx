@@ -137,6 +137,7 @@ export function LuzernerLeaseFormEditor({
   const [draft, setDraft] = useState<LuzernerLeaseFormContentRequest>(() =>
     toRequestContent(emptyLuzernerLeaseFormContent()),
   );
+  const draftRef = useRef<LuzernerLeaseFormContentRequest>(draft);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -173,6 +174,7 @@ export function LuzernerLeaseFormEditor({
       .then((value) => {
         if (controller.signal.aborted) return;
         setCanonical(value);
+        draftRef.current = value.content;
         setDraft(value.content);
         setDirty(false);
       })
@@ -183,7 +185,9 @@ export function LuzernerLeaseFormEditor({
           cause.code === 'LUZERNER_LEASE_FORM_NOT_FOUND'
         ) {
           setCanonical(null);
-          setDraft(toRequestContent(emptyLuzernerLeaseFormContent()));
+          const empty = toRequestContent(emptyLuzernerLeaseFormContent());
+          draftRef.current = empty;
+          setDraft(empty);
           setDirty(false);
           return;
         }
@@ -210,7 +214,9 @@ export function LuzernerLeaseFormEditor({
     ) => LuzernerLeaseFormContentRequest,
   ): void {
     if (controlsDisabled) return;
-    setDraft((current) => producer(current));
+    const next = producer(draftRef.current);
+    draftRef.current = next;
+    setDraft(next);
     setDirty(true);
     setSuccess(null);
     setError(null);
@@ -225,6 +231,7 @@ export function LuzernerLeaseFormEditor({
 
   function acceptCanonical(value: LuzernerLeaseFormResponse): void {
     setCanonical(value);
+    draftRef.current = value.content;
     setDraft(value.content);
     setDirty(false);
     setOutcomeAmbiguous(false);
@@ -270,7 +277,7 @@ export function LuzernerLeaseFormEditor({
 
     let normalized: LuzernerLeaseFormContentRequest;
     try {
-      normalized = normalizeRequestContent(draft);
+      normalized = normalizeRequestContent(draftRef.current);
     } catch (cause) {
       setError(
         cause instanceof Error
