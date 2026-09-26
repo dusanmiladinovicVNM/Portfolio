@@ -70,6 +70,16 @@ function sortedSchemas(
   );
 }
 
+function upsertSchemaVersion(
+  schemas: readonly InspectionSchemaVersionResponse[] | null,
+  schema: InspectionSchemaVersionResponse,
+): readonly InspectionSchemaVersionResponse[] {
+  return sortedSchemas([
+    ...(schemas ?? []).filter((candidate) => candidate.id !== schema.id),
+    schema,
+  ]);
+}
+
 function move<T>(items: readonly T[], index: number, delta: -1 | 1): readonly T[] {
   const target = index + delta;
   if (index < 0 || target < 0 || target >= items.length) return items;
@@ -1213,15 +1223,29 @@ export function InspectionSchemaAdministration({
         return;
       }
 
-      const canonical = await fetchSchemas();
       if (!mountedRef.current) return;
-      setSchemas(canonical);
+      setSchemas((current) => upsertSchemaVersion(current, saved));
       setSelectedId(saved.id);
       setDraft(null);
       setCreateOutcomeAmbiguous(false);
       setSuccess(
         `${saved.schemaCode} v${saved.versionNumber} saved as a canonical draft.`,
       );
+
+      try {
+        const canonical = await fetchSchemas();
+        if (!mountedRef.current) return;
+        setSchemas(canonical);
+      } catch (refreshCause) {
+        if (!mountedRef.current) return;
+        setActionError(
+          `Schema draft was saved as ${saved.schemaCode} v${saved.versionNumber}, but the version-list refresh failed: ${
+            refreshCause instanceof Error
+              ? refreshCause.message
+              : 'request failed'
+          }. The returned canonical version remains selected; refresh the list later.`,
+        );
+      }
     } catch (cause) {
       if (!mountedRef.current) return;
       setActionError(
@@ -1267,13 +1291,27 @@ export function InspectionSchemaAdministration({
         published = recovered;
       }
 
-      const canonical = await fetchSchemas();
       if (!mountedRef.current) return;
-      setSchemas(canonical);
+      setSchemas((current) => upsertSchemaVersion(current, published));
       setSelectedId(published.id);
       setSuccess(
         `${published.schemaCode} v${published.versionNumber} is published and available for new Inspections.`,
       );
+
+      try {
+        const canonical = await fetchSchemas();
+        if (!mountedRef.current) return;
+        setSchemas(canonical);
+      } catch (refreshCause) {
+        if (!mountedRef.current) return;
+        setActionError(
+          `Schema ${published.schemaCode} v${published.versionNumber} was published, but the version-list refresh failed: ${
+            refreshCause instanceof Error
+              ? refreshCause.message
+              : 'request failed'
+          }. The acknowledged published version remains selected; refresh the list later.`,
+        );
+      }
     } catch (cause) {
       if (!mountedRef.current) return;
       setActionError(
