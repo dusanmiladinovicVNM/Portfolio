@@ -51,6 +51,13 @@ import {
   type InspectionFindingRegistration,
 } from './inspection-content-owner.js';
 import type { InspectionWriteGate } from './inspection-write-gate.js';
+import {
+  INSPECTION_PHOTO_ACCEPT,
+  INSPECTION_PHOTO_MAX_EDGE_PX,
+  INSPECTION_PHOTO_RECOMPRESS_THRESHOLD_BYTES,
+  prepareInspectionPhoto,
+  type PreparedInspectionPhoto,
+} from './inspection-photo.js';
 
 interface InspectionFindingsEvidenceProps {
   readonly api: PortfolioApi;
@@ -70,6 +77,8 @@ type EvidenceScope = 'inspection' | 'section' | 'item';
 interface StableUpload {
   readonly key: string;
   readonly fingerprint: string;
+  readonly file: File;
+  readonly photoPreparation: PreparedInspectionPhoto | null;
 }
 
 const MAX_EVIDENCE_UPLOAD_BYTES = 16 * 1024 * 1024;
@@ -123,6 +132,8 @@ export function InspectionFindingsEvidence({
   const [success, setSuccess] = useState<string | null>(null);
   const [evidenceScope, setEvidenceScope] =
     useState<EvidenceScope>('section');
+  const [scopedUploadPurpose, setScopedUploadPurpose] =
+    useState<'photo' | 'attachment'>('photo');
 
   const inspection = bundle.inspection;
   const selectedSectionInstance = bundle.sectionInstances.find(
@@ -370,7 +381,10 @@ export function InspectionFindingsEvidence({
       setError('Choose a non-empty evidence file and a valid evidence kind.');
       return;
     }
-    if (fileValue.size > MAX_EVIDENCE_UPLOAD_BYTES) {
+    if (
+      purpose === 'attachment' &&
+      fileValue.size > MAX_EVIDENCE_UPLOAD_BYTES
+    ) {
       setError(
         'Inspection evidence files are limited to the 16 MiB online production ceiling.',
       );
@@ -378,26 +392,45 @@ export function InspectionFindingsEvidence({
     }
     if (!begin('scoped-upload')) return;
 
-    const fingerprint = fileFingerprint(fileValue);
-    const existing = scopedUploadRef.current;
-    const stable =
-      existing?.fingerprint === fingerprint
-        ? existing
-        : { key: crypto.randomUUID(), fingerprint };
-    scopedUploadRef.current = stable;
-    const path = inspectionBinaryUploadPath(
-      inspection.id,
-      purpose,
-      stable.key,
-      fileValue.name,
-    );
-
     try {
+      const fingerprint = [purpose, fileFingerprint(fileValue)].join('|');
+      const existing = scopedUploadRef.current;
+      let stable =
+        existing?.fingerprint === fingerprint ? existing : null;
+
+      if (!stable) {
+        const photoPreparation =
+          purpose === 'photo'
+            ? await prepareInspectionPhoto(fileValue)
+            : null;
+        const uploadFile = photoPreparation?.file ?? fileValue;
+        if (uploadFile.size > MAX_EVIDENCE_UPLOAD_BYTES) {
+          throw new Error(
+            'Prepared Inspection evidence still exceeds the 16 MiB online production ceiling.',
+          );
+        }
+        stable = {
+          key: crypto.randomUUID(),
+          fingerprint,
+          file: uploadFile,
+          photoPreparation,
+        };
+        scopedUploadRef.current = stable;
+      }
+
+      const uploadFile = stable.file;
+      const path = inspectionBinaryUploadPath(
+        inspection.id,
+        purpose,
+        stable.key,
+        uploadFile.name,
+      );
+
       let uploaded: DocumentVersionResponse;
       try {
         uploaded = await api.postBinary(
           path,
-          fileValue,
+          uploadFile,
           documentVersionResponseSchema,
         );
       } catch (cause) {
@@ -407,20 +440,20 @@ export function InspectionFindingsEvidence({
         }
         uploaded = await api.postBinary(
           path,
-          fileValue,
+          uploadFile,
           documentVersionResponseSchema,
         );
       }
 
       const expectedMimeType = (
-        fileValue.type || 'application/octet-stream'
+        uploadFile.type || 'application/octet-stream'
       ).toLowerCase();
       if (
         uploaded.id !== stable.key ||
         uploaded.versionNumber !== 1 ||
-        uploaded.fileName !== fileValue.name.trim() ||
+        uploaded.fileName !== uploadFile.name.trim() ||
         uploaded.mimeType !== expectedMimeType ||
-        uploaded.byteSize !== fileValue.size
+        uploaded.byteSize !== uploadFile.size
       ) {
         throw new Error(
           'Inspection-scoped upload returned a different binary identity.',
@@ -430,12 +463,18 @@ export function InspectionFindingsEvidence({
       scopedUploadRef.current = null;
       if (mountedRef.current) {
         formElement.reset();
+        setScopedUploadPurpose('photo');
         setSelectedDocumentId(uploaded.documentId);
         setSelectedVersionId(uploaded.id);
         setCatalogRevision((revision) => revision + 1);
         setVersionRevision((revision) => revision + 1);
+        const photo = stable.photoPreparation;
         setSuccess(
-          'Inspection-scoped evidence binary stored. Attach this exact version below.',
+          photo?.compressed
+            ? `Inspection photo compressed from ${formatBytes(photo.originalBytes)} to ${formatBytes(photo.preparedBytes)} and stored. Attach this exact version below.`
+            : purpose === 'photo'
+              ? 'Inspection photo stored without unnecessary recompression. Attach this exact version below.'
+              : 'Inspection-scoped evidence binary stored. Attach this exact version below.',
         );
       }
     } catch (cause) {
@@ -444,7 +483,7 @@ export function InspectionFindingsEvidence({
         if (!ambiguous) scopedUploadRef.current = null;
         setError(
           ambiguous
-            ? `Evidence upload outcome is still ambiguous: ${errorMessage(cause, 'request failed')}. Re-select the same file and retry; the stable upload key will be reused.`
+            ? `Evidence upload outcome is still ambiguous: ${errorMessage(cause, 'request failed')}. Retry the same selected file; the exact prepared bytes and stable upload key will be reused while this editor remains open.`
             : errorMessage(cause, 'Inspection-scoped evidence upload failed.'),
         );
       }
@@ -947,17 +986,52 @@ export function InspectionFindingsEvidence({
               </div>
               <label>
                 Kind
-                <select disabled={blocked} defaultValue="photo" name="purpose">
+                <select
+                  disabled={blocked}
+                  name="purpose"
+                  onChange={(event) => {
+                    const next =
+                      event.currentTarget.value === 'attachment'
+                        ? 'attachment'
+                        : 'photo';
+                    scopedUploadRef.current = null;
+                    setScopedUploadPurpose(next);
+                    setError(null);
+                    setSuccess(null);
+                  }}
+                  value={scopedUploadPurpose}
+                >
                   <option value="photo">Photo</option>
                   <option value="attachment">Attachment</option>
                 </select>
               </label>
               <label>
                 Evidence file
-                <input disabled={blocked} name="file" required type="file" />
+                <input
+                  accept={
+                    scopedUploadPurpose === 'photo'
+                      ? INSPECTION_PHOTO_ACCEPT
+                      : undefined
+                  }
+                  capture={
+                    scopedUploadPurpose === 'photo'
+                      ? 'environment'
+                      : undefined
+                  }
+                  disabled={blocked}
+                  key={scopedUploadPurpose}
+                  name="file"
+                  required
+                  type="file"
+                />
               </label>
               <p className="setup-hint">
-                Uses a stable upload key and exact DocumentVersion identity.
+                {scopedUploadPurpose === 'photo'
+                  ? `Mobile camera capture is enabled. Photos above ${formatBytes(INSPECTION_PHOTO_RECOMPRESS_THRESHOLD_BYTES)} are resized to at most ${INSPECTION_PHOTO_MAX_EDGE_PX}px on the longest edge and JPEG-compressed before upload; smaller JPEG/PNG/WebP files stay byte-for-byte unchanged.`
+                  : 'Attachments keep their original bytes and must fit the 16 MiB online production ceiling.'}
+              </p>
+              <p className="setup-hint">
+                Uses a stable upload key and exact prepared bytes for retry-safe DocumentVersion identity.
               </p>
               <button className="button-primary" disabled={blocked} type="submit">
                 {pendingAction === 'scoped-upload'
