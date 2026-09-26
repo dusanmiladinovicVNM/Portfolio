@@ -1725,6 +1725,26 @@ try {
     luzernerForm + "//label[normalize-space()='Mietantritt']//input",
     '2027-07-01',
   );
+  await selectOptionXpath(
+    sessionId,
+    luzernerForm + "//label[normalize-space()='Benutzungsart']//select",
+    'apartment',
+  );
+  await selectOptionXpath(
+    sessionId,
+    luzernerForm + "//label[normalize-space()='Mietdauer']//select",
+    'indefinite',
+  );
+  await selectOptionXpath(
+    sessionId,
+    luzernerForm + "//label[normalize-space()='Kündigungstermine']//select",
+    'monthly_except_december',
+  );
+  await selectOptionXpath(
+    sessionId,
+    luzernerForm + "//label[normalize-space()='Kündigungsfristen']//select",
+    'residential_3_months',
+  );
   await typeXpath(
     sessionId,
     luzernerForm +
@@ -1742,6 +1762,27 @@ try {
     luzernerForm +
       "//label[normalize-space()='Nebenkosten Akonto CHF']//input",
     '160.00',
+  );
+  await selectOptionXpath(
+    sessionId,
+    luzernerForm + "//label[normalize-space()='Zahlbar im Voraus']//select",
+    'monthly',
+  );
+  await selectOptionXpath(
+    sessionId,
+    luzernerForm + "//label[normalize-space()='Mietzinsanpassung']//select",
+    'termination_date',
+  );
+  await typeXpath(
+    sessionId,
+    luzernerForm + "//label[normalize-space()='Monate im Voraus']//input",
+    '3',
+  );
+  await selectOptionXpath(
+    sessionId,
+    luzernerForm +
+      "//label[normalize-space()='Stichtag Nebenkostenabrechnung']//select",
+    'december_31',
   );
   await typeXpath(
     sessionId,

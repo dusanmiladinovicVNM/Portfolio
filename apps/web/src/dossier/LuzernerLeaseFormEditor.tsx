@@ -555,6 +555,7 @@ export function LuzernerLeaseFormEditor({
                 update((current) => ({
                   ...current,
                   useType: event.currentTarget.value as
+                    | 'unset'
                     | 'apartment'
                     | 'commercial'
                     | 'other',
@@ -562,6 +563,7 @@ export function LuzernerLeaseFormEditor({
               }
               value={draft.useType}
             >
+              <option value="unset">— auswählen —</option>
               <option value="apartment">Wohnung</option>
               <option value="commercial">Gewerbe</option>
               <option value="other">Andere Nutzungsart</option>
@@ -585,6 +587,7 @@ export function LuzernerLeaseFormEditor({
                 update((current) => ({
                   ...current,
                   durationKind: event.currentTarget.value as
+                    | 'unset'
                     | 'indefinite'
                     | 'minimum_term'
                     | 'fixed_term',
@@ -592,6 +595,7 @@ export function LuzernerLeaseFormEditor({
               }
               value={draft.durationKind}
             >
+              <option value="unset">— auswählen —</option>
               <option value="indefinite">auf unbestimmte Zeit</option>
               <option value="minimum_term">
                 mit minimaler Laufzeit, erstmals kündbar auf den
@@ -623,6 +627,7 @@ export function LuzernerLeaseFormEditor({
                 update((current) => ({
                   ...current,
                   terminationSchedule: event.currentTarget.value as
+                    | 'unset'
                     | 'monthly_except_december'
                     | 'quarter_ends'
                     | 'custom',
@@ -630,6 +635,7 @@ export function LuzernerLeaseFormEditor({
               }
               value={draft.terminationSchedule}
             >
+              <option value="unset">— auswählen —</option>
               <option value="monthly_except_december">
                 auf jedes Monatsende, ausgenommen Ende Dez.
               </option>
@@ -656,6 +662,7 @@ export function LuzernerLeaseFormEditor({
                 update((current) => ({
                   ...current,
                   noticePeriodKind: event.currentTarget.value as
+                    | 'unset'
                     | 'residential_3_months'
                     | 'commercial_6_months'
                     | 'furnished_room_14_days'
@@ -664,6 +671,7 @@ export function LuzernerLeaseFormEditor({
               }
               value={draft.noticePeriodKind}
             >
+              <option value="unset">— auswählen —</option>
               <option value="residential_3_months">3 Monate (Wohnräume)</option>
               <option value="commercial_6_months">6 Monate (Geschäftsräume)</option>
               <option value="furnished_room_14_days">14 Tage (möbl. Zimmer)</option>
@@ -709,6 +717,7 @@ export function LuzernerLeaseFormEditor({
                 update((current) => ({
                   ...current,
                   paymentFrequency: event.currentTarget.value as
+                    | 'unset'
                     | 'monthly'
                     | 'quarterly'
                     | 'semiannual',
@@ -716,6 +725,7 @@ export function LuzernerLeaseFormEditor({
               }
               value={draft.paymentFrequency}
             >
+              <option value="unset">— auswählen —</option>
               <option value="monthly">monatlich</option>
               <option value="quarterly">vierteljährlich</option>
               <option value="semiannual">halbjährlich</option>
@@ -816,6 +826,7 @@ export function LuzernerLeaseFormEditor({
                 update((current) => ({
                   ...current,
                   rentAdjustmentMode: event.currentTarget.value as
+                    | 'unset'
                     | 'termination_date'
                     | 'indexation'
                     | 'graduated',
@@ -823,6 +834,7 @@ export function LuzernerLeaseFormEditor({
               }
               value={draft.rentAdjustmentMode}
             >
+              <option value="unset">— auswählen —</option>
               <option value="termination_date">
                 auf jeden aufgeführten Kündigungstermin
               </option>
@@ -859,6 +871,7 @@ export function LuzernerLeaseFormEditor({
                 update((current) => ({
                   ...current,
                   ancillaryClosingDate: event.currentTarget.value as
+                    | 'unset'
                     | 'june_30'
                     | 'december_31'
                     | 'custom',
@@ -866,6 +879,7 @@ export function LuzernerLeaseFormEditor({
               }
               value={draft.ancillaryClosingDate}
             >
+              <option value="unset">— auswählen —</option>
               <option value="june_30">30. Juni</option>
               <option value="december_31">31. Dezember</option>
               <option value="custom">Anderer Stichtag</option>

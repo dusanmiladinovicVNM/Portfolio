@@ -35,29 +35,35 @@ export type LuzernerSharedUseKey =
   (typeof LUZERNER_SHARED_USE_KEYS)[number];
 
 export type LuzernerAncillaryCostMode = 'excluded' | 'advance' | 'flat';
-export type LuzernerUseType = 'apartment' | 'commercial' | 'other';
+export type LuzernerUseType = 'unset' | 'apartment' | 'commercial' | 'other';
 export type LuzernerLeaseDurationKind =
+  | 'unset'
   | 'indefinite'
   | 'minimum_term'
   | 'fixed_term';
 export type LuzernerTerminationSchedule =
+  | 'unset'
   | 'monthly_except_december'
   | 'quarter_ends'
   | 'custom';
 export type LuzernerNoticePeriodKind =
+  | 'unset'
   | 'residential_3_months'
   | 'commercial_6_months'
   | 'furnished_room_14_days'
   | 'longer_months';
 export type LuzernerPaymentFrequency =
+  | 'unset'
   | 'monthly'
   | 'quarterly'
   | 'semiannual';
 export type LuzernerRentAdjustmentMode =
+  | 'unset'
   | 'termination_date'
   | 'indexation'
   | 'graduated';
 export type LuzernerAncillaryClosingDate =
+  | 'unset'
   | 'june_30'
   | 'december_31'
   | 'custom';
@@ -303,15 +309,15 @@ export function emptyLuzernerLeaseFormContent(): LuzernerLeaseFormContent {
     additionalObjectLabel: null,
     sharedUse: defaultSharedUse(),
     customSharedUse: [],
-    useType: 'apartment',
+    useType: 'unset',
     useTypeOther: null,
     moveInDate: null,
-    durationKind: 'indefinite',
+    durationKind: 'unset',
     minimumCancelableOn: null,
     fixedEndDate: null,
-    terminationSchedule: 'monthly_except_december',
+    terminationSchedule: 'unset',
     terminationScheduleCustom: null,
-    noticePeriodKind: 'residential_3_months',
+    noticePeriodKind: 'unset',
     longerNoticeMonths: null,
     currency: 'CHF',
     netRent: null,
@@ -320,11 +326,11 @@ export function emptyLuzernerLeaseFormContent(): LuzernerLeaseFormContent {
     ancillaryFlat: null,
     ancillaryCosts: defaultAncillaryCosts(),
     customAncillaryCosts: [],
-    paymentFrequency: 'monthly',
-    rentAdjustmentMode: 'termination_date',
+    paymentFrequency: 'unset',
+    rentAdjustmentMode: 'unset',
     rentAdjustmentAdvanceMonths: null,
     consumerPriceIndexPoints: null,
-    ancillaryClosingDate: 'december_31',
+    ancillaryClosingDate: 'unset',
     ancillaryClosingDateCustom: null,
     securityAmount: null,
     tenantNamedDepositAccount: false,
@@ -550,8 +556,33 @@ export function inspectLuzernerLeaseFormReadiness(
 ): LuzernerLeaseFormReadiness {
   const missing: string[] = [];
 
-  if (content.netRent === null) missing.push('netRent');
+  if (content.useType === 'unset') missing.push('useType');
   if (content.moveInDate === null) missing.push('moveInDate');
+  if (content.durationKind === 'unset') missing.push('durationKind');
+  if (content.terminationSchedule === 'unset') {
+    missing.push('terminationSchedule');
+  }
+  if (content.noticePeriodKind === 'unset') missing.push('noticePeriodKind');
+  if (content.netRent === null) missing.push('netRent');
+  if (content.paymentFrequency === 'unset') missing.push('paymentFrequency');
+  if (content.rentAdjustmentMode === 'unset') {
+    missing.push('rentAdjustmentMode');
+  }
+  if (
+    content.rentAdjustmentMode === 'termination_date' &&
+    content.rentAdjustmentAdvanceMonths === null
+  ) {
+    missing.push('rentAdjustmentAdvanceMonths');
+  }
+  if (
+    content.rentAdjustmentMode === 'indexation' &&
+    content.consumerPriceIndexPoints === null
+  ) {
+    missing.push('consumerPriceIndexPoints');
+  }
+  if (content.ancillaryClosingDate === 'unset') {
+    missing.push('ancillaryClosingDate');
+  }
   if (content.placeOfSigning === null) missing.push('placeOfSigning');
   if (content.signingDate === null) missing.push('signingDate');
 

@@ -242,8 +242,16 @@ describe('Luzerner lease form', () => {
 
     const complete = inspectLuzernerLeaseFormReadiness({
       ...base,
+      useType: 'apartment',
       moveInDate: '2026-10-01' as never,
+      durationKind: 'indefinite',
+      terminationSchedule: 'monthly_except_december',
+      noticePeriodKind: 'residential_3_months',
       netRent: '1850.00' as never,
+      paymentFrequency: 'monthly',
+      rentAdjustmentMode: 'termination_date',
+      rentAdjustmentAdvanceMonths: 3,
+      ancillaryClosingDate: 'december_31',
       placeOfSigning: 'Luzern',
       signingDate: '2026-09-26' as never,
     });

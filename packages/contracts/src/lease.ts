@@ -37,34 +37,40 @@ const luzernerAncillaryCostModeSchema = z.enum([
   'advance',
   'flat',
 ]);
-const luzernerUseTypeSchema = z.enum(['apartment', 'commercial', 'other']);
+const luzernerUseTypeSchema = z.enum(['unset', 'apartment', 'commercial', 'other']);
 const luzernerLeaseDurationKindSchema = z.enum([
+  'unset',
   'indefinite',
   'minimum_term',
   'fixed_term',
 ]);
 const luzernerTerminationScheduleSchema = z.enum([
+  'unset',
   'monthly_except_december',
   'quarter_ends',
   'custom',
 ]);
 const luzernerNoticePeriodKindSchema = z.enum([
+  'unset',
   'residential_3_months',
   'commercial_6_months',
   'furnished_room_14_days',
   'longer_months',
 ]);
 const luzernerPaymentFrequencySchema = z.enum([
+  'unset',
   'monthly',
   'quarterly',
   'semiannual',
 ]);
 const luzernerRentAdjustmentModeSchema = z.enum([
+  'unset',
   'termination_date',
   'indexation',
   'graduated',
 ]);
 const luzernerAncillaryClosingDateSchema = z.enum([
+  'unset',
   'june_30',
   'december_31',
   'custom',
