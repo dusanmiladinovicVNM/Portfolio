@@ -13,6 +13,7 @@ export * from './tenancy/tenancy.js';
 export * from './contracts/lease-agreement.js';
 export * from './contracts/lease-amendment.js';
 export * from './contracts/tenancy-term-version.js';
+export * from './contracts/luzern-lease-profile.js';
 export * from './documents/document.js';
 export * from './inspections/inspection-schema.js';
 export * from './inspections/inspection.js';
