@@ -40,12 +40,14 @@ import {
   duplicateInspectionSchemaSection,
   inspectionSchemaDraftFromVersion,
   inspectionSchemaDraftRequest,
+  inspectionSchemaOptionValueReferenced,
   newInspectionSchemaBuilderDraft,
   newInspectionSchemaItem,
   newInspectionSchemaSection,
   nextInspectionSchemaKey,
   referencedInspectionSchemaFieldKeys,
   renameInspectionSchemaItemKey,
+  renameInspectionSchemaOptionValue,
   validateInspectionSchemaBuilderDraft,
   type InspectionSchemaBuilderDraft,
   type InspectionSchemaItemDraft,
@@ -411,56 +413,68 @@ function ItemEditor({
               Add option
             </button>
           </div>
-          {item.options.map((option, optionIndex) => (
-            <div className="schema-option-row" key={option.id}>
-              <input
-                aria-label={`Option ${optionIndex + 1} label`}
-                onChange={(event) =>
-                  update((current) => ({
-                    ...current,
-                    options: current.options.map((candidate) =>
-                      candidate.id === option.id
-                        ? { ...candidate, label: event.currentTarget.value }
-                        : candidate,
-                    ),
-                  }))
-                }
-                placeholder="Label"
-                value={option.label}
-              />
-              <input
-                aria-label={`Option ${optionIndex + 1} value`}
-                onChange={(event) =>
-                  update((current) => ({
-                    ...current,
-                    options: current.options.map((candidate) =>
-                      candidate.id === option.id
-                        ? { ...candidate, value: event.currentTarget.value }
-                        : candidate,
-                    ),
-                  }))
-                }
-                placeholder="value"
-                spellCheck={false}
-                value={option.value}
-              />
-              <button
-                className="button-secondary"
-                disabled={item.options.length === 1}
-                onClick={() =>
-                  update((current) => ({
-                    ...current,
-                    options: current.options.filter(
-                      (candidate) => candidate.id !== option.id,
-                    ),
-                  }))
-                }
-                type="button"
-              >
-                Remove
-              </button>
-            </div>
-          ))}
+          {item.options.map((option, optionIndex) => {
+            const referenced = inspectionSchemaOptionValueReferenced(
+              draft,
+              item.key,
+              option.value,
+            );
+            return (
+              <div className="schema-option-row" key={option.id}>
+                <input
+                  aria-label={`Option ${optionIndex + 1} label`}
+                  onChange={(event) =>
+                    update((current) => ({
+                      ...current,
+                      options: current.options.map((candidate) =>
+                        candidate.id === option.id
+                          ? { ...candidate, label: event.currentTarget.value }
+                          : candidate,
+                      ),
+                    }))
+                  }
+                  placeholder="Label"
+                  value={option.label}
+                />
+                <input
+                  aria-label={`Option ${optionIndex + 1} value`}
+                  onChange={(event) =>
+                    onDraft(
+                      renameInspectionSchemaOptionValue(
+                        draft,
+                        item.id,
+                        option.id,
+                        event.currentTarget.value,
+                      ),
+                    )
+                  }
+                  placeholder="value"
+                  spellCheck={false}
+                  value={option.value}
+                />
+                <button
+                  className="button-secondary"
+                  disabled={item.options.length === 1 || referenced}
+                  onClick={() =>
+                    update((current) => ({
+                      ...current,
+                      options: current.options.filter(
+                        (candidate) => candidate.id !== option.id,
+                      ),
+                    }))
+                  }
+                  title={
+                    referenced
+                      ? 'This option value is referenced by a visibility/required condition. Rename it or update the condition before removing it.'
+                      : undefined
+                  }
+                  type="button"
+                >
+                  Remove
+                </button>
+              </div>
+            );
+          })}
         </div>
       ) : null}
 
@@ -783,14 +797,14 @@ function SchemaDraftEditor({
           <div>
             <strong>Save outcome needs operator verification</strong>
             <p>
-              Portfolio reloaded the canonical version list, but this client
-              cannot prove which newly-created draft belongs to the lost
-              response. Do not retry automatically.
+              Portfolio cannot prove whether the create request committed.
+              Save stays disabled until you resolve that uncertainty.
             </p>
             <small>
-              Inspect the canonical version list. If the intended version is
-              there, select it and discard this local copy. Only re-enable Save
-              after you have confirmed that no new canonical version exists.
+              Refresh and inspect the canonical version list. If the intended
+              version is there, select it and discard this local copy. Only
+              re-enable Save after you have confirmed that no new canonical
+              version exists.
             </small>
           </div>
           <button
@@ -1172,13 +1186,30 @@ export function InspectionSchemaAdministration({
       } catch (cause) {
         if (!isAmbiguousWriteFailure(cause)) throw cause;
 
-        const canonical = await fetchSchemas();
-        if (!mountedRef.current) return;
-        setSchemas(canonical);
-        setCreateOutcomeAmbiguous(true);
-        setActionError(
-          'Schema save outcome is ambiguous. Canonical versions were reloaded. Do not retry automatically; verify the version list first.',
-        );
+        if (mountedRef.current) {
+          setCreateOutcomeAmbiguous(true);
+          setActionError(
+            'Schema save outcome is ambiguous. Save is disabled until an operator verifies the canonical version list.',
+          );
+        }
+
+        try {
+          const canonical = await fetchSchemas();
+          if (!mountedRef.current) return;
+          setSchemas(canonical);
+          setActionError(
+            'Schema save outcome is ambiguous. Canonical versions were reloaded. Do not retry automatically; verify the version list first.',
+          );
+        } catch (rereadCause) {
+          if (!mountedRef.current) return;
+          setActionError(
+            `Schema save outcome is ambiguous and the canonical reread failed: ${
+              rereadCause instanceof Error
+                ? rereadCause.message
+                : 'request failed'
+            }. Save remains disabled until an operator resolves the uncertainty.`,
+          );
+        }
         return;
       }
 
