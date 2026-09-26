@@ -150,6 +150,14 @@ export function InspectionFinalizationPanel({
   onCanonicalBundle,
 }: InspectionFinalizationPanelProps) {
   const mountedRef = useRef(true);
+  const activeInspectionOwnerRef = useRef({
+    inspectionId: bundle.inspection.id,
+    unitId: bundle.inspection.unitId,
+  });
+  activeInspectionOwnerRef.current = {
+    inspectionId: bundle.inspection.id,
+    unitId: bundle.inspection.unitId,
+  };
   const signatureUploadRef = useRef<StableUpload | null>(null);
   const [parties, setParties] = useState<readonly PartyResponse[] | null>(null);
   const [partiesError, setPartiesError] = useState<string | null>(null);
@@ -212,6 +220,10 @@ export function InspectionFinalizationPanel({
   }, [api, inspection.status]);
 
   useEffect(() => {
+    setReviewBundle(null);
+  }, [inspection.id]);
+
+  useEffect(() => {
     if (inspection.status !== 'locked') {
       setSignatureVersion(null);
       signatureUploadRef.current = null;
@@ -271,11 +283,22 @@ export function InspectionFinalizationPanel({
     }
     if (writeGate.pending || reviewLoading) return;
 
+    const targetInspectionId = inspection.id;
+    const targetUnitId = inspection.unitId;
     setReviewLoading(true);
     setError(null);
     setSuccess(null);
     try {
       const canonical = await readCanonical();
+      const owner = activeInspectionOwnerRef.current;
+      if (
+        !mountedRef.current ||
+        owner.inspectionId !== targetInspectionId ||
+        owner.unitId !== targetUnitId
+      ) {
+        return;
+      }
+
       applyCanonical(canonical);
       if (canonical.inspection.status !== 'in_progress') {
         setReviewBundle(null);
@@ -286,17 +309,30 @@ export function InspectionFinalizationPanel({
       }
       setReviewBundle(canonical);
     } catch (cause) {
-      setReviewBundle(null);
-      if (mountedRef.current) {
-        setError(
-          errorMessage(
-            cause,
-            'Canonical Inspection review could not be loaded.',
-          ),
-        );
+      const owner = activeInspectionOwnerRef.current;
+      if (
+        !mountedRef.current ||
+        owner.inspectionId !== targetInspectionId ||
+        owner.unitId !== targetUnitId
+      ) {
+        return;
       }
+      setReviewBundle(null);
+      setError(
+        errorMessage(
+          cause,
+          'Canonical Inspection review could not be loaded.',
+        ),
+      );
     } finally {
-      if (mountedRef.current) setReviewLoading(false);
+      const owner = activeInspectionOwnerRef.current;
+      if (
+        mountedRef.current &&
+        owner.inspectionId === targetInspectionId &&
+        owner.unitId === targetUnitId
+      ) {
+        setReviewLoading(false);
+      }
     }
   }
 
