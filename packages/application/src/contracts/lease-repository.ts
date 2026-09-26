@@ -4,6 +4,7 @@ import type {
   LeaseAgreementId,
   LeaseAmendment,
   LeaseAmendmentId,
+  LuzernerLeaseFormProfile,
   TenancyId,
   TenancyTermVersion,
 } from '@portfolio/domain';
@@ -50,4 +51,12 @@ export interface LeaseRepository {
     tenancyId: TenancyId,
     effectiveAt: DateOnly,
   ): Promise<TenancyTermVersion | null>;
+
+  getLuzernerLeaseFormProfile(
+    agreementId: LeaseAgreementId,
+  ): Promise<LuzernerLeaseFormProfile | null>;
+  saveLuzernerLeaseFormProfile(
+    profile: LuzernerLeaseFormProfile,
+    expectedRevision: number,
+  ): Promise<void>;
 }
