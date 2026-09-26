@@ -29,6 +29,7 @@ export const LUZERNER_TERMINATION_DATE_MODES = [
 ] as const;
 
 export const LUZERNER_ANCILLARY_TREATMENTS = [
+  'not_recorded',
   'excluded',
   'advance',
   'flat',
@@ -113,24 +114,24 @@ export interface LuzernerLeaseFormData {
   readonly sharedBicycleMopedStorage: boolean;
   readonly sharedUseExtras: readonly string[];
 
-  readonly useType: LuzernerLeaseUseType;
+  readonly useType: LuzernerLeaseUseType | null;
   readonly customUse: string | null;
 
   readonly handoverDate: DateOnly | null;
-  readonly durationMode: LuzernerLeaseDurationMode;
+  readonly durationMode: LuzernerLeaseDurationMode | null;
   readonly minimumFirstTerminationDate: DateOnly | null;
-  readonly terminationDateMode: LuzernerTerminationDateMode;
+  readonly terminationDateMode: LuzernerTerminationDateMode | null;
 
   readonly ancillaryCosts: Readonly<
     Record<LuzernerAncillaryCostKey, LuzernerAncillaryTreatment>
   >;
   readonly customAncillaryCosts: readonly LuzernerCustomAncillaryCost[];
 
-  readonly rentAdjustmentMode: LuzernerRentAdjustmentMode;
+  readonly rentAdjustmentMode: LuzernerRentAdjustmentMode | null;
   readonly adjustmentNoticeMonths: number | null;
   readonly indexPointsAtContract: string | null;
 
-  readonly settlementCutoffMode: LuzernerSettlementCutoffMode;
+  readonly settlementCutoffMode: LuzernerSettlementCutoffMode | null;
   readonly customSettlementCutoffDate: DateOnly | null;
 
   readonly depositAccountOnTenantName: boolean;
