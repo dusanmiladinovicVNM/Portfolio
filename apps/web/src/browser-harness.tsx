@@ -1207,6 +1207,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioFailNextInspectionOrchestrationAfterCommit?: boolean;
   __portfolioFailNextInspectionSchemaCreateAfterCommit?: boolean;
   __portfolioFailNextInspectionSchemaListRead?: boolean;
+  __portfolioFailNextInspectionSchemaExactRead?: boolean;
   __portfolioFailNextInspectionSchemaPublishAfterCommit?: boolean;
   __portfolioFailNextMaintenanceIssueCreateAfterCommit?: boolean;
   __portfolioFailNextMaintenanceWorkOrderCreateAfterCommit?: boolean;
@@ -4348,6 +4349,35 @@ globalThis.fetch = async (
       );
     }
     return json({ items: inspectionSchemaVersions });
+  }
+
+  const inspectionSchemaExactMatch =
+    /^\/inspection-schemas\/([^/]+)$/.exec(path);
+  if (
+    inspectionSchemaExactMatch &&
+    (!init?.method || init.method === 'GET')
+  ) {
+    requirePortfolioAuth(init);
+    if (browserHarnessWindow.__portfolioFailNextInspectionSchemaExactRead) {
+      browserHarnessWindow.__portfolioFailNextInspectionSchemaExactRead = false;
+      return apiError(
+        503,
+        'INSPECTION_SCHEMA_EXACT_READ_TEST_FAILURE',
+        'Intentional exact schema-version reread failure.',
+      );
+    }
+    const schemaId = inspectionSchemaExactMatch[1]!;
+    const schema = inspectionSchemaVersions.find(
+      (candidate) => candidate.id === schemaId,
+    );
+    if (!schema) {
+      return apiError(
+        404,
+        'INSPECTION_SCHEMA_NOT_FOUND',
+        'Inspection schema version not found.',
+      );
+    }
+    return json(schema);
   }
 
   const inspectionSchemaPublishMatch =
