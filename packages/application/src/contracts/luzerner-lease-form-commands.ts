@@ -3,7 +3,7 @@ import {
   createLuzernerLeaseFormDraft,
   reviseLuzernerLeaseFormDraft,
   type LeaseAgreementId,
-  type LuzernerLeaseFormContent,
+  type LuzernerLeaseFormContentInput,
   type LuzernerLeaseFormDraft,
 } from '@portfolio/domain';
 import { requireCapability, type Actor } from '../security/access.js';
@@ -28,7 +28,7 @@ export async function saveLuzernerLeaseFormCommand(
   actor: Actor,
   agreementId: LeaseAgreementId,
   expectedRevision: number | null,
-  content: LuzernerLeaseFormContent,
+  content: LuzernerLeaseFormContentInput,
 ): Promise<LuzernerLeaseFormDraft> {
   requireCapability(actor, 'contracts:write');
 
