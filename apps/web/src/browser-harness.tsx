@@ -120,6 +120,7 @@ const setupPartyId = 'b1000000-0000-4000-8000-000000000004';
 const setupPartyEmailId = 'b1000000-0000-4000-8000-000000000005';
 const setupPartyAddressId = 'b1000000-0000-4000-8000-000000000006';
 const setupTenancyId = 'b1000000-0000-4000-8000-000000000007';
+const setupSecondaryTenancyId = 'b1000000-0000-4000-8000-000000000063';
 const setupTenancyPartyId = 'b1000000-0000-4000-8000-000000000008';
 const setupAgreementIds = [
   'b1000000-0000-4000-8000-000000000009',
@@ -309,6 +310,7 @@ let setupUnit: UnitResponse | null = null;
 let setupSpace: SpaceResponse | null = null;
 let setupParty: PartyResponse | null = null;
 let setupTenancy: TenancyResponse | null = null;
+let setupSecondaryTenancy: TenancyResponse | null = null;
 let setupAgreements: LeaseAgreementResponse[] = [];
 let setupLuzernerForms = new Map<string, LuzernerLeaseFormResponse>();
 let heldContractAgreementRead: LeaseAgreementResponse[] | null = null;
@@ -3691,8 +3693,8 @@ globalThis.fetch = async (
     if (init?.method === 'POST') {
       requirePortfolioAuth(init);
       const body = JSON.parse(String(init.body)) as CreateTenancyRequest;
-      setupTenancy = {
-        id: setupTenancyId,
+      const created: TenancyResponse = {
+        id: setupTenancy ? setupSecondaryTenancyId : setupTenancyId,
         code: body.code,
         unitId: setupUnitId,
         status: 'draft',
@@ -3705,9 +3707,19 @@ globalThis.fetch = async (
         version: 1,
         parties: [],
       };
-      return json(setupTenancy, 201);
+      if (setupTenancy) {
+        setupSecondaryTenancy = created;
+      } else {
+        setupTenancy = created;
+      }
+      return json(created, 201);
     }
-    return json({ items: setupTenancy ? [setupTenancy] : [] });
+    return json({
+      items: [
+        ...(setupTenancy ? [setupTenancy] : []),
+        ...(setupSecondaryTenancy ? [setupSecondaryTenancy] : []),
+      ],
+    });
   }
 
   if (
@@ -3816,6 +3828,32 @@ globalThis.fetch = async (
       throw new Error('Unexpected setup Tenancy action: ' + path);
     }
     return maybeHoldTenancyMutation(json(setupTenancy));
+  }
+
+  if (
+    setupSecondaryTenancy &&
+    path === '/tenancies/' + setupSecondaryTenancyId + '/cancel' &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as { expectedVersion: number };
+    if (body.expectedVersion !== setupSecondaryTenancy.version) {
+      return tenancyVersionConflict();
+    }
+    setupSecondaryTenancy = {
+      ...setupSecondaryTenancy,
+      status: 'cancelled',
+      version: setupSecondaryTenancy.version + 1,
+    };
+    return json(setupSecondaryTenancy);
+  }
+
+  if (
+    setupSecondaryTenancy &&
+    path === '/tenancies/' + setupSecondaryTenancyId + '/agreements' &&
+    (!init?.method || init.method === 'GET')
+  ) {
+    return json({ items: [] });
   }
 
   if (
@@ -4156,6 +4194,17 @@ globalThis.fetch = async (
       item.id === cancelled.id ? cancelled : item,
     );
     return json(cancelled);
+  }
+
+  if (
+    setupSecondaryTenancy &&
+    path === '/tenancies/' + setupSecondaryTenancyId + '/terms'
+  ) {
+    return apiError(
+      404,
+      'TENANCY_TERMS_NOT_FOUND',
+      'No effective tenancy terms exist for the requested date.',
+    );
   }
 
   if (setupTenancy && path === '/tenancies/' + setupTenancyId + '/terms') {
