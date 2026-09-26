@@ -118,6 +118,12 @@ export function agreementLuzernerPdfPath(agreementId: string): string {
   return `${agreementLuzernerFormPath(agreementId)}/pdf`;
 }
 
+export function agreementLuzernerFinalDocumentPath(
+  agreementId: string,
+): string {
+  return `${agreementLuzernerFormPath(agreementId)}/final-document`;
+}
+
 export function agreementSignPath(agreementId: string): string {
   return `${agreementPath(agreementId)}/sign`;
 }
