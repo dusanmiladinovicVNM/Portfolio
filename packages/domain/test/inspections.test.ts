@@ -306,6 +306,155 @@ describe('Inspection schema and lifecycle', () => {
     ).toThrowError(/cannot depend on Space field/i);
   });
 
+  it('rejects condition literals that are not configured options on the source field', () => {
+    expect(() =>
+      createInspectionSchemaVersion({
+        id: asInspectionSchemaVersionId(
+          '74600000-0000-4000-8000-000000000001',
+        ),
+        schemaCode: 'INVALID-CONDITION-OPTION',
+        versionNumber: 1,
+        inspectionType: 'move_in',
+        title: 'Invalid condition option',
+        sections: [{
+          id: asInspectionSchemaSectionId(
+            '74600000-0000-4000-8000-000000000002',
+          ),
+          key: 'general',
+          title: 'General',
+          sortOrder: 0,
+          items: [
+            {
+              id: asInspectionSchemaItemId(
+                '74600000-0000-4000-8000-000000000003',
+              ),
+              key: 'condition',
+              type: 'select',
+              label: 'Condition',
+              sortOrder: 0,
+              options: [
+                { value: 'good', label: 'Good' },
+                { value: 'defect', label: 'Defect' },
+              ],
+            },
+            {
+              id: asInspectionSchemaItemId(
+                '74600000-0000-4000-8000-000000000004',
+              ),
+              key: 'damage_note',
+              type: 'textarea',
+              label: 'Damage note',
+              sortOrder: 1,
+              requiredWhen: {
+                fieldKey: 'condition',
+                operator: 'equals',
+                value: 'damaged',
+              },
+            },
+          ],
+        }],
+      }),
+    ).toThrowError(/option 'damaged'.*not configured/i);
+  });
+
+  it('rejects condition values whose scalar type cannot be produced by the source field', () => {
+    expect(() =>
+      createInspectionSchemaVersion({
+        id: asInspectionSchemaVersionId(
+          '74600000-0000-4000-8000-000000000005',
+        ),
+        schemaCode: 'INVALID-CONDITION-TYPE',
+        versionNumber: 1,
+        inspectionType: 'move_in',
+        title: 'Invalid condition type',
+        sections: [{
+          id: asInspectionSchemaSectionId(
+            '74600000-0000-4000-8000-000000000006',
+          ),
+          key: 'general',
+          title: 'General',
+          sortOrder: 0,
+          items: [
+            {
+              id: asInspectionSchemaItemId(
+                '74600000-0000-4000-8000-000000000007',
+              ),
+              key: 'has_damage',
+              type: 'checkbox',
+              label: 'Has damage',
+              sortOrder: 0,
+            },
+            {
+              id: asInspectionSchemaItemId(
+                '74600000-0000-4000-8000-000000000008',
+              ),
+              key: 'damage_note',
+              type: 'textarea',
+              label: 'Damage note',
+              sortOrder: 1,
+              visibleWhen: {
+                fieldKey: 'has_damage',
+                operator: 'equals',
+                value: 'true',
+              },
+            },
+          ],
+        }],
+      }),
+    ).toThrowError(/requires boolean condition values/i);
+  });
+
+  it('validates every in\/notIn literal against multiselect options', () => {
+    expect(() =>
+      createInspectionSchemaVersion({
+        id: asInspectionSchemaVersionId(
+          '74600000-0000-4000-8000-000000000009',
+        ),
+        schemaCode: 'INVALID-CONDITION-IN',
+        versionNumber: 1,
+        inspectionType: 'move_in',
+        title: 'Invalid condition in list',
+        sections: [{
+          id: asInspectionSchemaSectionId(
+            '74600000-0000-4000-8000-000000000010',
+          ),
+          key: 'general',
+          title: 'General',
+          sortOrder: 0,
+          items: [
+            {
+              id: asInspectionSchemaItemId(
+                '74600000-0000-4000-8000-000000000011',
+              ),
+              key: 'issues',
+              type: 'multiselect',
+              label: 'Issues',
+              sortOrder: 0,
+              options: [
+                { value: 'window', label: 'Window' },
+                { value: 'floor', label: 'Floor' },
+              ],
+            },
+            {
+              id: asInspectionSchemaItemId(
+                '74600000-0000-4000-8000-000000000012',
+              ),
+              key: 'issue_note',
+              type: 'textarea',
+              label: 'Issue note',
+              sortOrder: 1,
+              visibleWhen: {
+                fieldKey: 'issues',
+                operator: 'in',
+                value: ['window', 'wall'],
+              },
+            },
+          ],
+        }],
+      }),
+    ).toThrowError(/option 'wall'.*not configured/i);
+  });
+
   it('keeps repeated room templates independent and prevents conditional bleed', () => {
     const roomSchema = createInspectionSchemaVersion({
       id: asInspectionSchemaVersionId(
