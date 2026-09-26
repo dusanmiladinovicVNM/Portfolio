@@ -143,6 +143,31 @@ export interface LuzernerLeaseFormContent {
   readonly signingDate: DateOnly | null;
 }
 
+export type LuzernerLeaseFormContentInput = Omit<
+  LuzernerLeaseFormContent,
+  | 'moveInDate'
+  | 'minimumCancelableOn'
+  | 'fixedEndDate'
+  | 'netRent'
+  | 'garageParkingRent'
+  | 'ancillaryAdvance'
+  | 'ancillaryFlat'
+  | 'securityAmount'
+  | 'rentReserveAmount'
+  | 'signingDate'
+> & {
+  readonly moveInDate: string | DateOnly | null;
+  readonly minimumCancelableOn: string | DateOnly | null;
+  readonly fixedEndDate: string | DateOnly | null;
+  readonly netRent: string | MoneyAmount | null;
+  readonly garageParkingRent: string | MoneyAmount | null;
+  readonly ancillaryAdvance: string | MoneyAmount | null;
+  readonly ancillaryFlat: string | MoneyAmount | null;
+  readonly securityAmount: string | MoneyAmount | null;
+  readonly rentReserveAmount: string | MoneyAmount | null;
+  readonly signingDate: string | DateOnly | null;
+};
+
 export interface LuzernerLeaseFormDraft {
   readonly agreementId: LeaseAgreementId;
   readonly templateCode: typeof LUZERNER_LEASE_TEMPLATE_CODE;
@@ -309,7 +334,7 @@ export function emptyLuzernerLeaseFormContent(): LuzernerLeaseFormContent {
 }
 
 export function normalizeLuzernerLeaseFormContent(
-  input: LuzernerLeaseFormContent,
+  input: LuzernerLeaseFormContentInput,
 ): LuzernerLeaseFormContent {
   const sharedUse = {
     ...defaultSharedUse(),
@@ -441,7 +466,7 @@ export function normalizeLuzernerLeaseFormContent(
 
 export function createLuzernerLeaseFormDraft(
   agreementId: LeaseAgreementId,
-  content: LuzernerLeaseFormContent,
+  content: LuzernerLeaseFormContentInput,
 ): LuzernerLeaseFormDraft {
   return {
     agreementId,
@@ -453,7 +478,7 @@ export function createLuzernerLeaseFormDraft(
 
 export function reviseLuzernerLeaseFormDraft(
   current: LuzernerLeaseFormDraft,
-  content: LuzernerLeaseFormContent,
+  content: LuzernerLeaseFormContentInput,
 ): LuzernerLeaseFormDraft {
   return {
     ...current,
