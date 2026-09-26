@@ -450,6 +450,9 @@ export function createPortfolioHttpHandler(
               tenancyRepository: deps.tenancyRepository,
               partyRepository: deps.partyRepository,
               portfolioRepository: deps.portfolioRepository,
+              documentRepository: deps.documentRepository,
+              fileStorage: deps.fileStorage,
+              clock: deps.clock,
               ...(deps.luzernerLeasePdfPort === undefined
                 ? {}
                 : { luzernerLeasePdfPort: deps.luzernerLeasePdfPort }),
