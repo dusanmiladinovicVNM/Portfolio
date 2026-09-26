@@ -5,7 +5,9 @@ import {
   duplicateInspectionSchemaSection,
   inspectionSchemaDraftFromVersion,
   inspectionSchemaDraftRequest,
+  inspectionSchemaOptionValueReferenced,
   renameInspectionSchemaItemKey,
+  renameInspectionSchemaOptionValue,
   validateInspectionSchemaBuilderDraft,
 } from '../src/admin/inspection-schema-builder.js';
 
@@ -229,6 +231,106 @@ describe('Inspection Schema Builder model', () => {
       'condition',
       'room_condition',
     ]);
+  });
+
+  it('propagates option-value rename through exact field conditions', () => {
+    const draft = inspectionSchemaDraftFromVersion(schema);
+    const source = draft.sections[1]!.items[0]!;
+    const option = source.options.find(
+      (candidate) => candidate.value === 'damaged',
+    )!;
+    const renamed = renameInspectionSchemaOptionValue(
+      draft,
+      source.id,
+      option.id,
+      'defect',
+    );
+    const renamedSource = renamed.sections[1]!.items[0]!;
+    const dependent = renamed.sections[1]!.items[1]!;
+
+    expect(renamedSource.options.map((candidate) => candidate.value)).toEqual([
+      'good',
+      'defect',
+    ]);
+    expect(dependent.visibleWhen).toEqual({
+      all: [
+        {
+          fieldKey: 'condition',
+          operator: 'equals',
+          value: 'damaged',
+        },
+        {
+          fieldKey: 'room_condition',
+          operator: 'equals',
+          value: 'defect',
+        },
+      ],
+    });
+    expect(dependent.requiredWhen).toEqual({
+      fieldKey: 'room_condition',
+      operator: 'equals',
+      value: 'defect',
+    });
+    expect(validateInspectionSchemaBuilderDraft(renamed)).toEqual([]);
+  });
+
+  it('detects referenced option values and blocks stale literals after destructive evolution', () => {
+    const draft = inspectionSchemaDraftFromVersion(schema);
+    const source = draft.sections[1]!.items[0]!;
+
+    expect(
+      inspectionSchemaOptionValueReferenced(
+        draft,
+        source.key,
+        'damaged',
+      ),
+    ).toBe(true);
+    expect(
+      inspectionSchemaOptionValueReferenced(
+        draft,
+        source.key,
+        'good',
+      ),
+    ).toBe(false);
+
+    const optionRemoved = {
+      ...draft,
+      sections: draft.sections.map((section) => ({
+        ...section,
+        items: section.items.map((item) =>
+          item.id === source.id
+            ? {
+                ...item,
+                options: item.options.filter(
+                  (option) => option.value !== 'damaged',
+                ),
+              }
+            : item,
+        ),
+      })),
+    };
+    expect(
+      validateInspectionSchemaBuilderDraft(optionRemoved).some((issue) =>
+        issue.message.includes("option 'damaged'"),
+      ),
+    ).toBe(true);
+
+    const changedToCheckbox = {
+      ...draft,
+      sections: draft.sections.map((section) => ({
+        ...section,
+        items: section.items.map((item) =>
+          item.id === source.id
+            ? { ...item, type: 'checkbox' as const, options: [] }
+            : item,
+        ),
+      })),
+    };
+    expect(
+      validateInspectionSchemaBuilderDraft(changedToCheckbox).some((issue) =>
+        issue.message.includes('requires boolean condition values'),
+      ),
+    ).toBe(true);
   });
 
   it('blocks structurally invalid operational drafts before POST', () => {
