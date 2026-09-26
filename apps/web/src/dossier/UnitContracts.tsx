@@ -30,7 +30,10 @@ import {
   isWorkspaceAsOf,
   unitRoute,
 } from '../navigation/workspace-route.js';
-import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
+import type {
+  NavigateWorkspace,
+  SetNavigationBlocker,
+} from '../navigation/use-workspace-navigation.js';
 import { DocumentBinaryActions } from '../documents/DocumentBinaryActions.js';
 import { SignedDocumentAdministration } from '../documents/SignedDocumentAdministration.js';
 import {
@@ -63,6 +66,7 @@ interface UnitContractsProps {
   readonly agreementId?: string | undefined;
   readonly amendmentId?: string | undefined;
   readonly navigate: NavigateWorkspace;
+  readonly setNavigationBlocker: SetNavigationBlocker;
 }
 
 type TermsState =
@@ -353,6 +357,7 @@ export function UnitContracts({
   agreementId,
   amendmentId,
   navigate,
+  setNavigationBlocker,
 }: UnitContractsProps) {
   const [tenancies, setTenancies] =
     useState<readonly TenancyResponse[] | null>(null);
@@ -374,6 +379,8 @@ export function UnitContracts({
   const [termsState, setTermsState] = useState<TermsState>({ kind: 'idle' });
   const [contractRevision, setContractRevision] = useState(0);
   const [documentRevision, setDocumentRevision] = useState(0);
+  const [luzernerFormBlocksWrites, setLuzernerFormBlocksWrites] =
+    useState(false);
   const agreementDocumentsOwnerRef = useRef<string | null>(null);
   const amendmentDocumentsOwnerRef = useRef<string | null>(null);
 
@@ -479,6 +486,10 @@ export function UnitContracts({
     agreements !== null &&
     agreementId !== undefined &&
     selectedAgreement === null;
+
+  useEffect(() => {
+    setLuzernerFormBlocksWrites(false);
+  }, [selectedAgreement?.id]);
 
   const partyIds = [
     ...(selectedTenancy?.parties.map((party) => party.partyId) ?? []),
@@ -712,6 +723,7 @@ export function UnitContracts({
               amendments={amendments}
               api={api}
               asOf={asOf}
+              blockedByLuzernerForm={luzernerFormBlocksWrites}
               navigate={navigate}
               onCanonicalWrite={() =>
                 setContractRevision((revision) => revision + 1)
@@ -834,6 +846,8 @@ export function UnitContracts({
             agreement={selectedAgreement}
             api={api}
             key={selectedAgreement.id}
+            onWriteBlockChange={setLuzernerFormBlocksWrites}
+            setNavigationBlocker={setNavigationBlocker}
           />
 
           <section className="panel">

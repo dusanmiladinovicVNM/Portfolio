@@ -63,6 +63,7 @@ interface LeaseAdministrationProps {
   readonly agreement: LeaseAgreementResponse | null;
   readonly amendments: readonly LeaseAmendmentResponse[] | null;
   readonly amendment: LeaseAmendmentResponse | null;
+  readonly blockedByLuzernerForm: boolean;
   readonly navigate: NavigateWorkspace;
   readonly onCanonicalWrite: () => void;
 }
@@ -578,6 +579,7 @@ export function LeaseAdministration({
   agreement,
   amendments,
   amendment,
+  blockedByLuzernerForm,
   navigate,
   onCanonicalWrite,
 }: LeaseAdministrationProps) {
@@ -629,6 +631,12 @@ export function LeaseAdministration({
   }, [tenancy.id, agreement?.id, amendment?.id]);
 
   function beginWrite(): boolean {
+    if (blockedByLuzernerForm) {
+      setError(
+        'Save or resolve the current Luzerner contract form before changing legal records.',
+      );
+      return false;
+    }
     if (writeInFlightRef.current) return false;
     writeInFlightRef.current = true;
     setPending(true);
@@ -1004,6 +1012,8 @@ export function LeaseAdministration({
     }
   }
 
+  const controlsBlocked = pending || blockedByLuzernerForm;
+
   return (
     <section className="panel contract-admin-panel">
       <div className="section-heading">
@@ -1022,13 +1032,19 @@ export function LeaseAdministration({
         </p>
       ) : null}
       {error ? <p className="setup-form-error" role="alert">{error}</p> : null}
+      {blockedByLuzernerForm ? (
+        <p className="setup-hint" role="status">
+          Save or resolve the current Luzerner contract form before changing
+          legal records.
+        </p>
+      ) : null}
 
       <div className="contract-admin-stack">
         <AgreementCreateForm
           agreements={agreements}
           onSubmit={createAgreement}
           parties={parties}
-          pending={pending}
+          pending={controlsBlocked}
           tenancy={tenancy}
         />
 
@@ -1037,7 +1053,7 @@ export function LeaseAdministration({
             agreement={agreement}
             onCancel={(target) => void cancelAgreement(target)}
             onSign={signAgreement}
-            pending={pending}
+            pending={controlsBlocked}
           />
         ) : null}
 
@@ -1045,7 +1061,7 @@ export function LeaseAdministration({
           <AmendmentCreateForm
             agreement={agreement}
             onSubmit={createAmendment}
-            pending={pending}
+            pending={controlsBlocked}
           />
         ) : null}
 
@@ -1057,7 +1073,7 @@ export function LeaseAdministration({
               void cancelAmendment(targetAgreement, targetAmendment)
             }
             onSign={signAmendment}
-            pending={pending}
+            pending={controlsBlocked}
           />
         ) : null}
 

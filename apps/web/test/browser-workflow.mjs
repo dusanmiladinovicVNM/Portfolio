@@ -1727,22 +1727,22 @@ try {
   );
   await selectOptionXpath(
     sessionId,
-    luzernerForm + "//label[normalize-space()='Benutzungsart']//select",
+    luzernerForm + "//label[contains(normalize-space(.),'Benutzungsart')]//select",
     'apartment',
   );
   await selectOptionXpath(
     sessionId,
-    luzernerForm + "//label[normalize-space()='Mietdauer']//select",
+    luzernerForm + "//label[contains(normalize-space(.),'Mietdauer')]//select",
     'indefinite',
   );
   await selectOptionXpath(
     sessionId,
-    luzernerForm + "//label[normalize-space()='Kündigungstermine']//select",
+    luzernerForm + "//label[contains(normalize-space(.),'Kündigungstermine')]//select",
     'monthly_except_december',
   );
   await selectOptionXpath(
     sessionId,
-    luzernerForm + "//label[normalize-space()='Kündigungsfristen']//select",
+    luzernerForm + "//label[contains(normalize-space(.),'Kündigungsfristen')]//select",
     'residential_3_months',
   );
   await typeXpath(
@@ -1765,12 +1765,12 @@ try {
   );
   await selectOptionXpath(
     sessionId,
-    luzernerForm + "//label[normalize-space()='Zahlbar im Voraus']//select",
+    luzernerForm + "//label[contains(normalize-space(.),'Zahlbar im Voraus')]//select",
     'monthly',
   );
   await selectOptionXpath(
     sessionId,
-    luzernerForm + "//label[normalize-space()='Mietzinsanpassung']//select",
+    luzernerForm + "//label[contains(normalize-space(.),'Mietzinsanpassung')]//select",
     'termination_date',
   );
   await typeXpath(
@@ -1781,7 +1781,7 @@ try {
   await selectOptionXpath(
     sessionId,
     luzernerForm +
-      "//label[normalize-space()='Stichtag Nebenkostenabrechnung']//select",
+      "//label[contains(normalize-space(.),'Stichtag Nebenkostenabrechnung')]//select",
     'december_31',
   );
   await typeXpath(
@@ -1799,6 +1799,49 @@ try {
     sessionId,
     luzernerForm + "//label[normalize-space()='Datum']//input",
     '2027-06-15',
+  );
+
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementSignForm +
+      "//button[normalize-space()='Sign Agreement' and @disabled]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementCreateForm +
+      "//button[normalize-space()='Create Agreement draft' and @disabled]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Save or resolve the current Luzerner contract form before changing legal records.')]",
+  );
+
+  await clickAndDismissConfirm(
+    sessionId,
+    "//a[normalize-space()='Timeline']",
+    'This Luzerner contract form has unsaved changes. Leave and discard them?',
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=contracts&tenancyId=' + setupTenancyId +
+      '&agreementId=' + setupReplacementAgreementId +
+      '&asOf=2027-01-01',
+    'Dirty Luzerner form blocks dossier navigation when discard is cancelled',
+  );
+  assertEqual(
+    await elementValueXpath(
+      sessionId,
+      luzernerForm +
+        "//label[contains(normalize-space(.),'Besondere Bestimmungen')]//textarea",
+    ),
+    'Browser canonical Luzerner provision.',
+    'Dirty Luzerner draft survives cancelled navigation',
   );
 
   const luzernerPutsBefore = await executeScript(
@@ -1823,6 +1866,18 @@ try {
     ),
     luzernerPutsBefore + 1,
     'Initial Luzerner form save issues one canonical PUT',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementSignForm +
+      "//button[normalize-space()='Sign Agreement' and not(@disabled)]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementCreateForm +
+      "//button[normalize-space()='Create Agreement draft' and not(@disabled)]",
   );
 
   await typeXpath(

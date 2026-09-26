@@ -16,6 +16,7 @@ import {
 } from '@portfolio/domain';
 import { useEffect, useRef, useState } from 'react';
 import { agreementLuzernerFormPath } from '../api/paths.js';
+import type { SetNavigationBlocker } from '../navigation/use-workspace-navigation.js';
 import {
   isAmbiguousWriteFailure,
   PortfolioApiError,
@@ -25,6 +26,8 @@ import {
 interface LuzernerLeaseFormEditorProps {
   readonly api: PortfolioApi;
   readonly agreement: LeaseAgreementResponse;
+  readonly onWriteBlockChange: (blocked: boolean) => void;
+  readonly setNavigationBlocker: SetNavigationBlocker;
 }
 
 const ANCILLARY_LABELS: Readonly<Record<LuzernerAncillaryCostKey, string>> = {
@@ -131,6 +134,8 @@ function setCustomAncillaryValue(
 export function LuzernerLeaseFormEditor({
   api,
   agreement,
+  onWriteBlockChange,
+  setNavigationBlocker,
 }: LuzernerLeaseFormEditorProps) {
   const [canonical, setCanonical] =
     useState<LuzernerLeaseFormResponse | null>(null);
@@ -156,6 +161,30 @@ export function LuzernerLeaseFormEditor({
       mountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    onWriteBlockChange(dirty || saving || outcomeAmbiguous);
+  }, [dirty, onWriteBlockChange, outcomeAmbiguous, saving]);
+
+  useEffect(() => {
+    if (saving || outcomeAmbiguous) {
+      setNavigationBlocker(() => false);
+      return () => setNavigationBlocker(null);
+    }
+
+    if (!dirty) {
+      setNavigationBlocker(null);
+      return;
+    }
+
+    setNavigationBlocker(() =>
+      window.confirm(
+        'This Luzerner contract form has unsaved changes. Leave and discard them?',
+      ),
+    );
+
+    return () => setNavigationBlocker(null);
+  }, [dirty, outcomeAmbiguous, saving, setNavigationBlocker]);
 
   useEffect(() => {
     const controller = new AbortController();
