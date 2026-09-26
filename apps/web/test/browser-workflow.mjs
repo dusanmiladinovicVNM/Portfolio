@@ -617,6 +617,150 @@ try {
     "//article[contains(@class,'party-card')][.//h3[normalize-space()='Setup Service GmbH']]",
   );
 
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//aside//a[normalize-space()='Inspection schemas']",
+  );
+  await clickXpath(
+    sessionId,
+    "//aside//a[normalize-space()='Inspection schemas']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//h1[normalize-space()='Inspection Schema Builder']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl + '/inspection-schemas?asOf=2025-06-30',
+    'Inspection Schema Builder URL',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//button[contains(@class,'schema-version-card')][.//strong[normalize-space()='Browser move-in inspection']]",
+  );
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Duplicate as new draft']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//h2[normalize-space()='Build Inspection schema']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'schema-item-editor')][.//input[@value='damage_notes']]//strong[normalize-space()='Visibility']",
+  );
+  await typeXpath(
+    sessionId,
+    "//label[normalize-space()='Title']//input",
+    'Browser move-in inspection revised',
+  );
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Add section']",
+  );
+  await typeXpath(
+    sessionId,
+    "(//article[contains(@class,'schema-section-editor')])[last()]//label[normalize-space()='Section title']//input",
+    'Bathroom checks',
+  );
+  await typeXpath(
+    sessionId,
+    "(//article[contains(@class,'schema-section-editor')])[last()]//label[normalize-space()='Stable section key']//input",
+    'bathroom_checks',
+  );
+  await selectOptionXpath(
+    sessionId,
+    "(//article[contains(@class,'schema-section-editor')])[last()]//label[normalize-space()='Scope']//select",
+    'space',
+  );
+  await clickXpath(
+    sessionId,
+    "(//article[contains(@class,'schema-section-editor')])[last()]//fieldset[contains(@class,'schema-space-types')]//label[contains(normalize-space(),'Bathroom')]//input",
+  );
+  await typeXpath(
+    sessionId,
+    "(//article[contains(@class,'schema-section-editor')])[last()]//label[normalize-space()='Field label']//input",
+    'Bathroom note',
+  );
+  await typeXpath(
+    sessionId,
+    "(//article[contains(@class,'schema-section-editor')])[last()]//label[normalize-space()='Stable field key']//input",
+    'bathroom_note',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(@class,'schema-builder-valid') and contains(normalize-space(),'Draft passes client structural validation')]",
+  );
+
+  const schemaCreatesBefore = await executeScript(
+    sessionId,
+    'return window.__portfolioInspectionSchemaCreateCount || 0;',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextInspectionSchemaCreateAfterCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Save draft version']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'MOVE-IN-BRW v2 saved as a canonical draft.')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioInspectionSchemaCreateCount || 0;',
+    ),
+    schemaCreatesBefore + 1,
+    'Ambiguous Schema Builder create recovers without duplicate POST',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'schema-canonical-heading')][.//h2[normalize-space()='Browser move-in inspection revised']]//span[normalize-space()='draft']",
+  );
+
+  const schemaPublishesBefore = await executeScript(
+    sessionId,
+    'return window.__portfolioInspectionSchemaPublishCount || 0;',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextInspectionSchemaPublishAfterCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Publish this draft']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'MOVE-IN-BRW v2 is published and available for new Inspections.')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioInspectionSchemaPublishCount || 0;',
+    ),
+    schemaPublishesBefore + 1,
+    'Ambiguous Schema Builder publish recovers without duplicate POST',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//button[contains(@class,'schema-version-card')][.//small[contains(normalize-space(),'v2')]][.//span[normalize-space()='published']]",
+  );
+
   await clickXpath(sessionId, "//aside//a[normalize-space()='Overview']");
   await waitForElement(
     sessionId,
