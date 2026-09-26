@@ -4,6 +4,7 @@ import {
   INSPECTION_SIGNATURE_ROLES,
   INSPECTION_TYPES,
   SPACE_TYPES,
+  assertInspectionConditionLeafValueCompatible,
   type InspectionCondition,
   type InspectionConditionOperator,
   type InspectionItemType,
@@ -258,6 +259,158 @@ export function renameInspectionSchemaItemKey(
   };
 }
 
+function replaceInspectionConditionOptionValue(
+  condition: InspectionCondition | null,
+  fieldKey: string,
+  previousValue: string,
+  nextValue: string,
+): InspectionCondition | null {
+  if (!condition) return null;
+  if ('all' in condition) {
+    return {
+      all: condition.all.map((child) =>
+        replaceInspectionConditionOptionValue(
+          child,
+          fieldKey,
+          previousValue,
+          nextValue,
+        )!,
+      ),
+    };
+  }
+  if ('any' in condition) {
+    return {
+      any: condition.any.map((child) =>
+        replaceInspectionConditionOptionValue(
+          child,
+          fieldKey,
+          previousValue,
+          nextValue,
+        )!,
+      ),
+    };
+  }
+  if (condition.fieldKey.toLowerCase() !== fieldKey.toLowerCase()) {
+    return condition;
+  }
+  if (Array.isArray(condition.value)) {
+    return {
+      ...condition,
+      value: condition.value.map((value) =>
+        value === previousValue ? nextValue : value,
+      ),
+    };
+  }
+  return condition.value === previousValue
+    ? { ...condition, value: nextValue }
+    : condition;
+}
+
+function inspectionConditionUsesOptionValue(
+  condition: InspectionCondition | null,
+  fieldKey: string,
+  optionValue: string,
+): boolean {
+  if (!condition) return false;
+  if ('all' in condition) {
+    return condition.all.some((child) =>
+      inspectionConditionUsesOptionValue(child, fieldKey, optionValue),
+    );
+  }
+  if ('any' in condition) {
+    return condition.any.some((child) =>
+      inspectionConditionUsesOptionValue(child, fieldKey, optionValue),
+    );
+  }
+  if (condition.fieldKey.toLowerCase() !== fieldKey.toLowerCase()) {
+    return false;
+  }
+  return Array.isArray(condition.value)
+    ? condition.value.some((value) => value === optionValue)
+    : condition.value === optionValue;
+}
+
+export function inspectionSchemaOptionValueReferenced(
+  draft: InspectionSchemaBuilderDraft,
+  fieldKey: string,
+  optionValue: string,
+): boolean {
+  return draft.sections.some((section) =>
+    section.items.some(
+      (item) =>
+        inspectionConditionUsesOptionValue(
+          item.visibleWhen,
+          fieldKey,
+          optionValue,
+        ) ||
+        inspectionConditionUsesOptionValue(
+          item.requiredWhen,
+          fieldKey,
+          optionValue,
+        ),
+    ),
+  );
+}
+
+export function renameInspectionSchemaOptionValue(
+  draft: InspectionSchemaBuilderDraft,
+  sourceItemId: string,
+  optionId: string,
+  nextValue: string,
+): InspectionSchemaBuilderDraft {
+  let sourceKey: string | null = null;
+  let previousValue: string | null = null;
+
+  const sections = draft.sections.map((section) => ({
+    ...section,
+    items: section.items.map((item) => {
+      if (item.id !== sourceItemId) return item;
+      const option = item.options.find((candidate) => candidate.id === optionId);
+      if (!option) return item;
+      sourceKey = item.key;
+      previousValue = option.value;
+      return {
+        ...item,
+        options: item.options.map((candidate) =>
+          candidate.id === optionId
+            ? { ...candidate, value: nextValue }
+            : candidate,
+        ),
+      };
+    }),
+  }));
+
+  if (
+    sourceKey === null ||
+    previousValue === null ||
+    previousValue === nextValue
+  ) {
+    return { ...draft, sections };
+  }
+
+  return {
+    ...draft,
+    sections: sections.map((section) => ({
+      ...section,
+      items: section.items.map((item) => ({
+        ...item,
+        visibleWhen: replaceInspectionConditionOptionValue(
+          item.visibleWhen,
+          sourceKey!,
+          previousValue!,
+          nextValue,
+        ),
+        requiredWhen: replaceInspectionConditionOptionValue(
+          item.requiredWhen,
+          sourceKey!,
+          previousValue!,
+          nextValue,
+        ),
+      })),
+    })),
+  };
+}
+
 function remapInspectionConditionKeys(
   condition: InspectionCondition | null,
   keyMap: ReadonlyMap<string, string>,
@@ -409,7 +562,7 @@ export function conditionSourcesForItem(
 
 function conditionIssue(
   condition: InspectionCondition | null,
-  knownKeys: ReadonlySet<string>,
+  knownFields: ReadonlyMap<string, InspectionSchemaFieldReference>,
   path: string,
   issues: InspectionSchemaBuilderIssue[],
 ): void {
@@ -420,23 +573,39 @@ function conditionIssue(
       issues.push({ path, message: 'Condition group needs at least one rule.' });
     }
     children.forEach((child, index) =>
-      conditionIssue(child, knownKeys, `${path}.${index}`, issues),
+      conditionIssue(child, knownFields, `${path}.${index}`, issues),
     );
     return;
   }
+
+  const fieldKey = condition.fieldKey.trim().toLowerCase();
   if (!condition.fieldKey.trim()) {
     issues.push({ path, message: 'Condition field is required.' });
-  } else if (!knownKeys.has(condition.fieldKey.trim().toLowerCase())) {
+    return;
+  }
+  const source = knownFields.get(fieldKey);
+  if (!source) {
     issues.push({
       path,
       message: `Condition references unknown field '${condition.fieldKey}'.`,
     });
+    return;
   }
-  if (
-    !['truthy', 'falsy'].includes(condition.operator) &&
-    condition.value === undefined
-  ) {
-    issues.push({ path, message: 'Condition value is required.' });
+
+  try {
+    assertInspectionConditionLeafValueCompatible(condition, {
+      key: source.key,
+      type: source.type,
+      options: source.options,
+    });
+  } catch (cause) {
+    issues.push({
+      path,
+      message:
+        cause instanceof Error
+          ? cause.message
+          : 'Condition value is incompatible with its source field.',
+    });
   }
 }
 
@@ -561,10 +730,11 @@ export function validateInspectionSchemaBuilderDraft(
 
   for (const [sectionIndex, section] of draft.sections.entries()) {
     for (const [itemIndex, item] of section.items.entries()) {
-      const sources = new Set(
-        conditionSourcesForItem(draft, section.id, item.id).map((field) =>
+      const sources = new Map(
+        conditionSourcesForItem(draft, section.id, item.id).map((field) => [
           field.key.toLowerCase(),
-        ),
+          field,
+        ] as const),
       );
       conditionIssue(
         item.visibleWhen,
