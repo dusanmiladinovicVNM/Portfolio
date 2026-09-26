@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  asDateOnly,
   asLeaseAgreementId,
   asLeaseAgreementPartyId,
   asLeaseAmendmentId,
@@ -121,11 +122,11 @@ describe('Luzerner lease form', () => {
     const form = createLuzernerLeaseFormDraft(agreementId, {
       ...base,
       ewid: ' 12345 ',
-      moveInDate: '2026-10-01',
+      moveInDate: asDateOnly('2026-10-01'),
       netRent: '1850.5' as never,
       garageParkingRent: '0' as never,
       placeOfSigning: ' Luzern ',
-      signingDate: '2026-09-26',
+      signingDate: asDateOnly('2026-09-26'),
     });
 
     expect(form.revision).toBe(1);
