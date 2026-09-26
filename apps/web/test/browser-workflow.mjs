@@ -3741,9 +3741,12 @@ try {
     "//a[contains(@class,'inspection-section-link')][.//strong[normalize-space()='General condition']]//*[contains(normalize-space(),'2/2 required · complete')]",
   );
   assertEqual(
-    await elementDisabledXpath(sessionId, lockButton),
+    await elementDisabledXpath(
+      sessionId,
+      "//button[normalize-space()='Review before lock']",
+    ),
     false,
-    'Canonical required completeness enables Inspection lock',
+    'Canonical required completeness leaves pre-lock review available',
   );
 
   await selectOptionXpath(
