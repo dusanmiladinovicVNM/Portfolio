@@ -57,13 +57,13 @@ export const luzernerLeaseFormDataSchema = z
     sharedBicycleMopedStorage: z.boolean(),
     sharedUseExtras: z.array(z.string().trim().min(1).max(120)).max(2),
 
-    useType: z.enum(LUZERNER_LEASE_USE_TYPES),
+    useType: z.enum(LUZERNER_LEASE_USE_TYPES).nullable(),
     customUse: z.string().trim().min(1).max(120).nullable(),
 
     handoverDate: dateOnlySchema.nullable(),
-    durationMode: z.enum(LUZERNER_LEASE_DURATION_MODES),
+    durationMode: z.enum(LUZERNER_LEASE_DURATION_MODES).nullable(),
     minimumFirstTerminationDate: dateOnlySchema.nullable(),
-    terminationDateMode: z.enum(LUZERNER_TERMINATION_DATE_MODES),
+    terminationDateMode: z.enum(LUZERNER_TERMINATION_DATE_MODES).nullable(),
 
     ancillaryCosts: ancillaryCostsSchema,
     customAncillaryCosts: z
@@ -75,11 +75,11 @@ export const luzernerLeaseFormDataSchema = z
       )
       .max(2),
 
-    rentAdjustmentMode: z.enum(LUZERNER_RENT_ADJUSTMENT_MODES),
+    rentAdjustmentMode: z.enum(LUZERNER_RENT_ADJUSTMENT_MODES).nullable(),
     adjustmentNoticeMonths: z.number().int().min(1).max(120).nullable(),
     indexPointsAtContract: canonicalDecimalSchema.nullable(),
 
-    settlementCutoffMode: z.enum(LUZERNER_SETTLEMENT_CUTOFF_MODES),
+    settlementCutoffMode: z.enum(LUZERNER_SETTLEMENT_CUTOFF_MODES).nullable(),
     customSettlementCutoffDate: dateOnlySchema.nullable(),
 
     depositAccountOnTenantName: z.boolean(),
