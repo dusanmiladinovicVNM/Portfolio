@@ -4,6 +4,7 @@ import {
   dashboardRoute,
   partiesRoute,
   staffRoute,
+  inspectionSchemasRoute,
   parseWorkspaceLocation,
   isWorkspaceAsOf,
   propertyRoute,
@@ -230,6 +231,24 @@ describe('workspace URL navigation', () => {
       asOf: '2025-06-30',
     });
     expect(workspaceRouteOwnerKey(route)).toBe('staff');
+  });
+
+  it('round-trips the global Inspection Schema Builder route', () => {
+    const route = inspectionSchemasRoute('2025-06-30');
+    expect(workspaceRouteHref(route)).toBe(
+      '/inspection-schemas?asOf=2025-06-30',
+    );
+    expect(
+      parseWorkspaceLocation(
+        '/inspection-schemas',
+        '?asOf=2025-06-30',
+        '2026-09-21',
+      ),
+    ).toEqual({
+      kind: 'inspection-schemas',
+      asOf: '2025-06-30',
+    });
+    expect(workspaceRouteOwnerKey(route)).toBe('inspection-schemas');
   });
 
   it('deep-links one Asset only inside the Assets dossier tab', () => {
