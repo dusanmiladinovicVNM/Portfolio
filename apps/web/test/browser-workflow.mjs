@@ -3734,6 +3734,12 @@ try {
     "//form[@data-inspection-content-form='evidence-scoped-upload']";
   const evidenceAttachForm =
     "//form[@data-inspection-content-form='evidence-attach']";
+  await waitForElement(
+    sessionId,
+    'xpath',
+    scopedEvidenceForm +
+      "//input[@name='file' and @capture='environment' and contains(@accept,'image/jpeg') and contains(@accept,'image/png') and contains(@accept,'image/webp')]",
+  );
   const scopedUploadsBefore = await executeScript(
     sessionId,
     'return window.__portfolioDocumentUploadCount || 0;',
@@ -3755,7 +3761,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[contains(normalize-space(),'Inspection-scoped evidence binary stored.')]",
+    "//*[contains(normalize-space(),'Inspection photo stored without unnecessary recompression.')]",
   );
   assertEqual(
     await executeScript(
