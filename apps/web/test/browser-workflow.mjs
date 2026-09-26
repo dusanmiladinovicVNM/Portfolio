@@ -724,7 +724,9 @@ try {
   );
   await executeScript(
     sessionId,
-    'window.__portfolioFailNextInspectionSchemaCreateAfterCommit = true; return true;',
+    'window.__portfolioFailNextInspectionSchemaCreateAfterCommit = true;' +
+      'window.__portfolioFailNextInspectionSchemaListRead = true;' +
+      'return true;',
   );
   await clickXpath(
     sessionId,
@@ -733,7 +735,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[contains(normalize-space(),'Schema save outcome is ambiguous. Canonical versions were reloaded. Do not retry automatically; verify the version list first.')]",
+    "//*[contains(normalize-space(),'Schema save outcome is ambiguous and the canonical reread failed:')]",
   );
   await waitForElement(
     sessionId,
@@ -754,7 +756,20 @@ try {
       'return window.__portfolioInspectionSchemaCreateCount || 0;',
     ),
     schemaCreatesBefore + 1,
-    'Ambiguous Schema Builder create never auto-retries POST',
+    'Ambiguous Schema Builder create never auto-retries POST when canonical reread also fails',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//button[contains(@class,'schema-version-card')][.//small[contains(normalize-space(),'v2')]]",
+    ),
+    false,
+    'Failed canonical reread leaves the rendered version list unchanged',
+  );
+
+  await clickXpath(
+    sessionId,
+    "//aside[contains(@class,'schema-version-sidebar')]//button[normalize-space()='Refresh']",
   );
   const createdDraftCard =
     "//button[contains(@class,'schema-version-card')][.//small[contains(normalize-space(),'v2')]][.//span[normalize-space()='draft']]";
@@ -762,6 +777,22 @@ try {
     sessionId,
     'xpath',
     createdDraftCard,
+  );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      "//button[normalize-space()='Save draft version']",
+    ),
+    true,
+    'Successful later canonical refresh does not silently clear create ambiguity',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioInspectionSchemaCreateCount || 0;',
+    ),
+    schemaCreatesBefore + 1,
+    'Operator verification refresh does not create another schema version',
   );
   await clickAndAcceptConfirm(
     sessionId,
