@@ -157,8 +157,8 @@ describe('CanonicalLuzernerPdfRenderer', () => {
     expect(first.content).toEqual(second.content);
     expect(source).not.toContain('%%PORTFOLIO_LUZERNER_OVERLAY_PAGE_');
 
-    expect(source).toContain('<506F7274666F6C696F20496D6D6F62696C69656E204147> Tj');
-    expect(source).toContain('<56657277616C74756E67204D7573746572204147> Tj');
+    expect(source).toContain('<506F7274666F6C696F20496D6D6F62696C69656E2041472C20');
+    expect(source).toContain('<56657277616C74756E67204D75737465722041472C20');
     expect(source).toContain('<416E6E61204DFC6C6C6572> Tj');
     expect(source).toContain('<30312E30372E32303237> Tj');
     expect(source).toContain('<32273131302E3030> Tj');
