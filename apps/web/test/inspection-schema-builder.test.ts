@@ -333,6 +333,95 @@ describe('Inspection Schema Builder model', () => {
     ).toBe(true);
   });
 
+  it('blocks number/date literals and empty membership sets that runtime answers cannot satisfy', () => {
+    const draft = inspectionSchemaDraftFromVersion(schema);
+    const source = draft.sections[1]!.items[0]!;
+    const dependent = draft.sections[1]!.items[1]!;
+
+    const invalidNumber = {
+      ...draft,
+      sections: draft.sections.map((section) => ({
+        ...section,
+        items: section.items.map((item) => {
+          if (item.id === source.id) {
+            return { ...item, type: 'number' as const, options: [] };
+          }
+          if (item.id === dependent.id) {
+            return {
+              ...item,
+              visibleWhen: {
+                fieldKey: source.key,
+                operator: 'equals' as const,
+                value: ' 1 ',
+              },
+              requiredWhen: null,
+            };
+          }
+          return item;
+        }),
+      })),
+    };
+    expect(
+      validateInspectionSchemaBuilderDraft(invalidNumber).some((issue) =>
+        issue.message.includes('canonical decimal string'),
+      ),
+    ).toBe(true);
+
+    const invalidDate = {
+      ...draft,
+      sections: draft.sections.map((section) => ({
+        ...section,
+        items: section.items.map((item) => {
+          if (item.id === source.id) {
+            return { ...item, type: 'date' as const, options: [] };
+          }
+          if (item.id === dependent.id) {
+            return {
+              ...item,
+              visibleWhen: {
+                fieldKey: source.key,
+                operator: 'equals' as const,
+                value: '2026-02-30',
+              },
+              requiredWhen: null,
+            };
+          }
+          return item;
+        }),
+      })),
+    };
+    expect(
+      validateInspectionSchemaBuilderDraft(invalidDate).some((issue) =>
+        issue.message.includes('valid YYYY-MM-DD calendar date'),
+      ),
+    ).toBe(true);
+
+    const emptyMembership = {
+      ...draft,
+      sections: draft.sections.map((section) => ({
+        ...section,
+        items: section.items.map((item) =>
+          item.id === dependent.id
+            ? {
+                ...item,
+                visibleWhen: {
+                  fieldKey: source.key,
+                  operator: 'in' as const,
+                  value: [],
+                },
+                requiredWhen: null,
+              }
+            : item,
+        ),
+      })),
+    };
+    expect(
+      validateInspectionSchemaBuilderDraft(emptyMembership).some((issue) =>
+        issue.message.includes('at least one condition value'),
+      ),
+    ).toBe(true);
+  });
+
   it('blocks structurally invalid operational drafts before POST', () => {
     const draft = inspectionSchemaDraftFromVersion(schema);
     const invalid = {
