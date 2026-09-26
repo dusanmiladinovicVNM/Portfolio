@@ -1,6 +1,7 @@
 import { DomainError } from '../shared/domain-error.js';
 import { asInstant } from '../shared/instant.js';
 import { asDateOnly, type DateOnly } from '../shared/date-only.js';
+import { normalizeCanonicalDecimal } from '../shared/canonical-decimal.js';
 import type {
   InspectionFindingId,
   InspectionId,
@@ -359,10 +360,6 @@ export function assertInspectionContentEditable(inspection: Inspection): void {
   }
 }
 
-function validDecimal(value: string): boolean {
-  return /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value.trim());
-}
-
 function optionValues(item: InspectionSchemaItem): ReadonlySet<string> {
   return new Set(item.options.map((option) => option.value));
 }
@@ -415,14 +412,17 @@ export function validateInspectionAnswer(
       return value;
     }
 
-    case 'number':
-      if (typeof value !== 'string' || !validDecimal(value)) {
+    case 'number': {
+      const normalized =
+        typeof value === 'string' ? normalizeCanonicalDecimal(value) : null;
+      if (normalized === null) {
         throw new DomainError(
           'INSPECTION_RESPONSE_TYPE_MISMATCH',
           `Item '${item.key}' requires a canonical decimal string.`,
         );
       }
-      return value.trim();
+      return normalized;
+    }
 
     case 'date':
       if (typeof value !== 'string') {
