@@ -52,6 +52,7 @@ import {
   assertTenancyAgreementsOwner,
 } from './contract-owner.js';
 import { LeaseAdministration } from './LeaseAdministration.js';
+import { LuzernerLeaseFormEditor } from './LuzernerLeaseFormEditor.js';
 
 interface UnitContractsProps {
   readonly api: PortfolioApi;
@@ -815,10 +816,15 @@ export function UnitContracts({
 
       {selectedAgreement ? (
         <>
+          <LuzernerLeaseFormEditor
+            agreement={selectedAgreement}
+            api={api}
+          />
+
           <section className="panel">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Step 3 · Agreement Documents</p>
+                <p className="eyebrow">Step 4 · Agreement Documents</p>
                 <h2>{selectedAgreement.code}</h2>
               </div>
               <span className="section-note">
@@ -857,7 +863,7 @@ export function UnitContracts({
           <section className="panel">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Step 4 · Amendments</p>
+                <p className="eyebrow">Step 5 · Amendments</p>
                 <h2>{selectedAgreement.code}</h2>
               </div>
               <span className="section-note">
@@ -893,7 +899,7 @@ export function UnitContracts({
         <section className="panel">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">Step 5 · Amendment Documents</p>
+              <p className="eyebrow">Step 6 · Amendment Documents</p>
               <h2>{selectedAmendment.code}</h2>
             </div>
             <span className="section-note">
