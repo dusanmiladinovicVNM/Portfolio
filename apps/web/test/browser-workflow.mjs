@@ -1740,7 +1740,7 @@ try {
   await typeXpath(
     sessionId,
     luzernerForm +
-      "//label[normalize-space()='Besondere Bestimmungen']//textarea",
+      "//label[contains(normalize-space(.),'Besondere Bestimmungen')]//textarea",
     'Browser canonical Luzerner provision.',
   );
   await typeXpath(
@@ -1781,7 +1781,7 @@ try {
   await typeXpath(
     sessionId,
     luzernerForm +
-      "//label[normalize-space()='Besondere Bestimmungen']//textarea",
+      "//label[contains(normalize-space(.),'Besondere Bestimmungen')]//textarea",
     'Browser canonical Luzerner provision revised.',
   );
   await executeScript(
