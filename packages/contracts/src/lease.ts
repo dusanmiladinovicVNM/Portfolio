@@ -25,8 +25,8 @@ export const leaseTermsRequestSchema = z.object({
   otherRecurringCharge: moneySchema.optional(),
   depositRequired: moneySchema.optional(),
   billingFrequency: z.enum(BILLING_FREQUENCIES).optional(),
-  noticePeriodTenantDays: z.number().int().nonnegative().optional(),
-  noticePeriodLandlordDays: z.number().int().nonnegative().optional(),
+  noticePeriodTenantDays: z.number().int().nonnegative().nullable().optional(),
+  noticePeriodLandlordDays: z.number().int().nonnegative().nullable().optional(),
 });
 
 const nullableTextSchema = z.string().trim().nullable();
@@ -319,8 +319,8 @@ export const tenancyTermVersionResponseSchema = z.object({
   otherRecurringCharge: z.string(),
   depositRequired: z.string(),
   billingFrequency: z.enum(BILLING_FREQUENCIES),
-  noticePeriodTenantDays: z.number().int().nonnegative(),
-  noticePeriodLandlordDays: z.number().int().nonnegative(),
+  noticePeriodTenantDays: z.number().int().nonnegative().nullable(),
+  noticePeriodLandlordDays: z.number().int().nonnegative().nullable(),
 });
 
 export type LeaseTermsRequest = z.infer<typeof leaseTermsRequestSchema>;

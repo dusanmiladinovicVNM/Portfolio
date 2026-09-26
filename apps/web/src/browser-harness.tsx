@@ -1087,8 +1087,8 @@ function setupTermSnapshot(
     otherRecurringCharge?: string;
     depositRequired?: string;
     billingFrequency?: 'monthly' | 'quarterly' | 'semiannual' | 'yearly';
-    noticePeriodTenantDays?: number;
-    noticePeriodLandlordDays?: number;
+    noticePeriodTenantDays?: number | null;
+    noticePeriodLandlordDays?: number | null;
   },
 ): TenancyTermVersionResponse {
   const id = setupTermIds[setupTermSequence++];
@@ -1109,8 +1109,14 @@ function setupTermSnapshot(
     otherRecurringCharge: exactMoney(termsInput.otherRecurringCharge),
     depositRequired: exactMoney(termsInput.depositRequired),
     billingFrequency: termsInput.billingFrequency ?? 'monthly',
-    noticePeriodTenantDays: termsInput.noticePeriodTenantDays ?? 0,
-    noticePeriodLandlordDays: termsInput.noticePeriodLandlordDays ?? 0,
+    noticePeriodTenantDays:
+      termsInput.noticePeriodTenantDays === undefined
+        ? 0
+        : termsInput.noticePeriodTenantDays,
+    noticePeriodLandlordDays:
+      termsInput.noticePeriodLandlordDays === undefined
+        ? 0
+        : termsInput.noticePeriodLandlordDays,
   };
 }
 
@@ -3950,8 +3956,8 @@ globalThis.fetch = async (
         otherRecurringCharge?: string;
         depositRequired?: string;
         billingFrequency?: 'monthly' | 'quarterly' | 'semiannual' | 'yearly';
-        noticePeriodTenantDays?: number;
-        noticePeriodLandlordDays?: number;
+        noticePeriodTenantDays?: number | null;
+        noticePeriodLandlordDays?: number | null;
       };
     };
     if (body.expectedVersion !== setupAgreement.version) {
@@ -4005,7 +4011,13 @@ globalThis.fetch = async (
           sourceAmendmentId: null,
           effectiveFrom: signed.effectiveFrom,
         },
-        body.terms,
+        setupLuzernerForms.has(signed.id)
+          ? {
+              ...body.terms,
+              noticePeriodTenantDays: null,
+              noticePeriodLandlordDays: null,
+            }
+          : body.terms,
       ),
     );
     return maybeHoldContractMutation(json(signed));
@@ -4089,8 +4101,8 @@ globalThis.fetch = async (
         otherRecurringCharge?: string;
         depositRequired?: string;
         billingFrequency?: 'monthly' | 'quarterly' | 'semiannual' | 'yearly';
-        noticePeriodTenantDays?: number;
-        noticePeriodLandlordDays?: number;
+        noticePeriodTenantDays?: number | null;
+        noticePeriodLandlordDays?: number | null;
       };
     };
     if (body.expectedVersion !== setupAmendment.version) {

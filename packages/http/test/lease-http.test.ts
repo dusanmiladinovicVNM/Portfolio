@@ -1109,6 +1109,30 @@ describe('Luzerner lease form HTTP', () => {
     );
     expect(complete.status).toBe(200);
 
+    const duplicateNoticeSign = await handler(
+      new Request(`https://portfolio.test/agreements/${agreement.id}/sign`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 1,
+          signedAt: '2026-09-26',
+          terms: {
+            currency: 'CHF',
+            baseRent: '1850.00',
+            parkingRent: '120.00',
+            depositRequired: '3700.00',
+            billingFrequency: 'semiannual',
+            noticePeriodTenantDays: 30,
+            noticePeriodLandlordDays: 30,
+          },
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(duplicateNoticeSign.status).toBe(422);
+    expect(await duplicateNoticeSign.json()).toMatchObject({
+      error: { code: 'LUZERNER_LEASE_FORM_NOTICE_PERIOD_OWNERSHIP' },
+    });
+
     const mismatchedSign = await handler(
       new Request(`https://portfolio.test/agreements/${agreement.id}/sign`, {
         method: 'POST',

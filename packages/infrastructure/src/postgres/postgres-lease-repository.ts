@@ -96,8 +96,8 @@ interface TermRow {
   other_recurring_charge: string | number;
   deposit_required: string | number;
   billing_frequency: BillingFrequency;
-  notice_period_tenant_days: number;
-  notice_period_landlord_days: number;
+  notice_period_tenant_days: number | null;
+  notice_period_landlord_days: number | null;
 }
 
 const agreementSelect = `

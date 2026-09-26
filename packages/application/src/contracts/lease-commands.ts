@@ -385,6 +385,21 @@ export async function signLeaseAgreementCommand(
   }
 
   const signed = signLeaseAgreement(agreement, signedAt);
+  const luzernerForm = await deps.leaseRepository.getLuzernerLeaseForm(
+    agreement.id,
+  );
+
+  if (
+    luzernerForm !== null &&
+    (terms.noticePeriodTenantDays != null ||
+      terms.noticePeriodLandlordDays != null)
+  ) {
+    throw new DomainError(
+      'LUZERNER_LEASE_FORM_NOTICE_PERIOD_OWNERSHIP',
+      'Luzerner Kündigungsfrist is contract-form-owned and must not be duplicated as an approximate day count.',
+    );
+  }
+
   const termVersion = createTenancyTermVersion({
     id: asTenancyTermVersionId(deps.idGenerator.next()),
     tenancyId: agreement.tenancyId,
@@ -392,11 +407,14 @@ export async function signLeaseAgreementCommand(
     sourceAgreementId: agreement.id,
     effectiveFrom: agreement.effectiveFrom,
     ...terms,
+    ...(luzernerForm !== null
+      ? {
+          noticePeriodTenantDays: null,
+          noticePeriodLandlordDays: null,
+        }
+      : {}),
   });
 
-  const luzernerForm = await deps.leaseRepository.getLuzernerLeaseForm(
-    agreement.id,
-  );
   if (luzernerForm !== null) {
     assertLuzernerLeaseSignConsistency(luzernerForm, signed, termVersion);
   }

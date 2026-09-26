@@ -174,8 +174,22 @@ function TermsPanel({
 
       <dl className="detail-list compact-detail-list">
         <div><dt>Billing</dt><dd>{formatDetailKey(terms.billingFrequency)}</dd></div>
-        <div><dt>Tenant notice</dt><dd>{terms.noticePeriodTenantDays} days</dd></div>
-        <div><dt>Landlord notice</dt><dd>{terms.noticePeriodLandlordDays} days</dd></div>
+        <div>
+          <dt>Tenant notice</dt>
+          <dd>
+            {terms.noticePeriodTenantDays === null
+              ? 'Contract-specific'
+              : `${terms.noticePeriodTenantDays} days`}
+          </dd>
+        </div>
+        <div>
+          <dt>Landlord notice</dt>
+          <dd>
+            {terms.noticePeriodLandlordDays === null
+              ? 'Contract-specific'
+              : `${terms.noticePeriodLandlordDays} days`}
+          </dd>
+        </div>
         <div>
           <dt>Source</dt>
           <dd>{formatDetailKey(terms.sourceType)}</dd>

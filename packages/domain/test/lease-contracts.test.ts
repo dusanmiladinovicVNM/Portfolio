@@ -251,6 +251,23 @@ describe('Lease terms', () => {
     expect(terms.depositRequired).toBe('1700.00');
   });
 
+  it('keeps contract-specific notice periods unrepresented instead of approximating months as days', () => {
+    const terms = createTenancyTermVersion({
+      id: asTenancyTermVersionId('20000000-0000-4000-8000-000000000009'),
+      tenancyId,
+      sourceType: 'agreement',
+      sourceAgreementId: agreementId,
+      effectiveFrom: '2026-10-01',
+      currency: 'CHF',
+      baseRent: '1850.00',
+      noticePeriodTenantDays: null,
+      noticePeriodLandlordDays: null,
+    });
+
+    expect(terms.noticePeriodTenantDays).toBeNull();
+    expect(terms.noticePeriodLandlordDays).toBeNull();
+  });
+
   it('creates full replacement terms from a signed amendment source', () => {
     const amendment = signLeaseAmendment(
       createLeaseAmendment({
