@@ -161,7 +161,7 @@ describe('CanonicalLuzernerPdfRenderer', () => {
     expect(source).toContain('<56657277616C74756E67204D7573746572204147> Tj');
     expect(source).toContain('<416E6E61204DFC6C6C6572> Tj');
     expect(source).toContain('<30312E30372E32303237> Tj');
-    expect(source).toContain('<322731302E3030> Tj');
+    expect(source).toContain('<32273131302E3030> Tj');
     expect(source).toContain('<486F6262797261756D2033> Tj');
     expect(source).toContain('<446163687465727261737365> Tj');
     expect(source).toContain('<536F6C61727374726F6D20416C6C67656D65696E> Tj');
