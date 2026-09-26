@@ -339,14 +339,18 @@ export function assertInspectionConditionLeafValueCompatible(
     return;
   }
 
-  if (Array.isArray(condition.value)) {
+  const scalar = condition.value;
+  if (
+    Array.isArray(scalar) ||
+    (typeof scalar !== 'string' && typeof scalar !== 'boolean')
+  ) {
     invalidConditionValue(
       source,
       condition,
       'requires one scalar condition value.',
     );
   }
-  assertConditionScalarCompatible(source, condition, condition.value);
+  assertConditionScalarCompatible(source, condition, scalar);
 }
 
 export function createInspectionSchemaVersion(
