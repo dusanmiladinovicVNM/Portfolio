@@ -12,6 +12,8 @@ import type {
   DocumentVersionResponse,
   LeaseAgreementDocumentReferenceResponse,
   LeaseAgreementResponse,
+  LuzernerLeaseFormContentRequest,
+  LuzernerLeaseFormResponse,
   LeaseAmendmentDocumentReferenceResponse,
   LeaseAmendmentResponse,
   MeterReadingBoundaryResponse,
@@ -308,6 +310,7 @@ let setupSpace: SpaceResponse | null = null;
 let setupParty: PartyResponse | null = null;
 let setupTenancy: TenancyResponse | null = null;
 let setupAgreements: LeaseAgreementResponse[] = [];
+let setupLuzernerForms = new Map<string, LuzernerLeaseFormResponse>();
 let heldContractAgreementRead: LeaseAgreementResponse[] | null = null;
 let setupAmendments: LeaseAmendmentResponse[] = [];
 let setupTerms: TenancyTermVersionResponse[] = [];
@@ -1220,6 +1223,8 @@ type BrowserHarnessWindow = Window & {
   __portfolioFailNextAssetReplacementAfterCommit?: boolean;
   __portfolioFailNextWarrantyCreateAfterCommit?: boolean;
   __portfolioFailNextSignedOriginalLink?: boolean;
+  __portfolioFailNextLuzernerFormSaveAfterCommit?: boolean;
+  __portfolioLuzernerFormPutCount?: number;
   __portfolioPendingUnitCreate?: boolean;
   __portfolioPendingSpaceCreate?: boolean;
   __portfolioPendingTenancyMutation?: boolean;
@@ -1253,6 +1258,7 @@ type BrowserHarnessWindow = Window & {
 const browserHarnessWindow = window as BrowserHarnessWindow;
 browserHarnessWindow.__portfolioBinaryReads = 0;
 browserHarnessWindow.__portfolioDocumentUploadCount = 0;
+browserHarnessWindow.__portfolioLuzernerFormPutCount = 0;
 browserHarnessWindow.__portfolioInspectionSectionPatchCount = 0;
 browserHarnessWindow.__portfolioInspectionSchemaCreateCount = 0;
 browserHarnessWindow.__portfolioInspectionSchemaPublishCount = 0;
@@ -3864,6 +3870,67 @@ globalThis.fetch = async (
   const setupAgreement = setupAgreements.find((item) =>
     path.startsWith('/agreements/' + item.id),
   );
+
+  if (
+    setupAgreement &&
+    path === '/agreements/' + setupAgreement.id + '/luzerner-form'
+  ) {
+    const current = setupLuzernerForms.get(setupAgreement.id) ?? null;
+
+    if (!init?.method || init.method === 'GET') {
+      if (!current) {
+        return apiError(
+          404,
+          'LUZERNER_LEASE_FORM_NOT_FOUND',
+          'No Luzerner lease form exists for this agreement.',
+        );
+      }
+      return json(current);
+    }
+
+    if (init.method === 'PUT') {
+      requirePortfolioAuth(init);
+      browserHarnessWindow.__portfolioLuzernerFormPutCount =
+        (browserHarnessWindow.__portfolioLuzernerFormPutCount ?? 0) + 1;
+      const body = JSON.parse(String(init.body)) as {
+        expectedRevision: number | null;
+        content: LuzernerLeaseFormContentRequest;
+      };
+
+      if (
+        (current === null && body.expectedRevision !== null) ||
+        (current !== null && body.expectedRevision !== current.revision)
+      ) {
+        return apiError(
+          409,
+          'LUZERNER_LEASE_FORM_REVISION_CONFLICT',
+          'The Luzerner lease form changed since the caller last read it.',
+        );
+      }
+
+      const saved: LuzernerLeaseFormResponse = {
+        agreementId: setupAgreement.id,
+        templateCode: 'lu-2020',
+        revision: (current?.revision ?? 0) + 1,
+        content: body.content,
+      };
+      setupLuzernerForms.set(setupAgreement.id, saved);
+
+      if (
+        browserHarnessWindow.__portfolioFailNextLuzernerFormSaveAfterCommit
+      ) {
+        browserHarnessWindow.__portfolioFailNextLuzernerFormSaveAfterCommit =
+          false;
+        return apiError(
+          503,
+          'LUZERNER_LEASE_FORM_TEST_ACK_LOST',
+          'Intentional Luzerner form save acknowledgement loss.',
+        );
+      }
+
+      return json(saved);
+    }
+  }
 
   if (
     setupAgreement &&
