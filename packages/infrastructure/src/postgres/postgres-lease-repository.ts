@@ -22,6 +22,10 @@ import {
   type LeaseAgreementStatus,
   type LeaseAgreementType,
   type LeaseAgreementId,
+  LUZERNER_LEASE_TEMPLATE_CODE,
+  normalizeLuzernerLeaseFormContent,
+  type LuzernerLeaseFormContent,
+  type LuzernerLeaseFormDraft,
   type LeaseAmendment,
   type LeaseAmendmentId,
   type LeaseAmendmentStatus,
@@ -56,6 +60,13 @@ interface AgreementRow {
   signed_at: string | Date | null;
   version: number;
   parties: AgreementPartyJson[];
+}
+
+interface LuzernerLeaseFormRow {
+  agreement_id: string;
+  template_code: string;
+  revision: number;
+  content: LuzernerLeaseFormContent;
 }
 
 interface AmendmentRow {
@@ -156,6 +167,23 @@ function mapAgreement(row: AgreementRow): LeaseAgreement {
   };
 }
 
+function mapLuzernerLeaseForm(
+  row: LuzernerLeaseFormRow,
+): LuzernerLeaseFormDraft {
+  if (row.template_code !== LUZERNER_LEASE_TEMPLATE_CODE) {
+    throw new DomainError(
+      'LUZERNER_LEASE_FORM_TEMPLATE_MISMATCH',
+      'Stored lease form has an unsupported template code.',
+    );
+  }
+  return {
+    agreementId: asLeaseAgreementId(row.agreement_id),
+    templateCode: LUZERNER_LEASE_TEMPLATE_CODE,
+    revision: row.revision,
+    content: normalizeLuzernerLeaseFormContent(row.content),
+  };
+}
+
 function mapAmendment(row: AmendmentRow): LeaseAmendment {
   return {
     id: asLeaseAmendmentId(row.id),
@@ -242,6 +270,11 @@ function translateLeaseError(error: unknown): DomainError | null {
           'LEASE_AMENDMENT_TERMS_ALREADY_EXIST',
           'This amendment already produced its term version.',
         );
+      case 'lease_agreement_luzerner_forms_pkey':
+        return new DomainError(
+          'LUZERNER_LEASE_FORM_ALREADY_EXISTS',
+          'A Luzerner lease form already exists for this agreement.',
+        );
       default:
         return null;
     }
@@ -273,6 +306,11 @@ function translateLeaseError(error: unknown): DomainError | null {
         return new DomainError(
           'LEASE_AGREEMENT_PREDECESSOR_PERIOD_INVALID',
           'A successor agreement must become effective after its predecessor starts.',
+        );
+      case 'lease_agreement_luzerner_form_draft_only':
+        return new DomainError(
+          'LUZERNER_LEASE_FORM_AGREEMENT_NOT_DRAFT',
+          'The Luzerner lease form can only be edited while its agreement is draft.',
         );
       default:
         break;
@@ -496,6 +534,59 @@ export class PostgresLeaseRepository implements LeaseRepository {
         'Lease agreement was modified concurrently.',
       );
     }
+  }
+
+  async getLuzernerLeaseForm(
+    agreementId: LeaseAgreementId,
+  ): Promise<LuzernerLeaseFormDraft | null> {
+    const rows = await this.sql<LuzernerLeaseFormRow[]>`
+      select agreement_id, template_code, revision, content
+      from public.lease_agreement_luzerner_forms
+      where agreement_id = ${agreementId}
+      limit 1
+    `;
+    return rows.length === 0 ? null : mapLuzernerLeaseForm(rows[0]!);
+  }
+
+  async insertLuzernerLeaseForm(
+    form: LuzernerLeaseFormDraft,
+  ): Promise<void> {
+    await withTranslatedErrors(async () => {
+      await this.sql`
+        insert into public.lease_agreement_luzerner_forms (
+          agreement_id, template_code, revision, content
+        ) values (
+          ${form.agreementId},
+          ${form.templateCode},
+          ${form.revision},
+          ${this.sql.json(form.content)}
+        )
+      `;
+    });
+  }
+
+  async updateLuzernerLeaseForm(
+    form: LuzernerLeaseFormDraft,
+    expectedRevision: number,
+  ): Promise<void> {
+    await withTranslatedErrors(async () => {
+      const rows = await this.sql<{ agreement_id: string }[]>`
+        update public.lease_agreement_luzerner_forms
+        set
+          revision = ${form.revision},
+          content = ${this.sql.json(form.content)},
+          updated_at = now()
+        where agreement_id = ${form.agreementId}
+          and revision = ${expectedRevision}
+        returning agreement_id
+      `;
+      if (rows.length === 0) {
+        throw new DomainError(
+          'LUZERNER_LEASE_FORM_REVISION_CONFLICT',
+          'The Luzerner lease form changed since the caller last read it.',
+        );
+      }
+    });
   }
 
   async getAmendmentById(id: LeaseAmendmentId): Promise<LeaseAmendment | null> {
