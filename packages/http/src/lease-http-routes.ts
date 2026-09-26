@@ -34,7 +34,6 @@ import {
   asLeaseAmendmentId,
   asPartyId,
   asTenancyId,
-  type LuzernerLeaseFormContent,
   type TermSnapshotInput,
 } from '@portfolio/domain';
 import {
@@ -199,7 +198,7 @@ export async function handleLeaseHttp(
         actor,
         agreementId,
         parsed.data.expectedRevision,
-        parsed.data.content as LuzernerLeaseFormContent,
+        parsed.data.content,
       );
       return json({ data: form });
     }
