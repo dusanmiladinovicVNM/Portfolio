@@ -4,6 +4,8 @@ import {
   type AgreementSupersession,
   type IdGenerator,
   type LeaseRepository,
+  type LuzernerLeasePdfPort,
+  type LuzernerLeasePdfRenderInput,
   type OwnershipRepository,
   type PartyRepository,
   type PortfolioRepository,
@@ -16,6 +18,7 @@ import {
   asLeaseAgreementId,
   asLeaseAmendmentId,
   asPartyId,
+  asPropertyId,
   asTenancyId,
   asTenancyPartyId,
   asUnitId,
@@ -451,6 +454,7 @@ class InMemoryLeaseRepository implements LeaseRepository {
 
 const TENANCY_ID = asTenancyId('10000000-0000-4000-8000-000000000001');
 const UNIT_ID = asUnitId('10000000-0000-4000-8000-000000000002');
+const PROPERTY_ID = asPropertyId('10000000-0000-4000-8000-000000000007');
 const TENANT_ID = asPartyId('10000000-0000-4000-8000-000000000003');
 const LANDLORD_ID = asPartyId('10000000-0000-4000-8000-000000000004');
 const OTHER_ID = asPartyId('10000000-0000-4000-8000-000000000005');
@@ -470,7 +474,9 @@ function person(id: PartyId, code: string, firstName: string): Party {
   };
 }
 
-function buildHandler() {
+function buildHandler(options?: {
+  readonly luzernerLeasePdfPort?: LuzernerLeasePdfPort;
+}) {
   const partyRepository = new InMemoryPartyRepository();
   partyRepository.parties.set(TENANT_ID, person(TENANT_ID, 'PTY-TENANT', 'Tenant'));
   partyRepository.parties.set(LANDLORD_ID, person(LANDLORD_ID, 'PTY-LANDLORD', 'Landlord'));
@@ -502,6 +508,51 @@ function buildHandler() {
 
   const leaseRepository = new InMemoryLeaseRepository();
 
+  const portfolioRepository: PortfolioRepository = {
+    async getPropertyById(id) {
+      if (id !== PROPERTY_ID) return null;
+      return {
+        id: PROPERTY_ID,
+        code: 'LU-TEST',
+        name: 'Luzern Test Property',
+        propertyType: 'apartment_building',
+        street: 'Seestrasse',
+        houseNumber: '12',
+        postalCode: '6003',
+        city: 'Luzern',
+        countryCode: 'CH',
+        yearBuilt: null,
+        status: 'active',
+      };
+    },
+    async getUnitById(id) {
+      if (id !== UNIT_ID) return null;
+      return {
+        id: UNIT_ID,
+        propertyId: PROPERTY_ID,
+        code: 'LU-301',
+        unitNumber: '3.01',
+        unitType: 'apartment',
+        floor: '3. OG',
+        areaM2: 82,
+        rooms: 3.5,
+        status: 'active',
+        notes: '',
+      };
+    },
+    async getSpaceById(_id) { return null; },
+    async listProperties() { return []; },
+    async listUnitsByProperty(_propertyId) { return []; },
+    async listSpacesByUnit(_unitId) { return []; },
+    async propertyCodeExists(_code) { return false; },
+    async unitCodeExists(_code) { return false; },
+    async unitNumberExists(_propertyId, _unitNumber) { return false; },
+    async spaceCodeExists(_unitId, _code) { return false; },
+    async insertProperty(_property) {},
+    async insertUnit(_unit) {},
+    async insertSpace(_space) {},
+  };
+
   const handler = createPortfolioHttpHandler({
     accessItemRepository: new InMemoryAccessItemRepository(),
     meterRepository: new InMemoryMeterRepository(),
@@ -513,11 +564,14 @@ function buildHandler() {
     improvementRepository: new InMemoryImprovementRepository(),
     costRepository: new InMemoryCostRepository(),
     maintenanceRepository: new InMemoryMaintenanceRepository(),
-    portfolioRepository: new EmptyPortfolioRepository(),
+    portfolioRepository,
     partyRepository,
     ownershipRepository: new EmptyOwnershipRepository(),
     tenancyRepository,
     leaseRepository,
+    ...(options?.luzernerLeasePdfPort === undefined
+      ? {}
+      : { luzernerLeasePdfPort: options.luzernerLeasePdfPort }),
     documentRepository: new InMemoryDocumentRepository(),
     inspectionRepository: new InMemoryInspectionRepository(),
     staffDirectoryRepository: new InMemoryStaffDirectoryRepository(),
@@ -546,6 +600,102 @@ function buildHandler() {
 }
 
 describe('Lease HTTP lifecycle', () => {
+  it('renders a canonical Luzerner PDF preview from saved form and dossier identity', async () => {
+    let captured: LuzernerLeasePdfRenderInput | null = null;
+    const luzernerLeasePdfPort: LuzernerLeasePdfPort = {
+      async renderLuzernerLeaseAgreement(input) {
+        captured = input;
+        return {
+          fileName: 'mietvertrag-AGR-0001.pdf',
+          content: new TextEncoder().encode('%PDF-preview'),
+        };
+      },
+    };
+
+    const { handler } = buildHandler({ luzernerLeasePdfPort });
+
+    const created = await handler(
+      new Request(`https://portfolio.test/tenancies/${TENANCY_ID}/agreements`, {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'AGR-0001',
+          agreementType: 'initial',
+          effectiveFrom: '2026-10-01',
+          effectiveTo: '2027-09-30',
+          parties: [
+            { partyId: LANDLORD_ID, role: 'landlord' },
+            { partyId: TENANT_ID, role: 'tenant' },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(created.status).toBe(201);
+    const agreement = (await created.json()).data as { id: string };
+
+    const empty = emptyLuzernerLeaseFormContent();
+    const saved = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedRevision: null,
+            content: {
+              ...empty,
+              useType: 'apartment',
+              moveInDate: '2026-10-01',
+              durationKind: 'indefinite',
+              terminationSchedule: 'monthly_except_december',
+              noticePeriodKind: 'residential_3_months',
+              netRent: '1500.00',
+              paymentFrequency: 'monthly',
+              rentAdjustmentMode: 'termination_date',
+              rentAdjustmentAdvanceMonths: 3,
+              ancillaryClosingDate: 'december_31',
+              placeOfSigning: 'Luzern',
+              signingDate: '2026-09-25',
+            },
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(saved.status).toBe(200);
+
+    const preview = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form/pdf`,
+      ),
+      adminIdentity,
+    );
+
+    expect(preview.status).toBe(200);
+    expect(preview.headers.get('content-type')).toBe('application/pdf');
+    expect(preview.headers.get('cache-control')).toBe('private, no-store');
+    expect(preview.headers.get('content-disposition')).toContain(
+      'mietvertrag-AGR-0001.pdf',
+    );
+    expect(await preview.text()).toBe('%PDF-preview');
+    expect(captured).not.toBeNull();
+    expect(captured!.agreementCode).toBe('AGR-0001');
+    expect(captured!.agreementEffectiveFrom).toBe('2026-10-01');
+    expect(captured!.property).toMatchObject({
+      street: 'Seestrasse',
+      houseNumber: '12',
+      postalCode: '6003',
+      city: 'Luzern',
+    });
+    expect(captured!.unit).toMatchObject({
+      unitNumber: '3.01',
+      unitType: 'apartment',
+      rooms: 3.5,
+    });
+    expect(captured!.landlords[0]?.displayName).toBe('Landlord Test');
+    expect(captured!.tenants[0]?.displayName).toBe('Tenant Test');
+    expect(captured!.form.netRent).toBe('1500.00');
+  });
+
   it('preserves exact historical terms through agreement and amendment snapshots', async () => {
     const { handler } = buildHandler();
 
