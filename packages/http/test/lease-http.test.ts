@@ -25,6 +25,7 @@ import {
   type LeaseAgreementId,
   type LeaseAmendment,
   type LeaseAmendmentId,
+  type LuzernerLeaseFormProfile,
   type OwnershipPeriod,
   type Party,
   type PartyId,
@@ -212,6 +213,7 @@ class InMemoryLeaseRepository implements LeaseRepository {
   readonly agreements = new Map<LeaseAgreementId, LeaseAgreement>();
   readonly amendments = new Map<LeaseAmendmentId, LeaseAmendment>();
   readonly terms: TenancyTermVersion[] = [];
+  readonly luzernerForms = new Map<LeaseAgreementId, LuzernerLeaseFormProfile>();
 
   async getAgreementById(id: LeaseAgreementId): Promise<LeaseAgreement | null> {
     return this.agreements.get(id) ?? null;
@@ -399,6 +401,29 @@ class InMemoryLeaseRepository implements LeaseRepository {
           right.effectiveFrom.localeCompare(left.effectiveFrom),
         )[0] ?? null
     );
+  }
+
+  async getLuzernerLeaseFormProfile(
+    agreementId: LeaseAgreementId,
+  ): Promise<LuzernerLeaseFormProfile | null> {
+    return this.luzernerForms.get(agreementId) ?? null;
+  }
+
+  async saveLuzernerLeaseFormProfile(
+    profile: LuzernerLeaseFormProfile,
+    expectedRevision: number,
+  ): Promise<void> {
+    const current = this.luzernerForms.get(profile.agreementId) ?? null;
+    if (
+      (expectedRevision === 0 && current !== null) ||
+      (expectedRevision > 0 &&
+        (current === null || current.revision !== expectedRevision))
+    ) {
+      throw Object.assign(new Error('form revision conflict'), {
+        code: 'LUZERNER_LEASE_FORM_REVISION_CONFLICT',
+      });
+    }
+    this.luzernerForms.set(profile.agreementId, profile);
   }
 }
 
