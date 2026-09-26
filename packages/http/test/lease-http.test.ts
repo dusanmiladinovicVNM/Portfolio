@@ -716,7 +716,6 @@ describe('Lease HTTP lifecycle', () => {
           code: 'AGR-FINAL-1',
           agreementType: 'initial',
           effectiveFrom: '2026-10-01',
-          effectiveTo: '2027-09-30',
           parties: [
             { partyId: LANDLORD_ID, role: 'landlord' },
             { partyId: TENANT_ID, role: 'tenant' },
