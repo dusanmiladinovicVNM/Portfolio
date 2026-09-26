@@ -1273,6 +1273,21 @@ try {
     "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//span[contains(@class,'status-chip') and normalize-space()='active']",
   );
 
+  await typeXpath(
+    sessionId,
+    "//form[@data-tenancy-form='create']//input[@name='code']",
+    'TEN-LU-EMPTY-BRW',
+  );
+  await clickXpath(
+    sessionId,
+    "//form[@data-tenancy-form='create']//button[normalize-space()='Create Tenancy']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'tenancy-card')][.//span[normalize-space()='TEN-LU-EMPTY-BRW']][.//span[contains(@class,'status-chip') and normalize-space()='draft']]",
+  );
+
   await clickXpath(sessionId, "//a[normalize-space()='Contracts']");
   await waitForElement(
     sessionId,
@@ -1878,6 +1893,82 @@ try {
     'xpath',
     agreementCreateForm +
       "//button[normalize-space()='Create Agreement draft' and not(@disabled)]",
+  );
+
+  await typeXpath(
+    sessionId,
+    luzernerForm +
+      "//label[contains(normalize-space(.),'Besondere Bestimmungen')]//textarea",
+    'Discard this temporary Luzerner edit.',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementCreateForm +
+      "//button[normalize-space()='Create Agreement draft' and @disabled]",
+  );
+  await clickAndAcceptConfirm(
+    sessionId,
+    "//a[contains(@class,'selection-card')][.//strong[normalize-space()='TEN-LU-EMPTY-BRW']]",
+    'This Luzerner contract form has unsaved changes. Leave and discard them?',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'selection-card')][@aria-current='page'][.//strong[normalize-space()='TEN-LU-EMPTY-BRW']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementCreateForm,
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[contains(normalize-space(),'Save or resolve the current Luzerner contract form before changing legal records.')]",
+    ),
+    false,
+    'Accepted Luzerner discard clears stale legal-write warning on the new Tenancy owner',
+  );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      agreementCreateForm +
+        "//button[normalize-space()='Create Agreement draft']",
+    ),
+    false,
+    'Accepted Luzerner discard releases Create Agreement on a Tenancy without an Agreement',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-luzerner-lease-form]",
+    ),
+    false,
+    'Tenancy without a selected Agreement has no Luzerner editor owner',
+  );
+
+  await clickXpath(
+    sessionId,
+    "//a[contains(@class,'selection-card')][.//strong[normalize-space()='TEN-SETUP-BRW']]",
+  );
+  const replacementAgreementCard =
+    "//a[contains(@class,'agreement-card')][.//span[normalize-space()='AGR-REPLACEMENT-BRW']]";
+  await waitForElement(sessionId, 'xpath', replacementAgreementCard);
+  await clickXpath(sessionId, replacementAgreementCard);
+  await waitForElement(
+    sessionId,
+    'xpath',
+    luzernerForm + "//h2[normalize-space()='Contract form data']",
+  );
+  assertEqual(
+    await elementValueXpath(
+      sessionId,
+      luzernerForm +
+        "//label[contains(normalize-space(.),'Besondere Bestimmungen')]//textarea",
+    ),
+    'Browser canonical Luzerner provision.',
+    'Accepted owner change discards only the local Luzerner draft and reloads canonical data',
   );
 
   await typeXpath(

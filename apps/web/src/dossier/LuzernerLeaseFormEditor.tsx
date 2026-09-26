@@ -163,6 +163,12 @@ export function LuzernerLeaseFormEditor({
   }, []);
 
   useEffect(() => {
+    return () => {
+      onWriteBlockChange(false);
+    };
+  }, [onWriteBlockChange]);
+
+  useEffect(() => {
     onWriteBlockChange(dirty || saving || outcomeAmbiguous);
   }, [dirty, onWriteBlockChange, outcomeAmbiguous, saving]);
 
