@@ -258,6 +258,119 @@ export function renameInspectionSchemaItemKey(
   };
 }
 
+function remapInspectionConditionKeys(
+  condition: InspectionCondition | null,
+  keyMap: ReadonlyMap<string, string>,
+): InspectionCondition | null {
+  if (!condition) return null;
+  if ('all' in condition) {
+    return {
+      all: condition.all.map(
+        (child) => remapInspectionConditionKeys(child, keyMap)!,
+      ),
+    };
+  }
+  if ('any' in condition) {
+    return {
+      any: condition.any.map(
+        (child) => remapInspectionConditionKeys(child, keyMap)!,
+      ),
+    };
+  }
+  return {
+    ...condition,
+    fieldKey:
+      keyMap.get(condition.fieldKey.toLowerCase()) ?? condition.fieldKey,
+  };
+}
+
+export function duplicateInspectionSchemaItem(
+  draft: InspectionSchemaBuilderDraft,
+  sectionId: string,
+  itemId: string,
+): InspectionSchemaBuilderDraft {
+  const used = new Set(
+    draft.sections.flatMap((section) =>
+      section.items.map((item) => item.key.toLowerCase()),
+    ),
+  );
+  return {
+    ...draft,
+    sections: draft.sections.map((section) => {
+      if (section.id !== sectionId) return section;
+      const index = section.items.findIndex((item) => item.id === itemId);
+      if (index < 0) return section;
+      const source = section.items[index]!;
+      const key = nextInspectionSchemaKey(source.key, used);
+      const duplicate: InspectionSchemaItemDraft = {
+        ...source,
+        id: id(),
+        key,
+        label: `${source.label} copy`,
+        options: source.options.map((option) => ({ ...option, id: id() })),
+      };
+      return {
+        ...section,
+        items: [
+          ...section.items.slice(0, index + 1),
+          duplicate,
+          ...section.items.slice(index + 1),
+        ],
+      };
+    }),
+  };
+}
+
+export function duplicateInspectionSchemaSection(
+  draft: InspectionSchemaBuilderDraft,
+  sectionId: string,
+): InspectionSchemaBuilderDraft {
+  const sectionIndex = draft.sections.findIndex(
+    (section) => section.id === sectionId,
+  );
+  if (sectionIndex < 0) return draft;
+  const source = draft.sections[sectionIndex]!;
+  const usedSectionKeys = new Set(
+    draft.sections.map((section) => section.key.toLowerCase()),
+  );
+  const usedItemKeys = new Set(
+    draft.sections.flatMap((section) =>
+      section.items.map((item) => item.key.toLowerCase()),
+    ),
+  );
+  const keyMap = new Map<string, string>();
+  const copiedItems = source.items.map((item) => {
+    const key = nextInspectionSchemaKey(item.key, usedItemKeys);
+    usedItemKeys.add(key.toLowerCase());
+    keyMap.set(item.key.toLowerCase(), key);
+    return {
+      ...item,
+      id: id(),
+      key,
+      options: item.options.map((option) => ({ ...option, id: id() })),
+    };
+  });
+  const duplicate: InspectionSchemaSectionDraft = {
+    ...source,
+    id: id(),
+    key: nextInspectionSchemaKey(source.key, usedSectionKeys),
+    title: `${source.title} copy`,
+    items: copiedItems.map((item) => ({
+      ...item,
+      visibleWhen: remapInspectionConditionKeys(item.visibleWhen, keyMap),
+      requiredWhen: remapInspectionConditionKeys(item.requiredWhen, keyMap),
+    })),
+  };
+  return {
+    ...draft,
+    sections: [
+      ...draft.sections.slice(0, sectionIndex + 1),
+      duplicate,
+      ...draft.sections.slice(sectionIndex + 1),
+    ],
+  };
+}
+
 export function inspectionSchemaFieldReferences(
   draft: InspectionSchemaBuilderDraft,
 ): readonly InspectionSchemaFieldReference[] {
