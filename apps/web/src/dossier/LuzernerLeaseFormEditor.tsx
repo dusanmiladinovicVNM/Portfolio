@@ -357,7 +357,10 @@ export function LuzernerLeaseFormEditor({
   );
 
   return (
-    <section className="panel">
+    <section
+      className="panel"
+      data-luzerner-lease-form={agreement.id}
+    >
       <div className="section-heading">
         <div>
           <p className="eyebrow">Luzerner Mietvertrag · Ausgabe 2020</p>
