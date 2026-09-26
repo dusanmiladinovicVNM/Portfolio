@@ -3749,6 +3749,71 @@ try {
     'Canonical required completeness leaves pre-lock review available',
   );
 
+  await executeScript(
+    sessionId,
+    'window.__portfolioHoldInspectionReviewRead = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Review before lock']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    'return window.__portfolioPendingInspectionReviewRead === true;',
+    'held stale Inspection review read',
+  );
+
+  await typeXpath(
+    sessionId,
+    notesInput,
+    'Window scratch after held review',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-autosave-status][contains(normalize-space(),'All section changes saved')]",
+  );
+  assertEqual(
+    await elementValueXpath(sessionId, notesInput),
+    'Window scratch after held review',
+    'Newer autosave is visible while older review GET remains held',
+  );
+
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioReleaseInspectionReviewRead?.() === true;',
+    ),
+    true,
+    'Held stale Inspection review response releases',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Inspection changed while review was loading. Load a fresh canonical review before locking.')]",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-inspection-pre-lock-review]",
+    ),
+    false,
+    'Late stale review response is discarded instead of becoming current',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//button[normalize-space()='Confirm review & lock Inspection']",
+    ),
+    false,
+    'Discarded stale review cannot expose lock confirmation',
+  );
+  assertEqual(
+    await elementValueXpath(sessionId, notesInput),
+    'Window scratch after held review',
+    'Late stale review response cannot regress newer canonical section content',
+  );
+
   await selectOptionXpath(
     sessionId,
     findingForm + "//select[@name='itemId']",
@@ -4100,8 +4165,8 @@ try {
   );
   assertEqual(
     await elementValueXpath(sessionId, notesInput),
-    'Window scratch',
-    'Conflict reload restores canonical Inspection answer',
+    'Window scratch after held review',
+    'Conflict reload restores newest canonical Inspection answer',
   );
 
   assertEqual(
