@@ -150,13 +150,21 @@ export function InspectionFinalizationPanel({
   onCanonicalBundle,
 }: InspectionFinalizationPanelProps) {
   const mountedRef = useRef(true);
-  const activeInspectionOwnerRef = useRef({
+  const currentReviewSourceRef = useRef({
     inspectionId: bundle.inspection.id,
     unitId: bundle.inspection.unitId,
+    schemaVersionId: bundle.inspection.schemaVersionId,
+    version: bundle.inspection.version,
+    contentRevision: bundle.inspection.contentRevision,
+    blockedByDirtySection,
   });
-  activeInspectionOwnerRef.current = {
+  currentReviewSourceRef.current = {
     inspectionId: bundle.inspection.id,
     unitId: bundle.inspection.unitId,
+    schemaVersionId: bundle.inspection.schemaVersionId,
+    version: bundle.inspection.version,
+    contentRevision: bundle.inspection.contentRevision,
+    blockedByDirtySection,
   };
   const signatureUploadRef = useRef<StableUpload | null>(null);
   const [parties, setParties] = useState<readonly PartyResponse[] | null>(null);
@@ -283,19 +291,37 @@ export function InspectionFinalizationPanel({
     }
     if (writeGate.pending || reviewLoading) return;
 
-    const targetInspectionId = inspection.id;
-    const targetUnitId = inspection.unitId;
+    const requestSource = {
+      inspectionId: inspection.id,
+      unitId: inspection.unitId,
+      schemaVersionId: inspection.schemaVersionId,
+      version: inspection.version,
+      contentRevision: inspection.contentRevision,
+    };
     setReviewLoading(true);
+    setReviewBundle(null);
     setError(null);
     setSuccess(null);
     try {
       const canonical = await readCanonical();
-      const owner = activeInspectionOwnerRef.current;
+      const current = currentReviewSourceRef.current;
       if (
         !mountedRef.current ||
-        owner.inspectionId !== targetInspectionId ||
-        owner.unitId !== targetUnitId
+        current.inspectionId !== requestSource.inspectionId ||
+        current.unitId !== requestSource.unitId
       ) {
+        return;
+      }
+      if (
+        current.schemaVersionId !== requestSource.schemaVersionId ||
+        current.version !== requestSource.version ||
+        current.contentRevision !== requestSource.contentRevision ||
+        current.blockedByDirtySection
+      ) {
+        setReviewBundle(null);
+        setError(
+          'Inspection changed while review was loading. Load a fresh canonical review before locking.',
+        );
         return;
       }
 
@@ -309,11 +335,11 @@ export function InspectionFinalizationPanel({
       }
       setReviewBundle(canonical);
     } catch (cause) {
-      const owner = activeInspectionOwnerRef.current;
+      const current = currentReviewSourceRef.current;
       if (
         !mountedRef.current ||
-        owner.inspectionId !== targetInspectionId ||
-        owner.unitId !== targetUnitId
+        current.inspectionId !== requestSource.inspectionId ||
+        current.unitId !== requestSource.unitId
       ) {
         return;
       }
@@ -325,11 +351,11 @@ export function InspectionFinalizationPanel({
         ),
       );
     } finally {
-      const owner = activeInspectionOwnerRef.current;
+      const current = currentReviewSourceRef.current;
       if (
         mountedRef.current &&
-        owner.inspectionId === targetInspectionId &&
-        owner.unitId === targetUnitId
+        current.inspectionId === requestSource.inspectionId &&
+        current.unitId === requestSource.unitId
       ) {
         setReviewLoading(false);
       }
