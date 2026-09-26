@@ -271,6 +271,19 @@ function normalizeCustomAncillaryCosts(
   return normalized;
 }
 
+function hasAncillaryCostMode(
+  content: Pick<
+    LuzernerLeaseFormContent,
+    'ancillaryCosts' | 'customAncillaryCosts'
+  >,
+  mode: Exclude<LuzernerAncillaryCostMode, 'excluded'>,
+): boolean {
+  return (
+    Object.values(content.ancillaryCosts).some((value) => value === mode) ||
+    content.customAncillaryCosts.some((value) => value.mode === mode)
+  );
+}
+
 export function emptyLuzernerLeaseFormContent(): LuzernerLeaseFormContent {
   return {
     ewid: null,
@@ -482,6 +495,25 @@ export function normalizeLuzernerLeaseFormContent(
     );
   }
 
+  if (
+    content.ancillaryAdvance !== null &&
+    !hasAncillaryCostMode(content, 'advance')
+  ) {
+    throw new DomainError(
+      'LUZERNER_LEASE_FORM_ANCILLARY_ADVANCE_WITHOUT_ITEMS',
+      'ancillaryAdvance requires at least one Akonto ancillary-cost item.',
+    );
+  }
+  if (
+    content.ancillaryFlat !== null &&
+    !hasAncillaryCostMode(content, 'flat')
+  ) {
+    throw new DomainError(
+      'LUZERNER_LEASE_FORM_ANCILLARY_FLAT_WITHOUT_ITEMS',
+      'ancillaryFlat requires at least one Pauschal ancillary-cost item.',
+    );
+  }
+
   return content;
 }
 
@@ -528,6 +560,18 @@ export function inspectLuzernerLeaseFormReadiness(
   }
   if (content.parkingSpace && content.parkingSpaceNumber === null) {
     missing.push('parkingSpaceNumber');
+  }
+  if (
+    hasAncillaryCostMode(content, 'advance') &&
+    content.ancillaryAdvance === null
+  ) {
+    missing.push('ancillaryAdvance');
+  }
+  if (
+    hasAncillaryCostMode(content, 'flat') &&
+    content.ancillaryFlat === null
+  ) {
+    missing.push('ancillaryFlat');
   }
 
   return { ready: missing.length === 0, missing };

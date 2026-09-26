@@ -1097,6 +1097,11 @@ describe('Luzerner lease form HTTP', () => {
               moveInDate: '2026-10-01',
               netRent: '1850.00',
               garageParkingRent: '120.00',
+              ancillaryAdvance: '160.00',
+              ancillaryCosts: {
+                ...base.ancillaryCosts,
+                heating_hot_water: 'advance',
+              },
               securityAmount: '3700.00',
               paymentFrequency: 'semiannual',
               placeOfSigning: 'Luzern',
@@ -1118,6 +1123,7 @@ describe('Luzerner lease form HTTP', () => {
           terms: {
             currency: 'CHF',
             baseRent: '1850.00',
+            serviceCharge: '160.00',
             parkingRent: '120.00',
             depositRequired: '3700.00',
             billingFrequency: 'semiannual',
@@ -1133,6 +1139,29 @@ describe('Luzerner lease form HTTP', () => {
       error: { code: 'LUZERNER_LEASE_FORM_NOTICE_PERIOD_OWNERSHIP' },
     });
 
+    const mismatchedAncillarySign = await handler(
+      new Request(`https://portfolio.test/agreements/${agreement.id}/sign`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 1,
+          signedAt: '2026-09-26',
+          terms: {
+            currency: 'CHF',
+            baseRent: '1850.00',
+            serviceCharge: '150.00',
+            parkingRent: '120.00',
+            depositRequired: '3700.00',
+            billingFrequency: 'semiannual',
+          },
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(mismatchedAncillarySign.status).toBe(422);
+    expect(await mismatchedAncillarySign.json()).toMatchObject({
+      error: { code: 'LUZERNER_LEASE_FORM_SIGN_MISMATCH' },
+    });
+
     const mismatchedSign = await handler(
       new Request(`https://portfolio.test/agreements/${agreement.id}/sign`, {
         method: 'POST',
@@ -1142,6 +1171,7 @@ describe('Luzerner lease form HTTP', () => {
           terms: {
             currency: 'CHF',
             baseRent: '1900.00',
+            serviceCharge: '160.00',
             parkingRent: '120.00',
             depositRequired: '3700.00',
             billingFrequency: 'semiannual',

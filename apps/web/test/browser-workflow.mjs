@@ -1740,6 +1740,12 @@ try {
   await typeXpath(
     sessionId,
     luzernerForm +
+      "//label[normalize-space()='Nebenkosten Akonto CHF']//input",
+    '160.00',
+  );
+  await typeXpath(
+    sessionId,
+    luzernerForm +
       "//label[contains(normalize-space(.),'Besondere Bestimmungen')]//textarea",
     'Browser canonical Luzerner provision.',
   );

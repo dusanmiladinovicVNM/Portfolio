@@ -62,6 +62,10 @@ export interface LeaseDependencies {
   idGenerator: IdGenerator;
 }
 
+function moneyCents(value: string | null): bigint {
+  return BigInt((value ?? '0.00').replace('.', ''));
+}
+
 function assertLuzernerLeaseSignConsistency(
   form: LuzernerLeaseFormDraft,
   agreement: LeaseAgreement,
@@ -102,6 +106,19 @@ function assertLuzernerLeaseSignConsistency(
   if ((content.garageParkingRent ?? '0.00') !== terms.parkingRent) {
     mismatches.push('garageParkingRent/parkingRent');
   }
+
+  const expectedAncillaryCents =
+    moneyCents(content.ancillaryAdvance) + moneyCents(content.ancillaryFlat);
+  if (expectedAncillaryCents !== moneyCents(terms.serviceCharge)) {
+    mismatches.push('ancillaryCosts/serviceCharge');
+  }
+  if (terms.utilitiesAdvance !== '0.00') {
+    mismatches.push('utilitiesAdvance');
+  }
+  if (terms.otherRecurringCharge !== '0.00') {
+    mismatches.push('otherRecurringCharge');
+  }
+
   if ((content.securityAmount ?? '0.00') !== terms.depositRequired) {
     mismatches.push('securityAmount/depositRequired');
   }
