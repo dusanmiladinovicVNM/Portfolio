@@ -27,6 +27,8 @@ import type {
   InspectionEvidenceResponse,
   InspectionFindingResponse,
   InspectionResponseDto,
+  InspectionSchemaVersionResponse,
+  CreateInspectionSchemaVersionRequest,
   InspectionSignatureResponse,
   PartyResponse,
   PropertyResponse,
@@ -353,7 +355,7 @@ function setupOrchestrationInspectionBundle() {
         id: setupOrchestrationInspectionSectionInstanceId,
         inspectionId: setupOrchestrationInspection.id,
         sectionId: inspectionSectionId,
-        scope: 'unit' as const,
+        scope: 'unit',
         spaceId: null,
         spaceCode: null,
         spaceName: null,
@@ -702,14 +704,14 @@ let inspectionFindingSequence = 0;
 let inspectionEvidenceSequence = 0;
 let inspectionSignatureSequence = 0;
 
-const inspectionSchema = {
+const inspectionSchema: InspectionSchemaVersionResponse = {
   id: inspectionSchemaVersionId,
   schemaCode: 'MOVE-IN-BRW',
   versionNumber: 1,
   inspectionType: 'move_in',
   title: 'Browser move-in inspection',
   status: 'published',
-  requiredSignatureRoles: ['tenant', 'landlord'] as const,
+  requiredSignatureRoles: ['tenant', 'landlord'],
   sections: [
     {
       id: inspectionSectionId,
@@ -717,7 +719,7 @@ const inspectionSchema = {
       title: 'General condition',
       description: 'Record the overall condition before handover.',
       sortOrder: 0,
-      scope: 'unit' as const,
+      scope: 'unit',
       spaceTypes: [],
       items: [
         {
@@ -763,8 +765,8 @@ const inspectionSchema = {
       title: 'Room condition',
       description: 'Record room-specific observations.',
       sortOrder: 1,
-      scope: 'space' as const,
-      spaceTypes: ['hall', 'living_room', 'bedroom'] as const,
+      scope: 'space',
+      spaceTypes: ['hall', 'living_room', 'bedroom'],
       items: [
         {
           id: inspectionRoomItemId,
@@ -782,6 +784,31 @@ const inspectionSchema = {
     },
   ],
 };
+
+let inspectionSchemaVersions: InspectionSchemaVersionResponse[] = [
+  inspectionSchema,
+];
+let inspectionSchemaVersionSequence = 1;
+let inspectionSchemaSectionSequence = 1;
+let inspectionSchemaItemSequence = 1;
+
+function inspectionSchemaHarnessId(
+  kind: 'version' | 'section' | 'item',
+): string {
+  const sequence =
+    kind === 'version'
+      ? inspectionSchemaVersionSequence++
+      : kind === 'section'
+        ? inspectionSchemaSectionSequence++
+        : inspectionSchemaItemSequence++;
+  const prefix =
+    kind === 'version'
+      ? 'd1000000'
+      : kind === 'section'
+        ? 'd2000000'
+        : 'd3000000';
+  return `${prefix}-0000-4000-8000-${String(sequence).padStart(12, '0')}`;
+}
 
 function inspectionRecord() {
   return {
@@ -856,7 +883,7 @@ function setupMaintenanceInspectionBundle() {
         id: setupMaintenanceInspectionSectionInstanceId,
         inspectionId: setupMaintenanceInspectionId,
         sectionId: inspectionSectionId,
-        scope: 'unit' as const,
+        scope: 'unit',
         spaceId: null,
         spaceCode: null,
         spaceName: null,
@@ -888,7 +915,7 @@ function inspectionBundle() {
         id: inspectionSectionInstanceId,
         inspectionId,
         sectionId: inspectionSectionId,
-        scope: 'unit' as const,
+        scope: 'unit',
         spaceId: null,
         spaceCode: null,
         spaceName: null,
@@ -899,7 +926,7 @@ function inspectionBundle() {
         id: inspectionHallwayInstanceId,
         inspectionId,
         sectionId: inspectionRoomSectionId,
-        scope: 'space' as const,
+        scope: 'space',
         spaceId: 'a9000000-0000-4000-8000-000000000011',
         spaceCode: 'SP-HALL',
         spaceName: 'Hallway',
@@ -910,7 +937,7 @@ function inspectionBundle() {
         id: inspectionLivingRoomInstanceId,
         inspectionId,
         sectionId: inspectionRoomSectionId,
-        scope: 'space' as const,
+        scope: 'space',
         spaceId: 'a9000000-0000-4000-8000-000000000012',
         spaceCode: 'SP-LIVING',
         spaceName: 'Living room',
@@ -921,7 +948,7 @@ function inspectionBundle() {
         id: inspectionBedroomInstanceId,
         inspectionId,
         sectionId: inspectionRoomSectionId,
-        scope: 'space' as const,
+        scope: 'space',
         spaceId: 'a9000000-0000-4000-8000-000000000013',
         spaceCode: 'SP-BED-1',
         spaceName: 'Bedroom 1',
@@ -1178,6 +1205,8 @@ type BrowserHarnessWindow = Window & {
   __portfolioFailNextInspectionFinalizeAfterCommit?: boolean;
   __portfolioFailNextInspectionReportAfterCommit?: boolean;
   __portfolioFailNextInspectionOrchestrationAfterCommit?: boolean;
+  __portfolioFailNextInspectionSchemaCreateAfterCommit?: boolean;
+  __portfolioFailNextInspectionSchemaPublishAfterCommit?: boolean;
   __portfolioFailNextMaintenanceIssueCreateAfterCommit?: boolean;
   __portfolioFailNextMaintenanceWorkOrderCreateAfterCommit?: boolean;
   __portfolioFailNextServiceEventCreateAfterCommit?: boolean;
@@ -1202,6 +1231,8 @@ type BrowserHarnessWindow = Window & {
   __portfolioPendingInspectionLifecycle?: boolean;
   __portfolioPendingInspectionReviewRead?: boolean;
   __portfolioInspectionSectionPatchCount?: number;
+  __portfolioInspectionSchemaCreateCount?: number;
+  __portfolioInspectionSchemaPublishCount?: number;
   __portfolioFinalReportRenderCount?: number;
   __portfolioReleaseUnitCreate?: () => boolean;
   __portfolioReleaseSpaceCreate?: () => boolean;
@@ -1221,6 +1252,8 @@ const browserHarnessWindow = window as BrowserHarnessWindow;
 browserHarnessWindow.__portfolioBinaryReads = 0;
 browserHarnessWindow.__portfolioDocumentUploadCount = 0;
 browserHarnessWindow.__portfolioInspectionSectionPatchCount = 0;
+browserHarnessWindow.__portfolioInspectionSchemaCreateCount = 0;
+browserHarnessWindow.__portfolioInspectionSchemaPublishCount = 0;
 browserHarnessWindow.__portfolioFinalReportRenderCount = 0;
 
 let heldUnitCreate:
@@ -1521,6 +1554,18 @@ globalThis.fetch = async (
 ): Promise<Response> => {
   const url = apiPath(input);
   const path = url.pathname;
+
+  if (path === '/me') {
+    return json({
+      userId: setupOrchestrationOtherStaffId,
+      displayName: 'Browser Manager',
+      email: 'manager@portfolio.test',
+      role: 'manager',
+      status: 'active',
+      revision: 1,
+      identityProviders: ['email'],
+    });
+  }
 
   if (path === '/documents') {
     if (init?.method === 'POST') {
@@ -4230,7 +4275,116 @@ globalThis.fetch = async (
   }
 
   if (path === '/inspection-schemas') {
-    return json({ items: [inspectionSchema] });
+    if (init?.method === 'POST') {
+      requirePortfolioAuth(init);
+      browserHarnessWindow.__portfolioInspectionSchemaCreateCount =
+        (browserHarnessWindow.__portfolioInspectionSchemaCreateCount ?? 0) + 1;
+      const body = JSON.parse(String(init.body)) as CreateInspectionSchemaVersionRequest;
+      const latestVersion = inspectionSchemaVersions
+        .filter(
+          (schema) =>
+            schema.schemaCode.toLowerCase() === body.schemaCode.toLowerCase(),
+        )
+        .reduce(
+          (latest, schema) => Math.max(latest, schema.versionNumber),
+          0,
+        );
+      const versionId = inspectionSchemaHarnessId('version');
+      const created: InspectionSchemaVersionResponse = {
+        id: versionId,
+        schemaCode: body.schemaCode,
+        versionNumber: latestVersion + 1,
+        inspectionType: body.inspectionType,
+        title: body.title,
+        status: 'draft',
+        requiredSignatureRoles: [...body.requiredSignatureRoles],
+        sections: body.sections.map((section) => {
+          const sectionId = inspectionSchemaHarnessId('section');
+          return {
+            id: sectionId,
+            key: section.key,
+            title: section.title,
+            description: section.description ?? null,
+            sortOrder: section.sortOrder,
+            scope: section.scope ?? 'unit',
+            spaceTypes: [...(section.spaceTypes ?? [])],
+            items: section.items.map((item) => ({
+              id: inspectionSchemaHarnessId('item'),
+              sectionId,
+              key: item.key,
+              type: item.type,
+              label: item.label,
+              required: item.required ?? false,
+              sortOrder: item.sortOrder,
+              options: (item.options ?? []).map((option) => ({ ...option })),
+              visibleWhen: item.visibleWhen ?? null,
+              requiredWhen: item.requiredWhen ?? null,
+            })),
+          };
+        }),
+      };
+      inspectionSchemaVersions = [...inspectionSchemaVersions, created];
+
+      if (
+        browserHarnessWindow.__portfolioFailNextInspectionSchemaCreateAfterCommit
+      ) {
+        browserHarnessWindow.__portfolioFailNextInspectionSchemaCreateAfterCommit =
+          false;
+        return apiError(
+          503,
+          'INSPECTION_SCHEMA_CREATE_TEST_ACK_LOST',
+          'Intentional schema-create acknowledgement loss.',
+        );
+      }
+      return json(created, 201);
+    }
+    return json({ items: inspectionSchemaVersions });
+  }
+
+  const inspectionSchemaPublishMatch =
+    /^\/inspection-schemas\/([^/]+)\/publish$/.exec(path);
+  if (inspectionSchemaPublishMatch && init?.method === 'POST') {
+    requirePortfolioAuth(init);
+    browserHarnessWindow.__portfolioInspectionSchemaPublishCount =
+      (browserHarnessWindow.__portfolioInspectionSchemaPublishCount ?? 0) + 1;
+    const schemaId = inspectionSchemaPublishMatch[1]!;
+    const current = inspectionSchemaVersions.find(
+      (schema) => schema.id === schemaId,
+    );
+    if (!current) {
+      return apiError(
+        404,
+        'INSPECTION_SCHEMA_NOT_FOUND',
+        'Inspection schema version not found.',
+      );
+    }
+    if (current.status !== 'draft') {
+      return apiError(
+        422,
+        'INSPECTION_SCHEMA_INVALID_TRANSITION',
+        'Only a draft schema version can be published.',
+      );
+    }
+    const published: InspectionSchemaVersionResponse = {
+      ...current,
+      status: 'published',
+    };
+    inspectionSchemaVersions = inspectionSchemaVersions.map((schema) =>
+      schema.id === published.id ? published : schema,
+    );
+
+    if (
+      browserHarnessWindow.__portfolioFailNextInspectionSchemaPublishAfterCommit
+    ) {
+      browserHarnessWindow.__portfolioFailNextInspectionSchemaPublishAfterCommit =
+        false;
+      return apiError(
+        503,
+        'INSPECTION_SCHEMA_PUBLISH_TEST_ACK_LOST',
+        'Intentional schema-publish acknowledgement loss.',
+      );
+    }
+    return json(published);
   }
 
   if (path === '/inspection-staff') {
