@@ -25,6 +25,7 @@ export interface LeaseRepository {
     expectedVersion: number,
     terms: TenancyTermVersion,
     predecessorToSupersede?: AgreementSupersession,
+    expectedLuzernerFormRevision?: number | null,
   ): Promise<void>;
   cancelAgreement(
     agreement: LeaseAgreement,

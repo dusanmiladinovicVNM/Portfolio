@@ -1086,7 +1086,7 @@ function setupTermSnapshot(
     parkingRent?: string;
     otherRecurringCharge?: string;
     depositRequired?: string;
-    billingFrequency?: 'monthly' | 'quarterly' | 'yearly';
+    billingFrequency?: 'monthly' | 'quarterly' | 'semiannual' | 'yearly';
     noticePeriodTenantDays?: number;
     noticePeriodLandlordDays?: number;
   },
@@ -3949,7 +3949,7 @@ globalThis.fetch = async (
         parkingRent?: string;
         otherRecurringCharge?: string;
         depositRequired?: string;
-        billingFrequency?: 'monthly' | 'quarterly' | 'yearly';
+        billingFrequency?: 'monthly' | 'quarterly' | 'semiannual' | 'yearly';
         noticePeriodTenantDays?: number;
         noticePeriodLandlordDays?: number;
       };
@@ -4088,7 +4088,7 @@ globalThis.fetch = async (
         parkingRent?: string;
         otherRecurringCharge?: string;
         depositRequired?: string;
-        billingFrequency?: 'monthly' | 'quarterly' | 'yearly';
+        billingFrequency?: 'monthly' | 'quarterly' | 'semiannual' | 'yearly';
         noticePeriodTenantDays?: number;
         noticePeriodLandlordDays?: number;
       };

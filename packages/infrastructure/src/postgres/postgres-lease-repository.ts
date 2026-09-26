@@ -471,6 +471,7 @@ export class PostgresLeaseRepository implements LeaseRepository {
     expectedVersion: number,
     terms: TenancyTermVersion,
     predecessorToSupersede?: AgreementSupersession,
+    expectedLuzernerFormRevision?: number | null,
   ): Promise<void> {
     await withTranslatedErrors(async () => {
       await this.sql.begin(async (tx) => {
@@ -492,6 +493,21 @@ export class PostgresLeaseRepository implements LeaseRepository {
             'LEASE_AGREEMENT_VERSION_CONFLICT',
             'Lease agreement was modified concurrently.',
           );
+        }
+
+        if (expectedLuzernerFormRevision !== undefined) {
+          const formRows = await tx<{ revision: number }[]>`
+            select revision
+            from public.lease_agreement_luzerner_forms
+            where agreement_id = ${agreement.id}
+          `;
+          const actualRevision = formRows[0]?.revision ?? null;
+          if (actualRevision !== expectedLuzernerFormRevision) {
+            throw new DomainError(
+              'LUZERNER_LEASE_FORM_REVISION_CONFLICT',
+              'The Luzerner lease form changed while Agreement signing was in progress.',
+            );
+          }
         }
 
         if (predecessorToSupersede) {

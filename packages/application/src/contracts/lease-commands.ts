@@ -9,6 +9,7 @@ import {
   createLeaseAgreement,
   createLeaseAmendment,
   createTenancyTermVersion,
+  inspectLuzernerLeaseFormReadiness,
   signLeaseAgreement,
   signLeaseAmendment,
   supersedeLeaseAgreement,
@@ -16,11 +17,13 @@ import {
   type LeaseAgreementId,
   type LeaseAgreementPartyRole,
   type LeaseAgreementType,
+  type LuzernerLeaseFormDraft,
   type LeaseAmendment,
   type LeaseAmendmentId,
   type PartyId,
   type Tenancy,
   type TenancyId,
+  type TenancyTermVersion,
   type TermSnapshotInput,
 } from '@portfolio/domain';
 import { requireCapability, type Actor } from '../security/access.js';
@@ -57,6 +60,61 @@ export interface LeaseDependencies {
   tenancyRepository: TenancyRepository;
   partyRepository: PartyRepository;
   idGenerator: IdGenerator;
+}
+
+function assertLuzernerLeaseSignConsistency(
+  form: LuzernerLeaseFormDraft,
+  agreement: LeaseAgreement,
+  terms: TenancyTermVersion,
+): void {
+  const readiness = inspectLuzernerLeaseFormReadiness(form.content);
+  if (!readiness.ready) {
+    throw new DomainError(
+      'LUZERNER_LEASE_FORM_INCOMPLETE',
+      `The Luzerner lease form is incomplete: ${readiness.missing.join(', ')}.`,
+    );
+  }
+
+  const content = form.content;
+  const mismatches: string[] = [];
+
+  if (content.moveInDate !== agreement.effectiveFrom) {
+    mismatches.push('moveInDate/effectiveFrom');
+  }
+  if (content.signingDate !== agreement.signedAt) {
+    mismatches.push('signingDate/signedAt');
+  }
+
+  if (content.durationKind === 'fixed_term') {
+    if (content.fixedEndDate !== agreement.effectiveTo) {
+      mismatches.push('fixedEndDate/effectiveTo');
+    }
+  } else if (agreement.effectiveTo !== null) {
+    mismatches.push('durationKind/effectiveTo');
+  }
+
+  if (content.currency !== terms.currency) {
+    mismatches.push('currency');
+  }
+  if (content.netRent !== terms.baseRent) {
+    mismatches.push('netRent/baseRent');
+  }
+  if ((content.garageParkingRent ?? '0.00') !== terms.parkingRent) {
+    mismatches.push('garageParkingRent/parkingRent');
+  }
+  if ((content.securityAmount ?? '0.00') !== terms.depositRequired) {
+    mismatches.push('securityAmount/depositRequired');
+  }
+  if (content.paymentFrequency !== terms.billingFrequency) {
+    mismatches.push('paymentFrequency/billingFrequency');
+  }
+
+  if (mismatches.length > 0) {
+    throw new DomainError(
+      'LUZERNER_LEASE_FORM_SIGN_MISMATCH',
+      `The Luzerner lease form conflicts with the Agreement sign snapshot: ${mismatches.join(', ')}.`,
+    );
+  }
 }
 
 async function requireTenancy(
@@ -336,11 +394,19 @@ export async function signLeaseAgreementCommand(
     ...terms,
   });
 
+  const luzernerForm = await deps.leaseRepository.getLuzernerLeaseForm(
+    agreement.id,
+  );
+  if (luzernerForm !== null) {
+    assertLuzernerLeaseSignConsistency(luzernerForm, signed, termVersion);
+  }
+
   await deps.leaseRepository.signAgreement(
     signed,
     agreement.version,
     termVersion,
     predecessorToSupersede,
+    luzernerForm?.revision ?? null,
   );
 
   return signed;

@@ -13,7 +13,7 @@ import {
   type MoneyAmount,
 } from '../shared/money.js';
 
-export const BILLING_FREQUENCIES = ['monthly', 'quarterly', 'yearly'] as const;
+export const BILLING_FREQUENCIES = ['monthly', 'quarterly', 'semiannual', 'yearly'] as const;
 export const TERM_SOURCE_TYPES = ['agreement', 'amendment'] as const;
 
 export type BillingFrequency = (typeof BILLING_FREQUENCIES)[number];

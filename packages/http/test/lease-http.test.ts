@@ -215,6 +215,7 @@ class InMemoryLeaseRepository implements LeaseRepository {
   readonly amendments = new Map<LeaseAmendmentId, LeaseAmendment>();
   readonly terms: TenancyTermVersion[] = [];
   readonly luzernerForms = new Map<LeaseAgreementId, LuzernerLeaseFormDraft>();
+  beforeAgreementSign: (() => void) | null = null;
 
   async getAgreementById(id: LeaseAgreementId): Promise<LeaseAgreement | null> {
     return this.agreements.get(id) ?? null;
@@ -249,12 +250,25 @@ class InMemoryLeaseRepository implements LeaseRepository {
     expectedVersion: number,
     terms: TenancyTermVersion,
     predecessorToSupersede?: AgreementSupersession,
+    expectedLuzernerFormRevision?: number | null,
   ): Promise<void> {
     const current = this.agreements.get(agreement.id);
     if (!current || current.version !== expectedVersion) {
       throw Object.assign(new Error('version conflict'), {
         code: 'LEASE_AGREEMENT_VERSION_CONFLICT',
       });
+    }
+
+    this.beforeAgreementSign?.();
+
+    if (expectedLuzernerFormRevision !== undefined) {
+      const actualRevision =
+        this.luzernerForms.get(agreement.id)?.revision ?? null;
+      if (actualRevision !== expectedLuzernerFormRevision) {
+        throw Object.assign(new Error('Luzerner form revision conflict'), {
+          code: 'LUZERNER_LEASE_FORM_REVISION_CONFLICT',
+        });
+      }
     }
 
     if (
@@ -1027,6 +1041,157 @@ describe('Luzerner lease form HTTP', () => {
     expect(await stale.json()).toMatchObject({
       error: { code: 'LUZERNER_LEASE_FORM_REVISION_CONFLICT' },
     });
+  });
+
+
+  it('rejects signing when frozen Luzerner facts are incomplete or conflict with the Agreement snapshot', async () => {
+    const { handler } = buildHandler();
+    const agreement = await createDraftAgreement(handler);
+    const base = emptyLuzernerLeaseFormContent();
+
+    const incomplete = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedRevision: null,
+            content: {
+              ...base,
+              specialProvisions: 'Draft only.',
+            },
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(incomplete.status).toBe(200);
+
+    const incompleteSign = await handler(
+      new Request(`https://portfolio.test/agreements/${agreement.id}/sign`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 1,
+          signedAt: '2026-09-26',
+          terms: { currency: 'CHF', baseRent: '1850.00' },
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(incompleteSign.status).toBe(422);
+    expect(await incompleteSign.json()).toMatchObject({
+      error: { code: 'LUZERNER_LEASE_FORM_INCOMPLETE' },
+    });
+
+    const complete = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedRevision: 1,
+            content: {
+              ...base,
+              moveInDate: '2026-10-01',
+              netRent: '1850.00',
+              garageParkingRent: '120.00',
+              securityAmount: '3700.00',
+              paymentFrequency: 'semiannual',
+              placeOfSigning: 'Luzern',
+              signingDate: '2026-09-26',
+            },
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(complete.status).toBe(200);
+
+    const mismatchedSign = await handler(
+      new Request(`https://portfolio.test/agreements/${agreement.id}/sign`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 1,
+          signedAt: '2026-09-26',
+          terms: {
+            currency: 'CHF',
+            baseRent: '1900.00',
+            parkingRent: '120.00',
+            depositRequired: '3700.00',
+            billingFrequency: 'semiannual',
+          },
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(mismatchedSign.status).toBe(422);
+    expect(await mismatchedSign.json()).toMatchObject({
+      error: { code: 'LUZERNER_LEASE_FORM_SIGN_MISMATCH' },
+    });
+  });
+
+  it('rejects Agreement signing when the exact Luzerner revision changes after validation', async () => {
+    const { handler, leaseRepository } = buildHandler();
+    const agreement = await createDraftAgreement(handler);
+    const base = emptyLuzernerLeaseFormContent();
+
+    const saved = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedRevision: null,
+            content: {
+              ...base,
+              moveInDate: '2026-10-01',
+              netRent: '1850.00',
+              placeOfSigning: 'Luzern',
+              signingDate: '2026-09-26',
+            },
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(saved.status).toBe(200);
+
+    leaseRepository.beforeAgreementSign = () => {
+      const current = leaseRepository.luzernerForms.get(
+        agreement.id as LeaseAgreementId,
+      );
+      if (!current) throw new Error('Expected Luzerner form.');
+      leaseRepository.luzernerForms.set(current.agreementId, {
+        ...current,
+        revision: current.revision + 1,
+        content: {
+          ...current.content,
+          specialProvisions: 'Concurrent canonical change.',
+        },
+      });
+      leaseRepository.beforeAgreementSign = null;
+    };
+
+    const sign = await handler(
+      new Request(`https://portfolio.test/agreements/${agreement.id}/sign`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 1,
+          signedAt: '2026-09-26',
+          terms: { currency: 'CHF', baseRent: '1850.00' },
+        }),
+      }),
+      adminIdentity,
+    );
+
+    expect(sign.status).toBe(409);
+    expect(await sign.json()).toMatchObject({
+      error: { code: 'LUZERNER_LEASE_FORM_REVISION_CONFLICT' },
+    });
+    expect(
+      leaseRepository.agreements.get(agreement.id as LeaseAgreementId)?.status,
+    ).toBe('draft');
+    expect(leaseRepository.terms).toHaveLength(0);
   });
 
   it('keeps inspectors read-only and freezes form mutation after Agreement signing', async () => {
