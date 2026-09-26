@@ -1,4 +1,5 @@
 export * from './shared/date-only.js';
+export * from './shared/canonical-decimal.js';
 export * from './shared/domain-error.js';
 export * from './shared/entity-id.js';
 export * from './shared/instant.js';
