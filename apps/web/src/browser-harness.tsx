@@ -1206,6 +1206,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioFailNextInspectionReportAfterCommit?: boolean;
   __portfolioFailNextInspectionOrchestrationAfterCommit?: boolean;
   __portfolioFailNextInspectionSchemaCreateAfterCommit?: boolean;
+  __portfolioFailNextInspectionSchemaListRead?: boolean;
   __portfolioFailNextInspectionSchemaPublishAfterCommit?: boolean;
   __portfolioFailNextMaintenanceIssueCreateAfterCommit?: boolean;
   __portfolioFailNextMaintenanceWorkOrderCreateAfterCommit?: boolean;
@@ -4337,6 +4338,14 @@ globalThis.fetch = async (
         );
       }
       return json(created, 201);
+    }
+    if (browserHarnessWindow.__portfolioFailNextInspectionSchemaListRead) {
+      browserHarnessWindow.__portfolioFailNextInspectionSchemaListRead = false;
+      return apiError(
+        503,
+        'INSPECTION_SCHEMA_LIST_TEST_FAILURE',
+        'Intentional schema-list reread failure.',
+      );
     }
     return json({ items: inspectionSchemaVersions });
   }
