@@ -1713,6 +1713,144 @@ input:focus-visible {
 .inspection-completeness-note-missing {
   color: #8a3028;
 }
+.inspection-pre-lock-workspace {
+  display: grid;
+  gap: 14px;
+}
+.inspection-pre-lock-intro {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+.inspection-pre-lock-review {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #d7d1c5;
+  border-radius: 12px;
+  background: #fff;
+}
+.inspection-pre-lock-review-stale {
+  border-color: #b66b60;
+  background: #fff9f7;
+}
+.inspection-pre-lock-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid #ded8cd;
+  border-radius: 10px;
+  background: #ded8cd;
+}
+.inspection-pre-lock-summary > div {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  background: #faf8f3;
+}
+.inspection-pre-lock-summary span {
+  color: #62665d;
+  font-size: .7rem;
+  font-weight: 750;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.inspection-pre-lock-summary strong {
+  font-size: 1.15rem;
+}
+.inspection-pre-lock-summary small {
+  color: #6a6e65;
+  line-height: 1.35;
+}
+.inspection-review-warning {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #d9a49b;
+  border-radius: 8px;
+  background: #fff1ee;
+  color: #8a3028;
+  font-size: .82rem;
+  font-weight: 700;
+}
+.inspection-review-general-evidence {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #e1dcd3;
+  border-radius: 9px;
+  background: #faf8f3;
+}
+.inspection-review-sections {
+  display: grid;
+  gap: 12px;
+}
+.inspection-review-section {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #e1dcd3;
+  border-radius: 10px;
+  background: #faf8f3;
+}
+.inspection-review-section-missing {
+  border-color: #d9a49b;
+}
+.inspection-review-section-heading,
+.inspection-review-item-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: baseline;
+}
+.inspection-review-section-heading > div {
+  display: grid;
+  gap: 3px;
+}
+.inspection-review-section-heading span,
+.inspection-review-section-heading small,
+.inspection-review-item-heading small {
+  color: #62665d;
+  font-size: .75rem;
+}
+.inspection-review-items {
+  display: grid;
+  gap: 8px;
+}
+.inspection-review-item {
+  display: grid;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid #e6e1d8;
+  border-radius: 8px;
+  background: #fff;
+}
+.inspection-review-item p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.inspection-review-item-missing {
+  border-color: #d9a49b;
+  background: #fff7f5;
+}
+.inspection-review-item-hidden {
+  border-style: dashed;
+  background: #f3f1eb;
+}
+.inspection-review-comment {
+  color: #62665d;
+}
+.inspection-review-subsection {
+  display: grid;
+  gap: 7px;
+  padding-top: 10px;
+  border-top: 1px solid #e4ded4;
+}
+.inspection-pre-lock-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 9px;
+}
 .inspection-signature-pad {
   display: grid;
   gap: 10px;
@@ -1748,6 +1886,16 @@ input:focus-visible {
 @media (max-width: 760px) {
   .inspection-finalization-grid {
     grid-template-columns: 1fr;
+  }
+  .inspection-pre-lock-intro,
+  .inspection-pre-lock-summary {
+    grid-template-columns: 1fr;
+  }
+  .inspection-review-section-heading,
+  .inspection-review-item-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
   }
 }
 
