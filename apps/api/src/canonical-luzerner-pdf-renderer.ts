@@ -318,6 +318,13 @@ function pageOne(input: LuzernerLeasePdfRenderInput): Commands {
   const form = input.form;
   const c: Commands = [];
   addText(c, landlordLine(input.landlords), box(133.741, 574.65, 536.987, 598.01));
+  addText(
+    c,
+    input.landlordRepresentatives.length === 0
+      ? null
+      : landlordLine(input.landlordRepresentatives),
+    box(133.741, 545.082, 536.987, 569.164),
+  );
 
   input.tenants.forEach((tenant, index) => {
     const slot = tenantSlots[index]!;
@@ -346,6 +353,9 @@ function pageOne(input: LuzernerLeasePdfRenderInput): Commands {
       : String(form.intendedForPersonCount),
     box(157.336, 294.413, 203.836, 309.745),
   );
+  if (form.intendedForPersonCount !== null) {
+    addCheck(c, box(130.784, 298.522, 141.368, 309.371));
+  }
 
   const checks: Array<[boolean, Rect]> = [
     [form.familyApartment, box(253.56, 300.12, 261.48, 308.64)],
@@ -368,6 +378,15 @@ function pageOne(input: LuzernerLeasePdfRenderInput): Commands {
     box(385.609, 254.997, 425.864, 273.09),
     8,
   );
+  if (form.additionalObjectLabel) {
+    addCheck(c, box(432.153, 259.488, 442.861, 270.533));
+    addText(
+      c,
+      form.additionalObjectLabel,
+      box(446.7, 258.208, 536.672, 273.09),
+      8,
+    );
+  }
 
   const sharedBoxes = {
     laundry_room: box(47.9455, 228.99, 58.5, 240.158),
@@ -385,6 +404,22 @@ function pageOne(input: LuzernerLeasePdfRenderInput): Commands {
     if (form.sharedUse[key]) addCheck(c, sharedBoxes[key]);
   }
 
+  const customSharedUseSlots = [
+    {
+      check: box(432.354, 228.908, 442.936, 240.117),
+      text: box(446.754, 227.172, 536.7, 241.876),
+    },
+    {
+      check: box(432.354, 211.808, 443.018, 222.908),
+      text: box(446.79, 210.918, 536.674, 225.963),
+    },
+  ] as const;
+  form.customSharedUse.slice(0, 2).forEach((value, index) => {
+    const slot = customSharedUseSlots[index]!;
+    addCheck(c, slot.check);
+    addText(c, value, slot.text, 8);
+  });
+
   if (form.useType === 'apartment') {
     addCheck(c, box(131.911, 197.04, 142.527, 208.045));
   } else if (form.useType === 'commercial') {
@@ -393,6 +428,11 @@ function pageOne(input: LuzernerLeasePdfRenderInput): Commands {
     addText(c, form.useTypeOther, box(366.245, 194.53, 536.7, 209.136), 8.5);
   }
 
+  addText(
+    c,
+    swissDate(input.agreementEffectiveFrom),
+    box(106.507, 152.417, 294.034, 181.945),
+  );
   addText(c, swissDate(form.moveInDate), box(414.982, 152.09, 547.091, 182.109));
 
   if (form.durationKind === 'indefinite') {
@@ -534,7 +574,11 @@ function pageTwo(input: LuzernerLeasePdfRenderInput): Commands {
   addText(c, form.consumerPriceIndexMonthYear, box(305.918, 288.338, 348.931, 301.491), 7.5);
   addText(c, form.consumerPriceIndexBasis, box(394.855, 287.414, 437.978, 300.69), 7.5);
 
-  if (form.rentReserveAmount !== null || form.rentReservePercent !== null) {
+  if (
+    form.separateRentReserveAgreement ||
+    form.rentReserveAmount !== null ||
+    form.rentReservePercent !== null
+  ) {
     addCheck(c, box(48.355, 260.354, 57.194, 270.564));
     addText(c, swissMoney(form.rentReserveAmount), box(354.764, 259.647, 405.222, 272.834), 7.5);
     addText(c, form.rentReservePercent, box(417.856, 259.32, 468.456, 272.855), 7.5);
