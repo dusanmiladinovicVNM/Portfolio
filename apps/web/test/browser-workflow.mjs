@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { rm, writeFile } from 'node:fs/promises';
+import { rm, truncate, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -78,6 +78,10 @@ const agreementSignedFilePath = join(
 const inspectionEvidencePhotoPath = join(
   tmpdir(),
   'portfolio-inspection-window-photo.jpg',
+);
+const oversizedInspectionEvidencePhotoPath = join(
+  tmpdir(),
+  'portfolio-inspection-oversized-photo.jpg',
 );
 
 const logs = [];
@@ -445,7 +449,15 @@ try {
       inspectionEvidencePhotoPath,
       new Uint8Array([255, 216, 255, 224, 0, 16, 74, 70, 73, 70, 255, 217]),
     ),
+    writeFile(
+      oversizedInspectionEvidencePhotoPath,
+      new Uint8Array(),
+    ),
   ]);
+  await truncate(
+    oversizedInspectionEvidencePhotoPath,
+    32 * 1024 * 1024 + 1,
+  );
 
   await Promise.all([
     waitForHttp(`${baseUrl}/browser-harness.html?asOf=2025-06-30`),
@@ -3734,9 +3746,71 @@ try {
     "//form[@data-inspection-content-form='evidence-scoped-upload']";
   const evidenceAttachForm =
     "//form[@data-inspection-content-form='evidence-attach']";
+  await waitForElement(
+    sessionId,
+    'xpath',
+    scopedEvidenceForm +
+      "//input[@name='file' and @capture='environment' and contains(@accept,'image/jpeg') and contains(@accept,'image/png') and contains(@accept,'image/webp')]",
+  );
   const scopedUploadsBefore = await executeScript(
     sessionId,
     'return window.__portfolioDocumentUploadCount || 0;',
+  );
+
+  await executeScript(
+    sessionId,
+    'window.__portfolioInspectionDigestCount = 0;' +
+      'const proto = Object.getPrototypeOf(crypto.subtle);' +
+      'window.__portfolioOriginalDigest = proto.digest;' +
+      'proto.digest = function(...args) {' +
+      'window.__portfolioInspectionDigestCount += 1;' +
+      'return window.__portfolioOriginalDigest.apply(this, args);' +
+      '};' +
+      'return true;',
+  );
+  await setFileXpath(
+    sessionId,
+    scopedEvidenceForm + "//input[@name='file']",
+    oversizedInspectionEvidencePhotoPath,
+  );
+  await clickXpath(
+    sessionId,
+    scopedEvidenceForm +
+      "//button[normalize-space()='Upload Inspection evidence']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Photo source files are limited to 32 MiB before browser compression.')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioInspectionDigestCount || 0;',
+    ),
+    0,
+    'Oversized Inspection photo is rejected before SHA-256 fingerprinting',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    scopedUploadsBefore,
+    'Oversized Inspection photo is rejected before binary upload',
+  );
+  await executeScript(
+    sessionId,
+    'const proto = Object.getPrototypeOf(crypto.subtle);' +
+      'if (window.__portfolioOriginalDigest) {' +
+      'proto.digest = window.__portfolioOriginalDigest;' +
+      '}' +
+      'delete window.__portfolioOriginalDigest;' +
+      'return true;',
+  );
+  await clearXpath(
+    sessionId,
+    scopedEvidenceForm + "//input[@name='file']",
   );
   await setFileXpath(
     sessionId,
@@ -3755,7 +3829,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[contains(normalize-space(),'Inspection-scoped evidence binary stored.')]",
+    "//*[contains(normalize-space(),'Inspection photo stored without unnecessary recompression.')]",
   );
   assertEqual(
     await executeScript(
@@ -4284,6 +4358,7 @@ try {
     rm(amendmentSignedFilePath, { force: true }),
     rm(agreementSignedFilePath, { force: true }),
     rm(inspectionEvidencePhotoPath, { force: true }),
+    rm(oversizedInspectionEvidencePhotoPath, { force: true }),
   ]);
   if (sessionId) {
     try {
