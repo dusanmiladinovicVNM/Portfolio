@@ -5,13 +5,16 @@ import {
   createLeaseAmendmentCommand,
   getEffectiveTenancyTermsQuery,
   getLeaseAgreementQuery,
+  getLuzernerLeaseFormProfileQuery,
   listLeaseAgreementsByTenancyQuery,
   listLeaseAmendmentsByAgreementQuery,
   signLeaseAgreementCommand,
   signLeaseAmendmentCommand,
+  upsertLuzernerLeaseFormProfileCommand,
   type Actor,
   type CreateLeaseAgreementCommandInput,
   type CreateLeaseAmendmentCommandInput,
+  type DocumentRepository,
   type IdGenerator,
   type LeaseRepository,
   type PartyRepository,
@@ -23,10 +26,12 @@ import {
   createLeaseAmendmentRequestSchema,
   entityIdSchema,
   leaseTermsRequestSchema,
+  upsertLuzernerLeaseFormRequestSchema,
   signLeaseAgreementRequestSchema,
   signLeaseAmendmentRequestSchema,
 } from '@portfolio/contracts';
 import {
+  asDocumentVersionId,
   asLeaseAgreementId,
   asLeaseAmendmentId,
   asPartyId,
@@ -48,6 +53,7 @@ export interface LeaseHttpDependencies {
   readonly leaseRepository: LeaseRepository;
   readonly tenancyRepository: TenancyRepository;
   readonly partyRepository: PartyRepository;
+  readonly documentRepository: DocumentRepository;
   readonly idGenerator: IdGenerator;
 }
 
@@ -181,6 +187,55 @@ export async function handleLeaseHttp(
     );
 
     return json({ data: toLeaseAgreementResponse(agreement) });
+  }
+
+  const luzernerFormMatch =
+    /^\/agreements\/([^/]+)\/luzerner-form$/.exec(path);
+  if (luzernerFormMatch) {
+    const parsedId = entityIdSchema.safeParse(luzernerFormMatch[1]);
+    if (!parsedId.success) return validationFailure();
+    const agreementId = asLeaseAgreementId(parsedId.data);
+
+    if (method === 'GET') {
+      const profile = await getLuzernerLeaseFormProfileQuery(
+        { leaseRepository: deps.leaseRepository },
+        actor,
+        agreementId,
+      );
+      return json({ data: profile });
+    }
+
+    if (method === 'PATCH') {
+      const body = await requestJson(request);
+      const parsed = upsertLuzernerLeaseFormRequestSchema.safeParse(body);
+      if (!parsed.success) return validationFailure();
+
+      const profile = await upsertLuzernerLeaseFormProfileCommand(
+        {
+          leaseRepository: deps.leaseRepository,
+          documentRepository: deps.documentRepository,
+        },
+        actor,
+        agreementId,
+        {
+          expectedRevision: parsed.data.expectedRevision,
+          ...(parsed.data.templateDocumentVersionId !== undefined
+            ? {
+                templateDocumentVersionId:
+                  parsed.data.templateDocumentVersionId === null
+                    ? null
+                    : asDocumentVersionId(
+                        parsed.data.templateDocumentVersionId,
+                      ),
+              }
+            : {}),
+          data: parsed.data.data,
+        },
+      );
+      return json({ data: profile });
+    }
+
+    return null;
   }
 
   const agreementSignMatch = /^\/agreements\/([^/]+)\/sign$/.exec(path);
