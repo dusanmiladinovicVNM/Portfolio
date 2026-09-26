@@ -6,6 +6,7 @@ export * from './postgres/postgres-party-repository.js';
 export * from './postgres/postgres-ownership-repository.js';
 export * from './postgres/postgres-tenancy-repository.js';
 export * from './postgres/postgres-lease-repository.js';
+export * from './postgres/postgres-luzern-lease-profile-repository.js';
 export * from './postgres/postgres-document-repository.js';
 export * from './time/system-clock.js';
 export * from './postgres/postgres-inspection-repository.js';
