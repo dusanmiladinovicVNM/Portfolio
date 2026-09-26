@@ -676,7 +676,7 @@ try {
   );
   await selectOptionXpath(
     sessionId,
-    "(//article[contains(@class,'schema-section-editor')])[last()]//label[normalize-space()='Scope']//select",
+    "(//article[contains(@class,'schema-section-editor')])[last()]//select[@aria-label='Section scope']",
     'space',
   );
   await clickXpath(
