@@ -18,6 +18,7 @@ import {
   type LeaseAgreementId,
   type LeaseAmendment,
   type LeaseAmendmentId,
+  type LuzernerLeaseFormDraft,
   type OwnershipPeriod,
   type Party,
   type PartyId,
@@ -261,6 +262,16 @@ class EmptyLeaseRepository implements LeaseRepository {
   async cancelAgreement(
     _agreement: LeaseAgreement,
     _expectedVersion: number,
+  ): Promise<void> {}
+  async getLuzernerLeaseForm(
+    _agreementId: LeaseAgreementId,
+  ): Promise<LuzernerLeaseFormDraft | null> { return null; }
+  async insertLuzernerLeaseForm(
+    _form: LuzernerLeaseFormDraft,
+  ): Promise<void> {}
+  async updateLuzernerLeaseForm(
+    _form: LuzernerLeaseFormDraft,
+    _expectedRevision: number,
   ): Promise<void> {}
   async getAmendmentById(_id: LeaseAmendmentId): Promise<LeaseAmendment | null> { return null; }
   async listAmendmentsByAgreement(

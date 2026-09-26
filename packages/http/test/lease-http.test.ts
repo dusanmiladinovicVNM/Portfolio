@@ -20,11 +20,13 @@ import {
   asTenancyPartyId,
   asUnitId,
   asUserId,
+  emptyLuzernerLeaseFormContent,
   type DateOnly,
   type LeaseAgreement,
   type LeaseAgreementId,
   type LeaseAmendment,
   type LeaseAmendmentId,
+  type LuzernerLeaseFormDraft,
   type OwnershipPeriod,
   type Party,
   type PartyId,
@@ -212,6 +214,7 @@ class InMemoryLeaseRepository implements LeaseRepository {
   readonly agreements = new Map<LeaseAgreementId, LeaseAgreement>();
   readonly amendments = new Map<LeaseAmendmentId, LeaseAmendment>();
   readonly terms: TenancyTermVersion[] = [];
+  readonly luzernerForms = new Map<LeaseAgreementId, LuzernerLeaseFormDraft>();
 
   async getAgreementById(id: LeaseAgreementId): Promise<LeaseAgreement | null> {
     return this.agreements.get(id) ?? null;
@@ -302,6 +305,34 @@ class InMemoryLeaseRepository implements LeaseRepository {
       });
     }
     this.agreements.set(agreement.id, agreement);
+  }
+
+  async getLuzernerLeaseForm(
+    agreementId: LeaseAgreementId,
+  ): Promise<LuzernerLeaseFormDraft | null> {
+    return this.luzernerForms.get(agreementId) ?? null;
+  }
+
+  async insertLuzernerLeaseForm(form: LuzernerLeaseFormDraft): Promise<void> {
+    if (this.luzernerForms.has(form.agreementId)) {
+      throw Object.assign(new Error('already exists'), {
+        code: 'LUZERNER_LEASE_FORM_ALREADY_EXISTS',
+      });
+    }
+    this.luzernerForms.set(form.agreementId, form);
+  }
+
+  async updateLuzernerLeaseForm(
+    form: LuzernerLeaseFormDraft,
+    expectedRevision: number,
+  ): Promise<void> {
+    const current = this.luzernerForms.get(form.agreementId);
+    if (!current || current.revision !== expectedRevision) {
+      throw Object.assign(new Error('revision conflict'), {
+        code: 'LUZERNER_LEASE_FORM_REVISION_CONFLICT',
+      });
+    }
+    this.luzernerForms.set(form.agreementId, form);
   }
 
   async getAmendmentById(id: LeaseAmendmentId): Promise<LeaseAmendment | null> {
@@ -861,6 +892,219 @@ describe('Lease HTTP lifecycle', () => {
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({
       error: { code: 'LEASE_AGREEMENT_VERSION_CONFLICT' },
+    });
+  });
+});
+
+
+describe('Luzerner lease form HTTP', () => {
+  async function createDraftAgreement(handler: ReturnType<typeof buildHandler>['handler']) {
+    const response = await handler(
+      new Request(`https://portfolio.test/tenancies/${TENANCY_ID}/agreements`, {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'AGR-LU-2020',
+          agreementType: 'initial',
+          effectiveFrom: '2026-10-01',
+          parties: [
+            { partyId: LANDLORD_ID, role: 'landlord' },
+            { partyId: TENANT_ID, role: 'tenant' },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(response.status).toBe(201);
+    return (await response.json()).data as { id: string; version: number };
+  }
+
+  it('creates, reads and CAS-updates one exact LU-2020 form per Agreement', async () => {
+    const { handler } = buildHandler();
+    const agreement = await createDraftAgreement(handler);
+    const base = emptyLuzernerLeaseFormContent();
+
+    const created = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedRevision: null,
+            content: {
+              ...base,
+              ewid: '12345',
+              egid: '67890',
+              moveInDate: '2026-10-01',
+              netRent: '1850.00',
+              placeOfSigning: 'Luzern',
+              signingDate: '2026-09-26',
+            },
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+
+    expect(created.status).toBe(200);
+    expect(await created.json()).toMatchObject({
+      data: {
+        agreementId: agreement.id,
+        templateCode: 'lu-2020',
+        revision: 1,
+        content: {
+          ewid: '12345',
+          egid: '67890',
+          netRent: '1850.00',
+        },
+      },
+    });
+
+    const read = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+      ),
+      adminIdentity,
+    );
+    expect(read.status).toBe(200);
+    expect(await read.json()).toMatchObject({
+      data: { revision: 1, content: { placeOfSigning: 'Luzern' } },
+    });
+
+    const updated = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedRevision: 1,
+            content: {
+              ...base,
+              ewid: '12345',
+              egid: '67890',
+              moveInDate: '2026-10-01',
+              netRent: '1900.00',
+              placeOfSigning: 'Luzern',
+              signingDate: '2026-09-26',
+              specialProvisions: 'Zusatzvereinbarung.',
+            },
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+
+    expect(updated.status).toBe(200);
+    expect(await updated.json()).toMatchObject({
+      data: {
+        revision: 2,
+        content: {
+          netRent: '1900.00',
+          specialProvisions: 'Zusatzvereinbarung.',
+        },
+      },
+    });
+
+    const stale = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedRevision: 1,
+            content: {
+              ...base,
+              moveInDate: '2026-10-01',
+              netRent: '2000.00',
+              placeOfSigning: 'Luzern',
+              signingDate: '2026-09-26',
+            },
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({
+      error: { code: 'LUZERNER_LEASE_FORM_REVISION_CONFLICT' },
+    });
+  });
+
+  it('keeps inspectors read-only and freezes form mutation after Agreement signing', async () => {
+    const { handler } = buildHandler();
+    const agreement = await createDraftAgreement(handler);
+    const base = emptyLuzernerLeaseFormContent();
+    const body = {
+      expectedRevision: null,
+      content: {
+        ...base,
+        moveInDate: '2026-10-01',
+        netRent: '1850.00',
+        placeOfSigning: 'Luzern',
+        signingDate: '2026-09-26',
+      },
+    };
+
+    const inspectorWrite = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+        { method: 'PUT', body: JSON.stringify(body) },
+      ),
+      inspectorIdentity,
+    );
+    expect(inspectorWrite.status).toBe(403);
+
+    const adminWrite = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+        { method: 'PUT', body: JSON.stringify(body) },
+      ),
+      adminIdentity,
+    );
+    expect(adminWrite.status).toBe(200);
+
+    const inspectorRead = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+      ),
+      inspectorIdentity,
+    );
+    expect(inspectorRead.status).toBe(200);
+
+    const signed = await handler(
+      new Request(`https://portfolio.test/agreements/${agreement.id}/sign`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 1,
+          signedAt: '2026-09-26',
+          terms: { currency: 'CHF', baseRent: '1850.00' },
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(signed.status).toBe(200);
+
+    const afterSign = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedRevision: 1,
+            content: {
+              ...base,
+              moveInDate: '2026-10-01',
+              netRent: '1950.00',
+              placeOfSigning: 'Luzern',
+              signingDate: '2026-09-26',
+            },
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(afterSign.status).toBe(422);
+    expect(await afterSign.json()).toMatchObject({
+      error: { code: 'LUZERNER_LEASE_FORM_AGREEMENT_NOT_DRAFT' },
     });
   });
 });

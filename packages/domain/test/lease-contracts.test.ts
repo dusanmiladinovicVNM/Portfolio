@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  asDateOnly,
   asLeaseAgreementId,
   asLeaseAgreementPartyId,
   asLeaseAmendmentId,
@@ -8,7 +9,11 @@ import {
   asTenancyTermVersionId,
   createLeaseAgreement,
   createLeaseAmendment,
+  createLuzernerLeaseFormDraft,
   createTenancyTermVersion,
+  emptyLuzernerLeaseFormContent,
+  inspectLuzernerLeaseFormReadiness,
+  reviseLuzernerLeaseFormDraft,
   signLeaseAgreement,
   signLeaseAmendment,
   supersedeLeaseAgreement,
@@ -108,6 +113,119 @@ describe('LeaseAgreement', () => {
 
     expect(() => signLeaseAgreement(draft, '2026-09-20'))
       .toThrowError(/requires at least one landlord/);
+  });
+});
+
+describe('Luzerner lease form', () => {
+  it('normalizes template-specific money, dates and optional strings', () => {
+    const base = emptyLuzernerLeaseFormContent();
+    const form = createLuzernerLeaseFormDraft(agreementId, {
+      ...base,
+      ewid: ' 12345 ',
+      moveInDate: asDateOnly('2026-10-01'),
+      netRent: '1850.5' as never,
+      garageParkingRent: '0' as never,
+      placeOfSigning: ' Luzern ',
+      signingDate: asDateOnly('2026-09-26'),
+    });
+
+    expect(form.revision).toBe(1);
+    expect(form.templateCode).toBe('lu-2020');
+    expect(form.content.ewid).toBe('12345');
+    expect(form.content.netRent).toBe('1850.50');
+    expect(form.content.garageParkingRent).toBe('0.00');
+    expect(form.content.placeOfSigning).toBe('Luzern');
+  });
+
+  it('keeps revision CAS identity outside mutable form content', () => {
+    const first = createLuzernerLeaseFormDraft(
+      agreementId,
+      emptyLuzernerLeaseFormContent(),
+    );
+    const second = reviseLuzernerLeaseFormDraft(first, {
+      ...first.content,
+      specialProvisions: 'Keine Untervermietung ohne Zustimmung.',
+    });
+
+    expect(second.agreementId).toBe(first.agreementId);
+    expect(second.templateCode).toBe(first.templateCode);
+    expect(second.revision).toBe(2);
+    expect(second.content.specialProvisions).toBe(
+      'Keine Untervermietung ohne Zustimmung.',
+    );
+  });
+
+  it('validates conditional fields that the printed LU form requires', () => {
+    const base = emptyLuzernerLeaseFormContent();
+
+    expect(() =>
+      createLuzernerLeaseFormDraft(agreementId, {
+        ...base,
+        durationKind: 'minimum_term',
+        minimumCancelableOn: null,
+      }),
+    ).toThrowError(/minimumCancelableOn is required/i);
+
+    expect(() =>
+      createLuzernerLeaseFormDraft(agreementId, {
+        ...base,
+        noticePeriodKind: 'longer_months',
+        longerNoticeMonths: null,
+      }),
+    ).toThrowError(/longerNoticeMonths is required/i);
+
+    expect(() =>
+      createLuzernerLeaseFormDraft(agreementId, {
+        ...base,
+        useType: 'other',
+        useTypeOther: null,
+      }),
+    ).toThrowError(/useTypeOther is required/i);
+  });
+
+  it('limits custom rows to the physical capacity of the LU 2020 form', () => {
+    const base = emptyLuzernerLeaseFormContent();
+
+    expect(() =>
+      createLuzernerLeaseFormDraft(agreementId, {
+        ...base,
+        customSharedUse: ['A', 'B', 'C'],
+      }),
+    ).toThrowError(/at most two custom shared-use/i);
+
+    expect(() =>
+      createLuzernerLeaseFormDraft(agreementId, {
+        ...base,
+        customAncillaryCosts: [
+          { label: 'A', mode: 'advance' },
+          { label: 'B', mode: 'flat' },
+          { label: 'C', mode: 'excluded' },
+        ],
+      }),
+    ).toThrowError(/at most two custom ancillary-cost/i);
+  });
+
+  it('exposes generation readiness separately from draft save validity', () => {
+    const base = emptyLuzernerLeaseFormContent();
+    const incomplete = inspectLuzernerLeaseFormReadiness(base);
+    expect(incomplete.ready).toBe(false);
+    expect(incomplete.missing).toEqual(
+      expect.arrayContaining([
+        'netRent',
+        'moveInDate',
+        'placeOfSigning',
+        'signingDate',
+      ]),
+    );
+
+    const complete = inspectLuzernerLeaseFormReadiness({
+      ...base,
+      moveInDate: '2026-10-01' as never,
+      netRent: '1850.00' as never,
+      placeOfSigning: 'Luzern',
+      signingDate: '2026-09-26' as never,
+    });
+    expect(complete).toEqual({ ready: true, missing: [] });
   });
 });
 

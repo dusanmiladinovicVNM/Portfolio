@@ -1703,6 +1703,120 @@ try {
     'Replacement Agreement deep-link',
   );
 
+  const luzernerForm =
+    "//*[@data-luzerner-lease-form='" + setupReplacementAgreementId + "']";
+  await waitForElement(
+    sessionId,
+    'xpath',
+    luzernerForm + "//h2[normalize-space()='Contract form data']",
+  );
+  await typeXpath(
+    sessionId,
+    luzernerForm + "//label[normalize-space()='EWID']//input",
+    '30123456',
+  );
+  await typeXpath(
+    sessionId,
+    luzernerForm + "//label[normalize-space()='EGID']//input",
+    '191234567',
+  );
+  await setInputValueXpath(
+    sessionId,
+    luzernerForm + "//label[normalize-space()='Mietantritt']//input",
+    '2027-07-01',
+  );
+  await typeXpath(
+    sessionId,
+    luzernerForm +
+      "//label[normalize-space()='Netto-Mietzins Wohnung / Gewerberaum CHF']//input",
+    '1200.00',
+  );
+  await selectOptionXpath(
+    sessionId,
+    luzernerForm +
+      "//label[.//span[normalize-space()='Heiz- und Warmwasserkosten (VMWG Art. 5)']]//select",
+    'advance',
+  );
+  await typeXpath(
+    sessionId,
+    luzernerForm +
+      "//label[normalize-space()='Besondere Bestimmungen']//textarea",
+    'Browser canonical Luzerner provision.',
+  );
+  await typeXpath(
+    sessionId,
+    luzernerForm + "//label[normalize-space()='Ort']//input",
+    'Luzern',
+  );
+  await setInputValueXpath(
+    sessionId,
+    luzernerForm + "//label[normalize-space()='Datum']//input",
+    '2027-06-15',
+  );
+
+  const luzernerPutsBefore = await executeScript(
+    sessionId,
+    'return window.__portfolioLuzernerFormPutCount || 0;',
+  );
+  await clickXpath(
+    sessionId,
+    luzernerForm +
+      "//button[normalize-space()='Save Luzerner contract data']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    luzernerForm +
+      "//*[contains(normalize-space(),'Luzerner Mietvertrag data saved as revision 1.')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioLuzernerFormPutCount || 0;',
+    ),
+    luzernerPutsBefore + 1,
+    'Initial Luzerner form save issues one canonical PUT',
+  );
+
+  await typeXpath(
+    sessionId,
+    luzernerForm +
+      "//label[normalize-space()='Besondere Bestimmungen']//textarea",
+    'Browser canonical Luzerner provision revised.',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextLuzernerFormSaveAfterCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    luzernerForm +
+      "//button[normalize-space()='Save Luzerner contract data']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    luzernerForm +
+      "//*[contains(normalize-space(),'Saved state recovered at revision 2 after an uncertain acknowledgement.')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioLuzernerFormPutCount || 0;',
+    ),
+    luzernerPutsBefore + 2,
+    'Ambiguous Luzerner save recovers by exact reread without duplicate PUT',
+  );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      luzernerForm +
+        "//button[normalize-space()='Save Luzerner contract data']",
+    ),
+    true,
+    'Recovered canonical Luzerner form is clean after exact reread',
+  );
+
   await setInputValueXpath(
     sessionId,
     agreementSignForm + "//input[@name='signedAt']",
