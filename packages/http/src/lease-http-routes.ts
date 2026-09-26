@@ -1,4 +1,5 @@
 import {
+  ApplicationError,
   cancelLeaseAgreementCommand,
   cancelLeaseAmendmentCommand,
   createLeaseAgreementCommand,
@@ -7,6 +8,7 @@ import {
   getLeaseAgreementQuery,
   getLuzernerLeaseFormQuery,
   listLeaseAgreementsByTenancyQuery,
+  renderLuzernerLeasePdfCommand,
   listLeaseAmendmentsByAgreementQuery,
   saveLuzernerLeaseFormCommand,
   signLeaseAgreementCommand,
@@ -16,7 +18,9 @@ import {
   type CreateLeaseAmendmentCommandInput,
   type IdGenerator,
   type LeaseRepository,
+  type LuzernerLeasePdfPort,
   type PartyRepository,
+  type PortfolioRepository,
   type TenancyRepository,
 } from '@portfolio/application';
 import {
@@ -51,6 +55,8 @@ export interface LeaseHttpDependencies {
   readonly leaseRepository: LeaseRepository;
   readonly tenancyRepository: TenancyRepository;
   readonly partyRepository: PartyRepository;
+  readonly portfolioRepository: PortfolioRepository;
+  readonly luzernerLeasePdfPort?: LuzernerLeasePdfPort;
   readonly idGenerator: IdGenerator;
 }
 
@@ -170,6 +176,47 @@ export async function handleLeaseHttp(
     );
 
     return json({ data: toTenancyTermVersionResponse(terms) });
+  }
+
+
+  const luzernerPdfMatch =
+    /^\/agreements\/([^/]+)\/luzerner-form\/pdf$/.exec(path);
+  if (method === 'GET' && luzernerPdfMatch) {
+    const parsedId = entityIdSchema.safeParse(luzernerPdfMatch[1]);
+    if (!parsedId.success) return validationFailure();
+
+    if (!deps.luzernerLeasePdfPort) {
+      throw new ApplicationError(
+        'LUZERNER_PDF_RENDERER_UNAVAILABLE',
+        'Luzerner PDF rendering is not configured.',
+      );
+    }
+
+    const rendered = await renderLuzernerLeasePdfCommand(
+      {
+        leaseRepository: deps.leaseRepository,
+        tenancyRepository: deps.tenancyRepository,
+        portfolioRepository: deps.portfolioRepository,
+        partyRepository: deps.partyRepository,
+        luzernerLeasePdfPort: deps.luzernerLeasePdfPort,
+      },
+      actor,
+      asLeaseAgreementId(parsedId.data),
+    );
+
+    const copy = new Uint8Array(rendered.content.byteLength);
+    copy.set(rendered.content);
+
+    return new Response(copy.buffer, {
+      status: 200,
+      headers: {
+        'cache-control': 'private, no-store',
+        'content-disposition': `inline; filename="${rendered.fileName}"`,
+        'content-length': String(copy.byteLength),
+        'content-type': 'application/pdf',
+        'x-content-type-options': 'nosniff',
+      },
+    });
   }
 
   const luzernerFormMatch =
