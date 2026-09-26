@@ -811,7 +811,9 @@ try {
   );
   await executeScript(
     sessionId,
-    'window.__portfolioFailNextInspectionSchemaPublishAfterCommit = true; return true;',
+    'window.__portfolioFailNextInspectionSchemaPublishAfterCommit = true;' +
+      'window.__portfolioFailNextInspectionSchemaExactRead = true;' +
+      'return true;',
   );
   await clickXpath(
     sessionId,
@@ -820,7 +822,20 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[contains(normalize-space(),'MOVE-IN-BRW v2 is published and available for new Inspections.')]",
+    "//*[contains(normalize-space(),'Publish outcome is ambiguous and exact schema reread failed:')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-schema-publish-ambiguity]",
+  );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      "//button[normalize-space()='Publish this draft']",
+    ),
+    true,
+    'Ambiguous publish remains blocked when exact recovery reread fails',
   );
   assertEqual(
     await executeScript(
@@ -828,7 +843,33 @@ try {
       'return window.__portfolioInspectionSchemaPublishCount || 0;',
     ),
     schemaPublishesBefore + 1,
-    'Ambiguous Schema Builder publish recovers without duplicate POST',
+    'Ambiguous publish failure path sends exactly one publish POST',
+  );
+
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Check exact publish status']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'MOVE-IN-BRW v2 publish was recovered from the exact canonical version.')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioInspectionSchemaPublishCount || 0;',
+    ),
+    schemaPublishesBefore + 1,
+    'Exact publish recovery reread never sends another publish POST',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//button[normalize-space()='Publish this draft']",
+    ),
+    false,
+    'Exact published recovery clears retry action',
   );
   await waitForElement(
     sessionId,
