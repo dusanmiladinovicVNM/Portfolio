@@ -425,6 +425,27 @@ export function normalizeLuzernerLeaseFormContent(
     );
   }
   if (
+    content.moveInDate !== null &&
+    content.minimumCancelableOn !== null &&
+    content.minimumCancelableOn < content.moveInDate
+  ) {
+    throw new DomainError(
+      'LUZERNER_LEASE_FORM_INVALID_PERIOD',
+      'minimumCancelableOn cannot be earlier than moveInDate.',
+    );
+  }
+  if (
+    content.moveInDate !== null &&
+    content.fixedEndDate !== null &&
+    content.fixedEndDate < content.moveInDate
+  ) {
+    throw new DomainError(
+      'LUZERNER_LEASE_FORM_INVALID_PERIOD',
+      'fixedEndDate cannot be earlier than moveInDate.',
+    );
+  }
+
+  if (
     content.noticePeriodKind === 'longer_months' &&
     content.longerNoticeMonths === null
   ) {

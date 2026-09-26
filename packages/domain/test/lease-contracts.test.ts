@@ -183,6 +183,28 @@ describe('Luzerner lease form', () => {
     ).toThrowError(/useTypeOther is required/i);
   });
 
+  it('rejects impossible contract periods relative to Mietantritt', () => {
+    const base = emptyLuzernerLeaseFormContent();
+
+    expect(() =>
+      createLuzernerLeaseFormDraft(agreementId, {
+        ...base,
+        moveInDate: asDateOnly('2026-10-01'),
+        durationKind: 'minimum_term',
+        minimumCancelableOn: asDateOnly('2026-09-30'),
+      }),
+    ).toThrowError(/cannot be earlier than moveInDate/);
+
+    expect(() =>
+      createLuzernerLeaseFormDraft(agreementId, {
+        ...base,
+        moveInDate: asDateOnly('2026-10-01'),
+        durationKind: 'fixed_term',
+        fixedEndDate: asDateOnly('2026-09-30'),
+      }),
+    ).toThrowError(/cannot be earlier than moveInDate/);
+  });
+
   it('limits custom rows to the physical capacity of the LU 2020 form', () => {
     const base = emptyLuzernerLeaseFormContent();
 
