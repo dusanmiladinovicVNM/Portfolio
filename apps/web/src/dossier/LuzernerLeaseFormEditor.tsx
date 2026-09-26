@@ -1,11 +1,14 @@
 import {
   luzernerLeaseFormResponseSchema,
   type LeaseAgreementResponse,
+  type LuzernerLeaseFormContentRequest,
   type LuzernerLeaseFormResponse,
 } from '@portfolio/contracts';
 import {
   LUZERNER_ANCILLARY_COST_KEYS,
   LUZERNER_SHARED_USE_KEYS,
+  asDateOnly,
+  asMoneyAmount,
   emptyLuzernerLeaseFormContent,
   normalizeLuzernerLeaseFormContent,
   type LuzernerAncillaryCostKey,
@@ -53,8 +56,8 @@ const SHARED_USE_LABELS: Readonly<Record<LuzernerSharedUseKey, string>> = {
 };
 
 function sameContent(
-  left: LuzernerLeaseFormContent,
-  right: LuzernerLeaseFormContent,
+  left: LuzernerLeaseFormContentRequest,
+  right: LuzernerLeaseFormContentRequest,
 ): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -67,6 +70,67 @@ function optionalNumber(value: string): number | null {
   if (!value.trim()) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toDomainContent(
+  input: LuzernerLeaseFormContentRequest,
+): LuzernerLeaseFormContent {
+  return {
+    ...input,
+    moveInDate:
+      input.moveInDate === null ? null : asDateOnly(input.moveInDate),
+    minimumCancelableOn:
+      input.minimumCancelableOn === null
+        ? null
+        : asDateOnly(input.minimumCancelableOn),
+    fixedEndDate:
+      input.fixedEndDate === null ? null : asDateOnly(input.fixedEndDate),
+    netRent: input.netRent === null ? null : asMoneyAmount(input.netRent),
+    garageParkingRent:
+      input.garageParkingRent === null
+        ? null
+        : asMoneyAmount(input.garageParkingRent),
+    ancillaryAdvance:
+      input.ancillaryAdvance === null
+        ? null
+        : asMoneyAmount(input.ancillaryAdvance),
+    ancillaryFlat:
+      input.ancillaryFlat === null
+        ? null
+        : asMoneyAmount(input.ancillaryFlat),
+    securityAmount:
+      input.securityAmount === null
+        ? null
+        : asMoneyAmount(input.securityAmount),
+    rentReserveAmount:
+      input.rentReserveAmount === null
+        ? null
+        : asMoneyAmount(input.rentReserveAmount),
+    signingDate:
+      input.signingDate === null ? null : asDateOnly(input.signingDate),
+  };
+}
+
+function toRequestContent(
+  input: LuzernerLeaseFormContent,
+): LuzernerLeaseFormContentRequest {
+  return {
+    ...input,
+    sharedUse: { ...input.sharedUse },
+    customSharedUse: [...input.customSharedUse],
+    ancillaryCosts: { ...input.ancillaryCosts },
+    customAncillaryCosts: input.customAncillaryCosts.map((value) => ({
+      ...value,
+    })),
+  };
+}
+
+function normalizeRequestContent(
+  input: LuzernerLeaseFormContentRequest,
+): LuzernerLeaseFormContentRequest {
+  return toRequestContent(
+    normalizeLuzernerLeaseFormContent(toDomainContent(input)),
+  );
 }
 
 function customSharedUseValue(
@@ -113,8 +177,8 @@ export function LuzernerLeaseFormEditor({
 }: LuzernerLeaseFormEditorProps) {
   const [canonical, setCanonical] =
     useState<LuzernerLeaseFormResponse | null>(null);
-  const [draft, setDraft] = useState<LuzernerLeaseFormContent>(() =>
-    emptyLuzernerLeaseFormContent(),
+  const [draft, setDraft] = useState<LuzernerLeaseFormContentRequest>(() =>
+    toRequestContent(emptyLuzernerLeaseFormContent()),
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -124,7 +188,7 @@ export function LuzernerLeaseFormEditor({
   const [outcomeAmbiguous, setOutcomeAmbiguous] = useState(false);
   const ambiguousAttemptRef = useRef<{
     expectedRevision: number;
-    content: LuzernerLeaseFormContent;
+    content: LuzernerLeaseFormContentRequest;
   } | null>(null);
   const mountedRef = useRef(true);
 
@@ -162,7 +226,7 @@ export function LuzernerLeaseFormEditor({
           cause.code === 'LUZERNER_LEASE_FORM_NOT_FOUND'
         ) {
           setCanonical(null);
-          setDraft(emptyLuzernerLeaseFormContent());
+          setDraft(toRequestContent(emptyLuzernerLeaseFormContent()));
           setDirty(false);
           return;
         }
@@ -184,7 +248,9 @@ export function LuzernerLeaseFormEditor({
     loading || saving || outcomeAmbiguous || !editable;
 
   function update(
-    producer: (current: LuzernerLeaseFormContent) => LuzernerLeaseFormContent,
+    producer: (
+      current: LuzernerLeaseFormContentRequest,
+    ) => LuzernerLeaseFormContentRequest,
   ): void {
     if (controlsDisabled) return;
     setDraft((current) => producer(current));
@@ -245,9 +311,9 @@ export function LuzernerLeaseFormEditor({
   async function save(): Promise<void> {
     if (!editable || saving || outcomeAmbiguous || !dirty) return;
 
-    let normalized: LuzernerLeaseFormContent;
+    let normalized: LuzernerLeaseFormContentRequest;
     try {
-      normalized = normalizeLuzernerLeaseFormContent(draft);
+      normalized = normalizeRequestContent(draft);
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -543,7 +609,7 @@ export function LuzernerLeaseFormEditor({
         <summary><strong>Mietbeginn · Mietdauer · Kündigung</strong></summary>
         <div className="setup-form-grid">
           {textInput('Mietantritt', draft.moveInDate, (value) =>
-            update((current) => ({ ...current, moveInDate: value as never })), 'date')}
+            update((current) => ({ ...current, moveInDate: value })), 'date')}
           <label>
             Mietdauer
             <select
@@ -572,14 +638,14 @@ export function LuzernerLeaseFormEditor({
             ? textInput('erstmals kündbar auf den', draft.minimumCancelableOn, (value) =>
                 update((current) => ({
                   ...current,
-                  minimumCancelableOn: value as never,
+                  minimumCancelableOn: value,
                 })), 'date')
             : null}
           {draft.durationKind === 'fixed_term'
             ? textInput('endet ohne Kündigung am', draft.fixedEndDate, (value) =>
                 update((current) => ({
                   ...current,
-                  fixedEndDate: value as never,
+                  fixedEndDate: value,
                 })), 'date')
             : null}
           <label>
@@ -661,13 +727,13 @@ export function LuzernerLeaseFormEditor({
         <summary><strong>Mietzins · Nebenkosten</strong></summary>
         <div className="setup-form-grid">
           {textInput('Netto-Mietzins Wohnung / Gewerberaum CHF', draft.netRent, (value) =>
-            update((current) => ({ ...current, netRent: value as never })))}
+            update((current) => ({ ...current, netRent: value })))}
           {textInput('Brutto-Mietzins Garage, Autoeinstellplatz / Autoabstellplatz CHF', draft.garageParkingRent, (value) =>
-            update((current) => ({ ...current, garageParkingRent: value as never })))}
+            update((current) => ({ ...current, garageParkingRent: value })))}
           {textInput('Nebenkosten Akonto CHF', draft.ancillaryAdvance, (value) =>
-            update((current) => ({ ...current, ancillaryAdvance: value as never })))}
+            update((current) => ({ ...current, ancillaryAdvance: value })))}
           {textInput('Nebenkosten Pauschal CHF', draft.ancillaryFlat, (value) =>
-            update((current) => ({ ...current, ancillaryFlat: value as never })))}
+            update((current) => ({ ...current, ancillaryFlat: value })))}
           <label>
             Zahlbar im Voraus
             <select
@@ -841,7 +907,7 @@ export function LuzernerLeaseFormEditor({
           {textInput('Anderer Stichtag', draft.ancillaryClosingDateCustom, (value) =>
             update((current) => ({ ...current, ancillaryClosingDateCustom: value })))}
           {textInput('Sicherheitsleistungen CHF', draft.securityAmount, (value) =>
-            update((current) => ({ ...current, securityAmount: value as never })))}
+            update((current) => ({ ...current, securityAmount: value })))}
           <label className="tenancy-checkbox">
             <input
               checked={draft.tenantNamedDepositAccount}
@@ -889,7 +955,7 @@ export function LuzernerLeaseFormEditor({
           {textInput('Basis', draft.consumerPriceIndexBasis, (value) =>
             update((current) => ({ ...current, consumerPriceIndexBasis: value })))}
           {textInput('aufgelaufene Reserve CHF', draft.rentReserveAmount, (value) =>
-            update((current) => ({ ...current, rentReserveAmount: value as never })))}
+            update((current) => ({ ...current, rentReserveAmount: value })))}
           {textInput('aufgelaufene Reserve %', draft.rentReservePercent, (value) =>
             update((current) => ({ ...current, rentReservePercent: value })))}
           <label className="tenancy-checkbox">
@@ -957,7 +1023,7 @@ export function LuzernerLeaseFormEditor({
           {textInput('Ort', draft.placeOfSigning, (value) =>
             update((current) => ({ ...current, placeOfSigning: value })))}
           {textInput('Datum', draft.signingDate, (value) =>
-            update((current) => ({ ...current, signingDate: value as never })), 'date')}
+            update((current) => ({ ...current, signingDate: value })), 'date')}
         </div>
       </details>
 
