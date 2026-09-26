@@ -30,7 +30,10 @@ import {
   isWorkspaceAsOf,
   unitRoute,
 } from '../navigation/workspace-route.js';
-import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
+import type {
+  NavigateWorkspace,
+  SetNavigationBlocker,
+} from '../navigation/use-workspace-navigation.js';
 import { DocumentBinaryActions } from '../documents/DocumentBinaryActions.js';
 import { SignedDocumentAdministration } from '../documents/SignedDocumentAdministration.js';
 import {
@@ -52,6 +55,7 @@ import {
   assertTenancyAgreementsOwner,
 } from './contract-owner.js';
 import { LeaseAdministration } from './LeaseAdministration.js';
+import { LuzernerLeaseFormPanel } from './LuzernerLeaseFormPanel.js';
 
 interface UnitContractsProps {
   readonly api: PortfolioApi;
@@ -62,6 +66,7 @@ interface UnitContractsProps {
   readonly agreementId?: string | undefined;
   readonly amendmentId?: string | undefined;
   readonly navigate: NavigateWorkspace;
+  readonly setNavigationBlocker: SetNavigationBlocker;
 }
 
 type TermsState =
@@ -338,6 +343,7 @@ export function UnitContracts({
   agreementId,
   amendmentId,
   navigate,
+  setNavigationBlocker,
 }: UnitContractsProps) {
   const [tenancies, setTenancies] =
     useState<readonly TenancyResponse[] | null>(null);
@@ -815,6 +821,12 @@ export function UnitContracts({
 
       {selectedAgreement ? (
         <>
+          <LuzernerLeaseFormPanel
+            agreement={selectedAgreement}
+            api={api}
+            setNavigationBlocker={setNavigationBlocker}
+          />
+
           <section className="panel">
             <div className="section-heading">
               <div>
