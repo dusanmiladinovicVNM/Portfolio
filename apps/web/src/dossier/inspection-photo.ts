@@ -94,7 +94,9 @@ export function scaledInspectionPhotoDimensions(
 
 async function decodeBrowserPhoto(file: File): Promise<DecodedInspectionPhoto> {
   if (typeof createImageBitmap === 'function') {
-    const bitmap = await createImageBitmap(file);
+    const bitmap = await createImageBitmap(file, {
+      imageOrientation: 'from-image',
+    });
     return {
       width: bitmap.width,
       height: bitmap.height,
