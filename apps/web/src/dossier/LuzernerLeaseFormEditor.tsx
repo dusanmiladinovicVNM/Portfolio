@@ -7,8 +7,6 @@ import {
 import {
   LUZERNER_ANCILLARY_COST_KEYS,
   LUZERNER_SHARED_USE_KEYS,
-  asDateOnly,
-  asMoneyAmount,
   emptyLuzernerLeaseFormContent,
   normalizeLuzernerLeaseFormContent,
   type LuzernerAncillaryCostKey,
@@ -72,45 +70,6 @@ function optionalNumber(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function toDomainContent(
-  input: LuzernerLeaseFormContentRequest,
-): LuzernerLeaseFormContent {
-  return {
-    ...input,
-    moveInDate:
-      input.moveInDate === null ? null : asDateOnly(input.moveInDate),
-    minimumCancelableOn:
-      input.minimumCancelableOn === null
-        ? null
-        : asDateOnly(input.minimumCancelableOn),
-    fixedEndDate:
-      input.fixedEndDate === null ? null : asDateOnly(input.fixedEndDate),
-    netRent: input.netRent === null ? null : asMoneyAmount(input.netRent),
-    garageParkingRent:
-      input.garageParkingRent === null
-        ? null
-        : asMoneyAmount(input.garageParkingRent),
-    ancillaryAdvance:
-      input.ancillaryAdvance === null
-        ? null
-        : asMoneyAmount(input.ancillaryAdvance),
-    ancillaryFlat:
-      input.ancillaryFlat === null
-        ? null
-        : asMoneyAmount(input.ancillaryFlat),
-    securityAmount:
-      input.securityAmount === null
-        ? null
-        : asMoneyAmount(input.securityAmount),
-    rentReserveAmount:
-      input.rentReserveAmount === null
-        ? null
-        : asMoneyAmount(input.rentReserveAmount),
-    signingDate:
-      input.signingDate === null ? null : asDateOnly(input.signingDate),
-  };
-}
-
 function toRequestContent(
   input: LuzernerLeaseFormContent,
 ): LuzernerLeaseFormContentRequest {
@@ -128,9 +87,7 @@ function toRequestContent(
 function normalizeRequestContent(
   input: LuzernerLeaseFormContentRequest,
 ): LuzernerLeaseFormContentRequest {
-  return toRequestContent(
-    normalizeLuzernerLeaseFormContent(toDomainContent(input)),
-  );
+  return toRequestContent(normalizeLuzernerLeaseFormContent(input));
 }
 
 function customSharedUseValue(
