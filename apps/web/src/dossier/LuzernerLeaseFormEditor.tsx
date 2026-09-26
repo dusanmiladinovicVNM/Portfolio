@@ -1,4 +1,5 @@
 import {
+  documentVersionResponseSchema,
   luzernerLeaseFormResponseSchema,
   type LeaseAgreementResponse,
   type LuzernerLeaseFormContentRequest,
@@ -16,6 +17,7 @@ import {
 } from '@portfolio/domain';
 import { useEffect, useRef, useState } from 'react';
 import {
+  agreementLuzernerFinalDocumentPath,
   agreementLuzernerFormPath,
   agreementLuzernerPdfPath,
 } from '../api/paths.js';
@@ -29,6 +31,8 @@ import {
 interface LuzernerLeaseFormEditorProps {
   readonly api: PortfolioApi;
   readonly agreement: LeaseAgreementResponse;
+  readonly hasSignedOriginal: boolean;
+  readonly onDocumentWrite: () => void;
   readonly onWriteBlockChange: (blocked: boolean) => void;
   readonly setNavigationBlocker: SetNavigationBlocker;
 }
@@ -137,6 +141,8 @@ function setCustomAncillaryValue(
 export function LuzernerLeaseFormEditor({
   api,
   agreement,
+  hasSignedOriginal,
+  onDocumentWrite,
   onWriteBlockChange,
   setNavigationBlocker,
 }: LuzernerLeaseFormEditorProps) {
@@ -149,6 +155,7 @@ export function LuzernerLeaseFormEditor({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [finalDocumentLoading, setFinalDocumentLoading] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -325,6 +332,46 @@ export function LuzernerLeaseFormEditor({
       );
     } finally {
       if (mountedRef.current) setPdfLoading(false);
+    }
+  }
+
+  async function generateFinalDocument(): Promise<void> {
+    if (
+      canonical === null ||
+      dirty ||
+      saving ||
+      outcomeAmbiguous ||
+      finalDocumentLoading ||
+      hasSignedOriginal ||
+      !['signed', 'superseded', 'terminated'].includes(agreement.status)
+    ) {
+      return;
+    }
+
+    setFinalDocumentLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const version = await api.post(
+        agreementLuzernerFinalDocumentPath(agreement.id),
+        {},
+        documentVersionResponseSchema,
+      );
+      if (!mountedRef.current) return;
+      onDocumentWrite();
+      setSuccess(
+        `Final Luzerner PDF stored as immutable DocumentVersion ${version.versionNumber}.`,
+      );
+    } catch (cause) {
+      if (!mountedRef.current) return;
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Final Luzerner PDF could not be stored.',
+      );
+    } finally {
+      if (mountedRef.current) setFinalDocumentLoading(false);
     }
   }
 
@@ -1127,6 +1174,27 @@ export function LuzernerLeaseFormEditor({
           >
             Open generated PDF
           </a>
+        ) : null}
+        {['signed', 'superseded', 'terminated'].includes(agreement.status) ? (
+          <button
+            className="button-secondary"
+            disabled={
+              canonical === null ||
+              dirty ||
+              saving ||
+              outcomeAmbiguous ||
+              finalDocumentLoading ||
+              hasSignedOriginal
+            }
+            onClick={() => void generateFinalDocument()}
+            type="button"
+          >
+            {hasSignedOriginal
+              ? 'Final PDF stored'
+              : finalDocumentLoading
+                ? 'Storing final PDF…'
+                : 'Store final signed PDF'}
+          </button>
         ) : null}
         <button
           className="button-primary"
