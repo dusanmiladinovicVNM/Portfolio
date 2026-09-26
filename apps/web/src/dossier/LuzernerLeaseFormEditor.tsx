@@ -363,7 +363,7 @@ export function LuzernerLeaseFormEditor({
     >
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Luzerner Mietvertrag · Ausgabe 2020</p>
+          <p className="eyebrow">Step 3 · Luzerner Mietvertrag · Ausgabe 2020</p>
           <h2>Contract form data</h2>
         </div>
         <span className="section-note">

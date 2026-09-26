@@ -1538,7 +1538,7 @@ try {
   );
 
   const amendmentDocumentsSection =
-    "//section[.//p[normalize-space()='Step 5 · Amendment Documents']]";
+    "//section[.//p[normalize-space()='Step 6 · Amendment Documents']]";
   const amendmentDocumentCreateForm =
     amendmentDocumentsSection +
     "//form[@data-signed-document-form='create']";
@@ -1909,7 +1909,7 @@ try {
   );
 
   const agreementDocumentsSection =
-    "//section[.//p[normalize-space()='Step 3 · Agreement Documents']]";
+    "//section[.//p[normalize-space()='Step 4 · Agreement Documents']]";
   const agreementDocumentCreateForm =
     agreementDocumentsSection +
     "//form[@data-signed-document-form='create']";
@@ -3652,7 +3652,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[.//p[normalize-space()='Step 3 · Agreement Documents']]//h2[normalize-space()='AGR-BRW']",
+    "//section[.//p[normalize-space()='Step 4 · Agreement Documents']]//h2[normalize-space()='AGR-BRW']",
   );
   await waitForElement(
     sessionId,
@@ -3734,7 +3734,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[.//p[normalize-space()='Step 5 · Amendment Documents']]//h2[normalize-space()='AMD-BRW']",
+    "//section[.//p[normalize-space()='Step 6 · Amendment Documents']]//h2[normalize-space()='AMD-BRW']",
   );
   await waitForElement(
     sessionId,
@@ -3762,7 +3762,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[.//p[normalize-space()='Step 5 · Amendment Documents']]//h2[normalize-space()='AMD-BRW']",
+    "//section[.//p[normalize-space()='Step 6 · Amendment Documents']]//h2[normalize-space()='AMD-BRW']",
   );
   await waitForElement(
     sessionId,
