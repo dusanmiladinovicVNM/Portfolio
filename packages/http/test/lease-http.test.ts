@@ -20,6 +20,7 @@ import {
   asTenancyPartyId,
   asUnitId,
   asUserId,
+  LUZERNER_ANCILLARY_COST_KEYS,
   type DateOnly,
   type LeaseAgreement,
   type LeaseAgreementId,
@@ -433,6 +434,64 @@ const TENANT_ID = asPartyId('10000000-0000-4000-8000-000000000003');
 const LANDLORD_ID = asPartyId('10000000-0000-4000-8000-000000000004');
 const OTHER_ID = asPartyId('10000000-0000-4000-8000-000000000005');
 
+function luzernerFormData() {
+  return {
+    occupantsCount: 2,
+    familyDwelling: true,
+    registeredPartnership: false,
+    furnished: false,
+    separateRoom: false,
+    cellar: true,
+    attic: true,
+    separateApartment: false,
+    garage: true,
+    garageNumber: 'G-12',
+    parkingSpace: false,
+    parkingSpaceNumber: null,
+    additionalObjects: [],
+    sharedLaundryRoom: true,
+    sharedDryingRoom: true,
+    sharedClothesLine: false,
+    sharedStrollerStorage: false,
+    sharedGarden: false,
+    sharedHobbyRoom: false,
+    sharedPlayground: false,
+    sharedBicycleMopedStorage: true,
+    sharedUseExtras: [],
+    useType: 'dwelling',
+    customUse: null,
+    handoverDate: '2026-10-01',
+    durationMode: 'minimum',
+    minimumFirstTerminationDate: '2027-09-30',
+    terminationDateMode: 'quarterly_mar_jun_sep',
+    ancillaryCosts: Object.fromEntries(
+      LUZERNER_ANCILLARY_COST_KEYS.map((key) => [
+        key,
+        key === 'heating_hot_water' ? 'advance' : 'excluded',
+      ]),
+    ),
+    customAncillaryCosts: [],
+    rentAdjustmentMode: 'standard',
+    adjustmentNoticeMonths: 3,
+    indexPointsAtContract: null,
+    settlementCutoffMode: 'december_31',
+    customSettlementCutoffDate: null,
+    depositAccountOnTenantName: true,
+    liabilityInsurance: 'yes',
+    referenceInterestRate: '1.25',
+    costIncreaseBalancedUntil: '2026-09-30',
+    consumerPriceIndex: '108.5',
+    consumerPriceIndexMonthYear: '09.2026',
+    consumerPriceIndexBasis: 'Dec 2020 = 100',
+    incompleteAdjustmentReserveAmount: null,
+    incompleteAdjustmentReservePercent: null,
+    remarksAndAttachments: 'Übergabeprotokoll folgt.',
+    initialRentFormAttached: true,
+    specialProvisions: 'Keine zusätzlichen Vereinbarungen.',
+    contractPlace: 'Luzern',
+  };
+}
+
 function person(id: PartyId, code: string, firstName: string): Party {
   return {
     id,
@@ -524,6 +583,161 @@ function buildHandler() {
 }
 
 describe('Lease HTTP lifecycle', () => {
+  it('keeps Luzerner form data Agreement-owned, CAS-safe and immutable after signing', async () => {
+    const { handler } = buildHandler();
+
+    const created = await handler(
+      new Request(`https://portfolio.test/tenancies/${TENANCY_ID}/agreements`, {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'AGR-LU-0001',
+          agreementType: 'initial',
+          effectiveFrom: '2026-10-01',
+          effectiveTo: null,
+          parties: [
+            { partyId: LANDLORD_ID, role: 'landlord' },
+            { partyId: TENANT_ID, role: 'tenant' },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(created.status).toBe(201);
+    const agreement = (await created.json()).data as {
+      id: string;
+      version: number;
+    };
+
+    const before = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+      ),
+      adminIdentity,
+    );
+    expect(before.status).toBe(200);
+    expect(await before.json()).toEqual({ data: null });
+
+    const saved = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            expectedRevision: 0,
+            data: luzernerFormData(),
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(saved.status).toBe(200);
+    expect(await saved.json()).toMatchObject({
+      data: {
+        agreementId: agreement.id,
+        templateCode: 'luzerner_mietvertrag_2020',
+        templateDocumentVersionId: null,
+        revision: 1,
+        data: {
+          familyDwelling: true,
+          cellar: true,
+          referenceInterestRate: '1.25',
+        },
+      },
+    });
+
+    const duplicateCreate = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            expectedRevision: 0,
+            data: luzernerFormData(),
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(duplicateCreate.status).toBe(409);
+    expect(await duplicateCreate.json()).toMatchObject({
+      error: { code: 'LUZERNER_LEASE_FORM_REVISION_CONFLICT' },
+    });
+
+    const inspectorWrite = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            expectedRevision: 1,
+            data: luzernerFormData(),
+          }),
+        },
+      ),
+      inspectorIdentity,
+    );
+    expect(inspectorWrite.status).toBe(403);
+
+    const signed = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/sign`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            expectedVersion: agreement.version,
+            signedAt: '2026-09-26',
+            terms: {
+              currency: 'CHF',
+              baseRent: '1800.00',
+              utilitiesAdvance: '250.00',
+              parkingRent: '120.00',
+              depositRequired: '5400.00',
+              billingFrequency: 'monthly',
+              noticePeriodTenantDays: 90,
+              noticePeriodLandlordDays: 90,
+            },
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(signed.status).toBe(200);
+
+    const afterSigning = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            expectedRevision: 1,
+            data: {
+              ...luzernerFormData(),
+              contractPlace: 'Zürich',
+            },
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(afterSigning.status).toBe(422);
+    expect(await afterSigning.json()).toMatchObject({
+      error: { code: 'LUZERNER_LEASE_FORM_AGREEMENT_NOT_DRAFT' },
+    });
+
+    const immutable = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+      ),
+      adminIdentity,
+    );
+    expect(await immutable.json()).toMatchObject({
+      data: {
+        revision: 1,
+        data: { contractPlace: 'Luzern' },
+      },
+    });
+  });
+
   it('preserves exact historical terms through agreement and amendment snapshots', async () => {
     const { handler } = buildHandler();
 
