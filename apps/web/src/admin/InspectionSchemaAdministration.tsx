@@ -20,6 +20,7 @@ import {
   useState,
 } from 'react';
 import {
+  inspectionSchemaPath,
   inspectionSchemaPublishPath,
   inspectionSchemasPath,
 } from '../api/paths.js';
@@ -941,13 +942,19 @@ function SchemaDraftEditor({
 function CanonicalSchemaDetail({
   schema,
   busy,
+  publishOutcomeAmbiguous,
+  publishRecoveryPending,
   onDuplicate,
   onPublish,
+  onResolvePublish,
 }: {
   readonly schema: InspectionSchemaVersionResponse;
   readonly busy: boolean;
+  readonly publishOutcomeAmbiguous: boolean;
+  readonly publishRecoveryPending: boolean;
   readonly onDuplicate: () => void;
   readonly onPublish: () => void;
+  readonly onResolvePublish: () => void;
 }) {
   return (
     <div className="schema-canonical-detail">
@@ -970,13 +977,51 @@ function CanonicalSchemaDetail({
             Duplicate this version to revise it. Existing published history and
             Inspections keep their original schema version.
           </p>
+          {publishOutcomeAmbiguous ? (
+            <div
+              className="schema-builder-ambiguity"
+              data-schema-publish-ambiguity
+              role="alert"
+            >
+              <strong>Publish outcome is uncertain.</strong>
+              <p>
+                A publish request may already have committed. Do not send a
+                second publish request until this exact schema version has been
+                reread.
+              </p>
+              <button
+                className="button-secondary"
+                disabled={publishRecoveryPending}
+                onClick={onResolvePublish}
+                type="button"
+              >
+                {publishRecoveryPending
+                  ? 'Checking exact status…'
+                  : 'Check exact publish status'}
+              </button>
+            </div>
+          ) : null}
         </div>
         <div className="schema-builder-button-row">
-          <button className="button-secondary" disabled={busy} onClick={onDuplicate} type="button">
+          <button
+            className="button-secondary"
+            disabled={busy || publishRecoveryPending}
+            onClick={onDuplicate}
+            type="button"
+          >
             Duplicate as new draft
           </button>
           {schema.status === 'draft' ? (
-            <button className="button-primary" disabled={busy} onClick={onPublish} type="button">
+            <button
+              className="button-primary"
+              disabled={
+                busy ||
+                publishRecoveryPending ||
+                publishOutcomeAmbiguous
+              }
+              onClick={onPublish}
+              type="button"
+            >
               {busy ? 'Publishing…' : 'Publish this draft'}
             </button>
           ) : null}
@@ -1065,6 +1110,10 @@ export function InspectionSchemaAdministration({
   const [actionError, setActionError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [createOutcomeAmbiguous, setCreateOutcomeAmbiguous] = useState(false);
+  const [publishOutcomeAmbiguousId, setPublishOutcomeAmbiguousId] =
+    useState<string | null>(null);
+  const [publishRecoveryPendingId, setPublishRecoveryPendingId] =
+    useState<string | null>(null);
   const [pending, setPending] = useState<'save' | 'publish' | null>(null);
   const mountedRef = useRef(true);
   const readGenerationRef = useRef(0);
@@ -1077,6 +1126,15 @@ export function InspectionSchemaAdministration({
     );
     return sortedSchemas(response.items);
   }, [api]);
+
+  const fetchSchemaVersion = useCallback(
+    async (schemaVersionId: string) =>
+      api.get(
+        inspectionSchemaPath(schemaVersionId),
+        inspectionSchemaVersionResponseSchema,
+      ),
+    [api],
+  );
 
   const load = useCallback(async () => {
     const generation = ++readGenerationRef.current;
@@ -1259,8 +1317,65 @@ export function InspectionSchemaAdministration({
     }
   }
 
+  async function resolvePublishOutcome(
+    schema: InspectionSchemaVersionResponse,
+  ) {
+    if (
+      publishOutcomeAmbiguousId !== schema.id ||
+      publishRecoveryPendingId !== null
+    ) {
+      return;
+    }
+
+    setPublishRecoveryPendingId(schema.id);
+    setActionError(null);
+    setSuccess(null);
+    try {
+      const canonical = await fetchSchemaVersion(schema.id);
+      if (!mountedRef.current) return;
+      if (canonical.id !== schema.id) {
+        setActionError(
+          'Exact publish recovery returned the wrong schema version. Publish remains blocked.',
+        );
+        return;
+      }
+
+      setSchemas((current) => upsertSchemaVersion(current, canonical));
+      setSelectedId(canonical.id);
+      setPublishOutcomeAmbiguousId(null);
+      if (canonical.status === 'published') {
+        setSuccess(
+          `${canonical.schemaCode} v${canonical.versionNumber} publish was recovered from the exact canonical version.`,
+        );
+      } else if (canonical.status === 'draft') {
+        setActionError(
+          `${canonical.schemaCode} v${canonical.versionNumber} is still a canonical draft. The previous publish did not commit; retry is now allowed.`,
+        );
+      } else {
+        setActionError(
+          `${canonical.schemaCode} v${canonical.versionNumber} is now ${canonical.status}; publish uncertainty is resolved from exact canonical state.`,
+        );
+      }
+    } catch (cause) {
+      if (!mountedRef.current) return;
+      setActionError(
+        `Publish outcome remains uncertain because exact schema reread failed: ${
+          cause instanceof Error ? cause.message : 'request failed'
+        }. Publish remains disabled.`,
+      );
+    } finally {
+      if (mountedRef.current) setPublishRecoveryPendingId(null);
+    }
+  }
+
   async function publish(schema: InspectionSchemaVersionResponse) {
-    if (writePendingRef.current || schema.status !== 'draft') return;
+    if (
+      writePendingRef.current ||
+      schema.status !== 'draft' ||
+      publishOutcomeAmbiguousId === schema.id
+    ) {
+      return;
+    }
     writePendingRef.current = true;
     setPending('publish');
     setActionError(null);
@@ -1276,15 +1391,42 @@ export function InspectionSchemaAdministration({
         );
       } catch (cause) {
         if (!isAmbiguousWriteFailure(cause)) throw cause;
-        const canonical = await fetchSchemas();
-        if (mountedRef.current) setSchemas(canonical);
-        const recovered = canonical.find(
-          (candidate) =>
-            candidate.id === schema.id && candidate.status === 'published',
-        );
-        if (!recovered) {
+
+        if (mountedRef.current) {
+          setPublishOutcomeAmbiguousId(schema.id);
           setActionError(
-            'Publish outcome is ambiguous. Canonical versions were reloaded; verify the schema status before retrying.',
+            'Publish outcome is ambiguous. A second publish is blocked until this exact schema version is reread.',
+          );
+        }
+
+        let recovered: InspectionSchemaVersionResponse;
+        try {
+          recovered = await fetchSchemaVersion(schema.id);
+        } catch (rereadCause) {
+          if (!mountedRef.current) return;
+          setActionError(
+            `Publish outcome is ambiguous and exact schema reread failed: ${
+              rereadCause instanceof Error
+                ? rereadCause.message
+                : 'request failed'
+            }. Publish remains disabled until exact canonical status is resolved.`,
+          );
+          return;
+        }
+        if (!mountedRef.current) return;
+        if (recovered.id !== schema.id) {
+          setActionError(
+            'Exact publish recovery returned the wrong schema version. Publish remains disabled.',
+          );
+          return;
+        }
+
+        setSchemas((current) => upsertSchemaVersion(current, recovered));
+        setSelectedId(recovered.id);
+        setPublishOutcomeAmbiguousId(null);
+        if (recovered.status !== 'published') {
+          setActionError(
+            `${recovered.schemaCode} v${recovered.versionNumber} is still ${recovered.status}; the ambiguous publish did not resolve as published.`,
           );
           return;
         }
@@ -1407,8 +1549,15 @@ export function InspectionSchemaAdministration({
           ) : selected ? (
             <CanonicalSchemaDetail
               busy={pending !== null}
+              publishOutcomeAmbiguous={
+                publishOutcomeAmbiguousId === selected.id
+              }
+              publishRecoveryPending={
+                publishRecoveryPendingId === selected.id
+              }
               onDuplicate={() => startDuplicate(selected)}
               onPublish={() => void publish(selected)}
+              onResolvePublish={() => void resolvePublishOutcome(selected)}
               schema={selected}
             />
           ) : schemas?.length === 0 ? (
