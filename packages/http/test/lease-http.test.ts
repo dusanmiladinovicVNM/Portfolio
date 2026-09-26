@@ -21,6 +21,7 @@ import {
   asUnitId,
   asUserId,
   emptyLuzernerLeaseFormContent,
+  DomainError,
   type DateOnly,
   type LeaseAgreement,
   type LeaseAgreementId,
@@ -265,9 +266,10 @@ class InMemoryLeaseRepository implements LeaseRepository {
       const actualRevision =
         this.luzernerForms.get(agreement.id)?.revision ?? null;
       if (actualRevision !== expectedLuzernerFormRevision) {
-        throw Object.assign(new Error('Luzerner form revision conflict'), {
-          code: 'LUZERNER_LEASE_FORM_REVISION_CONFLICT',
-        });
+        throw new DomainError(
+          'LUZERNER_LEASE_FORM_REVISION_CONFLICT',
+          'The Luzerner lease form changed while Agreement signing was in progress.',
+        );
       }
     }
 
