@@ -696,6 +696,147 @@ describe('Lease HTTP lifecycle', () => {
     expect(captured!.form.netRent).toBe('1500.00');
   });
 
+  it('freezes one idempotent final Luzerner PDF as the Agreement signed original', async () => {
+    let renderCount = 0;
+    const luzernerLeasePdfPort: LuzernerLeasePdfPort = {
+      async renderLuzernerLeaseAgreement() {
+        renderCount += 1;
+        return {
+          fileName: 'mietvertrag-final.pdf',
+          content: new TextEncoder().encode('%PDF-final-contract'),
+        };
+      },
+    };
+
+    const { handler } = buildHandler({ luzernerLeasePdfPort });
+    const created = await handler(
+      new Request(`https://portfolio.test/tenancies/${TENANCY_ID}/agreements`, {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'AGR-FINAL-1',
+          agreementType: 'initial',
+          effectiveFrom: '2026-10-01',
+          effectiveTo: '2027-09-30',
+          parties: [
+            { partyId: LANDLORD_ID, role: 'landlord' },
+            { partyId: TENANT_ID, role: 'tenant' },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(created.status).toBe(201);
+    const agreement = (await created.json()).data as {
+      id: string;
+      version: number;
+    };
+
+    const base = emptyLuzernerLeaseFormContent();
+    const saved = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedRevision: null,
+            content: {
+              ...base,
+              useType: 'apartment',
+              moveInDate: '2026-10-01',
+              durationKind: 'indefinite',
+              terminationSchedule: 'monthly_except_december',
+              noticePeriodKind: 'residential_3_months',
+              netRent: '1500.00',
+              paymentFrequency: 'monthly',
+              rentAdjustmentMode: 'termination_date',
+              rentAdjustmentAdvanceMonths: 3,
+              ancillaryClosingDate: 'december_31',
+              placeOfSigning: 'Luzern',
+              signingDate: '2026-09-25',
+            },
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(saved.status).toBe(200);
+
+    const signed = await handler(
+      new Request(`https://portfolio.test/agreements/${agreement.id}/sign`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: agreement.version,
+          signedAt: '2026-09-25',
+          terms: {
+            currency: 'CHF',
+            baseRent: '1500.00',
+            billingFrequency: 'monthly',
+          },
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(signed.status).toBe(200);
+
+    const first = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form/final-document`,
+        { method: 'POST', body: '{}' },
+      ),
+      adminIdentity,
+    );
+    expect(first.status).toBe(200);
+    const firstVersion = (await first.json()).data as {
+      id: string;
+      status: string;
+      mimeType: string;
+    };
+    expect(firstVersion).toMatchObject({
+      status: 'final',
+      mimeType: 'application/pdf',
+    });
+
+    const second = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form/final-document`,
+        { method: 'POST', body: '{}' },
+      ),
+      adminIdentity,
+    );
+    expect(second.status).toBe(200);
+    expect((await second.json()).data).toMatchObject({
+      id: firstVersion.id,
+      status: 'final',
+    });
+    expect(renderCount).toBe(1);
+
+    const documents = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/documents`,
+      ),
+      adminIdentity,
+    );
+    expect(documents.status).toBe(200);
+    expect(await documents.json()).toMatchObject({
+      data: {
+        items: [
+          {
+            document: { category: 'legal' },
+            link: {
+              relation: 'signed_original',
+              documentVersionId: firstVersion.id,
+            },
+            linkedVersion: {
+              id: firstVersion.id,
+              status: 'final',
+              mimeType: 'application/pdf',
+            },
+          },
+        ],
+      },
+    });
+  });
+
   it('preserves exact historical terms through agreement and amendment snapshots', async () => {
     const { handler } = buildHandler();
 
