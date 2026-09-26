@@ -121,6 +121,8 @@ const setupPartyEmailId = 'b1000000-0000-4000-8000-000000000005';
 const setupPartyAddressId = 'b1000000-0000-4000-8000-000000000006';
 const setupTenancyId = 'b1000000-0000-4000-8000-000000000007';
 const setupSecondaryTenancyId = 'b1000000-0000-4000-8000-000000000063';
+const setupSecondaryTenancyPartyId =
+  'b1000000-0000-4000-8000-000000000064';
 const setupTenancyPartyId = 'b1000000-0000-4000-8000-000000000008';
 const setupAgreementIds = [
   'b1000000-0000-4000-8000-000000000009',
@@ -3705,7 +3707,17 @@ globalThis.fetch = async (
         noticeGivenAt: null,
         terminationEffectiveAt: null,
         version: 1,
-        parties: [],
+        parties: setupTenancy
+          ? [
+              {
+                id: setupSecondaryTenancyPartyId,
+                tenancyId: setupSecondaryTenancyId,
+                partyId: tenantPartyId,
+                role: 'tenant',
+                isPrimary: true,
+              },
+            ]
+          : [],
       };
       if (setupTenancy) {
         setupSecondaryTenancy = created;
