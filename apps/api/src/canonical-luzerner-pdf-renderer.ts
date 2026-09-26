@@ -1,14 +1,27 @@
 import {
-  DomainError,
-  LUZERNER_ANCILLARY_COST_KEYS,
-  type LuzernerLeaseFormContent,
-} from '@portfolio/domain';
-import type {
-  LuzernerLeasePdfParty,
-  LuzernerLeasePdfPort,
-  LuzernerLeasePdfRenderInput,
-  PdfRenderResult,
+  ApplicationError,
+  type LuzernerLeasePdfParty,
+  type LuzernerLeasePdfPort,
+  type LuzernerLeasePdfRenderInput,
+  type PdfRenderResult,
 } from '@portfolio/application';
+
+type LuzernerLeaseFormContent = LuzernerLeasePdfRenderInput['form'];
+type LuzernerAncillaryCostKey =
+  keyof LuzernerLeaseFormContent['ancillaryCosts'];
+
+const LUZERNER_ANCILLARY_COST_KEYS: readonly LuzernerAncillaryCostKey[] = [
+  'heating_hot_water',
+  'cold_water',
+  'caretaker_stair_cleaning',
+  'garden_surroundings_snow',
+  'lift',
+  'common_electricity_gas',
+  'ara_kva_sewer',
+  'tv_cable',
+  'laundry',
+  'administration_share',
+];
 
 const PAGE_COUNT = 8;
 const PAGE_HEIGHT = 841.89;
@@ -69,7 +82,7 @@ function winAnsiHex(value: string): string {
         ? point
         : CP1252_SPECIAL.get(point);
     if (byte === undefined) {
-      throw new DomainError(
+      throw new ApplicationError(
         'LUZERNER_PDF_UNSUPPORTED_CHARACTER',
         "The Luzerner PDF cannot render character '" +
           char +
@@ -223,7 +236,7 @@ function addMultiline(
     Math.floor((target.y1 - target.y0 - 4) / leading),
   );
   if (lines.length > maxLines) {
-    throw new DomainError(
+    throw new ApplicationError(
       'LUZERNER_PDF_TEXT_OVERFLOW',
       'Text does not fit in the physical Luzerner 2020 form area.',
     );
@@ -303,13 +316,13 @@ function placeDate(form: LuzernerLeaseFormContent): string | null {
 
 function pageOne(input: LuzernerLeasePdfRenderInput): Commands {
   if (input.landlords.length === 0) {
-    throw new DomainError(
+    throw new ApplicationError(
       'LUZERNER_PDF_LANDLORD_REQUIRED',
       'The Luzerner PDF requires a landlord party.',
     );
   }
   if (input.tenants.length === 0 || input.tenants.length > 3) {
-    throw new DomainError(
+    throw new ApplicationError(
       'LUZERNER_PDF_TENANT_CAPACITY',
       'The Luzerner 2020 form supports one to three tenant/co-tenant parties.',
     );
@@ -664,14 +677,14 @@ function fillBlock(
 ): void {
   const offset = findUnique(target, marker(page));
   if (offset < 0) {
-    throw new DomainError(
+    throw new ApplicationError(
       'LUZERNER_PDF_TEMPLATE_INVALID',
       'Template overlay marker for page ' + page + ' is missing or duplicated.',
     );
   }
   const payload = new TextEncoder().encode(commands.join('\n') + '\n');
   if (payload.byteLength > OVERLAY_BLOCK_BYTES) {
-    throw new DomainError(
+    throw new ApplicationError(
       'LUZERNER_PDF_OVERLAY_TOO_LARGE',
       'Rendered overlay for page ' + page + ' exceeds reserved capacity.',
     );
@@ -694,7 +707,7 @@ export class CanonicalLuzernerPdfRenderer implements LuzernerLeasePdfPort {
 
   constructor(template: Uint8Array) {
     if (template.byteLength === 0) {
-      throw new DomainError(
+      throw new ApplicationError(
         'LUZERNER_PDF_TEMPLATE_INVALID',
         'Luzerner PDF template is empty.',
       );
@@ -702,7 +715,7 @@ export class CanonicalLuzernerPdfRenderer implements LuzernerLeasePdfPort {
     this.template = new Uint8Array(template);
     for (let page = 1; page <= PAGE_COUNT; page += 1) {
       if (findUnique(this.template, marker(page)) < 0) {
-        throw new DomainError(
+        throw new ApplicationError(
           'LUZERNER_PDF_TEMPLATE_INVALID',
           'Luzerner PDF template must contain one overlay marker for page ' +
             page +
