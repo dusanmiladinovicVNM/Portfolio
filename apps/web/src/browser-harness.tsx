@@ -1166,6 +1166,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioHoldMeterMutation?: boolean;
   __portfolioHoldMaintenanceMutation?: boolean;
   __portfolioHoldInspectionOrchestration?: boolean;
+  __portfolioHoldInspectionSectionSave?: boolean;
   __portfolioHoldInspectionEvidence?: boolean;
   __portfolioHoldInspectionLifecycle?: boolean;
   __portfolioFailNextInspectionCreateAfterCommit?: boolean;
@@ -1195,8 +1196,10 @@ type BrowserHarnessWindow = Window & {
   __portfolioPendingMeterMutation?: boolean;
   __portfolioPendingMaintenanceMutation?: boolean;
   __portfolioPendingInspectionOrchestration?: boolean;
+  __portfolioPendingInspectionSectionSave?: boolean;
   __portfolioPendingInspectionEvidence?: boolean;
   __portfolioPendingInspectionLifecycle?: boolean;
+  __portfolioInspectionSectionPatchCount?: number;
   __portfolioFinalReportRenderCount?: number;
   __portfolioReleaseUnitCreate?: () => boolean;
   __portfolioReleaseSpaceCreate?: () => boolean;
@@ -1206,6 +1209,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioReleaseMeterMutation?: () => boolean;
   __portfolioReleaseMaintenanceMutation?: () => boolean;
   __portfolioReleaseInspectionOrchestration?: () => boolean;
+  __portfolioReleaseInspectionSectionSave?: () => boolean;
   __portfolioReleaseInspectionEvidence?: () => boolean;
   __portfolioReleaseInspectionLifecycle?: () => boolean;
 };
@@ -1213,6 +1217,7 @@ type BrowserHarnessWindow = Window & {
 const browserHarnessWindow = window as BrowserHarnessWindow;
 browserHarnessWindow.__portfolioBinaryReads = 0;
 browserHarnessWindow.__portfolioDocumentUploadCount = 0;
+browserHarnessWindow.__portfolioInspectionSectionPatchCount = 0;
 browserHarnessWindow.__portfolioFinalReportRenderCount = 0;
 
 let heldUnitCreate:
@@ -1237,6 +1242,9 @@ let heldMaintenanceMutation:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 let heldInspectionOrchestration:
+  | { readonly response: Response; readonly resolve: (response: Response) => void }
+  | null = null;
+let heldInspectionSectionSave:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
 let heldInspectionEvidence:
@@ -1333,6 +1341,17 @@ function maybeHoldInspectionOrchestration(
   browserHarnessWindow.__portfolioPendingInspectionOrchestration = true;
   return new Promise<Response>((resolve) => {
     heldInspectionOrchestration = { response, resolve };
+  });
+}
+
+function maybeHoldInspectionSectionSave(response: Response): Promise<Response> {
+  if (!browserHarnessWindow.__portfolioHoldInspectionSectionSave) {
+    return Promise.resolve(response);
+  }
+
+  browserHarnessWindow.__portfolioPendingInspectionSectionSave = true;
+  return new Promise<Response>((resolve) => {
+    heldInspectionSectionSave = { response, resolve };
   });
 }
 
@@ -1435,6 +1454,16 @@ browserHarnessWindow.__portfolioReleaseInspectionOrchestration = () => {
   heldInspectionOrchestration = null;
   browserHarnessWindow.__portfolioHoldInspectionOrchestration = false;
   browserHarnessWindow.__portfolioPendingInspectionOrchestration = false;
+  held.resolve(held.response);
+  return true;
+};
+
+browserHarnessWindow.__portfolioReleaseInspectionSectionSave = () => {
+  if (!heldInspectionSectionSave) return false;
+  const held = heldInspectionSectionSave;
+  heldInspectionSectionSave = null;
+  browserHarnessWindow.__portfolioHoldInspectionSectionSave = false;
+  browserHarnessWindow.__portfolioPendingInspectionSectionSave = false;
   held.resolve(held.response);
   return true;
 };
@@ -4667,6 +4696,8 @@ globalThis.fetch = async (
     init?.method === 'PATCH'
   ) {
     requireInspectionAuth(init);
+    browserHarnessWindow.__portfolioInspectionSectionPatchCount =
+      (browserHarnessWindow.__portfolioInspectionSectionPatchCount ?? 0) + 1;
     const body = JSON.parse(String(init.body)) as {
       expectedRevision: number;
       set: Array<{
@@ -4734,12 +4765,14 @@ globalThis.fetch = async (
       return response;
     });
 
-    return json({
-      revision: inspectionSectionRevision,
-      contentRevision: inspectionContentRevision,
-      responses: persisted,
-      clearedItemIds: body.clear,
-    });
+    return maybeHoldInspectionSectionSave(
+      json({
+        revision: inspectionSectionRevision,
+        contentRevision: inspectionContentRevision,
+        responses: persisted,
+        clearedItemIds: body.clear,
+      }),
+    );
   }
 
   if (

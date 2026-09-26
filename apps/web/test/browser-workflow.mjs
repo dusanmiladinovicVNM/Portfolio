@@ -3497,6 +3497,15 @@ try {
     "//div[contains(@class,'inspection-item-missing')][.//span[contains(normalize-space(),'Condition')]]//*[normalize-space()='Required response missing']",
   );
 
+  await executeScript(
+    sessionId,
+    'window.__portfolioHoldInspectionSectionSave = true; return true;',
+  );
+  const sectionPatchCountBeforeAutosave = await executeScript(
+    sessionId,
+    'return window.__portfolioInspectionSectionPatchCount || 0;',
+  );
+
   const conditionSelect =
     "//div[contains(@class,'inspection-item')][.//span[contains(normalize-space(),'Condition')]]//select";
   await selectOptionXpath(sessionId, conditionSelect, 'damaged');
@@ -3510,6 +3519,40 @@ try {
     "//div[contains(@class,'inspection-item-missing')][.//span[contains(normalize-space(),'Damage notes')]]//*[normalize-space()='Required response missing']",
   );
   await typeXpath(sessionId, notesInput, 'Window scratch');
+  await clickAndDismissConfirm(
+    sessionId,
+    "//a[normalize-space()='Timeline']",
+    'This Inspection section has unsaved changes. Leave and discard them?',
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'Dirty Inspection navigation is guarded during the autosave debounce window',
+  );
+  assertEqual(
+    await elementValueXpath(sessionId, notesInput),
+    'Window scratch',
+    'Dirty Inspection answer survives cancelled navigation before autosave',
+  );
+
+  await waitForScriptTruthy(
+    sessionId,
+    'return window.__portfolioPendingInspectionSectionSave === true;',
+    'held Inspection section autosave',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioInspectionSectionPatchCount || 0;',
+    ),
+    sectionPatchCountBeforeAutosave + 1,
+    'Rapid Inspection edits coalesce into one debounced section PATCH',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-autosave-status][contains(normalize-space(),'Saving section')]",
+  );
 
   const dirtyCreateForm =
     "//form[@data-inspection-form='create']";
@@ -3606,30 +3649,26 @@ try {
     "//*[contains(normalize-space(),'Save or discard the current section before recording Findings or Evidence.')]",
   );
 
-  await clickAndDismissConfirm(
-    sessionId,
-    "//a[normalize-space()='Timeline']",
-    'This Inspection section has unsaved changes. Leave and discard them?',
-  );
+  await clickXpath(sessionId, "//a[normalize-space()='Timeline']");
+  await new Promise((resolve) => setTimeout(resolve, 150));
   assertEqual(
     await currentUrl(sessionId),
     inspectionUrl,
-    'Dirty Inspection navigation remains blocked',
-  );
-  assertEqual(
-    await elementValueXpath(sessionId, notesInput),
-    'Window scratch',
-    'Dirty Inspection answer after cancelled navigation',
+    'In-flight Inspection autosave hard-blocks navigation until acknowledgement',
   );
 
-  await clickXpath(
-    sessionId,
-    "//button[normalize-space()='Save section']",
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioReleaseInspectionSectionSave?.() === true;',
+    ),
+    true,
+    'Held Inspection autosave acknowledgement releases',
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[contains(normalize-space(),'Section matches canonical server state')]",
+    "//*[@data-inspection-autosave-status][contains(normalize-space(),'All section changes saved')]",
   );
   await waitForElement(
     sessionId,
@@ -3890,15 +3929,32 @@ try {
     'Lost Evidence-link acknowledgement never re-uploads the stored binary',
   );
 
-  await typeXpath(sessionId, notesInput, 'conflict-edit');
-  await clickXpath(
+  const sectionPatchCountBeforeConflict = await executeScript(
     sessionId,
-    "//button[normalize-space()='Save section']",
+    'return window.__portfolioInspectionSectionPatchCount || 0;',
   );
+  await typeXpath(sessionId, notesInput, 'conflict-edit');
   await waitForElement(
     sessionId,
     'xpath',
     "//*[contains(normalize-space(),'This section changed on the server. Your local answers are still visible.')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioInspectionSectionPatchCount || 0;',
+    ),
+    sectionPatchCountBeforeConflict + 1,
+    'Conflict edit is attempted exactly once by autosave',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 1800));
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioInspectionSectionPatchCount || 0;',
+    ),
+    sectionPatchCountBeforeConflict + 1,
+    'Autosave never retries a CAS conflict automatically',
   );
   assertEqual(
     await elementValueXpath(sessionId, notesInput),
@@ -3920,7 +3976,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[contains(normalize-space(),'Section matches canonical server state')]",
+    "//*[@data-inspection-autosave-status][contains(normalize-space(),'All section changes saved')]",
   );
   assertEqual(
     await elementValueXpath(sessionId, notesInput),
@@ -4215,7 +4271,7 @@ try {
   await waitForBinaryReads(sessionId, readsBeforeFinalReport + 1);
 
   process.stdout.write(
-    'Browser workflow PASS: Core setup + route-owner guards → Contracts/documents → Inspection progress/completeness → field evidence → lock/sign/unlock/finalize/report\n',
+    'Browser workflow PASS: Core setup + route-owner guards → Contracts/documents → Inspection progress/completeness → debounced autosave/CAS conflict → field evidence → lock/sign/unlock/finalize/report\n',
   );
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.stack : error}\n`);
