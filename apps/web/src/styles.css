@@ -1713,6 +1713,38 @@ input:focus-visible {
 .inspection-completeness-note-missing {
   color: #8a3028;
 }
+.inspection-signature-pad {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #d8d2c8;
+  border-radius: 10px;
+  background: #fff;
+}
+.inspection-signature-canvas {
+  width: 100%;
+  height: 180px;
+  border: 1px solid #bcb5a9;
+  border-radius: 8px;
+  background: #fff;
+  cursor: crosshair;
+  touch-action: none;
+}
+.inspection-signature-canvas:focus-visible {
+  outline: 3px solid #365f3d;
+  outline-offset: 3px;
+}
+.inspection-signature-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.inspection-signature-file-fallback {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid #e4ded4;
+}
 @media (max-width: 760px) {
   .inspection-finalization-grid {
     grid-template-columns: 1fr;

@@ -48,6 +48,7 @@ import {
   type InspectionSignatureRegistration,
 } from './inspection-finalization-owner.js';
 import type { InspectionWriteGate } from './inspection-write-gate.js';
+import { InspectionSignaturePad } from './InspectionSignaturePad.js';
 
 interface InspectionFinalizationPanelProps {
   readonly api: PortfolioApi;
@@ -74,6 +75,7 @@ type PendingAction =
 interface StableUpload {
   readonly key: string;
   readonly fingerprint: string;
+  readonly file: File;
 }
 
 const MAX_BINARY_BYTES = 16 * 1024 * 1024;
@@ -82,8 +84,18 @@ function errorMessage(cause: unknown, fallback: string): string {
   return cause instanceof Error ? cause.message : fallback;
 }
 
-function fileFingerprint(file: File): string {
-  return [file.name, file.type || 'application/octet-stream', file.size].join('|');
+async function fileFingerprint(file: File): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  const sha256 = [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+  return [
+    file.name,
+    file.type || 'application/octet-stream',
+    file.size,
+    file.lastModified,
+    sha256,
+  ].join('|');
 }
 
 function activeSignatures(
@@ -140,6 +152,7 @@ export function InspectionFinalizationPanel({
     useState<DocumentVersionResponse | null>(null);
   const [reportVersion, setReportVersion] =
     useState<DocumentVersionResponse | null>(null);
+  const [signaturePadResetRevision, setSignaturePadResetRevision] = useState(0);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -181,6 +194,7 @@ export function InspectionFinalizationPanel({
     if (inspection.status !== 'locked') {
       setSignatureVersion(null);
       signatureUploadRef.current = null;
+      setSignaturePadResetRevision((revision) => revision + 1);
     }
     if (inspection.status !== 'finalized') {
       setReportVersion(null);
@@ -280,12 +294,12 @@ export function InspectionFinalizationPanel({
     }
   }
 
-  async function uploadSignatureBinary(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function uploadSignatureFile(
+    fileValue: File,
+    formElement: HTMLFormElement | null = null,
+  ): Promise<void> {
     if (inspection.status !== 'locked') return;
-    const formElement = event.currentTarget;
-    const fileValue = new FormData(formElement).get('file');
-    if (!(fileValue instanceof File) || fileValue.size === 0) {
+    if (fileValue.size === 0) {
       setError('Choose a non-empty signature file.');
       return;
     }
@@ -295,26 +309,31 @@ export function InspectionFinalizationPanel({
     }
     if (!begin('signature-upload', { allowDirty: true })) return;
 
-    const fingerprint = fileFingerprint(fileValue);
-    const existingUpload = signatureUploadRef.current;
-    const stable =
-      existingUpload?.fingerprint === fingerprint
-        ? existingUpload
-        : { key: crypto.randomUUID(), fingerprint };
-    signatureUploadRef.current = stable;
-    const path = inspectionBinaryUploadPath(
-      inspection.id,
-      'signature',
-      stable.key,
-      fileValue.name,
-    );
-
     try {
+      const fingerprint = await fileFingerprint(fileValue);
+      const existingUpload = signatureUploadRef.current;
+      const stable =
+        existingUpload?.fingerprint === fingerprint
+          ? existingUpload
+          : {
+              key: crypto.randomUUID(),
+              fingerprint,
+              file: fileValue,
+            };
+      signatureUploadRef.current = stable;
+      const uploadFile = stable.file;
+      const path = inspectionBinaryUploadPath(
+        inspection.id,
+        'signature',
+        stable.key,
+        uploadFile.name,
+      );
+
       let version: DocumentVersionResponse;
       try {
         version = await api.postBinary(
           path,
-          fileValue,
+          uploadFile,
           documentVersionResponseSchema,
         );
       } catch (cause) {
@@ -324,16 +343,17 @@ export function InspectionFinalizationPanel({
         }
         version = await api.postBinary(
           path,
-          fileValue,
+          uploadFile,
           documentVersionResponseSchema,
         );
       }
 
-      assertFinalSignatureVersion(stable.key, fileValue, version);
+      assertFinalSignatureVersion(stable.key, uploadFile, version);
       signatureUploadRef.current = null;
       if (mountedRef.current) {
         setSignatureVersion(version);
-        formElement.reset();
+        formElement?.reset();
+        setSignaturePadResetRevision((revision) => revision + 1);
         setSuccess(
           'Signature binary stored as one final Inspection-scoped DocumentVersion.',
         );
@@ -344,13 +364,25 @@ export function InspectionFinalizationPanel({
         if (!ambiguous) signatureUploadRef.current = null;
         setError(
           ambiguous
-            ? `Signature upload outcome is still ambiguous: ${errorMessage(cause, 'request failed')}. Re-select the same file and retry; the stable upload key will be reused.`
+            ? `Signature upload outcome is still ambiguous: ${errorMessage(cause, 'request failed')}. Retry the same signature; the exact bytes and stable upload key will be reused while this editor remains open.`
             : errorMessage(cause, 'Signature binary could not be uploaded.'),
         );
       }
     } finally {
       finish();
     }
+  }
+
+  async function uploadSignatureBinary(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (inspection.status !== 'locked') return;
+    const formElement = event.currentTarget;
+    const fileValue = new FormData(formElement).get('file');
+    if (!(fileValue instanceof File)) {
+      setError('Choose a non-empty signature file.');
+      return;
+    }
+    await uploadSignatureFile(fileValue, formElement);
   }
 
   async function captureSignature(event: FormEvent<HTMLFormElement>) {
@@ -417,6 +449,7 @@ export function InspectionFinalizationPanel({
         if (mountedRef.current) {
           setSignatureVersion(null);
           formElement.reset();
+          setSignaturePadResetRevision((revision) => revision + 1);
           setSuccess('Signature relation recovered from canonical Inspection state.');
         }
         return;
@@ -433,6 +466,7 @@ export function InspectionFinalizationPanel({
       if (mountedRef.current) {
         setSignatureVersion(null);
         formElement.reset();
+        setSignaturePadResetRevision((revision) => revision + 1);
         setSuccess('Signature captured against the exact final DocumentVersion.');
       }
     } catch (cause) {
@@ -738,18 +772,33 @@ export function InspectionFinalizationPanel({
               <strong>1 · Capture signature binary</strong>
               <span>Inspection-scoped · auto-finalized</span>
             </div>
-            <label>
-              Signature file
-              <input disabled={blocked} name="file" required type="file" />
-            </label>
-            <p className="setup-hint">
-              Field inspectors can upload only through this Inspection-scoped route.
-            </p>
-            <button className="button-primary" disabled={blocked} type="submit">
-              {pendingAction === 'signature-upload'
-                ? 'Uploading…'
-                : 'Upload signature version'}
-            </button>
+            <InspectionSignaturePad
+              disabled={blocked}
+              inspectionCode={inspection.code}
+              onSignatureFile={(file) => uploadSignatureFile(file)}
+              resetRevision={signaturePadResetRevision}
+            />
+            <div className="inspection-signature-file-fallback">
+              <strong>Or upload an existing signature file</strong>
+              <label>
+                Signature file
+                <input
+                  accept="image/png,image/jpeg,image/webp,application/pdf"
+                  disabled={blocked}
+                  name="file"
+                  required
+                  type="file"
+                />
+              </label>
+              <p className="setup-hint">
+                Field inspectors can upload only through this Inspection-scoped route.
+              </p>
+              <button className="button-secondary" disabled={blocked} type="submit">
+                {pendingAction === 'signature-upload'
+                  ? 'Uploading…'
+                  : 'Upload signature file'}
+              </button>
+            </div>
             {signatureVersion ? (
               <div className="document-version-box">
                 <span>Exact final signature version</span>

@@ -223,6 +223,27 @@ async function setFileXpath(sessionId, xpath, filePath) {
   });
 }
 
+async function drawSignaturePadXpath(sessionId, xpath) {
+  const id = await waitForElement(sessionId, 'xpath', xpath);
+  return webdriver(`/session/${sessionId}/execute/sync`, {
+    method: 'POST',
+    body: {
+      script:
+        'const canvas = arguments[0];' +
+        'const rect = canvas.getBoundingClientRect();' +
+        'const points = [[.15,.62],[.28,.35],[.4,.66],[.55,.28],[.72,.58],[.84,.4]];' +
+        'const event = (type, point, buttons) => canvas.dispatchEvent(new PointerEvent(type, {' +
+        'bubbles:true,cancelable:true,pointerId:7,pointerType:"pen",isPrimary:true,button:0,buttons,' +
+        'clientX:rect.left + rect.width * point[0],clientY:rect.top + rect.height * point[1]}));' +
+        'event("pointerdown", points[0], 1);' +
+        'for (let i=1;i<points.length;i+=1) event("pointermove", points[i], 1);' +
+        'event("pointerup", points[points.length-1], 0);' +
+        'return true;',
+      args: [{ 'element-6066-11e4-a52e-4f735466cecf': id }],
+    },
+  });
+}
+
 async function selectOptionXpath(sessionId, selectXpath, optionValue) {
   const optionXpath =
     `${selectXpath}/option[@value='${optionValue}']`;
@@ -4103,10 +4124,24 @@ try {
     sessionId,
     'return window.__portfolioDocumentUploadCount || 0;',
   );
-  await setFileXpath(
+  const signatureCanvas =
+    signatureUploadForm + "//*[@data-inspection-signature-pad]//canvas";
+  await waitForElement(sessionId, 'xpath', signatureCanvas);
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      signatureUploadForm +
+        "//*[@data-inspection-signature-pad]//button[normalize-space()='Use drawn signature']",
+    ),
+    true,
+    'Blank signature pad cannot be uploaded',
+  );
+  await drawSignaturePadXpath(sessionId, signatureCanvas);
+  await waitForElement(
     sessionId,
-    signatureUploadForm + "//input[@name='file']",
-    agreementSignedFilePath,
+    'xpath',
+    signatureUploadForm +
+      "//*[@data-inspection-signature-pad]//button[normalize-space()='Use drawn signature' and not(@disabled)]",
   );
   await executeScript(
     sessionId,
@@ -4115,12 +4150,17 @@ try {
   await clickXpath(
     sessionId,
     signatureUploadForm +
-      "//button[normalize-space()='Upload signature version']",
+      "//*[@data-inspection-signature-pad]//button[normalize-space()='Use drawn signature']",
   );
   await waitForElement(
     sessionId,
     'xpath',
     "//*[contains(normalize-space(),'Signature binary stored as one final Inspection-scoped DocumentVersion.')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//div[contains(@class,'document-version-box')]//strong[contains(normalize-space(),'.png')]",
   );
   assertEqual(
     await executeScript(
@@ -4128,7 +4168,16 @@ try {
       'return window.__portfolioDocumentUploadCount || 0;',
     ),
     uploadsBeforeSignature + 1,
-    'Ambiguous signature upload reuses one Inspection-scoped binary',
+    'Ambiguous drawn-signature upload reuses one Inspection-scoped binary',
+  );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      signatureUploadForm +
+        "//*[@data-inspection-signature-pad]//button[normalize-space()='Use drawn signature']",
+    ),
+    true,
+    'Signature pad resets after canonical binary storage',
   );
 
   await selectOptionXpath(
@@ -4204,7 +4253,7 @@ try {
   await clickXpath(
     sessionId,
     signatureUploadForm +
-      "//button[normalize-space()='Upload signature version']",
+      "//button[normalize-space()='Upload signature file']",
   );
   await waitForElement(
     sessionId,
@@ -4245,7 +4294,7 @@ try {
   await clickXpath(
     sessionId,
     signatureUploadForm +
-      "//button[normalize-space()='Upload signature version']",
+      "//button[normalize-space()='Upload signature file']",
   );
   await waitForElement(
     sessionId,
@@ -4345,7 +4394,7 @@ try {
   await waitForBinaryReads(sessionId, readsBeforeFinalReport + 1);
 
   process.stdout.write(
-    'Browser workflow PASS: Core setup + route-owner guards → Contracts/documents → Inspection progress/completeness → debounced autosave/CAS conflict → field evidence → lock/sign/unlock/finalize/report\n',
+    'Browser workflow PASS: Core setup + route-owner guards → Contracts/documents → Inspection progress/completeness → debounced autosave/CAS conflict → field evidence → lock/drawn-signature/file-fallback/unlock/finalize/report\n',
   );
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.stack : error}\n`);
