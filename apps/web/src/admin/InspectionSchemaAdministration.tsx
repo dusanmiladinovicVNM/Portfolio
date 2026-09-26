@@ -40,7 +40,6 @@ import {
   duplicateInspectionSchemaSection,
   inspectionSchemaDraftFromVersion,
   inspectionSchemaDraftRequest,
-  inspectionSchemaVersionMatchesRequest,
   newInspectionSchemaBuilderDraft,
   newInspectionSchemaItem,
   newInspectionSchemaSection,
@@ -704,16 +703,20 @@ function SchemaDraftEditor({
   draft,
   issues,
   saving,
+  createOutcomeAmbiguous,
   onDraft,
   onCancel,
   onSave,
+  onConfirmRetry,
 }: {
   readonly draft: InspectionSchemaBuilderDraft;
   readonly issues: readonly { readonly path: string; readonly message: string }[];
   readonly saving: boolean;
+  readonly createOutcomeAmbiguous: boolean;
   readonly onDraft: (draft: InspectionSchemaBuilderDraft) => void;
   readonly onCancel: () => void;
   readonly onSave: () => void;
+  readonly onConfirmRetry: () => void;
 }) {
   function addSection() {
     const usedSections = new Set(
@@ -758,7 +761,11 @@ function SchemaDraftEditor({
           </button>
           <button
             className="button-primary"
-            disabled={saving || issues.length > 0}
+            disabled={
+              saving ||
+              issues.length > 0 ||
+              createOutcomeAmbiguous
+            }
             onClick={onSave}
             type="button"
           >
@@ -766,6 +773,35 @@ function SchemaDraftEditor({
           </button>
         </div>
       </section>
+
+      {createOutcomeAmbiguous ? (
+        <section
+          className="panel schema-builder-ambiguity"
+          data-schema-create-ambiguity
+          role="alert"
+        >
+          <div>
+            <strong>Save outcome needs operator verification</strong>
+            <p>
+              Portfolio reloaded the canonical version list, but this client
+              cannot prove which newly-created draft belongs to the lost
+              response. Do not retry automatically.
+            </p>
+            <small>
+              Inspect the canonical version list. If the intended version is
+              there, select it and discard this local copy. Only re-enable Save
+              after you have confirmed that no new canonical version exists.
+            </small>
+          </div>
+          <button
+            className="button-secondary"
+            onClick={onConfirmRetry}
+            type="button"
+          >
+            I confirmed no version was created — allow retry
+          </button>
+        </section>
+      ) : null}
 
       <section className="panel">
         <div className="schema-builder-field-grid">
@@ -1004,6 +1040,7 @@ export function InspectionSchemaAdministration({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [createOutcomeAmbiguous, setCreateOutcomeAmbiguous] = useState(false);
   const [pending, setPending] = useState<'save' | 'publish' | null>(null);
   const mountedRef = useRef(true);
   const readGenerationRef = useRef(0);
@@ -1083,6 +1120,7 @@ export function InspectionSchemaAdministration({
 
   function startNew() {
     if (!confirmDiscardDraft()) return;
+    setCreateOutcomeAmbiguous(false);
     setDraft(newInspectionSchemaBuilderDraft());
     setActionError(null);
     setSuccess(null);
@@ -1090,6 +1128,7 @@ export function InspectionSchemaAdministration({
 
   function startDuplicate(schema: InspectionSchemaVersionResponse) {
     if (!confirmDiscardDraft()) return;
+    setCreateOutcomeAmbiguous(false);
     setDraft(inspectionSchemaDraftFromVersion(schema));
     setActionError(null);
     setSuccess(
@@ -1098,7 +1137,13 @@ export function InspectionSchemaAdministration({
   }
 
   async function saveDraft() {
-    if (!draft || writePendingRef.current) return;
+    if (
+      !draft ||
+      writePendingRef.current ||
+      createOutcomeAmbiguous
+    ) {
+      return;
+    }
     const validation = validateInspectionSchemaBuilderDraft(draft);
     if (validation.length > 0) {
       setActionError('Fix the highlighted schema validation issues before saving.');
@@ -1111,7 +1156,6 @@ export function InspectionSchemaAdministration({
       return;
     }
 
-    const beforeIds = new Set((schemas ?? []).map((schema) => schema.id));
     writePendingRef.current = true;
     setPending('save');
     setActionError(null);
@@ -1129,19 +1173,13 @@ export function InspectionSchemaAdministration({
         if (!isAmbiguousWriteFailure(cause)) throw cause;
 
         const canonical = await fetchSchemas();
-        if (mountedRef.current) setSchemas(canonical);
-        const candidates = canonical.filter(
-          (schema) =>
-            !beforeIds.has(schema.id) &&
-            inspectionSchemaVersionMatchesRequest(schema, parsed.data),
+        if (!mountedRef.current) return;
+        setSchemas(canonical);
+        setCreateOutcomeAmbiguous(true);
+        setActionError(
+          'Schema save outcome is ambiguous. Canonical versions were reloaded. Do not retry automatically; verify the version list first.',
         );
-        if (candidates.length !== 1) {
-          setActionError(
-            'Schema save outcome is ambiguous. Canonical versions were reloaded; verify the list before trying again.',
-          );
-          return;
-        }
-        saved = candidates[0]!;
+        return;
       }
 
       const canonical = await fetchSchemas();
@@ -1149,6 +1187,7 @@ export function InspectionSchemaAdministration({
       setSchemas(canonical);
       setSelectedId(saved.id);
       setDraft(null);
+      setCreateOutcomeAmbiguous(false);
       setSuccess(
         `${saved.schemaCode} v${saved.versionNumber} saved as a canonical draft.`,
       );
@@ -1261,6 +1300,7 @@ export function InspectionSchemaAdministration({
                   onClick={() => {
                     if (!confirmDiscardDraft()) return;
                     setDraft(null);
+                    setCreateOutcomeAmbiguous(false);
                     setSelectedId(schema.id);
                     setActionError(null);
                   }}
@@ -1278,9 +1318,18 @@ export function InspectionSchemaAdministration({
             <SchemaDraftEditor
               draft={draft}
               issues={issues}
+              createOutcomeAmbiguous={createOutcomeAmbiguous}
               onCancel={() => {
                 if (!confirmDiscardDraft()) return;
+                setCreateOutcomeAmbiguous(false);
                 setDraft(null);
+              }}
+              onConfirmRetry={() => {
+                setCreateOutcomeAmbiguous(false);
+                setActionError(null);
+                setSuccess(
+                  'Schema draft retry re-enabled after operator verification.',
+                );
               }}
               onDraft={setDraft}
               onSave={() => void saveDraft()}
