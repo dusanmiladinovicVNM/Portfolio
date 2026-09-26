@@ -20,6 +20,7 @@ export * from './tenancy/tenancy-queries.js';
 export * from './contracts/lease-repository.js';
 export * from './contracts/lease-commands.js';
 export * from './contracts/lease-queries.js';
+export * from './contracts/luzerner-lease-form.js';
 export * from './shared/clock.js';
 export * from './documents/document-binary-policy.js';
 export * from './documents/file-storage-port.js';
