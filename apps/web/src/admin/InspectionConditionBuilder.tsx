@@ -319,7 +319,12 @@ function ConditionNodeEditor({
     );
   }
 
-  const children = 'all' in condition ? condition.all : condition.any;
+  const children: readonly InspectionCondition[] =
+    'all' in condition
+      ? condition.all
+      : 'any' in condition
+        ? condition.any
+        : [];
   return (
     <div className="schema-condition-node schema-condition-group" data-condition-depth={depth}>
       <div className="schema-condition-node-toolbar">
