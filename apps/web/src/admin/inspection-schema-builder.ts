@@ -618,50 +618,6 @@ export function inspectionSchemaDraftRequest(
   };
 }
 
-export function inspectionSchemaVersionAsRequest(
-  schema: InspectionSchemaVersionResponse,
-): CreateInspectionSchemaVersionRequest {
-  return {
-    schemaCode: schema.schemaCode,
-    inspectionType: schema.inspectionType,
-    title: schema.title,
-    requiredSignatureRoles: [...schema.requiredSignatureRoles],
-    sections: [...schema.sections]
-      .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map((section) => ({
-        key: section.key,
-        title: section.title,
-        ...(section.description ? { description: section.description } : {}),
-        sortOrder: section.sortOrder,
-        scope: section.scope,
-        spaceTypes: [...section.spaceTypes],
-        items: [...section.items]
-          .sort((a, b) => a.sortOrder - b.sortOrder)
-          .map((item) => ({
-            key: item.key,
-            type: item.type,
-            label: item.label,
-            required: item.required,
-            sortOrder: item.sortOrder,
-            options: item.options.map((option) => ({ ...option })),
-            visibleWhen: item.visibleWhen,
-            requiredWhen: item.requiredWhen,
-          })),
-      })),
-  };
-}
-
-export function inspectionSchemaVersionMatchesRequest(
-  schema: InspectionSchemaVersionResponse,
-  request: CreateInspectionSchemaVersionRequest,
-): boolean {
-  return (
-    schema.status === 'draft' &&
-    JSON.stringify(inspectionSchemaVersionAsRequest(schema)) ===
-      JSON.stringify(request)
-  );
-}
-
 export function defaultConditionForField(
   field: InspectionSchemaFieldReference,
 ): InspectionCondition {
