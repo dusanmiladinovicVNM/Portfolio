@@ -372,22 +372,35 @@ export function normalizeLuzernerLeaseFormContent(
       input.intendedForPersonCount,
       'intendedForPersonCount',
     ),
-    garageNumber: nullableTrimmed(input.garageNumber),
-    parkingSpaceNumber: nullableTrimmed(input.parkingSpaceNumber),
+    garageNumber: input.garage ? nullableTrimmed(input.garageNumber) : null,
+    parkingSpaceNumber: input.parkingSpace
+      ? nullableTrimmed(input.parkingSpaceNumber)
+      : null,
     additionalObjectLabel: nullableTrimmed(input.additionalObjectLabel),
     sharedUse,
     customSharedUse: normalizeCustomSharedUse(input.customSharedUse),
-    useTypeOther: nullableTrimmed(input.useTypeOther),
+    useTypeOther:
+      input.useType === 'other' ? nullableTrimmed(input.useTypeOther) : null,
     moveInDate: dateOrNull(input.moveInDate),
-    minimumCancelableOn: dateOrNull(input.minimumCancelableOn),
-    fixedEndDate: dateOrNull(input.fixedEndDate),
-    terminationScheduleCustom: nullableTrimmed(
-      input.terminationScheduleCustom,
-    ),
-    longerNoticeMonths: positiveIntegerOrNull(
-      input.longerNoticeMonths,
-      'longerNoticeMonths',
-    ),
+    minimumCancelableOn:
+      input.durationKind === 'minimum_term'
+        ? dateOrNull(input.minimumCancelableOn)
+        : null,
+    fixedEndDate:
+      input.durationKind === 'fixed_term'
+        ? dateOrNull(input.fixedEndDate)
+        : null,
+    terminationScheduleCustom:
+      input.terminationSchedule === 'custom'
+        ? nullableTrimmed(input.terminationScheduleCustom)
+        : null,
+    longerNoticeMonths:
+      input.noticePeriodKind === 'longer_months'
+        ? positiveIntegerOrNull(
+            input.longerNoticeMonths,
+            'longerNoticeMonths',
+          )
+        : null,
     netRent: moneyOrNull(input.netRent),
     garageParkingRent: moneyOrNull(input.garageParkingRent),
     ancillaryAdvance: moneyOrNull(input.ancillaryAdvance),
@@ -396,18 +409,25 @@ export function normalizeLuzernerLeaseFormContent(
     customAncillaryCosts: normalizeCustomAncillaryCosts(
       input.customAncillaryCosts,
     ),
-    rentAdjustmentAdvanceMonths: nonNegativeIntegerOrNull(
-      input.rentAdjustmentAdvanceMonths,
-      'rentAdjustmentAdvanceMonths',
-    ),
-    consumerPriceIndexPoints: nullableTrimmed(
-      input.consumerPriceIndexPoints,
-    ),
-    ancillaryClosingDateCustom: nullableTrimmed(
-      input.ancillaryClosingDateCustom,
-    ),
+    rentAdjustmentAdvanceMonths:
+      input.rentAdjustmentMode === 'termination_date'
+        ? nonNegativeIntegerOrNull(
+            input.rentAdjustmentAdvanceMonths,
+            'rentAdjustmentAdvanceMonths',
+          )
+        : null,
+    consumerPriceIndexPoints:
+      input.rentAdjustmentMode === 'indexation'
+        ? nullableTrimmed(input.consumerPriceIndexPoints)
+        : null,
+    ancillaryClosingDateCustom:
+      input.ancillaryClosingDate === 'custom'
+        ? nullableTrimmed(input.ancillaryClosingDateCustom)
+        : null,
     securityAmount: moneyOrNull(input.securityAmount),
-    depositAccountReference: nullableTrimmed(input.depositAccountReference),
+    depositAccountReference: input.tenantNamedDepositAccount
+      ? nullableTrimmed(input.depositAccountReference)
+      : null,
     mortgageReferenceRate: nullableTrimmed(input.mortgageReferenceRate),
     costIncreaseCompensatedThrough: nullableTrimmed(
       input.costIncreaseCompensatedThrough,

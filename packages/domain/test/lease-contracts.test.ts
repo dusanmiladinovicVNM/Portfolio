@@ -205,6 +205,47 @@ describe('Luzerner lease form', () => {
     ).toThrowError(/cannot be earlier than moveInDate/);
   });
 
+  it('drops inactive conditional values instead of preserving hidden stale legal facts', () => {
+    const base = emptyLuzernerLeaseFormContent();
+    const form = createLuzernerLeaseFormDraft(agreementId, {
+      ...base,
+      garage: false,
+      garageNumber: 'G-OLD',
+      parkingSpace: false,
+      parkingSpaceNumber: 'P-OLD',
+      useType: 'apartment',
+      useTypeOther: 'stale use',
+      durationKind: 'indefinite',
+      minimumCancelableOn: asDateOnly('2027-01-31'),
+      fixedEndDate: asDateOnly('2027-12-31'),
+      terminationSchedule: 'monthly_except_december',
+      terminationScheduleCustom: 'stale termination',
+      noticePeriodKind: 'residential_3_months',
+      longerNoticeMonths: 12,
+      rentAdjustmentMode: 'graduated',
+      rentAdjustmentAdvanceMonths: 3,
+      consumerPriceIndexPoints: '105.2',
+      ancillaryClosingDate: 'december_31',
+      ancillaryClosingDateCustom: '30.09.',
+      tenantNamedDepositAccount: false,
+      depositAccountReference: 'OLD-ACCOUNT',
+    });
+
+    expect(form.content).toMatchObject({
+      garageNumber: null,
+      parkingSpaceNumber: null,
+      useTypeOther: null,
+      minimumCancelableOn: null,
+      fixedEndDate: null,
+      terminationScheduleCustom: null,
+      longerNoticeMonths: null,
+      rentAdjustmentAdvanceMonths: null,
+      consumerPriceIndexPoints: null,
+      ancillaryClosingDateCustom: null,
+      depositAccountReference: null,
+    });
+  });
+
   it('limits custom rows to the physical capacity of the LU 2020 form', () => {
     const base = emptyLuzernerLeaseFormContent();
 
