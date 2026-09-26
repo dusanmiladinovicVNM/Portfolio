@@ -144,6 +144,7 @@ function errorStatus(code: string): number {
   if (
     code.endsWith('_ALREADY_EXISTS') ||
     code.endsWith('_VERSION_CONFLICT') ||
+    code === 'LUZERNER_LEASE_FORM_REVISION_CONFLICT' ||
     code === 'INSPECTION_SECTION_REVISION_CONFLICT' ||
     code === 'INSPECTION_CONTENT_REVISION_CONFLICT' ||
     code === 'OWNERSHIP_PERIOD_OVERLAP' ||
