@@ -331,6 +331,14 @@ export function inspectionSchemasPath(): string {
   return '/inspection-schemas';
 }
 
+export function inspectionSchemaPath(schemaVersionId: string): string {
+  return `${inspectionSchemasPath()}/${encodeURIComponent(schemaVersionId)}`;
+}
+
+export function inspectionSchemaPublishPath(schemaVersionId: string): string {
+  return `${inspectionSchemaPath(schemaVersionId)}/publish`;
+}
+
 export function inspectionStaffPath(): string {
   return '/inspection-staff';
 }

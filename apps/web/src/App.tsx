@@ -5,6 +5,7 @@ import type { AuthSession, SessionGateway } from './auth/session-gateway.js';
 import { AccountSecurity } from './auth/AccountSecurity.js';
 import { PartyDirectory } from './admin/PartyDirectory.js';
 import { StaffAdministration } from './admin/StaffAdministration.js';
+import { InspectionSchemaAdministration } from './admin/InspectionSchemaAdministration.js';
 import { currentStaffPath } from './api/paths.js';
 import { PortfolioDashboard } from './dashboard/PortfolioDashboard.js';
 import { PropertyUnits } from './dossier/PropertyUnits.js';
@@ -14,6 +15,7 @@ import {
   dashboardRoute,
   partiesRoute,
   staffRoute,
+  inspectionSchemasRoute,
   propertyRoute,
   unitRoute,
   workspaceRouteOwnerKey,
@@ -107,9 +109,11 @@ function AuthenticatedShell({
         ? 'parties'
         : route.kind === 'staff'
           ? 'staff'
-          : route.kind === 'property'
-          ? 'property:' + route.propertyId
-          : 'unit:' + route.propertyId + ':' + route.unitId + ':' + route.tab;
+          : route.kind === 'inspection-schemas'
+            ? 'inspection-schemas'
+            : route.kind === 'property'
+              ? 'property:' + route.propertyId
+              : 'unit:' + route.propertyId + ':' + route.unitId + ':' + route.tab;
   const api = useMemo(
     () =>
       createPortfolioApi({
@@ -195,6 +199,19 @@ function AuthenticatedShell({
               route={staffRoute(route.asOf)}
             >
               Staff
+            </WorkspaceLink>
+          ) : null}
+          {currentStaff && currentStaff.role !== 'inspector' ? (
+            <WorkspaceLink
+              ariaCurrent={route.kind === 'inspection-schemas' ? 'page' : undefined}
+              className={
+                'nav-item ' +
+                (route.kind === 'inspection-schemas' ? 'nav-item-active' : '')
+              }
+              navigate={navigate}
+              route={inspectionSchemasRoute(route.asOf)}
+            >
+              Inspection schemas
             </WorkspaceLink>
           ) : null}
           {route.kind === 'property' || route.kind === 'unit' ? (
@@ -288,6 +305,22 @@ function AuthenticatedShell({
               <h1>Staff Administration</h1>
               <p className="form-error">
                 Administrator access is required.
+              </p>
+            </section>
+          )
+        ) : null}
+
+        {route.kind === 'inspection-schemas' ? (
+          currentStaff && currentStaff.role !== 'inspector' ? (
+            <InspectionSchemaAdministration
+              api={api}
+              setNavigationBlocker={setNavigationBlocker}
+            />
+          ) : (
+            <section className="panel" role="alert">
+              <h1>Inspection Schema Builder</h1>
+              <p className="form-error">
+                Manager or administrator access is required.
               </p>
             </section>
           )

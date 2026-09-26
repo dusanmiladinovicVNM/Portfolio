@@ -1,4 +1,6 @@
 import { DomainError } from '../shared/domain-error.js';
+import { asDateOnly } from '../shared/date-only.js';
+import { isCanonicalDecimal } from '../shared/canonical-decimal.js';
 import { SPACE_TYPES, type SpaceType } from '../portfolio/space.js';
 import type {
   InspectionSchemaItemId,
@@ -82,6 +84,12 @@ export type InspectionCondition =
   | InspectionConditionLeaf
   | { readonly all: readonly InspectionCondition[] }
   | { readonly any: readonly InspectionCondition[] };
+
+export interface InspectionConditionSourceField {
+  readonly key: string;
+  readonly type: InspectionItemType;
+  readonly options: readonly InspectionOption[];
+}
 
 export interface InspectionSchemaItem {
   readonly id: InspectionSchemaItemId;
@@ -253,6 +261,131 @@ function validateOptions(
   return normalized;
 }
 
+function invalidConditionValue(
+  source: InspectionConditionSourceField,
+  condition: InspectionConditionLeaf,
+  detail: string,
+): never {
+  throw new DomainError(
+    'INSPECTION_SCHEMA_CONDITION_VALUE_INVALID',
+    `Condition on field '${source.key}' with operator '${condition.operator}' ${detail}`,
+  );
+}
+
+function assertConditionScalarCompatible(
+  source: InspectionConditionSourceField,
+  condition: InspectionConditionLeaf,
+  value: InspectionScalarValue,
+): void {
+  if (source.type === 'checkbox') {
+    if (typeof value !== 'boolean') {
+      invalidConditionValue(
+        source,
+        condition,
+        'requires boolean condition values.',
+      );
+    }
+    return;
+  }
+
+  if (typeof value !== 'string') {
+    invalidConditionValue(
+      source,
+      condition,
+      'requires string condition values.',
+    );
+  }
+
+  if (['select', 'radio', 'multiselect'].includes(source.type)) {
+    const allowed = new Set(source.options.map((option) => option.value));
+    if (!allowed.has(value)) {
+      invalidConditionValue(
+        source,
+        condition,
+        `references option '${value}' that is not configured on the source field.`,
+      );
+    }
+    return;
+  }
+
+  if (source.type === 'number') {
+    if (!isCanonicalDecimal(value)) {
+      invalidConditionValue(
+        source,
+        condition,
+        `requires an exact canonical decimal string; received '${value}'.`,
+      );
+    }
+    return;
+  }
+
+  if (source.type === 'date') {
+    try {
+      asDateOnly(value);
+    } catch {
+      invalidConditionValue(
+        source,
+        condition,
+        `requires a valid YYYY-MM-DD calendar date; received '${value}'.`,
+      );
+    }
+  }
+}
+
+export function assertInspectionConditionLeafValueCompatible(
+  condition: InspectionConditionLeaf,
+  source: InspectionConditionSourceField,
+): void {
+  if (['truthy', 'falsy'].includes(condition.operator)) {
+    if (condition.value !== undefined) {
+      invalidConditionValue(
+        source,
+        condition,
+        'does not accept an explicit value.',
+      );
+    }
+    return;
+  }
+
+  if (condition.value === undefined) {
+    invalidConditionValue(source, condition, 'requires a value.');
+  }
+
+  if (['in', 'notIn'].includes(condition.operator)) {
+    if (!Array.isArray(condition.value)) {
+      invalidConditionValue(
+        source,
+        condition,
+        'requires an array of condition values.',
+      );
+    }
+    if (condition.value.length === 0) {
+      invalidConditionValue(
+        source,
+        condition,
+        'requires at least one condition value.',
+      );
+    }
+    for (const value of condition.value) {
+      assertConditionScalarCompatible(source, condition, value);
+    }
+    return;
+  }
+
+  const scalar = condition.value;
+  if (
+    Array.isArray(scalar) ||
+    (typeof scalar !== 'string' && typeof scalar !== 'boolean')
+  ) {
+    invalidConditionValue(
+      source,
+      condition,
+      'requires one scalar condition value.',
+    );
+  }
+  assertConditionScalarCompatible(source, condition, scalar);
+}
+
 export function createInspectionSchemaVersion(
   input: CreateInspectionSchemaVersionInput,
 ): InspectionSchemaVersion {
@@ -392,6 +525,7 @@ export function createInspectionSchemaVersion(
         {
           scope: section.scope,
           spaceTypes: section.spaceTypes,
+          item,
         },
       ] as const),
     ),
@@ -413,6 +547,8 @@ export function createInspectionSchemaVersion(
 
     const source = fieldContext.get(condition.fieldKey.toLowerCase());
     if (!source) return;
+
+    assertInspectionConditionLeafValueCompatible(condition, source.item);
 
     if (section.scope === 'unit' && source.scope === 'space') {
       throw new DomainError(

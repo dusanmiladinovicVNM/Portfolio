@@ -306,6 +306,336 @@ describe('Inspection schema and lifecycle', () => {
     ).toThrowError(/cannot depend on Space field/i);
   });
 
+  it('rejects condition literals that are not configured options on the source field', () => {
+    expect(() =>
+      createInspectionSchemaVersion({
+        id: asInspectionSchemaVersionId(
+          '74600000-0000-4000-8000-000000000001',
+        ),
+        schemaCode: 'INVALID-CONDITION-OPTION',
+        versionNumber: 1,
+        inspectionType: 'move_in',
+        title: 'Invalid condition option',
+        sections: [{
+          id: asInspectionSchemaSectionId(
+            '74600000-0000-4000-8000-000000000002',
+          ),
+          key: 'general',
+          title: 'General',
+          sortOrder: 0,
+          items: [
+            {
+              id: asInspectionSchemaItemId(
+                '74600000-0000-4000-8000-000000000003',
+              ),
+              key: 'condition',
+              type: 'select',
+              label: 'Condition',
+              sortOrder: 0,
+              options: [
+                { value: 'good', label: 'Good' },
+                { value: 'defect', label: 'Defect' },
+              ],
+            },
+            {
+              id: asInspectionSchemaItemId(
+                '74600000-0000-4000-8000-000000000004',
+              ),
+              key: 'damage_note',
+              type: 'textarea',
+              label: 'Damage note',
+              sortOrder: 1,
+              requiredWhen: {
+                fieldKey: 'condition',
+                operator: 'equals',
+                value: 'damaged',
+              },
+            },
+          ],
+        }],
+      }),
+    ).toThrowError(/option 'damaged'.*not configured/i);
+  });
+
+  it('rejects condition values whose scalar type cannot be produced by the source field', () => {
+    expect(() =>
+      createInspectionSchemaVersion({
+        id: asInspectionSchemaVersionId(
+          '74600000-0000-4000-8000-000000000005',
+        ),
+        schemaCode: 'INVALID-CONDITION-TYPE',
+        versionNumber: 1,
+        inspectionType: 'move_in',
+        title: 'Invalid condition type',
+        sections: [{
+          id: asInspectionSchemaSectionId(
+            '74600000-0000-4000-8000-000000000006',
+          ),
+          key: 'general',
+          title: 'General',
+          sortOrder: 0,
+          items: [
+            {
+              id: asInspectionSchemaItemId(
+                '74600000-0000-4000-8000-000000000007',
+              ),
+              key: 'has_damage',
+              type: 'checkbox',
+              label: 'Has damage',
+              sortOrder: 0,
+            },
+            {
+              id: asInspectionSchemaItemId(
+                '74600000-0000-4000-8000-000000000008',
+              ),
+              key: 'damage_note',
+              type: 'textarea',
+              label: 'Damage note',
+              sortOrder: 1,
+              visibleWhen: {
+                fieldKey: 'has_damage',
+                operator: 'equals',
+                value: 'true',
+              },
+            },
+          ],
+        }],
+      }),
+    ).toThrowError(/requires boolean condition values/i);
+  });
+
+  it('validates every in\/notIn literal against multiselect options', () => {
+    expect(() =>
+      createInspectionSchemaVersion({
+        id: asInspectionSchemaVersionId(
+          '74600000-0000-4000-8000-000000000009',
+        ),
+        schemaCode: 'INVALID-CONDITION-IN',
+        versionNumber: 1,
+        inspectionType: 'move_in',
+        title: 'Invalid condition in list',
+        sections: [{
+          id: asInspectionSchemaSectionId(
+            '74600000-0000-4000-8000-000000000010',
+          ),
+          key: 'general',
+          title: 'General',
+          sortOrder: 0,
+          items: [
+            {
+              id: asInspectionSchemaItemId(
+                '74600000-0000-4000-8000-000000000011',
+              ),
+              key: 'issues',
+              type: 'multiselect',
+              label: 'Issues',
+              sortOrder: 0,
+              options: [
+                { value: 'window', label: 'Window' },
+                { value: 'floor', label: 'Floor' },
+              ],
+            },
+            {
+              id: asInspectionSchemaItemId(
+                '74600000-0000-4000-8000-000000000012',
+              ),
+              key: 'issue_note',
+              type: 'textarea',
+              label: 'Issue note',
+              sortOrder: 1,
+              visibleWhen: {
+                fieldKey: 'issues',
+                operator: 'in',
+                value: ['window', 'wall'],
+              },
+            },
+          ],
+        }],
+      }),
+    ).toThrowError(/option 'wall'.*not configured/i);
+  });
+
+  it('rejects non-canonical number and invalid date condition literals', () => {
+    const createWithLiteral = (
+      sourceType: 'number' | 'date',
+      value: string,
+      suffix: string,
+    ) =>
+      createInspectionSchemaVersion({
+        id: asInspectionSchemaVersionId(
+          `74700000-0000-4000-8000-0000000000${suffix}`,
+        ),
+        schemaCode: `INVALID-LITERAL-${suffix}`,
+        versionNumber: 1,
+        inspectionType: 'move_in',
+        title: 'Invalid typed condition literal',
+        sections: [{
+          id: asInspectionSchemaSectionId(
+            `74700000-0000-4000-8000-0000000001${suffix}`,
+          ),
+          key: 'general',
+          title: 'General',
+          sortOrder: 0,
+          items: [
+            {
+              id: asInspectionSchemaItemId(
+                `74700000-0000-4000-8000-0000000002${suffix}`,
+              ),
+              key: 'source',
+              type: sourceType,
+              label: 'Source',
+              sortOrder: 0,
+            },
+            {
+              id: asInspectionSchemaItemId(
+                `74700000-0000-4000-8000-0000000003${suffix}`,
+              ),
+              key: 'dependent',
+              type: 'text',
+              label: 'Dependent',
+              sortOrder: 1,
+              requiredWhen: {
+                fieldKey: 'source',
+                operator: 'equals',
+                value,
+              },
+            },
+          ],
+        }],
+      });
+
+    expect(() => createWithLiteral('number', 'banana', '01')).toThrowError(
+      /canonical decimal string/i,
+    );
+    expect(() => createWithLiteral('number', ' 1 ', '02')).toThrowError(
+      /canonical decimal string/i,
+    );
+    expect(() => createWithLiteral('date', '2026-02-30', '03')).toThrowError(
+      /valid YYYY-MM-DD calendar date/i,
+    );
+    expect(() => createWithLiteral('date', 'foo', '04')).toThrowError(
+      /valid YYYY-MM-DD calendar date/i,
+    );
+  });
+
+  it('accepts condition literals from the exact runtime number/date answer domain', () => {
+    expect(() =>
+      createInspectionSchemaVersion({
+        id: asInspectionSchemaVersionId(
+          '74800000-0000-4000-8000-000000000001',
+        ),
+        schemaCode: 'VALID-TYPED-LITERALS',
+        versionNumber: 1,
+        inspectionType: 'move_in',
+        title: 'Valid typed condition literals',
+        sections: [{
+          id: asInspectionSchemaSectionId(
+            '74800000-0000-4000-8000-000000000002',
+          ),
+          key: 'general',
+          title: 'General',
+          sortOrder: 0,
+          items: [
+            {
+              id: asInspectionSchemaItemId(
+                '74800000-0000-4000-8000-000000000003',
+              ),
+              key: 'amount',
+              type: 'number',
+              label: 'Amount',
+              sortOrder: 0,
+            },
+            {
+              id: asInspectionSchemaItemId(
+                '74800000-0000-4000-8000-000000000004',
+              ),
+              key: 'inspection_date',
+              type: 'date',
+              label: 'Inspection date',
+              sortOrder: 1,
+            },
+            {
+              id: asInspectionSchemaItemId(
+                '74800000-0000-4000-8000-000000000005',
+              ),
+              key: 'dependent',
+              type: 'text',
+              label: 'Dependent',
+              sortOrder: 2,
+              visibleWhen: {
+                fieldKey: 'amount',
+                operator: 'in',
+                value: ['1', '-2.50'],
+              },
+              requiredWhen: {
+                fieldKey: 'inspection_date',
+                operator: 'equals',
+                value: '2026-09-26',
+              },
+            },
+          ],
+        }],
+      }),
+    ).not.toThrow();
+  });
+
+  it('rejects empty in/notIn condition sets', () => {
+    for (const operator of ['in', 'notIn'] as const) {
+      expect(() =>
+        createInspectionSchemaVersion({
+          id: asInspectionSchemaVersionId(
+            operator === 'in'
+              ? '74900000-0000-4000-8000-000000000001'
+              : '74900000-0000-4000-8000-000000000002',
+          ),
+          schemaCode: `EMPTY-${operator}`,
+          versionNumber: 1,
+          inspectionType: 'move_in',
+          title: 'Empty condition set',
+          sections: [{
+            id: asInspectionSchemaSectionId(
+              operator === 'in'
+                ? '74900000-0000-4000-8000-000000000003'
+                : '74900000-0000-4000-8000-000000000004',
+            ),
+            key: 'general',
+            title: 'General',
+            sortOrder: 0,
+            items: [
+              {
+                id: asInspectionSchemaItemId(
+                  operator === 'in'
+                    ? '74900000-0000-4000-8000-000000000005'
+                    : '74900000-0000-4000-8000-000000000006',
+                ),
+                key: 'source',
+                type: 'text',
+                label: 'Source',
+                sortOrder: 0,
+              },
+              {
+                id: asInspectionSchemaItemId(
+                  operator === 'in'
+                    ? '74900000-0000-4000-8000-000000000007'
+                    : '74900000-0000-4000-8000-000000000008',
+                ),
+                key: 'dependent',
+                type: 'text',
+                label: 'Dependent',
+                sortOrder: 1,
+                visibleWhen: {
+                  fieldKey: 'source',
+                  operator,
+                  value: [],
+                },
+              },
+            ],
+          }],
+        }),
+      ).toThrowError(/at least one condition value/i);
+    }
+  });
+
   it('keeps repeated room templates independent and prevents conditional bleed', () => {
     const roomSchema = createInspectionSchemaVersion({
       id: asInspectionSchemaVersionId(

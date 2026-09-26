@@ -32,6 +32,10 @@ export type WorkspaceRoute =
       readonly asOf: string;
     }
   | {
+      readonly kind: 'inspection-schemas';
+      readonly asOf: string;
+    }
+  | {
       readonly kind: 'property';
       readonly propertyId: string;
       readonly asOf: string;
@@ -57,6 +61,7 @@ export function workspaceRouteOwnerKey(route: WorkspaceRoute): string {
   if (route.kind === 'dashboard') return 'dashboard';
   if (route.kind === 'parties') return 'parties';
   if (route.kind === 'staff') return 'staff';
+  if (route.kind === 'inspection-schemas') return 'inspection-schemas';
   if (route.kind === 'property') return 'property:' + route.propertyId;
   return 'unit:' + route.propertyId + ':' + route.unitId;
 }
@@ -111,6 +116,10 @@ export function partiesRoute(asOf: string): WorkspaceRoute {
 
 export function staffRoute(asOf: string): WorkspaceRoute {
   return { kind: 'staff', asOf: requireWorkspaceAsOf(asOf) };
+}
+
+export function inspectionSchemasRoute(asOf: string): WorkspaceRoute {
+  return { kind: 'inspection-schemas', asOf: requireWorkspaceAsOf(asOf) };
 }
 
 export function propertyRoute(
@@ -265,6 +274,10 @@ export function parseWorkspaceLocation(
     return staffRoute(asOf);
   }
 
+  if (segments.length === 1 && segments[0] === 'inspection-schemas') {
+    return inspectionSchemasRoute(asOf);
+  }
+
   if (segments.length === 2 && segments[0] === 'properties') {
     const propertyId = readEntityId(segments[1]);
     if (propertyId) return propertyRoute(propertyId, asOf);
@@ -316,6 +329,9 @@ export function workspaceRouteHref(route: WorkspaceRoute): string {
   }
   if (route.kind === 'staff') {
     return '/staff?' + search.toString();
+  }
+  if (route.kind === 'inspection-schemas') {
+    return '/inspection-schemas?' + search.toString();
   }
   if (route.kind === 'property') {
     return `/properties/${encodeURIComponent(route.propertyId)}?${search.toString()}`;
