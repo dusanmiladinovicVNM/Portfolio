@@ -1,5 +1,6 @@
 import {
   luzernerLeaseFormDataSchema,
+  luzernerLeaseFormProfileResponseSchema,
   nullableLuzernerLeaseFormProfileResponseSchema,
   upsertLuzernerLeaseFormRequestSchema,
   type LeaseAgreementResponse,
@@ -751,14 +752,7 @@ export function LuzernerLeaseFormPanel({
       const saved = await api.patch(
         agreementLuzernerFormPath(targetAgreementId),
         parsedRequest.data,
-        // The response and read contract are the same non-null profile.
-        { safeParse: (value) => {
-          const parsed =
-            nullableLuzernerLeaseFormProfileResponseSchema.safeParse(value);
-          return parsed.success && parsed.data !== null
-            ? { success: true as const, data: parsed.data }
-            : { success: false as const, error: parsed };
-        } },
+        luzernerLeaseFormProfileResponseSchema,
       );
       if (
         !mountedRef.current ||
