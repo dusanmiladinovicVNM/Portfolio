@@ -83,8 +83,18 @@ interface StableUpload {
 
 const MAX_EVIDENCE_UPLOAD_BYTES = 16 * 1024 * 1024;
 
-function fileFingerprint(file: File): string {
-  return [file.name, file.type || 'application/octet-stream', file.size].join('|');
+async function fileFingerprint(file: File): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  const sha256 = [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+  return [
+    file.name,
+    file.type || 'application/octet-stream',
+    file.size,
+    file.lastModified,
+    sha256,
+  ].join('|');
 }
 
 function formatBytes(value: number): string {
@@ -393,7 +403,10 @@ export function InspectionFindingsEvidence({
     if (!begin('scoped-upload')) return;
 
     try {
-      const fingerprint = [purpose, fileFingerprint(fileValue)].join('|');
+      const fingerprint = [
+        purpose,
+        await fileFingerprint(fileValue),
+      ].join('|');
       const existing = scopedUploadRef.current;
       let stable =
         existing?.fingerprint === fingerprint ? existing : null;
