@@ -8,6 +8,7 @@ import {
   DomainError,
   asCurrencyCode,
   asDateOnly,
+  asDocumentVersionId,
   asLeaseAgreementId,
   asLeaseAgreementPartyId,
   asLeaseAmendmentId,
@@ -22,6 +23,8 @@ import {
   type LeaseAgreementStatus,
   type LeaseAgreementType,
   type LeaseAgreementId,
+  type LuzernerLeaseFormDataInput,
+  type LuzernerLeaseFormProfile,
   type LeaseAmendment,
   type LeaseAmendmentId,
   type LeaseAmendmentStatus,
@@ -87,6 +90,14 @@ interface TermRow {
   billing_frequency: BillingFrequency;
   notice_period_tenant_days: number;
   notice_period_landlord_days: number;
+}
+
+interface LuzernerFormRow {
+  agreement_id: string;
+  template_code: 'luzerner_mietvertrag_2020';
+  template_document_version_id: string | null;
+  revision: number;
+  data: LuzernerLeaseFormDataInput;
 }
 
 const agreementSelect = `
@@ -194,6 +205,19 @@ function mapTerms(row: TermRow): TenancyTermVersion {
     billingFrequency: row.billing_frequency,
     noticePeriodTenantDays: row.notice_period_tenant_days,
     noticePeriodLandlordDays: row.notice_period_landlord_days,
+  };
+}
+
+function mapLuzernerForm(row: LuzernerFormRow): LuzernerLeaseFormProfile {
+  return {
+    agreementId: asLeaseAgreementId(row.agreement_id),
+    templateCode: row.template_code,
+    templateDocumentVersionId:
+      row.template_document_version_id === null
+        ? null
+        : asDocumentVersionId(row.template_document_version_id),
+    revision: row.revision,
+    data: row.data as LuzernerLeaseFormProfile['data'],
   };
 }
 
@@ -652,5 +676,77 @@ export class PostgresLeaseRepository implements LeaseRepository {
     `;
 
     return rows.length === 0 ? null : mapTerms(rows[0]!);
+  }
+
+  async getLuzernerLeaseFormProfile(
+    agreementId: LeaseAgreementId,
+  ): Promise<LuzernerLeaseFormProfile | null> {
+    const rows = await this.sql<LuzernerFormRow[]>`
+      select
+        agreement_id,
+        template_code,
+        template_document_version_id,
+        revision,
+        data
+      from public.lease_agreement_luzerner_forms
+      where agreement_id = ${agreementId}
+      limit 1
+    `;
+
+    return rows.length === 0 ? null : mapLuzernerForm(rows[0]!);
+  }
+
+  async saveLuzernerLeaseFormProfile(
+    profile: LuzernerLeaseFormProfile,
+    expectedRevision: number,
+  ): Promise<void> {
+    if (expectedRevision === 0) {
+      try {
+        await this.sql`
+          insert into public.lease_agreement_luzerner_forms (
+            agreement_id,
+            template_code,
+            template_document_version_id,
+            revision,
+            data
+          ) values (
+            ${profile.agreementId},
+            ${profile.templateCode},
+            ${profile.templateDocumentVersionId},
+            ${profile.revision},
+            ${this.sql.json(profile.data)}
+          )
+        `;
+        return;
+      } catch (error) {
+        const pg = error as PostgresErrorLike;
+        if (pg.code === '23505') {
+          throw new DomainError(
+            'LUZERNER_LEASE_FORM_REVISION_CONFLICT',
+            'Luzerner lease form was created concurrently.',
+          );
+        }
+        throw error;
+      }
+    }
+
+    const rows = await this.sql<{ agreement_id: string }[]>`
+      update public.lease_agreement_luzerner_forms
+      set
+        template_document_version_id = ${profile.templateDocumentVersionId},
+        revision = ${profile.revision},
+        data = ${this.sql.json(profile.data)},
+        updated_at = now()
+      where agreement_id = ${profile.agreementId}
+        and revision = ${expectedRevision}
+      returning agreement_id
+    `;
+
+    if (rows.length === 0) {
+      throw new DomainError(
+        'LUZERNER_LEASE_FORM_REVISION_CONFLICT',
+        'Luzerner lease form changed since it was last read.',
+      );
+    }
   }
 }
