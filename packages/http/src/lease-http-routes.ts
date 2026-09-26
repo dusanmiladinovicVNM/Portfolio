@@ -5,8 +5,10 @@ import {
   createLeaseAmendmentCommand,
   getEffectiveTenancyTermsQuery,
   getLeaseAgreementQuery,
+  getLuzernerLeaseFormQuery,
   listLeaseAgreementsByTenancyQuery,
   listLeaseAmendmentsByAgreementQuery,
+  saveLuzernerLeaseFormCommand,
   signLeaseAgreementCommand,
   signLeaseAmendmentCommand,
   type Actor,
@@ -23,6 +25,7 @@ import {
   createLeaseAmendmentRequestSchema,
   entityIdSchema,
   leaseTermsRequestSchema,
+  putLuzernerLeaseFormRequestSchema,
   signLeaseAgreementRequestSchema,
   signLeaseAmendmentRequestSchema,
 } from '@portfolio/contracts';
@@ -31,6 +34,7 @@ import {
   asLeaseAmendmentId,
   asPartyId,
   asTenancyId,
+  type LuzernerLeaseFormContent,
   type TermSnapshotInput,
 } from '@portfolio/domain';
 import {
@@ -167,6 +171,40 @@ export async function handleLeaseHttp(
     );
 
     return json({ data: toTenancyTermVersionResponse(terms) });
+  }
+
+  const luzernerFormMatch =
+    /^\/agreements\/([^/]+)\/luzerner-form$/.exec(path);
+  if (luzernerFormMatch) {
+    const parsedId = entityIdSchema.safeParse(luzernerFormMatch[1]);
+    if (!parsedId.success) return validationFailure();
+    const agreementId = asLeaseAgreementId(parsedId.data);
+
+    if (method === 'GET') {
+      const form = await getLuzernerLeaseFormQuery(
+        deps.leaseRepository,
+        actor,
+        agreementId,
+      );
+      return json({ data: form });
+    }
+
+    if (method === 'PUT') {
+      const body = await requestJson(request);
+      const parsed = putLuzernerLeaseFormRequestSchema.safeParse(body);
+      if (!parsed.success) return validationFailure();
+
+      const form = await saveLuzernerLeaseFormCommand(
+        deps.leaseRepository,
+        actor,
+        agreementId,
+        parsed.data.expectedRevision,
+        parsed.data.content as LuzernerLeaseFormContent,
+      );
+      return json({ data: form });
+    }
+
+    return null;
   }
 
   const agreementMatch = /^\/agreements\/([^/]+)$/.exec(path);
