@@ -10,6 +10,7 @@ export interface LuzernerLeasePdfParty {
 
 export interface LuzernerLeasePdfRenderInput {
   readonly agreementCode: string;
+  readonly agreementEffectiveFrom: string;
   readonly form: LuzernerLeaseFormContent;
   readonly property: {
     readonly street: string;
@@ -23,6 +24,7 @@ export interface LuzernerLeasePdfRenderInput {
     readonly rooms: number | null;
   };
   readonly landlords: readonly LuzernerLeasePdfParty[];
+  readonly landlordRepresentatives: readonly LuzernerLeasePdfParty[];
   readonly tenants: readonly LuzernerLeasePdfParty[];
 }
 
