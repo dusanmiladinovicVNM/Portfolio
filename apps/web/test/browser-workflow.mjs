@@ -327,6 +327,25 @@ async function clickAndDismissConfirm(sessionId, xpath, expectedText) {
   });
 }
 
+async function clickAndAcceptConfirm(sessionId, xpath, expectedText) {
+  const id = await waitForElement(sessionId, 'xpath', xpath);
+  try {
+    await webdriver(`/session/${sessionId}/element/${id}/click`, {
+      method: 'POST',
+      body: {},
+    });
+  } catch (error) {
+    if (!String(error).includes('unexpected alert open')) throw error;
+  }
+
+  const text = await webdriver(`/session/${sessionId}/alert/text`);
+  assertEqual(text, expectedText, 'Confirmation text');
+  await webdriver(`/session/${sessionId}/alert/accept`, {
+    method: 'POST',
+    body: {},
+  });
+}
+
 async function currentUrl(sessionId) {
   return webdriver(`/session/${sessionId}/url`);
 }
@@ -714,7 +733,20 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[contains(normalize-space(),'MOVE-IN-BRW v2 saved as a canonical draft.')]",
+    "//*[contains(normalize-space(),'Schema save outcome is ambiguous. Canonical versions were reloaded. Do not retry automatically; verify the version list first.')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-schema-create-ambiguity]",
+  );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      "//button[normalize-space()='Save draft version']",
+    ),
+    true,
+    'Ambiguous Schema Builder create pauses retry until operator verification',
   );
   assertEqual(
     await executeScript(
@@ -722,7 +754,19 @@ try {
       'return window.__portfolioInspectionSchemaCreateCount || 0;',
     ),
     schemaCreatesBefore + 1,
-    'Ambiguous Schema Builder create recovers without duplicate POST',
+    'Ambiguous Schema Builder create never auto-retries POST',
+  );
+  const createdDraftCard =
+    "//button[contains(@class,'schema-version-card')][.//small[contains(normalize-space(),'v2')]][.//span[normalize-space()='draft']]";
+  await waitForElement(
+    sessionId,
+    'xpath',
+    createdDraftCard,
+  );
+  await clickAndAcceptConfirm(
+    sessionId,
+    createdDraftCard,
+    'Discard the current unsaved Inspection schema draft?',
   );
   await waitForElement(
     sessionId,
