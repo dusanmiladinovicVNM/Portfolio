@@ -30,7 +30,10 @@ import {
   isWorkspaceAsOf,
   unitRoute,
 } from '../navigation/workspace-route.js';
-import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
+import type {
+  NavigateWorkspace,
+  SetNavigationBlocker,
+} from '../navigation/use-workspace-navigation.js';
 import { DocumentBinaryActions } from '../documents/DocumentBinaryActions.js';
 import { SignedDocumentAdministration } from '../documents/SignedDocumentAdministration.js';
 import {
@@ -52,6 +55,7 @@ import {
   assertTenancyAgreementsOwner,
 } from './contract-owner.js';
 import { LeaseAdministration } from './LeaseAdministration.js';
+import { LuzernerLeaseFormEditor } from './LuzernerLeaseFormEditor.js';
 
 interface UnitContractsProps {
   readonly api: PortfolioApi;
@@ -62,6 +66,7 @@ interface UnitContractsProps {
   readonly agreementId?: string | undefined;
   readonly amendmentId?: string | undefined;
   readonly navigate: NavigateWorkspace;
+  readonly setNavigationBlocker: SetNavigationBlocker;
 }
 
 type TermsState =
@@ -173,8 +178,22 @@ function TermsPanel({
 
       <dl className="detail-list compact-detail-list">
         <div><dt>Billing</dt><dd>{formatDetailKey(terms.billingFrequency)}</dd></div>
-        <div><dt>Tenant notice</dt><dd>{terms.noticePeriodTenantDays} days</dd></div>
-        <div><dt>Landlord notice</dt><dd>{terms.noticePeriodLandlordDays} days</dd></div>
+        <div>
+          <dt>Tenant notice</dt>
+          <dd>
+            {terms.noticePeriodTenantDays === null
+              ? 'Contract-specific'
+              : `${terms.noticePeriodTenantDays} days`}
+          </dd>
+        </div>
+        <div>
+          <dt>Landlord notice</dt>
+          <dd>
+            {terms.noticePeriodLandlordDays === null
+              ? 'Contract-specific'
+              : `${terms.noticePeriodLandlordDays} days`}
+          </dd>
+        </div>
         <div>
           <dt>Source</dt>
           <dd>{formatDetailKey(terms.sourceType)}</dd>
@@ -338,6 +357,7 @@ export function UnitContracts({
   agreementId,
   amendmentId,
   navigate,
+  setNavigationBlocker,
 }: UnitContractsProps) {
   const [tenancies, setTenancies] =
     useState<readonly TenancyResponse[] | null>(null);
@@ -359,6 +379,8 @@ export function UnitContracts({
   const [termsState, setTermsState] = useState<TermsState>({ kind: 'idle' });
   const [contractRevision, setContractRevision] = useState(0);
   const [documentRevision, setDocumentRevision] = useState(0);
+  const [luzernerFormBlocksWrites, setLuzernerFormBlocksWrites] =
+    useState(false);
   const agreementDocumentsOwnerRef = useRef<string | null>(null);
   const amendmentDocumentsOwnerRef = useRef<string | null>(null);
 
@@ -464,6 +486,10 @@ export function UnitContracts({
     agreements !== null &&
     agreementId !== undefined &&
     selectedAgreement === null;
+
+  useEffect(() => {
+    setLuzernerFormBlocksWrites(false);
+  }, [selectedAgreement?.id]);
 
   const partyIds = [
     ...(selectedTenancy?.parties.map((party) => party.partyId) ?? []),
@@ -697,6 +723,7 @@ export function UnitContracts({
               amendments={amendments}
               api={api}
               asOf={asOf}
+              blockedByLuzernerForm={luzernerFormBlocksWrites}
               navigate={navigate}
               onCanonicalWrite={() =>
                 setContractRevision((revision) => revision + 1)
@@ -815,10 +842,18 @@ export function UnitContracts({
 
       {selectedAgreement ? (
         <>
+          <LuzernerLeaseFormEditor
+            agreement={selectedAgreement}
+            api={api}
+            key={selectedAgreement.id}
+            onWriteBlockChange={setLuzernerFormBlocksWrites}
+            setNavigationBlocker={setNavigationBlocker}
+          />
+
           <section className="panel">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Step 3 · Agreement Documents</p>
+                <p className="eyebrow">Step 4 · Agreement Documents</p>
                 <h2>{selectedAgreement.code}</h2>
               </div>
               <span className="section-note">
@@ -857,7 +892,7 @@ export function UnitContracts({
           <section className="panel">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Step 4 · Amendments</p>
+                <p className="eyebrow">Step 5 · Amendments</p>
                 <h2>{selectedAgreement.code}</h2>
               </div>
               <span className="section-note">
@@ -893,7 +928,7 @@ export function UnitContracts({
         <section className="panel">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">Step 5 · Amendment Documents</p>
+              <p className="eyebrow">Step 6 · Amendment Documents</p>
               <h2>{selectedAmendment.code}</h2>
             </div>
             <span className="section-note">

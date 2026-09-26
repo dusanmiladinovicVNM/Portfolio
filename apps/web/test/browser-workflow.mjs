@@ -1273,6 +1273,21 @@ try {
     "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//span[contains(@class,'status-chip') and normalize-space()='active']",
   );
 
+  await typeXpath(
+    sessionId,
+    "//form[@data-tenancy-form='create']//input[@name='code']",
+    'TEN-LU-EMPTY-BRW',
+  );
+  await clickXpath(
+    sessionId,
+    "//form[@data-tenancy-form='create']//button[normalize-space()='Create Tenancy']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'tenancy-card')][.//span[normalize-space()='TEN-LU-EMPTY-BRW']][.//span[contains(@class,'status-chip') and normalize-space()='draft']]",
+  );
+
   await clickXpath(sessionId, "//a[normalize-space()='Contracts']");
   await waitForElement(
     sessionId,
@@ -1538,7 +1553,7 @@ try {
   );
 
   const amendmentDocumentsSection =
-    "//section[.//p[normalize-space()='Step 5 · Amendment Documents']]";
+    "//section[.//p[normalize-space()='Step 6 · Amendment Documents']]";
   const amendmentDocumentCreateForm =
     amendmentDocumentsSection +
     "//form[@data-signed-document-form='create']";
@@ -1703,6 +1718,298 @@ try {
     'Replacement Agreement deep-link',
   );
 
+  const luzernerForm =
+    "//*[@data-luzerner-lease-form='" + setupReplacementAgreementId + "']";
+  await waitForElement(
+    sessionId,
+    'xpath',
+    luzernerForm + "//h2[normalize-space()='Contract form data']",
+  );
+  await typeXpath(
+    sessionId,
+    luzernerForm + "//label[normalize-space()='EWID']//input",
+    '30123456',
+  );
+  await typeXpath(
+    sessionId,
+    luzernerForm + "//label[normalize-space()='EGID']//input",
+    '191234567',
+  );
+  await setInputValueXpath(
+    sessionId,
+    luzernerForm + "//label[normalize-space()='Mietantritt']//input",
+    '2027-07-01',
+  );
+  await selectOptionXpath(
+    sessionId,
+    luzernerForm + "//label[contains(normalize-space(.),'Benutzungsart')]//select",
+    'apartment',
+  );
+  await selectOptionXpath(
+    sessionId,
+    luzernerForm + "//label[contains(normalize-space(.),'Mietdauer')]//select",
+    'indefinite',
+  );
+  await selectOptionXpath(
+    sessionId,
+    luzernerForm + "//label[contains(normalize-space(.),'Kündigungstermine')]//select",
+    'monthly_except_december',
+  );
+  await selectOptionXpath(
+    sessionId,
+    luzernerForm + "//label[contains(normalize-space(.),'Kündigungsfristen')]//select",
+    'residential_3_months',
+  );
+  await typeXpath(
+    sessionId,
+    luzernerForm +
+      "//label[normalize-space()='Netto-Mietzins Wohnung / Gewerberaum CHF']//input",
+    '1200.00',
+  );
+  await selectOptionXpath(
+    sessionId,
+    luzernerForm +
+      "//label[.//span[normalize-space()='Heiz- und Warmwasserkosten (VMWG Art. 5)']]//select",
+    'advance',
+  );
+  await typeXpath(
+    sessionId,
+    luzernerForm +
+      "//label[normalize-space()='Nebenkosten Akonto CHF']//input",
+    '160.00',
+  );
+  await selectOptionXpath(
+    sessionId,
+    luzernerForm + "//label[contains(normalize-space(.),'Zahlbar im Voraus')]//select",
+    'monthly',
+  );
+  await selectOptionXpath(
+    sessionId,
+    luzernerForm + "//label[contains(normalize-space(.),'Mietzinsanpassung')]//select",
+    'termination_date',
+  );
+  await typeXpath(
+    sessionId,
+    luzernerForm + "//label[normalize-space()='Monate im Voraus']//input",
+    '3',
+  );
+  await selectOptionXpath(
+    sessionId,
+    luzernerForm +
+      "//label[contains(normalize-space(.),'Stichtag Nebenkostenabrechnung')]//select",
+    'december_31',
+  );
+  await typeXpath(
+    sessionId,
+    luzernerForm +
+      "//label[contains(normalize-space(.),'Besondere Bestimmungen')]//textarea",
+    'Browser canonical Luzerner provision.',
+  );
+  await typeXpath(
+    sessionId,
+    luzernerForm + "//label[normalize-space()='Ort']//input",
+    'Luzern',
+  );
+  await setInputValueXpath(
+    sessionId,
+    luzernerForm + "//label[normalize-space()='Datum']//input",
+    '2027-06-15',
+  );
+
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementSignForm +
+      "//button[normalize-space()='Sign Agreement' and @disabled]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementCreateForm +
+      "//button[normalize-space()='Create Agreement draft' and @disabled]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Save or resolve the current Luzerner contract form before changing legal records.')]",
+  );
+
+  await clickAndDismissConfirm(
+    sessionId,
+    "//a[normalize-space()='Timeline']",
+    'This Luzerner contract form has unsaved changes. Leave and discard them?',
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=contracts&tenancyId=' + setupTenancyId +
+      '&agreementId=' + setupReplacementAgreementId +
+      '&asOf=2027-01-01',
+    'Dirty Luzerner form blocks dossier navigation when discard is cancelled',
+  );
+  assertEqual(
+    await elementValueXpath(
+      sessionId,
+      luzernerForm +
+        "//label[contains(normalize-space(.),'Besondere Bestimmungen')]//textarea",
+    ),
+    'Browser canonical Luzerner provision.',
+    'Dirty Luzerner draft survives cancelled navigation',
+  );
+
+  const luzernerPutsBefore = await executeScript(
+    sessionId,
+    'return window.__portfolioLuzernerFormPutCount || 0;',
+  );
+  await clickXpath(
+    sessionId,
+    luzernerForm +
+      "//button[normalize-space()='Save Luzerner contract data']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    luzernerForm +
+      "//*[contains(normalize-space(),'Luzerner Mietvertrag data saved as revision 1.')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioLuzernerFormPutCount || 0;',
+    ),
+    luzernerPutsBefore + 1,
+    'Initial Luzerner form save issues one canonical PUT',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementSignForm +
+      "//button[normalize-space()='Sign Agreement' and not(@disabled)]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementCreateForm +
+      "//button[normalize-space()='Create Agreement draft' and not(@disabled)]",
+  );
+
+  await typeXpath(
+    sessionId,
+    luzernerForm +
+      "//label[contains(normalize-space(.),'Besondere Bestimmungen')]//textarea",
+    'Discard this temporary Luzerner edit.',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementCreateForm +
+      "//button[normalize-space()='Create Agreement draft' and @disabled]",
+  );
+  await clickAndAcceptConfirm(
+    sessionId,
+    "//a[contains(@class,'selection-card')][.//strong[normalize-space()='TEN-LU-EMPTY-BRW']]",
+    'This Luzerner contract form has unsaved changes. Leave and discard them?',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'selection-card')][@aria-current='page'][.//strong[normalize-space()='TEN-LU-EMPTY-BRW']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementCreateForm,
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[contains(normalize-space(),'Save or resolve the current Luzerner contract form before changing legal records.')]",
+    ),
+    false,
+    'Accepted Luzerner discard clears stale legal-write warning on the new Tenancy owner',
+  );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      agreementCreateForm +
+        "//button[normalize-space()='Create Agreement draft']",
+    ),
+    false,
+    'Accepted Luzerner discard releases Create Agreement on a Tenancy without an Agreement',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-luzerner-lease-form]",
+    ),
+    false,
+    'Tenancy without a selected Agreement has no Luzerner editor owner',
+  );
+
+  await clickXpath(
+    sessionId,
+    "//a[contains(@class,'selection-card')][.//strong[normalize-space()='TEN-SETUP-BRW']]",
+  );
+  const replacementAgreementCard =
+    "//a[contains(@class,'agreement-card')][.//span[normalize-space()='AGR-REPLACEMENT-BRW']]";
+  await waitForElement(sessionId, 'xpath', replacementAgreementCard);
+  await clickXpath(sessionId, replacementAgreementCard);
+  await waitForElement(
+    sessionId,
+    'xpath',
+    luzernerForm + "//h2[normalize-space()='Contract form data']",
+  );
+  assertEqual(
+    await elementValueXpath(
+      sessionId,
+      luzernerForm +
+        "//label[contains(normalize-space(.),'Besondere Bestimmungen')]//textarea",
+    ),
+    'Browser canonical Luzerner provision.',
+    'Accepted owner change discards only the local Luzerner draft and reloads canonical data',
+  );
+
+  await typeXpath(
+    sessionId,
+    luzernerForm +
+      "//label[contains(normalize-space(.),'Besondere Bestimmungen')]//textarea",
+    'Browser canonical Luzerner provision revised.',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextLuzernerFormSaveAfterCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    luzernerForm +
+      "//button[normalize-space()='Save Luzerner contract data']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    luzernerForm +
+      "//*[contains(normalize-space(),'Saved state recovered at revision 2 after an uncertain acknowledgement.')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioLuzernerFormPutCount || 0;',
+    ),
+    luzernerPutsBefore + 2,
+    'Ambiguous Luzerner save recovers by exact reread without duplicate PUT',
+  );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      luzernerForm +
+        "//button[normalize-space()='Save Luzerner contract data']",
+    ),
+    true,
+    'Recovered canonical Luzerner form is clean after exact reread',
+  );
+
   await setInputValueXpath(
     sessionId,
     agreementSignForm + "//input[@name='signedAt']",
@@ -1795,7 +2102,7 @@ try {
   );
 
   const agreementDocumentsSection =
-    "//section[.//p[normalize-space()='Step 3 · Agreement Documents']]";
+    "//section[.//p[normalize-space()='Step 4 · Agreement Documents']]";
   const agreementDocumentCreateForm =
     agreementDocumentsSection +
     "//form[@data-signed-document-form='create']";
@@ -3538,7 +3845,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[.//p[normalize-space()='Step 3 · Agreement Documents']]//h2[normalize-space()='AGR-BRW']",
+    "//section[.//p[normalize-space()='Step 4 · Agreement Documents']]//h2[normalize-space()='AGR-BRW']",
   );
   await waitForElement(
     sessionId,
@@ -3620,7 +3927,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[.//p[normalize-space()='Step 5 · Amendment Documents']]//h2[normalize-space()='AMD-BRW']",
+    "//section[.//p[normalize-space()='Step 6 · Amendment Documents']]//h2[normalize-space()='AMD-BRW']",
   );
   await waitForElement(
     sessionId,
@@ -3648,7 +3955,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[.//p[normalize-space()='Step 5 · Amendment Documents']]//h2[normalize-space()='AMD-BRW']",
+    "//section[.//p[normalize-space()='Step 6 · Amendment Documents']]//h2[normalize-space()='AMD-BRW']",
   );
   await waitForElement(
     sessionId,

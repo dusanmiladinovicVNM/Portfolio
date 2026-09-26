@@ -2,6 +2,7 @@ import type {
   DateOnly,
   LeaseAgreement,
   LeaseAgreementId,
+  LuzernerLeaseFormDraft,
   LeaseAmendment,
   LeaseAmendmentId,
   TenancyId,
@@ -24,10 +25,20 @@ export interface LeaseRepository {
     expectedVersion: number,
     terms: TenancyTermVersion,
     predecessorToSupersede?: AgreementSupersession,
+    expectedLuzernerFormRevision?: number | null,
   ): Promise<void>;
   cancelAgreement(
     agreement: LeaseAgreement,
     expectedVersion: number,
+  ): Promise<void>;
+
+  getLuzernerLeaseForm(
+    agreementId: LeaseAgreementId,
+  ): Promise<LuzernerLeaseFormDraft | null>;
+  insertLuzernerLeaseForm(form: LuzernerLeaseFormDraft): Promise<void>;
+  updateLuzernerLeaseForm(
+    form: LuzernerLeaseFormDraft,
+    expectedRevision: number,
   ): Promise<void>;
 
   getAmendmentById(id: LeaseAmendmentId): Promise<LeaseAmendment | null>;

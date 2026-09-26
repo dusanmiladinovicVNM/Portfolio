@@ -271,6 +271,7 @@ export function UnitDossier({
               agreementId={agreementId}
               amendmentId={amendmentId}
               navigate={navigate}
+              setNavigationBlocker={setNavigationBlocker}
             />
           ) : null}
           {tab === 'inspections' ? (

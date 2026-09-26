@@ -13,7 +13,7 @@ import {
   type MoneyAmount,
 } from '../shared/money.js';
 
-export const BILLING_FREQUENCIES = ['monthly', 'quarterly', 'yearly'] as const;
+export const BILLING_FREQUENCIES = ['monthly', 'quarterly', 'semiannual', 'yearly'] as const;
 export const TERM_SOURCE_TYPES = ['agreement', 'amendment'] as const;
 
 export type BillingFrequency = (typeof BILLING_FREQUENCIES)[number];
@@ -34,8 +34,8 @@ export interface TenancyTermVersion {
   readonly otherRecurringCharge: MoneyAmount;
   readonly depositRequired: MoneyAmount;
   readonly billingFrequency: BillingFrequency;
-  readonly noticePeriodTenantDays: number;
-  readonly noticePeriodLandlordDays: number;
+  readonly noticePeriodTenantDays: number | null;
+  readonly noticePeriodLandlordDays: number | null;
 }
 
 export interface TermSnapshotInput {
@@ -47,8 +47,8 @@ export interface TermSnapshotInput {
   otherRecurringCharge?: string;
   depositRequired?: string;
   billingFrequency?: BillingFrequency;
-  noticePeriodTenantDays?: number;
-  noticePeriodLandlordDays?: number;
+  noticePeriodTenantDays?: number | null;
+  noticePeriodLandlordDays?: number | null;
 }
 
 export interface CreateAgreementTermVersionInput extends TermSnapshotInput {
@@ -85,6 +85,13 @@ function nonNegativeInteger(
   return normalized;
 }
 
+function nullableNonNegativeInteger(
+  value: number | null | undefined,
+  field: string,
+): number | null {
+  return value === null ? null : nonNegativeInteger(value, field);
+}
+
 export function createTenancyTermVersion(
   input: CreateTenancyTermVersionInput,
 ): TenancyTermVersion {
@@ -100,11 +107,11 @@ export function createTenancyTermVersion(
     otherRecurringCharge: asMoneyAmount(input.otherRecurringCharge ?? '0'),
     depositRequired: asMoneyAmount(input.depositRequired ?? '0'),
     billingFrequency: input.billingFrequency ?? 'monthly',
-    noticePeriodTenantDays: nonNegativeInteger(
+    noticePeriodTenantDays: nullableNonNegativeInteger(
       input.noticePeriodTenantDays,
       'noticePeriodTenantDays',
     ),
-    noticePeriodLandlordDays: nonNegativeInteger(
+    noticePeriodLandlordDays: nullableNonNegativeInteger(
       input.noticePeriodLandlordDays,
       'noticePeriodLandlordDays',
     ),

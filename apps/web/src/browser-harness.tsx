@@ -12,6 +12,8 @@ import type {
   DocumentVersionResponse,
   LeaseAgreementDocumentReferenceResponse,
   LeaseAgreementResponse,
+  LuzernerLeaseFormContentRequest,
+  LuzernerLeaseFormResponse,
   LeaseAmendmentDocumentReferenceResponse,
   LeaseAmendmentResponse,
   MeterReadingBoundaryResponse,
@@ -118,6 +120,9 @@ const setupPartyId = 'b1000000-0000-4000-8000-000000000004';
 const setupPartyEmailId = 'b1000000-0000-4000-8000-000000000005';
 const setupPartyAddressId = 'b1000000-0000-4000-8000-000000000006';
 const setupTenancyId = 'b1000000-0000-4000-8000-000000000007';
+const setupSecondaryTenancyId = 'b1000000-0000-4000-8000-000000000063';
+const setupSecondaryTenancyPartyId =
+  'b1000000-0000-4000-8000-000000000064';
 const setupTenancyPartyId = 'b1000000-0000-4000-8000-000000000008';
 const setupAgreementIds = [
   'b1000000-0000-4000-8000-000000000009',
@@ -307,7 +312,9 @@ let setupUnit: UnitResponse | null = null;
 let setupSpace: SpaceResponse | null = null;
 let setupParty: PartyResponse | null = null;
 let setupTenancy: TenancyResponse | null = null;
+let setupSecondaryTenancy: TenancyResponse | null = null;
 let setupAgreements: LeaseAgreementResponse[] = [];
+let setupLuzernerForms = new Map<string, LuzernerLeaseFormResponse>();
 let heldContractAgreementRead: LeaseAgreementResponse[] | null = null;
 let setupAmendments: LeaseAmendmentResponse[] = [];
 let setupTerms: TenancyTermVersionResponse[] = [];
@@ -1083,9 +1090,9 @@ function setupTermSnapshot(
     parkingRent?: string;
     otherRecurringCharge?: string;
     depositRequired?: string;
-    billingFrequency?: 'monthly' | 'quarterly' | 'yearly';
-    noticePeriodTenantDays?: number;
-    noticePeriodLandlordDays?: number;
+    billingFrequency?: 'monthly' | 'quarterly' | 'semiannual' | 'yearly';
+    noticePeriodTenantDays?: number | null;
+    noticePeriodLandlordDays?: number | null;
   },
 ): TenancyTermVersionResponse {
   const id = setupTermIds[setupTermSequence++];
@@ -1106,8 +1113,14 @@ function setupTermSnapshot(
     otherRecurringCharge: exactMoney(termsInput.otherRecurringCharge),
     depositRequired: exactMoney(termsInput.depositRequired),
     billingFrequency: termsInput.billingFrequency ?? 'monthly',
-    noticePeriodTenantDays: termsInput.noticePeriodTenantDays ?? 0,
-    noticePeriodLandlordDays: termsInput.noticePeriodLandlordDays ?? 0,
+    noticePeriodTenantDays:
+      termsInput.noticePeriodTenantDays === undefined
+        ? 0
+        : termsInput.noticePeriodTenantDays,
+    noticePeriodLandlordDays:
+      termsInput.noticePeriodLandlordDays === undefined
+        ? 0
+        : termsInput.noticePeriodLandlordDays,
   };
 }
 
@@ -1220,6 +1233,8 @@ type BrowserHarnessWindow = Window & {
   __portfolioFailNextAssetReplacementAfterCommit?: boolean;
   __portfolioFailNextWarrantyCreateAfterCommit?: boolean;
   __portfolioFailNextSignedOriginalLink?: boolean;
+  __portfolioFailNextLuzernerFormSaveAfterCommit?: boolean;
+  __portfolioLuzernerFormPutCount?: number;
   __portfolioPendingUnitCreate?: boolean;
   __portfolioPendingSpaceCreate?: boolean;
   __portfolioPendingTenancyMutation?: boolean;
@@ -1253,6 +1268,7 @@ type BrowserHarnessWindow = Window & {
 const browserHarnessWindow = window as BrowserHarnessWindow;
 browserHarnessWindow.__portfolioBinaryReads = 0;
 browserHarnessWindow.__portfolioDocumentUploadCount = 0;
+browserHarnessWindow.__portfolioLuzernerFormPutCount = 0;
 browserHarnessWindow.__portfolioInspectionSectionPatchCount = 0;
 browserHarnessWindow.__portfolioInspectionSchemaCreateCount = 0;
 browserHarnessWindow.__portfolioInspectionSchemaPublishCount = 0;
@@ -3679,8 +3695,8 @@ globalThis.fetch = async (
     if (init?.method === 'POST') {
       requirePortfolioAuth(init);
       const body = JSON.parse(String(init.body)) as CreateTenancyRequest;
-      setupTenancy = {
-        id: setupTenancyId,
+      const created: TenancyResponse = {
+        id: setupTenancy ? setupSecondaryTenancyId : setupTenancyId,
         code: body.code,
         unitId: setupUnitId,
         status: 'draft',
@@ -3691,11 +3707,31 @@ globalThis.fetch = async (
         noticeGivenAt: null,
         terminationEffectiveAt: null,
         version: 1,
-        parties: [],
+        parties: setupTenancy
+          ? [
+              {
+                id: setupSecondaryTenancyPartyId,
+                tenancyId: setupSecondaryTenancyId,
+                partyId: tenantPartyId,
+                role: 'tenant',
+                isPrimary: true,
+              },
+            ]
+          : [],
       };
-      return json(setupTenancy, 201);
+      if (setupTenancy) {
+        setupSecondaryTenancy = created;
+      } else {
+        setupTenancy = created;
+      }
+      return json(created, 201);
     }
-    return json({ items: setupTenancy ? [setupTenancy] : [] });
+    return json({
+      items: [
+        ...(setupTenancy ? [setupTenancy] : []),
+        ...(setupSecondaryTenancy ? [setupSecondaryTenancy] : []),
+      ],
+    });
   }
 
   if (
@@ -3807,6 +3843,32 @@ globalThis.fetch = async (
   }
 
   if (
+    setupSecondaryTenancy &&
+    path === '/tenancies/' + setupSecondaryTenancyId + '/cancel' &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as { expectedVersion: number };
+    if (body.expectedVersion !== setupSecondaryTenancy.version) {
+      return tenancyVersionConflict();
+    }
+    setupSecondaryTenancy = {
+      ...setupSecondaryTenancy,
+      status: 'cancelled',
+      version: setupSecondaryTenancy.version + 1,
+    };
+    return json(setupSecondaryTenancy);
+  }
+
+  if (
+    setupSecondaryTenancy &&
+    path === '/tenancies/' + setupSecondaryTenancyId + '/agreements' &&
+    (!init?.method || init.method === 'GET')
+  ) {
+    return json({ items: [] });
+  }
+
+  if (
     setupTenancy &&
     path === '/tenancies/' + setupTenancyId + '/agreements'
   ) {
@@ -3867,6 +3929,67 @@ globalThis.fetch = async (
 
   if (
     setupAgreement &&
+    path === '/agreements/' + setupAgreement.id + '/luzerner-form'
+  ) {
+    const current = setupLuzernerForms.get(setupAgreement.id) ?? null;
+
+    if (!init?.method || init.method === 'GET') {
+      if (!current) {
+        return apiError(
+          404,
+          'LUZERNER_LEASE_FORM_NOT_FOUND',
+          'No Luzerner lease form exists for this agreement.',
+        );
+      }
+      return json(current);
+    }
+
+    if (init.method === 'PUT') {
+      requirePortfolioAuth(init);
+      browserHarnessWindow.__portfolioLuzernerFormPutCount =
+        (browserHarnessWindow.__portfolioLuzernerFormPutCount ?? 0) + 1;
+      const body = JSON.parse(String(init.body)) as {
+        expectedRevision: number | null;
+        content: LuzernerLeaseFormContentRequest;
+      };
+
+      if (
+        (current === null && body.expectedRevision !== null) ||
+        (current !== null && body.expectedRevision !== current.revision)
+      ) {
+        return apiError(
+          409,
+          'LUZERNER_LEASE_FORM_REVISION_CONFLICT',
+          'The Luzerner lease form changed since the caller last read it.',
+        );
+      }
+
+      const saved: LuzernerLeaseFormResponse = {
+        agreementId: setupAgreement.id,
+        templateCode: 'lu-2020',
+        revision: (current?.revision ?? 0) + 1,
+        content: body.content,
+      };
+      setupLuzernerForms.set(setupAgreement.id, saved);
+
+      if (
+        browserHarnessWindow.__portfolioFailNextLuzernerFormSaveAfterCommit
+      ) {
+        browserHarnessWindow.__portfolioFailNextLuzernerFormSaveAfterCommit =
+          false;
+        return apiError(
+          503,
+          'LUZERNER_LEASE_FORM_TEST_ACK_LOST',
+          'Intentional Luzerner form save acknowledgement loss.',
+        );
+      }
+
+      return json(saved);
+    }
+  }
+
+  if (
+    setupAgreement &&
     path === '/agreements/' + setupAgreement.id + '/sign' &&
     init?.method === 'POST'
   ) {
@@ -3882,9 +4005,9 @@ globalThis.fetch = async (
         parkingRent?: string;
         otherRecurringCharge?: string;
         depositRequired?: string;
-        billingFrequency?: 'monthly' | 'quarterly' | 'yearly';
-        noticePeriodTenantDays?: number;
-        noticePeriodLandlordDays?: number;
+        billingFrequency?: 'monthly' | 'quarterly' | 'semiannual' | 'yearly';
+        noticePeriodTenantDays?: number | null;
+        noticePeriodLandlordDays?: number | null;
       };
     };
     if (body.expectedVersion !== setupAgreement.version) {
@@ -3938,7 +4061,13 @@ globalThis.fetch = async (
           sourceAmendmentId: null,
           effectiveFrom: signed.effectiveFrom,
         },
-        body.terms,
+        setupLuzernerForms.has(signed.id)
+          ? {
+              ...body.terms,
+              noticePeriodTenantDays: null,
+              noticePeriodLandlordDays: null,
+            }
+          : body.terms,
       ),
     );
     return maybeHoldContractMutation(json(signed));
@@ -4021,9 +4150,9 @@ globalThis.fetch = async (
         parkingRent?: string;
         otherRecurringCharge?: string;
         depositRequired?: string;
-        billingFrequency?: 'monthly' | 'quarterly' | 'yearly';
-        noticePeriodTenantDays?: number;
-        noticePeriodLandlordDays?: number;
+        billingFrequency?: 'monthly' | 'quarterly' | 'semiannual' | 'yearly';
+        noticePeriodTenantDays?: number | null;
+        noticePeriodLandlordDays?: number | null;
       };
     };
     if (body.expectedVersion !== setupAmendment.version) {
@@ -4077,6 +4206,17 @@ globalThis.fetch = async (
       item.id === cancelled.id ? cancelled : item,
     );
     return json(cancelled);
+  }
+
+  if (
+    setupSecondaryTenancy &&
+    path === '/tenancies/' + setupSecondaryTenancyId + '/terms'
+  ) {
+    return apiError(
+      404,
+      'TENANCY_TERMS_NOT_FOUND',
+      'No effective tenancy terms exist for the requested date.',
+    );
   }
 
   if (setupTenancy && path === '/tenancies/' + setupTenancyId + '/terms') {
