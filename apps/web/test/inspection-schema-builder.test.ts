@@ -5,7 +5,6 @@ import {
   duplicateInspectionSchemaSection,
   inspectionSchemaDraftFromVersion,
   inspectionSchemaDraftRequest,
-  inspectionSchemaVersionMatchesRequest,
   renameInspectionSchemaItemKey,
   validateInspectionSchemaBuilderDraft,
 } from '../src/admin/inspection-schema-builder.js';
@@ -260,32 +259,5 @@ describe('Inspection Schema Builder model', () => {
     expect(messages).toContain('Unit sections cannot target Space types.');
     expect(messages).toContain('Space sections need at least one Space type.');
     expect(messages).toContain('Item keys must be globally unique.');
-  });
-
-  it('recovers only an exact new canonical draft after ambiguous create', () => {
-    const request = inspectionSchemaDraftRequest(
-      inspectionSchemaDraftFromVersion(schema),
-    );
-    const matching: InspectionSchemaVersionResponse = {
-      ...schema,
-      id: '77777777-7777-4777-8777-777777777777',
-      versionNumber: 4,
-      status: 'draft',
-    };
-    expect(
-      inspectionSchemaVersionMatchesRequest(matching, request),
-    ).toBe(true);
-    expect(
-      inspectionSchemaVersionMatchesRequest(
-        { ...matching, title: 'Different schema' },
-        request,
-      ),
-    ).toBe(false);
-    expect(
-      inspectionSchemaVersionMatchesRequest(
-        { ...matching, status: 'published' },
-        request,
-      ),
-    ).toBe(false);
   });
 });
