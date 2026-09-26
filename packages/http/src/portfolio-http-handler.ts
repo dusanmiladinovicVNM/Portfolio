@@ -442,6 +442,7 @@ export function createPortfolioHttpHandler(
               leaseRepository: deps.leaseRepository,
               tenancyRepository: deps.tenancyRepository,
               partyRepository: deps.partyRepository,
+              documentRepository: deps.documentRepository,
               idGenerator: deps.idGenerator,
             },
             actor,
