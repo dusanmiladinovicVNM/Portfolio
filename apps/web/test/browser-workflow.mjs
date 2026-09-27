@@ -1115,7 +1115,7 @@ try {
   await typeXpath(
     sessionId,
     "//form[contains(@class,'setup-form')]//input[@name='sortOrder']",
-    '1',
+    '4',
   );
   await clickXpath(
     sessionId,
@@ -1130,6 +1130,108 @@ try {
     await currentUrl(sessionId),
     setupUnitUrl,
     'Space creation keeps Unit Spaces context',
+  );
+
+  const setupSpaceForm = "//form[contains(@class,'setup-form')]";
+  const additionalSpaces = [
+    {
+      code: 'HALL-SETUP',
+      name: 'Entrance Hall',
+      type: 'hall',
+      area: '7',
+      order: '1',
+    },
+    {
+      code: 'LIV-SETUP',
+      name: 'Living Room',
+      type: 'living_room',
+      area: '24',
+      order: '2',
+    },
+    {
+      code: 'KIT-SETUP',
+      name: 'Kitchen',
+      type: 'kitchen',
+      area: '9.5',
+      order: '3',
+    },
+    {
+      code: 'BATH-SETUP',
+      name: 'Bathroom',
+      type: 'bathroom',
+      area: '6.5',
+      order: '5',
+    },
+  ];
+
+  for (const space of additionalSpaces) {
+    await typeXpath(
+      sessionId,
+      setupSpaceForm + "//input[@name='code']",
+      space.code,
+    );
+    await typeXpath(
+      sessionId,
+      setupSpaceForm + "//input[@name='name']",
+      space.name,
+    );
+    await selectOptionXpath(
+      sessionId,
+      setupSpaceForm + "//select[@name='spaceType']",
+      space.type,
+    );
+    await typeXpath(
+      sessionId,
+      setupSpaceForm + "//input[@name='areaM2']",
+      space.area,
+    );
+    await typeXpath(
+      sessionId,
+      setupSpaceForm + "//input[@name='sortOrder']",
+      space.order,
+    );
+    await clickXpath(
+      sessionId,
+      setupSpaceForm + "//button[normalize-space()='Create Space']",
+    );
+    await waitForElement(
+      sessionId,
+      'xpath',
+      "//article[contains(@class,'space-card')][.//h3[normalize-space()='" +
+        space.name +
+        "']]",
+    );
+  }
+
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[.//h2[normalize-space()='Spaces']]//span[contains(@class,'section-note') and normalize-space()='5 records']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'space-card')][.//span[normalize-space()='HALL-SETUP']][.//h3[normalize-space()='Entrance Hall']][.//span[contains(normalize-space(),'hall')]][.//span[contains(normalize-space(),'order 1')]]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'space-card')][.//span[normalize-space()='LIV-SETUP']][.//h3[normalize-space()='Living Room']][.//span[contains(normalize-space(),'living room')]][.//span[contains(normalize-space(),'order 2')]]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'space-card')][.//span[normalize-space()='KIT-SETUP']][.//h3[normalize-space()='Kitchen']][.//span[contains(normalize-space(),'order 3')]]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'space-card')][.//span[normalize-space()='BED-SETUP']][.//h3[normalize-space()='Setup Bedroom']][.//span[contains(normalize-space(),'order 4')]]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//article[contains(@class,'space-card')][.//span[normalize-space()='BATH-SETUP']][.//h3[normalize-space()='Bathroom']][.//span[contains(normalize-space(),'order 5')]]",
   );
 
   await clickXpath(sessionId, "//a[normalize-space()='Tenancies']");
@@ -4037,6 +4139,20 @@ try {
     'xpath',
     "//article[contains(@class,'space-card')][.//h3[normalize-space()='Setup Bedroom']]",
   );
+  for (const spaceName of [
+    'Entrance Hall',
+    'Living Room',
+    'Kitchen',
+    'Bathroom',
+  ]) {
+    await waitForElement(
+      sessionId,
+      'xpath',
+      "//article[contains(@class,'space-card')][.//h3[normalize-space()='" +
+        spaceName +
+        "']]",
+    );
+  }
 
   await executeScript(
     sessionId,

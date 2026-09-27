@@ -113,6 +113,13 @@ const inspectionFinalReportDocumentId =
 const setupPropertyId = 'b1000000-0000-4000-8000-000000000001';
 const setupUnitId = 'b1000000-0000-4000-8000-000000000002';
 const setupSpaceId = 'b1000000-0000-4000-8000-000000000003';
+const setupAdditionalSpaceIds = [
+  'b1000000-0000-4000-8000-000000000080',
+  'b1000000-0000-4000-8000-000000000081',
+  'b1000000-0000-4000-8000-000000000082',
+  'b1000000-0000-4000-8000-000000000083',
+  'b1000000-0000-4000-8000-000000000084',
+] as const;
 const setupDestinationUnitId = 'c1000000-0000-4000-8000-000000000001';
 const setupDestinationSpaceId = 'c1000000-0000-4000-8000-000000000002';
 const setupRecoveryPropertyId = 'c2000000-0000-4000-8000-000000000001';
@@ -335,7 +342,8 @@ const orchestrationUnit: UnitResponse = {
 
 let setupProperty: PropertyResponse | null = null;
 let setupUnit: UnitResponse | null = null;
-let setupSpace: SpaceResponse | null = null;
+let setupSpaces: SpaceResponse[] = [];
+let setupSpaceSequence = 0;
 let setupParty: PartyResponse | null = null;
 let setupTenancy: TenancyResponse | null = null;
 let setupSecondaryTenancy: TenancyResponse | null = null;
@@ -2016,7 +2024,7 @@ globalThis.fetch = async (
   }
 
   if (setupUnit && path === '/units/' + setupUnitId + '/spaces') {
-    return json({ items: setupSpace ? [setupSpace] : [] });
+    return json({ items: setupSpaces });
   }
 
   if (setupUnit && path === '/units/' + setupUnitId + '/access-items') {
@@ -2040,7 +2048,8 @@ globalThis.fetch = async (
     if (
       body.propertyId !== setupPropertyId ||
       body.unitId !== setupUnitId ||
-      (body.spaceId != null && body.spaceId !== setupSpaceId)
+      (body.spaceId != null &&
+        !setupSpaces.some((space) => space.id === body.spaceId))
     ) {
       throw new Error('Setup AccessItem was created for the wrong scope.');
     }
@@ -2256,7 +2265,8 @@ globalThis.fetch = async (
     };
     if (
       body.unitId !== setupUnitId ||
-      (body.spaceId != null && body.spaceId !== setupSpaceId)
+      (body.spaceId != null &&
+        !setupSpaces.some((space) => space.id === body.spaceId))
     ) {
       throw new Error('Setup Meter was created for the wrong Unit/Space.');
     }
@@ -2800,7 +2810,8 @@ globalThis.fetch = async (
     if (
       body.propertyId !== setupPropertyId ||
       body.unitId !== setupUnitId ||
-      (body.spaceId != null && body.spaceId !== setupSpaceId)
+      (body.spaceId != null &&
+        !setupSpaces.some((space) => space.id === body.spaceId))
     ) {
       throw new Error('Setup Asset was created for the wrong placement.');
     }
@@ -2984,7 +2995,8 @@ globalThis.fetch = async (
       body.propertyId === setupPropertyId &&
       (
         (body.unitId === setupUnitId &&
-          (body.spaceId == null || body.spaceId === setupSpaceId)) ||
+          (body.spaceId == null ||
+            setupSpaces.some((space) => space.id === body.spaceId))) ||
         (body.unitId === setupDestinationUnitId &&
           (body.spaceId == null || body.spaceId === setupDestinationSpaceId))
       );
@@ -3214,7 +3226,8 @@ globalThis.fetch = async (
     if (
       body.propertyId !== setupPropertyId ||
       body.unitId !== setupUnitId ||
-      (body.spaceId != null && body.spaceId !== setupSpaceId)
+      (body.spaceId != null &&
+        !setupSpaces.some((space) => space.id === body.spaceId))
     ) {
       throw new Error('Setup Maintenance Issue has invalid Unit scope.');
     }
@@ -4720,8 +4733,25 @@ globalThis.fetch = async (
     if (body.unitId !== setupUnitId) {
       throw new Error('Setup Space was created for the wrong Unit.');
     }
-    setupSpace = {
-      id: setupSpaceId,
+    if (
+      setupSpaces.some(
+        (space) => space.code.toLowerCase() === body.code.toLowerCase(),
+      )
+    ) {
+      return apiError(
+        409,
+        'SPACE_CODE_ALREADY_EXISTS',
+        'Space code already exists inside this Unit.',
+      );
+    }
+    const id =
+      setupSpaceSequence === 0
+        ? setupSpaceId
+        : setupAdditionalSpaceIds[setupSpaceSequence - 1];
+    if (!id) throw new Error('Setup Space id pool exhausted.');
+    setupSpaceSequence += 1;
+    const created: SpaceResponse = {
+      id,
       unitId: body.unitId,
       code: body.code,
       name: body.name,
@@ -4730,7 +4760,8 @@ globalThis.fetch = async (
       sortOrder: body.sortOrder ?? 0,
       active: true,
     };
-    return maybeHoldSpaceCreate(json(setupSpace, 201));
+    setupSpaces.push(created);
+    return maybeHoldSpaceCreate(json(created, 201));
   }
 
   if (path === '/parties' && (!init?.method || init.method === 'GET')) {
