@@ -756,13 +756,16 @@ describe('AccessItem HTTP custody lifecycle', () => {
         method: 'POST',
         body: JSON.stringify({
           tenancyId,
+          expectedLastTransactionId: null,
           occurredAt: '2026-09-18T20:00:00.000Z',
         }),
       }),
       adminIdentity,
     );
     expect(issue.status).toBe(201);
-    expect(await issue.json()).toMatchObject({
+    const issueBody = await issue.json();
+    const issueTransactionId = issueBody.data.id as string;
+    expect(issueBody).toMatchObject({
       data: { type: 'issued', sequence: 1, tenancyId },
     });
 
@@ -770,6 +773,7 @@ describe('AccessItem HTTP custody lifecycle', () => {
       new Request(`https://portfolio.test/access-items/${itemId}/loss`, {
         method: 'POST',
         body: JSON.stringify({
+          expectedLastTransactionId: issueTransactionId,
           occurredAt: '2026-09-18T20:00:00.000Z',
           note: 'Reported missing during handover',
         }),
@@ -777,7 +781,9 @@ describe('AccessItem HTTP custody lifecycle', () => {
       adminIdentity,
     );
     expect(lost.status).toBe(201);
-    expect(await lost.json()).toMatchObject({
+    const lostBody = await lost.json();
+    const lostTransactionId = lostBody.data.id as string;
+    expect(lostBody).toMatchObject({
       data: { type: 'lost', sequence: 2, tenancyId },
     });
 
@@ -800,6 +806,7 @@ describe('AccessItem HTTP custody lifecycle', () => {
       new Request(`https://portfolio.test/access-items/${itemId}/return`, {
         method: 'POST',
         body: JSON.stringify({
+          expectedLastTransactionId: lostTransactionId,
           occurredAt: '2026-09-18T20:00:00.000Z',
         }),
       }),
@@ -807,10 +814,42 @@ describe('AccessItem HTTP custody lifecycle', () => {
     );
     expect(inspectorWrite.status).toBe(403);
 
+    const staleReturn = await handler(
+      new Request(`https://portfolio.test/access-items/${itemId}/return`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedLastTransactionId: issueTransactionId,
+          occurredAt: '2026-09-18T20:00:00.000Z',
+          note: 'Stale predecessor must fail',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(staleReturn.status).toBe(409);
+    expect(await staleReturn.json()).toMatchObject({
+      error: { code: 'ACCESS_ITEM_TRANSACTION_CONFLICT' },
+    });
+
+    const afterStaleReturn = await handler(
+      new Request(`https://portfolio.test/access-items/${itemId}`),
+      adminIdentity,
+    );
+    expect(afterStaleReturn.status).toBe(200);
+    expect(await afterStaleReturn.json()).toMatchObject({
+      data: {
+        state: { kind: 'lost', tenancyId },
+        transactions: [
+          { type: 'issued', sequence: 1 },
+          { type: 'lost', sequence: 2 },
+        ],
+      },
+    });
+
     const returned = await handler(
       new Request(`https://portfolio.test/access-items/${itemId}/return`, {
         method: 'POST',
         body: JSON.stringify({
+          expectedLastTransactionId: lostTransactionId,
           occurredAt: '2026-09-18T20:00:00.000Z',
           note: 'Recovered and handed back',
         }),
@@ -818,7 +857,9 @@ describe('AccessItem HTTP custody lifecycle', () => {
       adminIdentity,
     );
     expect(returned.status).toBe(201);
-    expect(await returned.json()).toMatchObject({
+    const returnedBody = await returned.json();
+    const returnedTransactionId = returnedBody.data.id as string;
+    expect(returnedBody).toMatchObject({
       data: { type: 'returned', sequence: 3, tenancyId },
     });
 
@@ -827,6 +868,7 @@ describe('AccessItem HTTP custody lifecycle', () => {
         method: 'POST',
         body: JSON.stringify({
           tenancyId,
+          expectedLastTransactionId: returnedTransactionId,
           occurredAt: '2026-09-18T20:00:00.000Z',
         }),
       }),
