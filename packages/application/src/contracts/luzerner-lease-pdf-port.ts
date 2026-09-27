@@ -8,6 +8,11 @@ export interface LuzernerLeasePdfParty {
   readonly city: string | null;
 }
 
+export interface LuzernerLeasePdfTemplateIdentity {
+  readonly templateCode: string;
+  readonly templateRevision: number;
+}
+
 export interface LuzernerLeasePdfRenderInput {
   readonly agreementCode: string;
   readonly agreementEffectiveFrom: string;
@@ -31,12 +36,15 @@ export interface LuzernerLeasePdfRenderInput {
 export type LuzernerLeasePdfSnapshot = Omit<
   LuzernerLeasePdfRenderInput,
   'form'
-> & {
-  readonly formRevision: number;
-};
+> &
+  LuzernerLeasePdfTemplateIdentity & {
+    readonly formRevision: number;
+  };
 
 export interface LuzernerLeasePdfPort {
+  getCurrentTemplateIdentity(): LuzernerLeasePdfTemplateIdentity;
   renderLuzernerLeaseAgreement(
     input: LuzernerLeasePdfRenderInput,
+    templateIdentity?: LuzernerLeasePdfTemplateIdentity,
   ): Promise<PdfRenderResult>;
 }
