@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { LuzernerLeasePdfRenderInput } from '@portfolio/application';
 import { CanonicalLuzernerPdfRenderer } from '../src/canonical-luzerner-pdf-renderer.js';
@@ -168,6 +170,11 @@ describe('CanonicalLuzernerPdfRenderer', () => {
     const first = await renderer.renderLuzernerLeaseAgreement(input);
     const second = await renderer.renderLuzernerLeaseAgreement(input);
     const source = new TextDecoder().decode(first.content);
+    const visualProofPath = process.env['LUZERNER_VISUAL_PROOF_PATH'];
+    if (visualProofPath) {
+      mkdirSync(dirname(visualProofPath), { recursive: true });
+      writeFileSync(visualProofPath, first.content);
+    }
     expect(first.fileName).toBe('mietvertrag-AGR-LU-2027-001.pdf');
     expect(first.content).toEqual(second.content);
     expect(source.startsWith('%PDF-1.4')).toBe(true);

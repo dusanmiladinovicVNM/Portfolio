@@ -64,7 +64,17 @@ jobs:
         run: pnpm web:deployment:check
 
       - name: Unit tests
+        env:
+          LUZERNER_VISUAL_PROOF_PATH: .artifacts/luzerner/mietvertrag-fixture.pdf
         run: pnpm test
+
+      - name: Upload Luzerner visual proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: luzerner-visual-proof
+          path: .artifacts/luzerner/mietvertrag-fixture.pdf
+          if-no-files-found: error
+          retention-days: 3
 
       - name: First-admin bootstrap concurrency
         env:
