@@ -626,8 +626,8 @@ function pageTwo(input: LuzernerLeasePdfRenderInput): Commands {
   custom.forEach((entry, index) => {
     addTextAt(
       c,
-      '- ' + entry.label,
-      47.9,
+      entry.label,
+      58.5,
       PAGE_HEIGHT - topBaselines[10 + index]!,
       8.5,
     );
@@ -853,11 +853,33 @@ function pageTwoStructure(): Commands {
   return c;
 }
 
-function isLegalHeading(value: string): boolean {
-  return /^(?:\d+\.|\d+\.\d+)(?:\s|$)/u.test(value) ||
-    value.startsWith('Allgemeine Bedingungen') ||
-    value.startsWith('zum Luzerner Mietvertrag') ||
-    value === 'ZENTRALSCHWEIZ';
+const LEGAL_SECTION_HEADINGS = Object.freeze([
+  '2.1 Gebrauch der Mietsache',
+  '2.2 Unterhalt und Reparaturen am Mietobjekt',
+  '2.3 Meldepflichten',
+  '2.4 Bauliche Veränderungen am Mietobjekt',
+  '2.5 Bauliche Veränderungen',
+  '2.6 Untermiete, Abtretung des Mietvertrages,',
+  '2.7 Hausordnung',
+  '2.8 Waschküchenordnung',
+  '2.9 Besichtigungsrecht',
+  '3.1 Ausscheidung Mietzins und Nebenkosten',
+  '3.2 Mietzinsveränderungen',
+  '3.3 Nebenkosten',
+  '3.4 Verrechnung und Sicherheitsleistung',
+  '4.1 Kündigung OR 266 ff.',
+  '4.2 Vorzeitiger Auszug',
+  '4.3 Rückgabe der Mietsache',
+]);
+
+type LegalLineKind = 'major' | 'section' | 'body';
+
+function legalLineKind(value: string): LegalLineKind {
+  if (/^\d+\.\s/u.test(value)) return 'major';
+  if (LEGAL_SECTION_HEADINGS.some((heading) => value.startsWith(heading))) {
+    return 'section';
+  }
+  return 'body';
 }
 
 function wrapLegalLine(value: string, width: number, size: number): string[] {
@@ -880,7 +902,7 @@ function wrapLegalLine(value: string, width: number, size: number): string[] {
 
 interface LegalVisualLine {
   readonly text: string;
-  readonly heading: boolean;
+  readonly kind: LegalLineKind;
 }
 
 function legalVisualLines(source: string, width: number): LegalVisualLine[] {
@@ -888,13 +910,50 @@ function legalVisualLines(source: string, width: number): LegalVisualLine[] {
   for (const raw of source.split('\n')) {
     const text = raw.trim();
     if (!text) continue;
-    const heading = isLegalHeading(text);
-    const size = heading ? 9.1 : 8.55;
+    const kind = legalLineKind(text);
+    const size = kind === 'major' || kind === 'section' ? 10.2 : 9.45;
     for (const wrapped of wrapLegalLine(text, width, size)) {
-      result.push({ text: wrapped, heading });
+      result.push({ text: wrapped, kind });
     }
   }
   return result;
+}
+
+function addParagraphLine(
+  commands: Commands,
+  value: string,
+  x: number,
+  y: number,
+  size: number,
+): void {
+  const match = /^(\d+(?:\.\d+){1,2})\s+(.*)$/u.exec(value);
+  if (!match) {
+    addTextAt(commands, value, x, y, size);
+    return;
+  }
+
+  const prefix = match[1]!;
+  const remainder = match[2]!;
+  commands.push(
+    'BT 0.4314 0.4314 0.4314 rg ' +
+      BOLD_FONT +
+      ' ' +
+      pdfNumber(size) +
+      ' Tf ' +
+      pdfNumber(x) +
+      ' ' +
+      pdfNumber(y) +
+      ' Td <' +
+      winAnsiHex(prefix) +
+      '> Tj ET',
+  );
+  addTextAt(
+    commands,
+    remainder,
+    x + estimatedWidth(prefix + ' ', size),
+    y,
+    size,
+  );
 }
 
 function addLegalColumn(
@@ -905,32 +964,97 @@ function addLegalColumn(
 ): void {
   let y = topY;
   for (const line of lines) {
-    const major = /^\d+\.\s/u.test(line.text);
-    const size = line.heading ? (major ? 10.3 : 8.9) : 8.35;
-    const color = major ? '0 0.4078 0.7059' : line.heading ? '0.32 0.32 0.32' : '0 0 0';
-    commands.push(
-      'BT ' +
-        color +
-        ' rg ' +
-        (line.heading ? BOLD_FONT : FONT) +
-        ' ' +
-        pdfNumber(size) +
-        ' Tf ' +
-        pdfNumber(x) +
-        ' ' +
-        pdfNumber(y) +
-        ' Td <' +
-        winAnsiHex(line.text) +
-        '> Tj ET',
-    );
-    y -= line.heading ? 11.4 : 10.15;
-    if (y < 24) {
+    if (line.kind === 'major') {
+      commands.push(
+        'BT 0 0.4078 0.7059 rg ' +
+          BOLD_FONT +
+          ' 12 Tf ' +
+          pdfNumber(x) +
+          ' ' +
+          pdfNumber(y) +
+          ' Td <' +
+          winAnsiHex(line.text) +
+          '> Tj ET',
+      );
+      y -= 16.8;
+    } else if (line.kind === 'section') {
+      commands.push(
+        'BT 0.4314 0.4314 0.4314 rg ' +
+          BOLD_FONT +
+          ' 11.4 Tf ' +
+          pdfNumber(x) +
+          ' ' +
+          pdfNumber(y) +
+          ' Td <' +
+          winAnsiHex(line.text) +
+          '> Tj ET',
+      );
+      y -= 15.2;
+    } else {
+      addParagraphLine(commands, line.text, x, y, 9.45);
+      y -= 11.15;
+    }
+
+    if (y < 23) {
       throw new ApplicationError(
         'LUZERNER_PDF_TEXT_OVERFLOW',
         'Fixed Luzerner legal wording exceeds its native page column.',
       );
     }
   }
+}
+
+interface LegalPageLayout {
+  readonly marker: string;
+  readonly leftX: number;
+  readonly rightX: number;
+  readonly leftTop: number;
+  readonly rightTop: number;
+}
+
+const LEGAL_PAGE_LAYOUTS: Readonly<Record<number, LegalPageLayout>> = Object.freeze({
+  4: {
+    marker: '2.4.5 Die Mieterschaft',
+    leftX: 35.43,
+    rightX: 304.72,
+    leftTop: 791.53,
+    rightTop: 791.53,
+  },
+  5: {
+    marker: 'benützen. Nach Beendigung der Wäsche hat sie Räume und',
+    leftX: 35.43,
+    rightX: 304.72,
+    leftTop: 789.37,
+    rightTop: 789.37,
+  },
+  6: {
+    marker: 'hinterlegen. Gleiches gilt, wenn die Mieterschaft eine Herab',
+    leftX: 35.43,
+    rightX: 304.72,
+    leftTop: 793.42,
+    rightTop: 793.42,
+  },
+  7: {
+    marker: 'von ihren Verpflichtungen nur befreit, wenn diese eine',
+    leftX: 35.43,
+    rightX: 304.72,
+    leftTop: 791.53,
+    rightTop: 791.53,
+  },
+});
+
+function splitLegalSource(
+  source: string,
+  marker: string,
+): readonly [string, string] {
+  const splitAt = source.indexOf(marker);
+  if (splitAt < 0) {
+    throw new ApplicationError(
+      'LUZERNER_PDF_TEMPLATE_INVALID',
+      'A reviewed Luzerner page-column boundary is missing.',
+    );
+  }
+  return [source.slice(0, splitAt).trim(), source.slice(splitAt).trim()];
 }
 
 function legalBodyPage(pageNumber: number): Commands {
@@ -941,12 +1065,84 @@ function legalBodyPage(pageNumber: number): Commands {
       'Missing fixed wording for Luzerner page ' + pageNumber + '.',
     );
   }
+
   const c: Commands = [];
-  const width = 252;
-  const lines = legalVisualLines(source, width);
-  const split = Math.ceil(lines.length / 2);
-  addLegalColumn(c, lines.slice(0, split), 35.5, 792);
-  addLegalColumn(c, lines.slice(split), 304.5, 792);
+  if (pageNumber === 3) {
+    const title = 'Allgemeine Bedingungen';
+    const subtitle = 'zum Luzerner Mietvertrag (Ausgabe 2020 ©)';
+    const bodyStart = '1. Übergabe der Mietsache und Mängelrüge';
+    const rightStart = '2. Gebrauch und Unterhalt der Mietsache';
+    const bodyAt = source.indexOf(bodyStart);
+    if (bodyAt < 0) {
+      throw new ApplicationError(
+        'LUZERNER_PDF_TEMPLATE_INVALID',
+        'Reviewed Luzerner page-3 heading boundary is missing.',
+      );
+    }
+    const body = source
+      .slice(bodyAt)
+      .replace(/\nZENTRALSCHWEIZ\s*$/u, '');
+    const [left, right] = splitLegalSource(body, rightStart);
+
+    addFixedTextLine(c, {
+      text: title + ' ',
+      x: 42.52,
+      y: 758.52,
+      size: 27,
+      bold: true,
+      color: [0, 0.4078, 0.7059],
+    });
+    addFixedTextLine(c, {
+      text: 'zum Luzerner Mietvertrag ',
+      x: 42.52,
+      y: 731.44,
+      size: 27,
+      bold: false,
+      color: [0.3059, 0.5608, 0.8],
+    });
+    addFixedTextLine(c, {
+      text: '(Ausgabe 2020 ©)',
+      x: 467.86,
+      y: 732.01,
+      size: 12,
+      bold: true,
+      color: [0.4314, 0.4314, 0.4314],
+    });
+    addFixedTextLine(c, {
+      text: 'ZENTRALSCHWEIZ',
+      x: 116.22,
+      y: 793.52,
+      size: 8.8,
+      bold: false,
+      color: [0, 0.4706, 0.6706],
+    });
+
+    addLegalColumn(c, legalVisualLines(left, 252), 42.52, 689.74);
+    addLegalColumn(c, legalVisualLines(right, 252), 311.81, 689.4);
+    return c;
+  }
+
+  const layout = LEGAL_PAGE_LAYOUTS[pageNumber];
+  if (!layout) {
+    throw new ApplicationError(
+      'LUZERNER_PDF_TEMPLATE_INVALID',
+      'Missing reviewed Luzerner layout for page ' + pageNumber + '.',
+    );
+  }
+
+  const [left, right] = splitLegalSource(source, layout.marker);
+  addLegalColumn(
+    c,
+    legalVisualLines(left, 252),
+    layout.leftX,
+    layout.leftTop,
+  );
+  addLegalColumn(
+    c,
+    legalVisualLines(right, 252),
+    layout.rightX,
+    layout.rightTop,
+  );
   return c;
 }
 
@@ -958,43 +1154,95 @@ function pageEightFixed(): Commands {
       'Missing fixed wording for Luzerner page 8.',
     );
   }
-  const marker =
+
+  const confirmation =
     'Die Vermieterschaft und die Mieterschaft bestätigen mit';
-  const splitAt = source.indexOf(marker);
-  const left = splitAt < 0 ? source : source.slice(0, splitAt);
-  const right = splitAt < 0 ? '' : source.slice(splitAt);
-  const c: Commands = [];
-
-  const leftLines = legalVisualLines(left, 250);
-  addLegalColumn(c, leftLines, 35.5, 792);
-
-  const rightLines = legalVisualLines(right, 252);
-  let y = 360;
-  for (const line of rightLines) {
-    const label = /^(?:Ort, Datum:|Mieterschaft I:|Mieterschaft II:|Vermieterschaft:)/u.test(
-      line.text,
+  const splitAt = source.indexOf(confirmation);
+  if (splitAt < 0) {
+    throw new ApplicationError(
+      'LUZERNER_PDF_TEMPLATE_INVALID',
+      'Reviewed Luzerner page-8 signature boundary is missing.',
     );
-    const footer = line.text.startsWith('Eine Dienstleistung');
-    const size = footer ? 7.2 : label ? 9.2 : 8.7;
-    c.push(
-      'BT 0 0 0 rg ' +
-        (label ? BOLD_FONT : FONT) +
-        ' ' +
-        pdfNumber(size) +
-        ' Tf 304.7 ' +
-        pdfNumber(y) +
-        ' Td <' +
-        winAnsiHex(line.text) +
-        '> Tj ET',
-    );
-    y -= label ? 26 : 10.5;
   }
 
-  [286, 214, 142, 70].forEach((lineY) =>
-    addLine(c, 304.7, lineY, 559.8, lineY),
-  );
+  const left = source.slice(0, splitAt).trim();
+  const c: Commands = [];
+  addLegalColumn(c, legalVisualLines(left, 250), 35.43, 791.53);
+
   fillRect(c, box(304.7, 380, 559.8, 806), '0.985 0.988 0.998');
   strokeRect(c, box(304.7, 380, 559.8, 806), 0.35, '0.78 0.82 0.9');
+
+  const rightLines: readonly Luzerner2020FixedTextLine[] = [
+    {
+      text: 'Die Vermieterschaft und die Mieterschaft bestätigen mit ',
+      x: 304.72,
+      y: 359.98,
+      size: 10,
+      bold: false,
+      color: [0, 0, 0],
+    },
+    {
+      text: 'Unterschrift, dass sie die allgemeinen Bestimmungen zum ',
+      x: 304.72,
+      y: 347.98,
+      size: 10,
+      bold: false,
+      color: [0, 0, 0],
+    },
+    {
+      text: 'Mietvertrag gelesen und verstanden haben.',
+      x: 304.72,
+      y: 335.98,
+      size: 10,
+      bold: false,
+      color: [0, 0, 0],
+    },
+    {
+      text: 'Ort, Datum:',
+      x: 304.72,
+      y: 302.63,
+      size: 10,
+      bold: false,
+      color: [0, 0, 0],
+    },
+    {
+      text: 'Mieterschaft I:',
+      x: 304.72,
+      y: 235.63,
+      size: 10,
+      bold: false,
+      color: [0, 0, 0],
+    },
+    {
+      text: 'Mieterschaft II:',
+      x: 304.72,
+      y: 163.96,
+      size: 10,
+      bold: false,
+      color: [0, 0, 0],
+    },
+    {
+      text: 'Vermieterschaft:',
+      x: 304.72,
+      y: 91.8,
+      size: 10,
+      bold: false,
+      color: [0, 0, 0],
+    },
+    {
+      text: 'Eine Dienstleistung des HEV Kanton Luzern',
+      x: 35.43,
+      y: 39.13,
+      size: 10,
+      bold: false,
+      color: [0, 0, 0],
+    },
+  ];
+  rightLines.forEach((line) => addFixedTextLine(c, line));
+
+  [286, 214, 142, 70].forEach((lineY) =>
+    addLine(c, 304.72, lineY, 559.8, lineY),
+  );
   return c;
 }
 
