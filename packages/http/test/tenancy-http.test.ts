@@ -875,7 +875,9 @@ describe('AccessItem HTTP custody lifecycle', () => {
       adminIdentity,
     );
     expect(reissued.status).toBe(201);
-    expect(await reissued.json()).toMatchObject({
+    const reissuedBody = await reissued.json();
+    const reissuedTransactionId = reissuedBody.data.id as string;
+    expect(reissuedBody).toMatchObject({
       data: { type: 'issued', sequence: 4, tenancyId },
     });
 
@@ -923,6 +925,7 @@ describe('AccessItem HTTP custody lifecycle', () => {
       new Request(`https://portfolio.test/access-items/${itemId}/return`, {
         method: 'POST',
         body: JSON.stringify({
+          expectedLastTransactionId: reissuedTransactionId,
           occurredAt: '2026-09-18T20:00:00.000Z',
           note: 'Returned after administrative retirement',
         }),
@@ -930,7 +933,10 @@ describe('AccessItem HTTP custody lifecycle', () => {
       adminIdentity,
     );
     expect(returnedAfterRetirement.status).toBe(201);
-    expect(await returnedAfterRetirement.json()).toMatchObject({
+    const returnedAfterRetirementBody = await returnedAfterRetirement.json();
+    const returnedAfterRetirementTransactionId =
+      returnedAfterRetirementBody.data.id as string;
+    expect(returnedAfterRetirementBody).toMatchObject({
       data: { type: 'returned', sequence: 5, tenancyId },
     });
 
@@ -939,6 +945,7 @@ describe('AccessItem HTTP custody lifecycle', () => {
         method: 'POST',
         body: JSON.stringify({
           tenancyId,
+          expectedLastTransactionId: returnedAfterRetirementTransactionId,
           occurredAt: '2026-09-18T20:00:00.000Z',
         }),
       }),
