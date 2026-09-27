@@ -25,6 +25,7 @@ import {
   type LuzernerLeasePdfPort,
   type PartyRepository,
   type PortfolioRepository,
+  type Sha256Port,
   type TenancyRepository,
 } from '@portfolio/application';
 import {
@@ -63,6 +64,7 @@ export interface LeaseHttpDependencies {
   readonly portfolioRepository: PortfolioRepository;
   readonly documentRepository: DocumentRepository;
   readonly fileStorage: FileStorageWritePort;
+  readonly sha256: Sha256Port;
   readonly clock: ClockPort;
   readonly luzernerLeasePdfPort?: LuzernerLeasePdfPort;
   readonly idGenerator: IdGenerator;
@@ -249,6 +251,7 @@ export async function handleLeaseHttp(
         documentRepository: deps.documentRepository,
         fileStorage: deps.fileStorage,
         luzernerLeasePdfPort: deps.luzernerLeasePdfPort,
+        sha256: deps.sha256,
         idGenerator: deps.idGenerator,
         clock: deps.clock,
       },

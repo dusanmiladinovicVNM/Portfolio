@@ -601,6 +601,9 @@ function buildHandler(options?: {
     async insertSpace(_space) {},
   };
 
+  const documentRepository = new InMemoryDocumentRepository();
+  const fileStorage = new MemoryFileStorage();
+
   const handler = createPortfolioHttpHandler({
     accessItemRepository: new InMemoryAccessItemRepository(),
     meterRepository: new InMemoryMeterRepository(),
@@ -619,10 +622,10 @@ function buildHandler(options?: {
     leaseRepository,
     luzernerLeasePdfPort:
       options?.luzernerLeasePdfPort ?? defaultLuzernerLeasePdfPort,
-    documentRepository: new InMemoryDocumentRepository(),
+    documentRepository,
     inspectionRepository: new InMemoryInspectionRepository(),
     staffDirectoryRepository: new InMemoryStaffDirectoryRepository(),
-    fileStorage: new MemoryFileStorage(),
+    fileStorage,
     pdfPort: unusedPdfPort,
     sha256: testSha256,
     clock: new FixedClock(),
@@ -643,8 +646,59 @@ function buildHandler(options?: {
     ]),
   });
 
-  return { handler, leaseRepository, partyRepository };
+  return {
+    handler,
+    leaseRepository,
+    partyRepository,
+    documentRepository,
+    fileStorage,
+  };
 }
+
+describe('System-owned generated contract boundaries', () => {
+  it('rejects generic generated_contract links at the transport boundary', async () => {
+    const { handler } = buildHandler();
+
+    const response = await handler(
+      new Request(
+        'https://portfolio.test/documents/20000000-0000-4000-8000-000000000099/links',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            documentVersionId: '20000000-0000-4000-8000-000000000098',
+            relation: 'generated_contract',
+            targetType: 'lease_agreement',
+            targetId: '20000000-0000-4000-8000-000000000097',
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+
+    expect(response.status).toBe(400);
+  });
+
+  it('rejects generic creation inside the reserved LUZERNER-FINAL namespace', async () => {
+    const { handler } = buildHandler();
+
+    const response = await handler(
+      new Request('https://portfolio.test/documents', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'luzerner-final-AGR-SPOOF',
+          title: 'Spoofed canonical contract',
+          category: 'legal',
+        }),
+      }),
+      adminIdentity,
+    );
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'DOCUMENT_CODE_RESERVED' },
+    });
+  });
+});
 
 describe('Lease HTTP lifecycle', () => {
   it('renders a canonical Luzerner PDF preview from saved form and dossier identity', async () => {
@@ -951,6 +1005,147 @@ describe('Lease HTTP lifecycle', () => {
           },
         ],
       },
+    });
+  });
+
+  it('rejects a pre-seeded reserved DocumentVersion whose bytes do not match the canonical render', async () => {
+    const renderedBytes = new TextEncoder().encode('%PDF-canonical-expected');
+    const luzernerLeasePdfPort: LuzernerLeasePdfPort = {
+      getCurrentTemplateIdentity() {
+        return { templateCode: 'lu-2020', templateRevision: 1 };
+      },
+      async renderLuzernerLeaseAgreement() {
+        return {
+          fileName: 'mietvertrag-final.pdf',
+          content: renderedBytes,
+        };
+      },
+    };
+
+    const {
+      handler,
+      documentRepository,
+      fileStorage,
+    } = buildHandler({ luzernerLeasePdfPort });
+
+    const created = await handler(
+      new Request(`https://portfolio.test/tenancies/${TENANCY_ID}/agreements`, {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'AGR-SPOOF-HASH',
+          agreementType: 'initial',
+          effectiveFrom: '2026-10-01',
+          parties: [
+            { partyId: LANDLORD_ID, role: 'landlord' },
+            { partyId: TENANT_ID, role: 'tenant' },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+    const agreement = (await created.json()).data as {
+      id: string;
+      version: number;
+    };
+
+    const base = emptyLuzernerLeaseFormContent();
+    await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedRevision: null,
+            content: {
+              ...base,
+              useType: 'apartment',
+              moveInDate: '2026-10-01',
+              durationKind: 'indefinite',
+              terminationSchedule: 'monthly_except_december',
+              noticePeriodKind: 'residential_3_months',
+              netRent: '1500.00',
+              paymentFrequency: 'monthly',
+              rentAdjustmentMode: 'termination_date',
+              rentAdjustmentAdvanceMonths: 3,
+              ancillaryClosingDate: 'december_31',
+              placeOfSigning: 'Luzern',
+              signingDate: '2026-09-25',
+            },
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+
+    const signed = await handler(
+      new Request(`https://portfolio.test/agreements/${agreement.id}/sign`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: agreement.version,
+          signedAt: '2026-09-25',
+          terms: {
+            currency: 'CHF',
+            baseRent: '1500.00',
+            billingFrequency: 'monthly',
+          },
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(signed.status).toBe(200);
+
+    const documentId = '20000000-0000-4000-8000-000000000090' as never;
+    const versionId = '20000000-0000-4000-8000-000000000091' as never;
+    const spoofBytes = new TextEncoder().encode('%PDF-spoofed');
+    const spoofSha = await testSha256.digest(spoofBytes);
+
+    documentRepository.documents.set(documentId, {
+      id: documentId,
+      code: 'LUZERNER-FINAL-AGR-SPOOF-HASH',
+      title: 'Spoofed final contract',
+      category: 'legal',
+      status: 'active',
+      latestVersionNumber: 1,
+      revision: 2,
+    });
+    documentRepository.versions.set(versionId, {
+      id: versionId,
+      documentId,
+      versionNumber: 1,
+      fileName: 'spoofed.pdf',
+      mimeType: 'application/pdf',
+      byteSize: spoofBytes.byteLength,
+      sha256: spoofSha,
+      status: 'final',
+      finalizedAt: '2026-09-27T12:00:00.000Z',
+    });
+    const objectKey = `document-version:${versionId}`;
+    documentRepository.storage.set(versionId, {
+      provider: 'memory',
+      objectId: objectKey,
+      objectKey,
+    });
+    fileStorage.objects.set(objectKey, {
+      provider: 'memory',
+      objectId: objectKey,
+      objectKey,
+      byteSize: spoofBytes.byteLength,
+      sha256: spoofSha,
+      disposition: 'created',
+    });
+    fileStorage.contents.set(objectKey, spoofBytes);
+
+    const response = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form/final-document`,
+        { method: 'POST', body: '{}' },
+      ),
+      adminIdentity,
+    );
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'LUZERNER_FINAL_DOCUMENT_HASH_MISMATCH' },
     });
   });
 

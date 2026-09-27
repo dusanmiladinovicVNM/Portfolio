@@ -15,9 +15,17 @@ export const createDocumentRequestSchema = z.object({
   category: z.enum(DOCUMENT_CATEGORIES),
 });
 
+const USER_DOCUMENT_LINK_RELATIONS = [
+  'primary',
+  'signed_original',
+  'supporting',
+  'attachment',
+  'other',
+] as const;
+
 export const documentLinkRequestSchema = z.object({
   documentVersionId: entityIdSchema.nullable().optional(),
-  relation: z.enum(DOCUMENT_LINK_RELATIONS),
+  relation: z.enum(USER_DOCUMENT_LINK_RELATIONS),
   targetType: z.enum(DOCUMENT_TARGET_TYPES),
   targetId: entityIdSchema,
 });

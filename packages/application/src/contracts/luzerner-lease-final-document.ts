@@ -2,18 +2,20 @@ import {
   DomainError,
   asDocumentLinkId,
   createDocumentLink,
+  type Document,
   type DocumentVersion,
   type LeaseAgreementId,
 } from '@portfolio/domain';
 import { requireCapability, type Actor } from '../security/access.js';
 import type { ClockPort } from '../shared/clock.js';
 import type { IdGenerator } from '../shared/id-generator.js';
+import type { Sha256Port } from '../shared/sha256-port.js';
+import { assertDocumentVersionStorageIntegrity } from '../documents/document-commands.js';
 import {
-  assertDocumentVersionStorageIntegrity,
-  createDocumentCommand,
-  finalizeDocumentVersionCommand,
-  uploadDocumentVersionCommand,
-} from '../documents/document-commands.js';
+  createDocumentRecord,
+  finalizeDocumentVersionRecord,
+  uploadDocumentVersionRecord,
+} from '../documents/document-write-service.js';
 import type {
   DocumentRepository,
   TargetDocumentReference,
@@ -34,6 +36,7 @@ export interface GenerateLuzernerLeaseFinalDocumentDependencies {
   readonly documentRepository: DocumentRepository;
   readonly fileStorage: FileStorageWritePort;
   readonly luzernerLeasePdfPort: LuzernerLeasePdfPort;
+  readonly sha256: Sha256Port;
   readonly idGenerator: IdGenerator;
   readonly clock: ClockPort;
 }
@@ -53,12 +56,31 @@ function generatedContract(
   return matches[0] ?? null;
 }
 
+function assertExpectedCanonicalVersion(
+  version: DocumentVersion,
+  expectedSha256: string,
+): void {
+  if (version.mimeType !== 'application/pdf') {
+    throw new DomainError(
+      'LUZERNER_FINAL_DOCUMENT_INVALID',
+      'Canonical final contract must be an application/pdf DocumentVersion.',
+    );
+  }
+  if (version.sha256 !== expectedSha256) {
+    throw new DomainError(
+      'LUZERNER_FINAL_DOCUMENT_HASH_MISMATCH',
+      'Existing final-contract bytes do not match the deterministic canonical render.',
+    );
+  }
+}
+
 async function resolveExistingGeneratedContract(
   deps: Pick<
     GenerateLuzernerLeaseFinalDocumentDependencies,
     'documentRepository' | 'fileStorage'
   >,
   agreementId: LeaseAgreementId,
+  expectedSha256: string,
 ): Promise<DocumentVersion | null> {
   const reference = generatedContract(
     await deps.documentRepository.listTargetDocuments({
@@ -69,19 +91,30 @@ async function resolveExistingGeneratedContract(
   if (!reference) return null;
 
   const version = reference.linkedVersion;
-  if (
-    version === null ||
-    version.status !== 'final' ||
-    version.mimeType !== 'application/pdf'
-  ) {
+  if (version === null || version.status !== 'final') {
     throw new DomainError(
       'LUZERNER_FINAL_DOCUMENT_INVALID',
       'Generated-contract link must reference one final PDF DocumentVersion.',
     );
   }
 
+  assertExpectedCanonicalVersion(version, expectedSha256);
   await assertDocumentVersionStorageIntegrity(deps, version);
   return version;
+}
+
+async function createGeneratedContractDocument(
+  deps: Pick<
+    GenerateLuzernerLeaseFinalDocumentDependencies,
+    'documentRepository' | 'idGenerator'
+  >,
+  agreementCode: string,
+): Promise<Document> {
+  return createDocumentRecord(deps, {
+    code: `LUZERNER-FINAL-${agreementCode}`,
+    title: `${agreementCode} Luzerner Mietvertrag`,
+    category: 'legal',
+  });
 }
 
 export async function generateLuzernerLeaseFinalDocumentCommand(
@@ -106,7 +139,26 @@ export async function generateLuzernerLeaseFinalDocumentCommand(
     );
   }
 
-  const existing = await resolveExistingGeneratedContract(deps, agreement.id);
+  const rendered = await renderLuzernerLeasePdfCommand(
+    deps,
+    actor,
+    agreement.id,
+  );
+  if (rendered.content.byteLength === 0) {
+    throw new DomainError(
+      'LUZERNER_FINAL_DOCUMENT_EMPTY',
+      'Luzerner PDF renderer returned empty content.',
+    );
+  }
+  const expectedSha256 = (
+    await deps.sha256.digest(rendered.content)
+  ).toLowerCase();
+
+  const existing = await resolveExistingGeneratedContract(
+    deps,
+    agreement.id,
+    expectedSha256,
+  );
   if (existing) return existing;
 
   const documentCode = `LUZERNER-FINAL-${agreement.code}`;
@@ -119,18 +171,7 @@ export async function generateLuzernerLeaseFinalDocumentCommand(
   let document = await findDocument();
   if (!document) {
     try {
-      document = await createDocumentCommand(
-        {
-          documentRepository: deps.documentRepository,
-          idGenerator: deps.idGenerator,
-        },
-        actor,
-        {
-          code: documentCode,
-          title: `${agreement.code} Luzerner Mietvertrag`,
-          category: 'legal',
-        },
-      );
+      document = await createGeneratedContractDocument(deps, agreement.code);
     } catch (error) {
       if (
         !(error instanceof DomainError) ||
@@ -148,10 +189,14 @@ export async function generateLuzernerLeaseFinalDocumentCommand(
     }
   }
 
-  if (document.category !== 'legal' || document.status !== 'active') {
+  if (
+    document.code.toLowerCase() !== documentCode.toLowerCase() ||
+    document.category !== 'legal' ||
+    document.status !== 'active'
+  ) {
     throw new DomainError(
       'LUZERNER_FINAL_DOCUMENT_INVALID',
-      'Canonical final contract Document has an invalid category or status.',
+      'Canonical final contract Document has an invalid identity, category or status.',
     );
   }
 
@@ -165,27 +210,34 @@ export async function generateLuzernerLeaseFinalDocumentCommand(
         'Canonical final contract Document contains more than one version.',
       );
     }
-    return versions[0] ?? null;
+    const version = versions[0] ?? null;
+    if (version) {
+      assertExpectedCanonicalVersion(version, expectedSha256);
+    }
+    return version;
   };
 
   const ensureFinal = async (
     candidate: DocumentVersion,
   ): Promise<DocumentVersion> => {
+    assertExpectedCanonicalVersion(candidate, expectedSha256);
+
     if (candidate.status === 'final') {
       await assertDocumentVersionStorageIntegrity(deps, candidate);
       return candidate;
     }
 
     try {
-      return await finalizeDocumentVersionCommand(
+      const finalized = await finalizeDocumentVersionRecord(
         {
           documentRepository: deps.documentRepository,
           fileStorage: deps.fileStorage,
           clock: deps.clock,
         },
-        actor,
         candidate.id,
       );
+      assertExpectedCanonicalVersion(finalized, expectedSha256);
+      return finalized;
     } catch (error) {
       if (
         !(error instanceof DomainError) ||
@@ -199,6 +251,7 @@ export async function generateLuzernerLeaseFinalDocumentCommand(
 
       const winner = await deps.documentRepository.getVersionById(candidate.id);
       if (!winner || winner.status !== 'final') throw error;
+      assertExpectedCanonicalVersion(winner, expectedSha256);
       await assertDocumentVersionStorageIntegrity(deps, winner);
       return winner;
     }
@@ -207,26 +260,13 @@ export async function generateLuzernerLeaseFinalDocumentCommand(
   let canonicalVersion = await resolveCanonicalVersion();
   if (!canonicalVersion) {
     const expectedDocumentRevision = document.revision;
-    const rendered = await renderLuzernerLeasePdfCommand(
-      deps,
-      actor,
-      agreement.id,
-    );
-    if (rendered.content.byteLength === 0) {
-      throw new DomainError(
-        'LUZERNER_FINAL_DOCUMENT_EMPTY',
-        'Luzerner PDF renderer returned empty content.',
-      );
-    }
-
     try {
-      canonicalVersion = await uploadDocumentVersionCommand(
+      canonicalVersion = await uploadDocumentVersionRecord(
         {
           documentRepository: deps.documentRepository,
           fileStorage: deps.fileStorage,
           idGenerator: deps.idGenerator,
         },
-        actor,
         {
           documentId: document.id,
           fileName: rendered.fileName,
@@ -272,7 +312,11 @@ export async function generateLuzernerLeaseFinalDocumentCommand(
       throw error;
     }
 
-    const winner = await resolveExistingGeneratedContract(deps, agreement.id);
+    const winner = await resolveExistingGeneratedContract(
+      deps,
+      agreement.id,
+      expectedSha256,
+    );
     if (!winner) {
       throw new DomainError(
         'LUZERNER_FINAL_DOCUMENT_RECONCILIATION_REQUIRED',
