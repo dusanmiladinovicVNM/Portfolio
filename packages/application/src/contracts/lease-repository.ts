@@ -8,6 +8,7 @@ import type {
   TenancyId,
   TenancyTermVersion,
 } from '@portfolio/domain';
+import type { LuzernerLeasePdfSnapshot } from './luzerner-lease-pdf-port.js';
 
 export interface AgreementSupersession {
   readonly agreement: LeaseAgreement;
@@ -26,6 +27,7 @@ export interface LeaseRepository {
     terms: TenancyTermVersion,
     predecessorToSupersede?: AgreementSupersession,
     expectedLuzernerFormRevision?: number | null,
+    luzernerPdfSnapshot?: LuzernerLeasePdfSnapshot | null,
   ): Promise<void>;
   cancelAgreement(
     agreement: LeaseAgreement,
@@ -35,6 +37,9 @@ export interface LeaseRepository {
   getLuzernerLeaseForm(
     agreementId: LeaseAgreementId,
   ): Promise<LuzernerLeaseFormDraft | null>;
+  getLuzernerLeasePdfSnapshot(
+    agreementId: LeaseAgreementId,
+  ): Promise<LuzernerLeasePdfSnapshot | null>;
   insertLuzernerLeaseForm(form: LuzernerLeaseFormDraft): Promise<void>;
   updateLuzernerLeaseForm(
     form: LuzernerLeaseFormDraft,
