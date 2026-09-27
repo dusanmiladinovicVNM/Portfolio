@@ -911,7 +911,7 @@ function legalVisualLines(source: string, width: number): LegalVisualLine[] {
     const text = raw.trim();
     if (!text) continue;
     const kind = legalLineKind(text);
-    const size = kind === 'major' || kind === 'section' ? 10.2 : 9.45;
+    const size = kind === 'major' || kind === 'section' ? 10 : 8.9;
     for (const wrapped of wrapLegalLine(text, width, size)) {
       result.push({ text: wrapped, kind });
     }
@@ -962,13 +962,30 @@ function addLegalColumn(
   x: number,
   topY: number,
 ): void {
+  const baseAdvance = (line: LegalVisualLine): number =>
+    line.kind === 'major' ? 16.2 : line.kind === 'section' ? 14.2 : 10.25;
+  const requiredHeight = lines.reduce(
+    (total, line) => total + baseAdvance(line),
+    0,
+  );
+  const availableHeight = topY - 25;
+  const scale = Math.min(1, availableHeight / Math.max(requiredHeight, 1));
+  if (scale < 0.78) {
+    throw new ApplicationError(
+      'LUZERNER_PDF_TEXT_OVERFLOW',
+      'Fixed Luzerner legal wording cannot fit its reviewed page column.',
+    );
+  }
+
   let y = topY;
   for (const line of lines) {
     if (line.kind === 'major') {
       commands.push(
         'BT 0 0.4078 0.7059 rg ' +
           BOLD_FONT +
-          ' 12 Tf ' +
+          ' ' +
+          pdfNumber(11.8 * scale) +
+          ' Tf ' +
           pdfNumber(x) +
           ' ' +
           pdfNumber(y) +
@@ -976,12 +993,13 @@ function addLegalColumn(
           winAnsiHex(line.text) +
           '> Tj ET',
       );
-      y -= 16.8;
     } else if (line.kind === 'section') {
       commands.push(
         'BT 0.4314 0.4314 0.4314 rg ' +
           BOLD_FONT +
-          ' 11.4 Tf ' +
+          ' ' +
+          pdfNumber(10.8 * scale) +
+          ' Tf ' +
           pdfNumber(x) +
           ' ' +
           pdfNumber(y) +
@@ -989,18 +1007,10 @@ function addLegalColumn(
           winAnsiHex(line.text) +
           '> Tj ET',
       );
-      y -= 15.2;
     } else {
-      addParagraphLine(commands, line.text, x, y, 9.45);
-      y -= 11.15;
+      addParagraphLine(commands, line.text, x, y, 9.2 * scale);
     }
-
-    if (y < 23) {
-      throw new ApplicationError(
-        'LUZERNER_PDF_TEXT_OVERFLOW',
-        'Fixed Luzerner legal wording exceeds its native page column.',
-      );
-    }
+    y -= baseAdvance(line) * scale;
   }
 }
 
