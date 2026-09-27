@@ -1,6 +1,7 @@
 import {
   DomainError,
   inspectLuzernerLeaseFormReadiness,
+  type LeaseAgreement,
   type LeaseAgreementId,
   type Party,
   type PartyAddress,
@@ -13,13 +14,19 @@ import type { LeaseRepository } from './lease-repository.js';
 import type {
   LuzernerLeasePdfParty,
   LuzernerLeasePdfPort,
+  LuzernerLeasePdfRenderInput,
+  LuzernerLeasePdfSnapshot,
 } from './luzerner-lease-pdf-port.js';
 
-export interface RenderLuzernerLeasePdfDependencies {
-  readonly leaseRepository: LeaseRepository;
+export interface LuzernerLeasePdfContextDependencies {
   readonly tenancyRepository: TenancyRepository;
   readonly portfolioRepository: PortfolioRepository;
   readonly partyRepository: PartyRepository;
+}
+
+export interface RenderLuzernerLeasePdfDependencies
+  extends LuzernerLeasePdfContextDependencies {
+  readonly leaseRepository: LeaseRepository;
   readonly luzernerLeasePdfPort: LuzernerLeasePdfPort;
 }
 
@@ -96,6 +103,113 @@ function requireParties(
   return byId;
 }
 
+export async function buildLuzernerLeasePdfSnapshot(
+  deps: LuzernerLeasePdfContextDependencies,
+  agreement: LeaseAgreement,
+  formRevision: number,
+): Promise<LuzernerLeasePdfSnapshot> {
+  const tenancy = await deps.tenancyRepository.getById(agreement.tenancyId);
+  if (!tenancy) {
+    throw new DomainError('TENANCY_NOT_FOUND', 'Tenancy not found.');
+  }
+  const unit = await deps.portfolioRepository.getUnitById(tenancy.unitId);
+  if (!unit) {
+    throw new DomainError('UNIT_NOT_FOUND', 'Unit not found.');
+  }
+  const property = await deps.portfolioRepository.getPropertyById(
+    unit.propertyId,
+  );
+  if (!property) {
+    throw new DomainError('PROPERTY_NOT_FOUND', 'Property not found.');
+  }
+
+  const partyIds = [
+    ...new Set(agreement.parties.map((entry) => String(entry.partyId))),
+  ];
+  const parties = await deps.partyRepository.getByIds(
+    agreement.parties.map((entry) => entry.partyId),
+  );
+  const partyById = requireParties(parties, partyIds);
+
+  const primaryTenantId =
+    tenancy.parties.find(
+      (entry) =>
+        entry.isPrimary &&
+        (entry.role === 'tenant' || entry.role === 'co_tenant'),
+    )?.partyId ?? null;
+
+  const landlords = agreement.parties
+    .filter((entry) => entry.role === 'landlord')
+    .sort((left, right) =>
+      String(left.partyId).localeCompare(String(right.partyId)),
+    )
+    .map((entry) =>
+      presentationParty(
+        partyById.get(String(entry.partyId))!,
+        LANDLORD_ADDRESS_ORDER,
+      ),
+    );
+
+  const landlordRepresentatives = agreement.parties
+    .filter((entry) => entry.role === 'authorized_signatory')
+    .sort((left, right) =>
+      String(left.partyId).localeCompare(String(right.partyId)),
+    )
+    .map((entry) =>
+      presentationParty(
+        partyById.get(String(entry.partyId))!,
+        LANDLORD_ADDRESS_ORDER,
+      ),
+    );
+
+  const tenants = agreement.parties
+    .filter((entry) => entry.role === 'tenant' || entry.role === 'co_tenant')
+    .sort((left, right) => {
+      const leftPrimary = left.partyId === primaryTenantId ? 0 : 1;
+      const rightPrimary = right.partyId === primaryTenantId ? 0 : 1;
+      if (leftPrimary !== rightPrimary) return leftPrimary - rightPrimary;
+      if (left.role !== right.role) return left.role === 'tenant' ? -1 : 1;
+      return String(left.partyId).localeCompare(String(right.partyId));
+    })
+    .map((entry) =>
+      presentationParty(
+        partyById.get(String(entry.partyId))!,
+        TENANT_ADDRESS_ORDER,
+      ),
+    );
+
+  return {
+    formRevision,
+    agreementCode: agreement.code,
+    agreementEffectiveFrom: agreement.effectiveFrom,
+    property: {
+      street: property.street,
+      houseNumber: property.houseNumber,
+      postalCode: property.postalCode,
+      city: property.city,
+    },
+    unit: {
+      unitNumber: unit.unitNumber,
+      unitType: unit.unitType,
+      rooms: unit.rooms,
+    },
+    landlords,
+    landlordRepresentatives,
+    tenants,
+  };
+}
+
+function renderInput(
+  snapshot: LuzernerLeasePdfSnapshot,
+  form: LuzernerLeasePdfRenderInput['form'],
+): LuzernerLeasePdfRenderInput {
+  const { formRevision: _formRevision, ...presentation } = snapshot;
+  return {
+    ...presentation,
+    form,
+  };
+}
+
 export async function renderLuzernerLeasePdfCommand(
   deps: RenderLuzernerLeasePdfDependencies,
   actor: Actor,
@@ -132,87 +246,33 @@ export async function renderLuzernerLeasePdfCommand(
     );
   }
 
-  const tenancy = await deps.tenancyRepository.getById(agreement.tenancyId);
-  if (!tenancy) {
-    throw new DomainError('TENANCY_NOT_FOUND', 'Tenancy not found.');
+  let snapshot: LuzernerLeasePdfSnapshot;
+  if (agreement.status === 'draft') {
+    snapshot = await buildLuzernerLeasePdfSnapshot(
+      deps,
+      agreement,
+      form.revision,
+    );
+  } else {
+    const persisted = await deps.leaseRepository.getLuzernerLeasePdfSnapshot(
+      agreement.id,
+    );
+    if (!persisted) {
+      throw new DomainError(
+        'LUZERNER_PDF_SIGNED_SNAPSHOT_MISSING',
+        'Signed Luzerner Agreement is missing its immutable PDF presentation snapshot.',
+      );
+    }
+    if (persisted.formRevision !== form.revision) {
+      throw new DomainError(
+        'LUZERNER_PDF_SIGNED_SNAPSHOT_MISMATCH',
+        'Signed Luzerner PDF snapshot does not match the frozen form revision.',
+      );
+    }
+    snapshot = persisted;
   }
-  const unit = await deps.portfolioRepository.getUnitById(tenancy.unitId);
-  if (!unit) {
-    throw new DomainError('UNIT_NOT_FOUND', 'Unit not found.');
-  }
-  const property = await deps.portfolioRepository.getPropertyById(
-    unit.propertyId,
+
+  return deps.luzernerLeasePdfPort.renderLuzernerLeaseAgreement(
+    renderInput(snapshot, form.content),
   );
-  if (!property) {
-    throw new DomainError('PROPERTY_NOT_FOUND', 'Property not found.');
-  }
-
-  const partyIds = [...new Set(agreement.parties.map((entry) => String(entry.partyId)))];
-  const parties = await deps.partyRepository.getByIds(
-    agreement.parties.map((entry) => entry.partyId),
-  );
-  const partyById = requireParties(parties, partyIds);
-
-  const primaryTenantId =
-    tenancy.parties.find(
-      (entry) =>
-        entry.isPrimary &&
-        (entry.role === 'tenant' || entry.role === 'co_tenant'),
-    )?.partyId ?? null;
-
-  const landlords = agreement.parties
-    .filter((entry) => entry.role === 'landlord')
-    .sort((left, right) => String(left.partyId).localeCompare(String(right.partyId)))
-    .map((entry) =>
-      presentationParty(
-        partyById.get(String(entry.partyId))!,
-        LANDLORD_ADDRESS_ORDER,
-      ),
-    );
-
-  const landlordRepresentatives = agreement.parties
-    .filter((entry) => entry.role === 'authorized_signatory')
-    .sort((left, right) => String(left.partyId).localeCompare(String(right.partyId)))
-    .map((entry) =>
-      presentationParty(
-        partyById.get(String(entry.partyId))!,
-        LANDLORD_ADDRESS_ORDER,
-      ),
-    );
-
-  const tenants = agreement.parties
-    .filter((entry) => entry.role === 'tenant' || entry.role === 'co_tenant')
-    .sort((left, right) => {
-      const leftPrimary = left.partyId === primaryTenantId ? 0 : 1;
-      const rightPrimary = right.partyId === primaryTenantId ? 0 : 1;
-      if (leftPrimary !== rightPrimary) return leftPrimary - rightPrimary;
-      if (left.role !== right.role) return left.role === 'tenant' ? -1 : 1;
-      return String(left.partyId).localeCompare(String(right.partyId));
-    })
-    .map((entry) =>
-      presentationParty(
-        partyById.get(String(entry.partyId))!,
-        TENANT_ADDRESS_ORDER,
-      ),
-    );
-
-  return deps.luzernerLeasePdfPort.renderLuzernerLeaseAgreement({
-    agreementCode: agreement.code,
-    agreementEffectiveFrom: agreement.effectiveFrom,
-    form: form.content,
-    property: {
-      street: property.street,
-      houseNumber: property.houseNumber,
-      postalCode: property.postalCode,
-      city: property.city,
-    },
-    unit: {
-      unitNumber: unit.unitNumber,
-      unitType: unit.unitType,
-      rooms: unit.rooms,
-    },
-    landlords,
-    landlordRepresentatives,
-    tenants,
-  });
 }
