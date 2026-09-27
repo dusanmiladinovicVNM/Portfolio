@@ -6,6 +6,7 @@ import {
   type LeaseRepository,
   type LuzernerLeasePdfPort,
   type LuzernerLeasePdfRenderInput,
+  type LuzernerLeasePdfSnapshot,
   type OwnershipRepository,
   type PartyRepository,
   type PortfolioRepository,
@@ -219,6 +220,10 @@ class InMemoryLeaseRepository implements LeaseRepository {
   readonly amendments = new Map<LeaseAmendmentId, LeaseAmendment>();
   readonly terms: TenancyTermVersion[] = [];
   readonly luzernerForms = new Map<LeaseAgreementId, LuzernerLeaseFormDraft>();
+  readonly luzernerPdfSnapshots = new Map<
+    LeaseAgreementId,
+    LuzernerLeasePdfSnapshot
+  >();
   beforeAgreementSign: (() => void) | null = null;
 
   async getAgreementById(id: LeaseAgreementId): Promise<LeaseAgreement | null> {
@@ -255,6 +260,7 @@ class InMemoryLeaseRepository implements LeaseRepository {
     terms: TenancyTermVersion,
     predecessorToSupersede?: AgreementSupersession,
     expectedLuzernerFormRevision?: number | null,
+    luzernerPdfSnapshot?: LuzernerLeasePdfSnapshot | null,
   ): Promise<void> {
     const current = this.agreements.get(agreement.id);
     if (!current || current.version !== expectedVersion) {
@@ -274,6 +280,27 @@ class InMemoryLeaseRepository implements LeaseRepository {
           'The Luzerner lease form changed while Agreement signing was in progress.',
         );
       }
+    }
+
+    const actualFormRevision =
+      this.luzernerForms.get(agreement.id)?.revision ?? null;
+    if (
+      actualFormRevision !== null &&
+      (
+        luzernerPdfSnapshot == null ||
+        luzernerPdfSnapshot.formRevision !== actualFormRevision
+      )
+    ) {
+      throw new DomainError(
+        'LUZERNER_PDF_SIGNED_SNAPSHOT_MISSING',
+        'Signing a Luzerner Agreement requires its exact PDF presentation snapshot.',
+      );
+    }
+    if (actualFormRevision === null && luzernerPdfSnapshot != null) {
+      throw new DomainError(
+        'LUZERNER_PDF_SIGNED_SNAPSHOT_MISMATCH',
+        'A Luzerner PDF presentation snapshot requires a Luzerner form.',
+      );
     }
 
     if (
@@ -311,6 +338,9 @@ class InMemoryLeaseRepository implements LeaseRepository {
     }
     this.agreements.set(agreement.id, agreement);
     this.terms.push(terms);
+    if (luzernerPdfSnapshot) {
+      this.luzernerPdfSnapshots.set(agreement.id, luzernerPdfSnapshot);
+    }
   }
 
   async cancelAgreement(
@@ -330,6 +360,12 @@ class InMemoryLeaseRepository implements LeaseRepository {
     agreementId: LeaseAgreementId,
   ): Promise<LuzernerLeaseFormDraft | null> {
     return this.luzernerForms.get(agreementId) ?? null;
+  }
+
+  async getLuzernerLeasePdfSnapshot(
+    agreementId: LeaseAgreementId,
+  ): Promise<LuzernerLeasePdfSnapshot | null> {
+    return this.luzernerPdfSnapshots.get(agreementId) ?? null;
   }
 
   async insertLuzernerLeaseForm(form: LuzernerLeaseFormDraft): Promise<void> {
