@@ -16,6 +16,7 @@ import type {
   LuzernerLeasePdfPort,
   LuzernerLeasePdfRenderInput,
   LuzernerLeasePdfSnapshot,
+  LuzernerLeasePdfTemplateIdentity,
 } from './luzerner-lease-pdf-port.js';
 
 export interface LuzernerLeasePdfContextDependencies {
@@ -107,6 +108,7 @@ export async function buildLuzernerLeasePdfSnapshot(
   deps: LuzernerLeasePdfContextDependencies,
   agreement: LeaseAgreement,
   formRevision: number,
+  templateIdentity: LuzernerLeasePdfTemplateIdentity,
 ): Promise<LuzernerLeasePdfSnapshot> {
   const tenancy = await deps.tenancyRepository.getById(agreement.tenancyId);
   if (!tenancy) {
@@ -178,8 +180,21 @@ export async function buildLuzernerLeasePdfSnapshot(
       ),
     );
 
+  if (
+    !templateIdentity.templateCode.trim() ||
+    !Number.isInteger(templateIdentity.templateRevision) ||
+    templateIdentity.templateRevision < 1
+  ) {
+    throw new DomainError(
+      'LUZERNER_PDF_TEMPLATE_IDENTITY_INVALID',
+      'Luzerner PDF template identity must have a non-empty code and positive integer revision.',
+    );
+  }
+
   return {
     formRevision,
+    templateCode: templateIdentity.templateCode,
+    templateRevision: templateIdentity.templateRevision,
     agreementCode: agreement.code,
     agreementEffectiveFrom: agreement.effectiveFrom,
     property: {
@@ -203,7 +218,12 @@ function renderInput(
   snapshot: LuzernerLeasePdfSnapshot,
   form: LuzernerLeasePdfRenderInput['form'],
 ): LuzernerLeasePdfRenderInput {
-  const { formRevision: _formRevision, ...presentation } = snapshot;
+  const {
+    formRevision: _formRevision,
+    templateCode: _templateCode,
+    templateRevision: _templateRevision,
+    ...presentation
+  } = snapshot;
   return {
     ...presentation,
     form,
@@ -217,6 +237,10 @@ export async function renderFrozenLuzernerLeasePdf(
 ) {
   const rendered = await port.renderLuzernerLeaseAgreement(
     renderInput(snapshot, form),
+    {
+      templateCode: snapshot.templateCode,
+      templateRevision: snapshot.templateRevision,
+    },
   );
   if (rendered.content.byteLength === 0) {
     throw new DomainError(
@@ -265,10 +289,19 @@ export async function renderLuzernerLeasePdfCommand(
 
   let snapshot: LuzernerLeasePdfSnapshot;
   if (agreement.status === 'draft') {
+    const templateIdentity =
+      deps.luzernerLeasePdfPort.getCurrentTemplateIdentity();
+    if (templateIdentity.templateCode !== form.templateCode) {
+      throw new DomainError(
+        'LUZERNER_PDF_TEMPLATE_MISMATCH',
+        'Current Luzerner PDF renderer does not match the saved contract template.',
+      );
+    }
     snapshot = await buildLuzernerLeasePdfSnapshot(
       deps,
       agreement,
       form.revision,
+      templateIdentity,
     );
   } else {
     const persisted = await deps.leaseRepository.getLuzernerLeasePdfSnapshot(
@@ -280,10 +313,13 @@ export async function renderLuzernerLeasePdfCommand(
         'Signed Luzerner Agreement is missing its immutable PDF presentation snapshot.',
       );
     }
-    if (persisted.formRevision !== form.revision) {
+    if (
+      persisted.formRevision !== form.revision ||
+      persisted.templateCode !== form.templateCode
+    ) {
       throw new DomainError(
         'LUZERNER_PDF_SIGNED_SNAPSHOT_MISMATCH',
-        'Signed Luzerner PDF snapshot does not match the frozen form revision.',
+        'Signed Luzerner PDF snapshot does not match the frozen form/template identity.',
       );
     }
     snapshot = persisted;
