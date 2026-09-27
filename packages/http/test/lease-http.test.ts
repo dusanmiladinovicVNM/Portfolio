@@ -632,7 +632,7 @@ function buildHandler(options?: {
     ]),
   });
 
-  return { handler, leaseRepository };
+  return { handler, leaseRepository, partyRepository };
 }
 
 describe('Lease HTTP lifecycle', () => {
@@ -734,9 +734,11 @@ describe('Lease HTTP lifecycle', () => {
 
   it('freezes one idempotent final Luzerner PDF as the Agreement signed original', async () => {
     let renderCount = 0;
+    let lastRenderInput: LuzernerLeasePdfRenderInput | null = null;
     const luzernerLeasePdfPort: LuzernerLeasePdfPort = {
-      async renderLuzernerLeaseAgreement() {
+      async renderLuzernerLeaseAgreement(input) {
         renderCount += 1;
+        lastRenderInput = input;
         return {
           fileName: 'mietvertrag-final.pdf',
           content: new TextEncoder().encode('%PDF-final-contract'),
@@ -744,7 +746,9 @@ describe('Lease HTTP lifecycle', () => {
       },
     };
 
-    const { handler } = buildHandler({ luzernerLeasePdfPort });
+    const { handler, leaseRepository, partyRepository } = buildHandler({
+      luzernerLeasePdfPort,
+    });
     const created = await handler(
       new Request(`https://portfolio.test/tenancies/${TENANCY_ID}/agreements`, {
         method: 'POST',
@@ -812,6 +816,51 @@ describe('Lease HTTP lifecycle', () => {
       adminIdentity,
     );
     expect(signed.status).toBe(200);
+
+    const frozenSnapshot = leaseRepository.luzernerPdfSnapshots.get(
+      agreement.id as LeaseAgreementId,
+    );
+    expect(frozenSnapshot).toMatchObject({
+      formRevision: 1,
+      agreementCode: 'AGR-FINAL-1',
+      property: {
+        street: 'Seestrasse',
+        houseNumber: '12',
+        postalCode: '6003',
+        city: 'Luzern',
+      },
+      unit: {
+        unitNumber: '3.01',
+        unitType: 'apartment',
+        rooms: 3.5,
+      },
+      landlords: [{ displayName: 'Landlord Test' }],
+      tenants: [{ displayName: 'Tenant Test' }],
+    });
+
+    const landlord = partyRepository.parties.get(LANDLORD_ID)!;
+    partyRepository.parties.set(LANDLORD_ID, {
+      ...landlord,
+      displayName: 'Renamed Landlord After Signing',
+    });
+    const tenant = partyRepository.parties.get(TENANT_ID)!;
+    partyRepository.parties.set(TENANT_ID, {
+      ...tenant,
+      displayName: 'Renamed Tenant After Signing',
+    });
+
+    const signedPreview = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form/pdf`,
+      ),
+      adminIdentity,
+    );
+    expect(signedPreview.status).toBe(200);
+    expect(lastRenderInput?.landlords[0]?.displayName).toBe('Landlord Test');
+    expect(lastRenderInput?.tenants[0]?.displayName).toBe('Tenant Test');
+
+    renderCount = 0;
+    lastRenderInput = null;
 
     const first = await handler(
       new Request(
