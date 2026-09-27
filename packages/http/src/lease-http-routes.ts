@@ -316,12 +316,20 @@ export async function handleLeaseHttp(
     const parsed = signLeaseAgreementRequestSchema.safeParse(body);
     if (!parsed.success) return validationFailure();
 
+    if (!deps.luzernerLeasePdfPort) {
+      throw new ApplicationError(
+        'LUZERNER_PDF_RENDERER_UNAVAILABLE',
+        'Luzerner PDF rendering is not configured.',
+      );
+    }
+
     const agreement = await signLeaseAgreementCommand(
       {
         leaseRepository: deps.leaseRepository,
         tenancyRepository: deps.tenancyRepository,
         partyRepository: deps.partyRepository,
         portfolioRepository: deps.portfolioRepository,
+        luzernerLeasePdfPort: deps.luzernerLeasePdfPort,
         idGenerator: deps.idGenerator,
       },
       actor,

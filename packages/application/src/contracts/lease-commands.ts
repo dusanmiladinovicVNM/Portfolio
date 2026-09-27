@@ -27,12 +27,16 @@ import {
   type TermSnapshotInput,
 } from '@portfolio/domain';
 import { requireCapability, type Actor } from '../security/access.js';
+import type { LuzernerLeasePdfPort } from './luzerner-lease-pdf-port.js';
 import type { IdGenerator } from '../shared/id-generator.js';
 import type { PartyRepository } from '../parties/party-repository.js';
 import type { PortfolioRepository } from '../portfolio/portfolio-repository.js';
 import type { TenancyRepository } from '../tenancy/tenancy-repository.js';
 import type { AgreementSupersession, LeaseRepository } from './lease-repository.js';
-import { buildLuzernerLeasePdfSnapshot } from './luzerner-lease-pdf-commands.js';
+import {
+  buildLuzernerLeasePdfSnapshot,
+  renderFrozenLuzernerLeasePdf,
+} from './luzerner-lease-pdf-commands.js';
 
 export interface LeaseAgreementPartyCommandInput {
   partyId: PartyId;
@@ -66,6 +70,7 @@ export interface LeaseDependencies {
 
 export interface SignLeaseAgreementDependencies extends LeaseDependencies {
   portfolioRepository: PortfolioRepository;
+  luzernerLeasePdfPort: LuzernerLeasePdfPort;
 }
 
 function moneyCents(value: string | null): bigint {
@@ -445,6 +450,11 @@ export async function signLeaseAgreementCommand(
       deps,
       signed,
       luzernerForm.revision,
+    );
+    await renderFrozenLuzernerLeasePdf(
+      deps.luzernerLeasePdfPort,
+      luzernerPdfSnapshot,
+      luzernerForm.content,
     );
   }
 

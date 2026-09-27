@@ -513,6 +513,14 @@ function person(id: PartyId, code: string, firstName: string): Party {
 function buildHandler(options?: {
   readonly luzernerLeasePdfPort?: LuzernerLeasePdfPort;
 }) {
+  const defaultLuzernerLeasePdfPort: LuzernerLeasePdfPort = {
+    async renderLuzernerLeaseAgreement(input) {
+      return {
+        fileName: `mietvertrag-${input.agreementCode}.pdf`,
+        content: new TextEncoder().encode('%PDF-test'),
+      };
+    },
+  };
   const partyRepository = new InMemoryPartyRepository();
   partyRepository.parties.set(TENANT_ID, person(TENANT_ID, 'PTY-TENANT', 'Tenant'));
   partyRepository.parties.set(LANDLORD_ID, person(LANDLORD_ID, 'PTY-LANDLORD', 'Landlord'));
@@ -605,9 +613,8 @@ function buildHandler(options?: {
     ownershipRepository: new EmptyOwnershipRepository(),
     tenancyRepository,
     leaseRepository,
-    ...(options?.luzernerLeasePdfPort === undefined
-      ? {}
-      : { luzernerLeasePdfPort: options.luzernerLeasePdfPort }),
+    luzernerLeasePdfPort:
+      options?.luzernerLeasePdfPort ?? defaultLuzernerLeasePdfPort,
     documentRepository: new InMemoryDocumentRepository(),
     inspectionRepository: new InMemoryInspectionRepository(),
     staffDirectoryRepository: new InMemoryStaffDirectoryRepository(),
@@ -1583,6 +1590,75 @@ describe('Luzerner lease form HTTP', () => {
     expect(await mismatchedSign.json()).toMatchObject({
       error: { code: 'LUZERNER_LEASE_FORM_SIGN_MISMATCH' },
     });
+  });
+
+  it('keeps a Luzerner Agreement draft when PDF renderability preflight fails', async () => {
+    const failingPort: LuzernerLeasePdfPort = {
+      async renderLuzernerLeaseAgreement() {
+        throw new ApplicationError(
+          'LUZERNER_PDF_TEXT_OVERFLOW',
+          'Synthetic renderability failure.',
+        );
+      },
+    };
+    const { handler, leaseRepository } = buildHandler({
+      luzernerLeasePdfPort: failingPort,
+    });
+    const agreement = await createDraftAgreement(handler);
+    const base = emptyLuzernerLeaseFormContent();
+
+    const saved = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedRevision: null,
+            content: {
+              ...base,
+              useType: 'apartment',
+              moveInDate: '2026-10-01',
+              durationKind: 'indefinite',
+              terminationSchedule: 'monthly_except_december',
+              noticePeriodKind: 'residential_3_months',
+              netRent: '1850.00',
+              paymentFrequency: 'monthly',
+              rentAdjustmentMode: 'termination_date',
+              rentAdjustmentAdvanceMonths: 3,
+              ancillaryClosingDate: 'december_31',
+              placeOfSigning: 'Luzern',
+              signingDate: '2026-09-26',
+            },
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(saved.status).toBe(200);
+
+    const sign = await handler(
+      new Request(`https://portfolio.test/agreements/${agreement.id}/sign`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 1,
+          signedAt: '2026-09-26',
+          terms: { currency: 'CHF', baseRent: '1850.00' },
+        }),
+      }),
+      adminIdentity,
+    );
+
+    expect(sign.status).toBe(422);
+    expect(await sign.json()).toMatchObject({
+      error: { code: 'LUZERNER_PDF_TEXT_OVERFLOW' },
+    });
+    expect(
+      leaseRepository.agreements.get(agreement.id as LeaseAgreementId)?.status,
+    ).toBe('draft');
+    expect(leaseRepository.terms).toHaveLength(0);
+    expect(leaseRepository.luzernerPdfSnapshots.has(
+      agreement.id as LeaseAgreementId,
+    )).toBe(false);
   });
 
   it('rejects Agreement signing when the exact Luzerner revision changes after validation', async () => {

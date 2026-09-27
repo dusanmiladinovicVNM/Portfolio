@@ -210,6 +210,23 @@ function renderInput(
   };
 }
 
+export async function renderFrozenLuzernerLeasePdf(
+  port: LuzernerLeasePdfPort,
+  snapshot: LuzernerLeasePdfSnapshot,
+  form: LuzernerLeasePdfRenderInput['form'],
+) {
+  const rendered = await port.renderLuzernerLeaseAgreement(
+    renderInput(snapshot, form),
+  );
+  if (rendered.content.byteLength === 0) {
+    throw new DomainError(
+      'LUZERNER_PDF_EMPTY',
+      'Luzerner PDF renderer returned empty content.',
+    );
+  }
+  return rendered;
+}
+
 export async function renderLuzernerLeasePdfCommand(
   deps: RenderLuzernerLeasePdfDependencies,
   actor: Actor,
@@ -272,7 +289,9 @@ export async function renderLuzernerLeasePdfCommand(
     snapshot = persisted;
   }
 
-  return deps.luzernerLeasePdfPort.renderLuzernerLeaseAgreement(
-    renderInput(snapshot, form.content),
+  return renderFrozenLuzernerLeasePdf(
+    deps.luzernerLeasePdfPort,
+    snapshot,
+    form.content,
   );
 }
