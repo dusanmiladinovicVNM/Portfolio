@@ -9230,6 +9230,7 @@ describe('PostgreSQL infrastructure', () => {
         tenancyStartBoundaryKey.id,
         {
           tenancyId: activeA.id,
+          expectedLastTransactionId: null,
           occurredAt: '2026-09-18T23:59:59.000Z',
         },
       ),
@@ -9303,6 +9304,7 @@ describe('PostgreSQL infrastructure', () => {
       unitKey.id,
       {
         tenancyId: activeA.id,
+        expectedLastTransactionId: null,
         occurredAt: '2026-09-19T10:05:00.000Z',
       },
     );
@@ -9351,6 +9353,7 @@ describe('PostgreSQL infrastructure', () => {
       actor,
       unitKey.id,
       {
+        expectedLastTransactionId: issued.id,
         occurredAt: '2026-09-19T10:09:00.000Z',
         note: 'Reported lost',
       },
@@ -9367,6 +9370,7 @@ describe('PostgreSQL infrastructure', () => {
         unitKey.id,
         {
           tenancyId: activeA.id,
+          expectedLastTransactionId: lost.id,
           occurredAt: '2026-09-19T10:11:00.000Z',
         },
       ),
@@ -9380,6 +9384,7 @@ describe('PostgreSQL infrastructure', () => {
       actor,
       unitKey.id,
       {
+        expectedLastTransactionId: lost.id,
         occurredAt: '2026-09-19T10:12:00.000Z',
         note: 'Recovered and returned',
       },
@@ -9395,6 +9400,7 @@ describe('PostgreSQL infrastructure', () => {
       unitKey.id,
       {
         tenancyId: activeA.id,
+        expectedLastTransactionId: returned.id,
         occurredAt: '2026-09-19T10:13:00.000Z',
       },
     );
@@ -9459,6 +9465,7 @@ describe('PostgreSQL infrastructure', () => {
       propertyCard.id,
       {
         tenancyId: activeB.id,
+        expectedLastTransactionId: null,
         occurredAt: '2026-09-19T10:22:00.000Z',
       },
     );
@@ -9588,7 +9595,7 @@ describe('PostgreSQL infrastructure', () => {
         label: 'Property-wide holder check card',
       },
     );
-    await issueAccessItemCommand(
+    const holderIssued = await issueAccessItemCommand(
       {
         ...accessDeps,
         clock: { now: () => '2026-09-19T11:21:00.000Z' },
@@ -9597,6 +9604,7 @@ describe('PostgreSQL infrastructure', () => {
       holderCard.id,
       {
         tenancyId: activeA.id,
+        expectedLastTransactionId: null,
         occurredAt: '2026-09-19T11:21:00.000Z',
       },
     );
@@ -9680,6 +9688,7 @@ describe('PostgreSQL infrastructure', () => {
       retirementCard.id,
       {
         tenancyId: activeA.id,
+        expectedLastTransactionId: null,
         occurredAt: '2026-09-19T11:31:00.000Z',
       },
     );
@@ -9726,6 +9735,7 @@ describe('PostgreSQL infrastructure', () => {
         retirementCard.id,
         {
           tenancyId: activeA.id,
+          expectedLastTransactionId: retirementIssued.id,
           occurredAt: '2026-09-19T11:33:00.000Z',
         },
       ),
@@ -9739,6 +9749,7 @@ describe('PostgreSQL infrastructure', () => {
       actor,
       retirementCard.id,
       {
+        expectedLastTransactionId: retirementIssued.id,
         occurredAt: '2026-09-19T11:34:00.000Z',
         note: 'Returned after credential was disabled',
       },
@@ -10002,6 +10013,7 @@ describe('PostgreSQL infrastructure', () => {
       actor,
       holderCard.id,
       {
+        expectedLastTransactionId: holderIssued.id,
         occurredAt: '2026-09-19T13:00:00.000Z',
         note: 'Returned during final post-tenancy reconciliation',
       },
@@ -10021,6 +10033,7 @@ describe('PostgreSQL infrastructure', () => {
         emptyKey.id,
         {
           tenancyId: endedA.id,
+          expectedLastTransactionId: null,
           occurredAt: '2026-09-19T13:05:00.000Z',
         },
       ),
@@ -11012,6 +11025,7 @@ describe('PostgreSQL infrastructure', () => {
       propertyKey.id,
       {
         tenancyId: active.id,
+        expectedLastTransactionId: null,
         occurredAt: '2026-09-20T09:10:00.000Z',
       },
     );
