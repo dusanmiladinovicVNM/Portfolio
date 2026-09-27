@@ -192,6 +192,11 @@ function translateDocumentError(error: unknown): DomainError | null {
           'DOCUMENT_SIGNED_ORIGINAL_ALREADY_EXISTS',
           'This legal record already has a signed original document.',
         );
+      case 'document_links_generated_agreement_uq':
+        return new DomainError(
+          'DOCUMENT_GENERATED_CONTRACT_ALREADY_EXISTS',
+          'This lease agreement already has a generated contract document.',
+        );
       case 'document_links_identity_uq':
         return new DomainError(
           'DOCUMENT_LINK_ALREADY_EXISTS',
@@ -214,6 +219,16 @@ function translateDocumentError(error: unknown): DomainError | null {
         return new DomainError(
           'DOCUMENT_SIGNED_ORIGINAL_TARGET_NOT_FINAL',
           'A signed original may only be linked to a signed legal record.',
+        );
+      case 'document_links_generated_contract_version_final':
+        return new DomainError(
+          'DOCUMENT_GENERATED_CONTRACT_VERSION_NOT_FINAL',
+          'generated_contract requires a finalized immutable document version.',
+        );
+      case 'document_links_generated_contract_agreement_signed':
+        return new DomainError(
+          'DOCUMENT_GENERATED_CONTRACT_TARGET_NOT_FINAL',
+          'A generated contract may only be linked to a signed legal record.',
         );
       default:
         break;

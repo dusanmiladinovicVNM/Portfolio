@@ -29,6 +29,7 @@ export const DOCUMENT_VERSION_STATUSES = ['stored', 'final'] as const;
 export const DOCUMENT_LINK_RELATIONS = [
   'primary',
   'signed_original',
+  'generated_contract',
   'supporting',
   'attachment',
   'other',
@@ -246,6 +247,23 @@ export function createDocumentLink(input: DocumentLink): DocumentLink {
     throw new DomainError(
       'DOCUMENT_SIGNED_ORIGINAL_VERSION_REQUIRED',
       'signed_original must reference an exact final document version.',
+    );
+  }
+
+  if (
+    input.relation === 'generated_contract' &&
+    input.targetType !== 'lease_agreement'
+  ) {
+    throw new DomainError(
+      'DOCUMENT_GENERATED_CONTRACT_TARGET_INVALID',
+      'generated_contract may only target a lease agreement.',
+    );
+  }
+
+  if (input.relation === 'generated_contract' && input.documentVersionId === null) {
+    throw new DomainError(
+      'DOCUMENT_GENERATED_CONTRACT_VERSION_REQUIRED',
+      'generated_contract must reference an exact final document version.',
     );
   }
 

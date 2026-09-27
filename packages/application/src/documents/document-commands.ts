@@ -210,6 +210,15 @@ async function assertTargetExists(
           'A signed original may only be linked to a signed legal record.',
         );
       }
+      if (
+        input.relation === 'generated_contract' &&
+        !['signed', 'superseded', 'terminated'].includes(agreement.status)
+      ) {
+        throw new DomainError(
+          'DOCUMENT_GENERATED_CONTRACT_TARGET_NOT_FINAL',
+          'A generated contract may only be linked to a signed legal record.',
+        );
+      }
       return;
     }
     case 'lease_amendment': {
@@ -265,6 +274,12 @@ export async function linkDocumentCommand(
     throw new DomainError(
       'DOCUMENT_SIGNED_ORIGINAL_VERSION_NOT_FINAL',
       'signed_original requires a finalized immutable document version.',
+    );
+  }
+  if (input.relation === 'generated_contract' && version?.status !== 'final') {
+    throw new DomainError(
+      'DOCUMENT_GENERATED_CONTRACT_VERSION_NOT_FINAL',
+      'generated_contract requires a finalized immutable document version.',
     );
   }
 

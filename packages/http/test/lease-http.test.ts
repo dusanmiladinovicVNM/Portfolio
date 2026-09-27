@@ -732,7 +732,7 @@ describe('Lease HTTP lifecycle', () => {
     expect(captured!.form.netRent).toBe('1500.00');
   });
 
-  it('freezes one idempotent final Luzerner PDF as the Agreement signed original', async () => {
+  it('freezes one idempotent generated Luzerner PDF without occupying signed_original', async () => {
     let renderCount = 0;
     const renderInputs: LuzernerLeasePdfRenderInput[] = [];
     const luzernerLeasePdfPort: LuzernerLeasePdfPort = {
@@ -908,7 +908,7 @@ describe('Lease HTTP lifecycle', () => {
           {
             document: { category: 'legal' },
             link: {
-              relation: 'signed_original',
+              relation: 'generated_contract',
               documentVersionId: firstVersion.id,
             },
             linkedVersion: {

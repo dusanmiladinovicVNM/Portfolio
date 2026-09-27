@@ -38,29 +38,29 @@ export interface GenerateLuzernerLeaseFinalDocumentDependencies {
   readonly clock: ClockPort;
 }
 
-function signedOriginal(
+function generatedContract(
   references: readonly TargetDocumentReference[],
 ): TargetDocumentReference | null {
   const matches = references.filter(
-    (reference) => reference.link.relation === 'signed_original',
+    (reference) => reference.link.relation === 'generated_contract',
   );
   if (matches.length > 1) {
     throw new DomainError(
-      'LUZERNER_FINAL_DOCUMENT_LINK_CONFLICT',
-      'Agreement has more than one signed-original Document link.',
+      'LUZERNER_GENERATED_CONTRACT_LINK_CONFLICT',
+      'Agreement has more than one generated-contract Document link.',
     );
   }
   return matches[0] ?? null;
 }
 
-async function resolveExistingSignedOriginal(
+async function resolveExistingGeneratedContract(
   deps: Pick<
     GenerateLuzernerLeaseFinalDocumentDependencies,
     'documentRepository' | 'fileStorage'
   >,
   agreementId: LeaseAgreementId,
 ): Promise<DocumentVersion | null> {
-  const reference = signedOriginal(
+  const reference = generatedContract(
     await deps.documentRepository.listTargetDocuments({
       targetType: 'lease_agreement',
       targetId: agreementId,
@@ -76,7 +76,7 @@ async function resolveExistingSignedOriginal(
   ) {
     throw new DomainError(
       'LUZERNER_FINAL_DOCUMENT_INVALID',
-      'Signed-original link must reference one final PDF DocumentVersion.',
+      'Generated-contract link must reference one final PDF DocumentVersion.',
     );
   }
 
@@ -106,7 +106,7 @@ export async function generateLuzernerLeaseFinalDocumentCommand(
     );
   }
 
-  const existing = await resolveExistingSignedOriginal(deps, agreement.id);
+  const existing = await resolveExistingGeneratedContract(deps, agreement.id);
   if (existing) return existing;
 
   const documentCode = `LUZERNER-FINAL-${agreement.code}`;
@@ -253,7 +253,7 @@ export async function generateLuzernerLeaseFinalDocumentCommand(
     id: asDocumentLinkId(deps.idGenerator.next()),
     documentId: document.id,
     documentVersionId: finalVersion.id,
-    relation: 'signed_original',
+    relation: 'generated_contract',
     targetType: 'lease_agreement',
     targetId: agreement.id,
   });
@@ -265,18 +265,18 @@ export async function generateLuzernerLeaseFinalDocumentCommand(
     if (
       !(error instanceof DomainError) ||
       ![
-        'DOCUMENT_SIGNED_ORIGINAL_ALREADY_EXISTS',
+        'DOCUMENT_GENERATED_CONTRACT_ALREADY_EXISTS',
         'DOCUMENT_LINK_ALREADY_EXISTS',
       ].includes(error.code)
     ) {
       throw error;
     }
 
-    const winner = await resolveExistingSignedOriginal(deps, agreement.id);
+    const winner = await resolveExistingGeneratedContract(deps, agreement.id);
     if (!winner) {
       throw new DomainError(
         'LUZERNER_FINAL_DOCUMENT_RECONCILIATION_REQUIRED',
-        'Signed-original uniqueness was claimed but the canonical link cannot be resolved.',
+        'Generated-contract uniqueness was claimed but the canonical link cannot be resolved.',
       );
     }
     if (winner.id !== finalVersion.id) {
