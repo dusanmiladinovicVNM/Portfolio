@@ -1,4 +1,9 @@
-import { CanonicalInspectionPdfRenderer, createSupabaseApi, SupabaseStaffAuthAdmin } from '@portfolio/api';
+import {
+  CanonicalInspectionPdfRenderer,
+  createEmbeddedLuzernerPdfRenderer,
+  createSupabaseApi,
+  SupabaseStaffAuthAdmin,
+} from '@portfolio/api';
 import {
   GoogleDriveFileStorage,
   GoogleOAuthRefreshTokenProvider,
@@ -23,6 +28,7 @@ const api = createSupabaseApi({
     accessTokenProvider,
   }),
   pdfPort: new CanonicalInspectionPdfRenderer(),
+  luzernerLeasePdfPort: createEmbeddedLuzernerPdfRenderer(),
   staffAuthAdmin: new SupabaseStaffAuthAdmin({
     supabaseUrl: config.supabaseUrl,
     serviceRoleKey: config.serviceRoleKey,
