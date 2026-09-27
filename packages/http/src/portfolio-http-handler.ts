@@ -400,7 +400,6 @@ export function createPortfolioHttpHandler(
             {
               documentRepository: deps.documentRepository,
               fileStorage: deps.fileStorage,
-              sha256: deps.sha256,
               clock: deps.clock,
               portfolioRepository: deps.portfolioRepository,
               partyRepository: deps.partyRepository,
@@ -453,6 +452,7 @@ export function createPortfolioHttpHandler(
               portfolioRepository: deps.portfolioRepository,
               documentRepository: deps.documentRepository,
               fileStorage: deps.fileStorage,
+              sha256: deps.sha256,
               clock: deps.clock,
               ...(deps.luzernerLeasePdfPort === undefined
                 ? {}
