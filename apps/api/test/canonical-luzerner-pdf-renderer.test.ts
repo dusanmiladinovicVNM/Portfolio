@@ -156,6 +156,7 @@ describe('CanonicalLuzernerPdfRenderer', () => {
 
     expect(canonical).toContain('Allgemeine Bedingungen');
     expect(canonical).toContain('3.4 Verrechnung und Sicherheitsleistung');
+    expect(canonical).toContain('3.3.2 Für die Verteilung der anderen Betriebskosten');
     expect(canonical).toContain('8. Besondere Bestimmungen');
     expect(canonical).not.toContain('Mietverhältnis wird übernommen;');
     expect(canonical).not.toContain('￾');

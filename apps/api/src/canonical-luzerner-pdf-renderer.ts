@@ -675,6 +675,7 @@ function rgb(color: Luzerner2020Rgb): string {
 function addFixedTextLine(
   commands: Commands,
   line: Luzerner2020FixedTextLine,
+  horizontalScale = 100,
 ): void {
   commands.push(
     'BT ' +
@@ -684,6 +685,8 @@ function addFixedTextLine(
       ' ' +
       pdfNumber(line.size) +
       ' Tf ' +
+      pdfNumber(horizontalScale) +
+      ' Tz ' +
       pdfNumber(line.x) +
       ' ' +
       pdfNumber(line.y) +
@@ -862,7 +865,12 @@ function addFixedTextTuple(
   tuple: Luzerner2020FixedTextTuple,
 ): void {
   const [text, x, y, size, bold, color] = tuple;
-  addFixedTextLine(commands, { text, x, y, size, bold, color });
+  const horizontalScale = size <= 10.1 ? 95 : 100;
+  addFixedTextLine(
+    commands,
+    { text, x, y, size, bold, color },
+    horizontalScale,
+  );
 }
 
 function fixedTuplePage(
