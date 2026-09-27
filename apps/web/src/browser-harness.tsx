@@ -199,7 +199,12 @@ const setupMeterIds = [
   'b1000000-0000-4000-8000-000000000038',
   'b1000000-0000-4000-8000-000000000091',
 ] as const;
-const setupAccessItemId = 'b1000000-0000-4000-8000-000000000068';
+const setupAccessItemIds = [
+  'b1000000-0000-4000-8000-000000000068',
+  'b1000000-0000-4000-8000-000000000092',
+  'b1000000-0000-4000-8000-000000000093',
+] as const;
+const setupPrimaryAccessItemId = setupAccessItemIds[0];
 const setupAccessItemTransactionIds = [
   'b1000000-0000-4000-8000-000000000069',
   'b1000000-0000-4000-8000-000000000070',
@@ -212,6 +217,12 @@ const setupAccessItemTransactionIds = [
   'b1000000-0000-4000-8000-000000000077',
   'b1000000-0000-4000-8000-000000000078',
   'b1000000-0000-4000-8000-000000000079',
+  'b1000000-0000-4000-8000-000000000094',
+  'b1000000-0000-4000-8000-000000000095',
+  'b1000000-0000-4000-8000-000000000096',
+  'b1000000-0000-4000-8000-000000000097',
+  'b1000000-0000-4000-8000-000000000098',
+  'b1000000-0000-4000-8000-000000000099',
 ] as const;
 const setupAccessConcurrencyTenancyIds = [
   'b2000000-0000-4000-8000-000000000001',
@@ -381,6 +392,7 @@ let setupAssetMutationSequence = 0;
 let setupMeters: MeterResponse[] = [];
 let setupMeterSequence = 0;
 let setupAccessItems: AccessItemResponse[] = [];
+let setupAccessItemSequence = 0;
 let setupAccessItemTransactions: AccessItemTransactionResponse[] = [];
 let setupAccessItemTransactionSequence = 0;
 let setupAccessItemClockSequence = 0;
@@ -470,6 +482,7 @@ function nextSetupAccessItemAt(): string {
 }
 
 function appendSetupAccessTransaction(
+  accessItemId: string,
   tenancyId: string,
   type: AccessItemTransactionResponse['type'],
   occurredAt = '2026-10-01T08:00:00.000Z',
@@ -477,12 +490,16 @@ function appendSetupAccessTransaction(
 ): AccessItemTransactionResponse {
   const id = setupAccessItemTransactionIds[setupAccessItemTransactionSequence++];
   if (!id) throw new Error('Setup AccessItem transaction id pool exhausted.');
+  const sequence =
+    setupAccessItemTransactions.filter(
+      (transaction) => transaction.accessItemId === accessItemId,
+    ).length + 1;
   const transaction: AccessItemTransactionResponse = {
     id,
-    accessItemId: setupAccessItemId,
+    accessItemId,
     tenancyId,
     type,
-    sequence: setupAccessItemTransactions.length + 1,
+    sequence,
     occurredAt,
     recordedAt: nextSetupAccessItemAt(),
     recordedByUserId: inspectionUserId,
@@ -1355,6 +1372,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioSimulateAccessItemAvailabilityCycle?: () => boolean;
   __portfolioSimulateAccessItemHandoff?: () => boolean;
   __portfolioAccessItemTransactionCount?: () => number;
+  __portfolioAccessItemTransactionCountFor?: (accessItemId: string) => number;
   __portfolioFailNextMeterBoundaryAfterCommit?: boolean;
   __portfolioFailNextAssetMoveAfterCommit?: boolean;
   __portfolioConcurrentAssetMoveAcrossProperty?: boolean;
@@ -1407,12 +1425,18 @@ browserHarnessWindow.__portfolioInspectionSchemaPublishCount = 0;
 browserHarnessWindow.__portfolioFinalReportRenderCount = 0;
 browserHarnessWindow.__portfolioAccessItemTransactionCount = () =>
   setupAccessItemTransactions.length;
+browserHarnessWindow.__portfolioAccessItemTransactionCountFor = (accessItemId) =>
+  setupAccessItemTransactions.filter(
+    (transaction) => transaction.accessItemId === accessItemId,
+  ).length;
 browserHarnessWindow.__portfolioSimulateAccessItemAvailabilityCycle = () => {
-  const item = setupAccessItems.find((candidate) => candidate.id === setupAccessItemId);
+  const item = setupAccessItems.find(
+    (candidate) => candidate.id === setupPrimaryAccessItemId,
+  );
   if (!item || setupAccessItemEntry(item).state.kind !== 'available') return false;
   const tenancy = ensureAccessConcurrencyTenancy(0);
-  appendSetupAccessTransaction(tenancy.id, 'issued');
-  appendSetupAccessTransaction(tenancy.id, 'returned');
+  appendSetupAccessTransaction(setupPrimaryAccessItemId, tenancy.id, 'issued');
+  appendSetupAccessTransaction(setupPrimaryAccessItemId, tenancy.id, 'returned');
   return true;
 };
 browserHarnessWindow.__portfolioSimulateAccessItemHandoff = () => {
@@ -1421,8 +1445,16 @@ browserHarnessWindow.__portfolioSimulateAccessItemHandoff = () => {
   const state = setupAccessItemEntry(item).state;
   if (state.kind !== 'issued' || state.tenancyId === null) return false;
   const target = ensureAccessConcurrencyTenancy(setupAccessHandoffSequence++);
-  appendSetupAccessTransaction(state.tenancyId, 'returned');
-  appendSetupAccessTransaction(target.id, 'issued');
+  appendSetupAccessTransaction(
+    setupPrimaryAccessItemId,
+    state.tenancyId,
+    'returned',
+  );
+  appendSetupAccessTransaction(
+    setupPrimaryAccessItemId,
+    target.id,
+    'issued',
+  );
   return true;
 };
 
@@ -2076,8 +2108,10 @@ globalThis.fetch = async (
         'AccessItem code already exists.',
       );
     }
+    const id = setupAccessItemIds[setupAccessItemSequence++];
+    if (!id) throw new Error('Setup AccessItem id pool exhausted.');
     const created: AccessItemResponse = {
-      id: setupAccessItemId,
+      id,
       code: body.code,
       kind: body.kind,
       propertyId: setupPropertyId,
@@ -2176,6 +2210,7 @@ globalThis.fetch = async (
       );
     }
     const transaction = appendSetupAccessTransaction(
+      setupAccessItem.id,
       body.tenancyId,
       'issued',
       body.occurredAt,
@@ -2218,6 +2253,7 @@ globalThis.fetch = async (
       );
     }
     const transaction = appendSetupAccessTransaction(
+      setupAccessItem.id,
       state.tenancyId,
       type,
       body.occurredAt,

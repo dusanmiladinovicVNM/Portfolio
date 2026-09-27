@@ -60,6 +60,8 @@ const setupSmokeDetectorAssetId = 'b1000000-0000-4000-8000-000000000086';
 const setupMeterId = 'b1000000-0000-4000-8000-000000000038';
 const setupWaterMeterId = 'b1000000-0000-4000-8000-000000000091';
 const setupAccessItemId = 'b1000000-0000-4000-8000-000000000068';
+const setupEntryCardId = 'b1000000-0000-4000-8000-000000000092';
+const setupHallKeyId = 'b1000000-0000-4000-8000-000000000093';
 const setupMeterMoveInReadingId = 'b1000000-0000-4000-8000-000000000039';
 const setupMeterMoveOutReadingId = 'b1000000-0000-4000-8000-000000000040';
 const setupInspectionFindingId = 'b1000000-0000-4000-8000-000000000044';
@@ -1712,6 +1714,155 @@ try {
     sessionId,
     'xpath',
     accessCard + "//*[contains(normalize-space(),'Lock cylinder replaced')]",
+  );
+
+  await typeXpath(
+    sessionId,
+    accessCreateForm + "//input[@name='code']",
+    'CARD-ENTRY-BRW',
+  );
+  await selectOptionXpath(
+    sessionId,
+    accessCreateForm + "//select[@name='kind']",
+    'card',
+  );
+  await typeXpath(
+    sessionId,
+    accessCreateForm + "//input[@name='label']",
+    'Building entrance card',
+  );
+  await clickXpath(
+    sessionId,
+    accessCreateForm + "//button[normalize-space()='Create AccessItem']",
+  );
+
+  const entryCard =
+    "//article[contains(@class,'access-item-card')][@data-access-item-code='CARD-ENTRY-BRW']";
+  await waitForElement(
+    sessionId,
+    'xpath',
+    entryCard + "//h3[normalize-space()='Building entrance card']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    entryCard + "//*[contains(normalize-space(),'Unit-wide')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return window.__portfolioAccessItemTransactionCountFor('" +
+        setupEntryCardId +
+        "');",
+    ),
+    0,
+    'New entrance card starts with independent empty custody ledger',
+  );
+
+  const entryCardIssueForm =
+    entryCard + "//form[@data-access-item-form='issue']";
+  await selectOptionXpath(
+    sessionId,
+    entryCardIssueForm + "//select[@name='tenancyId']",
+    setupTenancyId,
+  );
+  await setInputValueXpath(
+    sessionId,
+    entryCardIssueForm + "//input[@name='date']",
+    '2026-10-04',
+  );
+  await setInputValueXpath(
+    sessionId,
+    entryCardIssueForm + "//input[@name='time']",
+    '11:00',
+  );
+  await typeXpath(
+    sessionId,
+    entryCardIssueForm + "//input[@name='note']",
+    'Building access card issued separately',
+  );
+  await clickXpath(
+    sessionId,
+    entryCardIssueForm + "//button[normalize-space()='Issue AccessItem']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    entryCard + "//span[contains(@class,'status-chip') and normalize-space()='issued']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    entryCard + "//*[contains(normalize-space(),'TEN-SETUP-BRW')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return window.__portfolioAccessItemTransactionCountFor('" +
+        setupEntryCardId +
+        "');",
+    ),
+    1,
+    'Entrance card custody sequence starts at one independently',
+  );
+
+  await typeXpath(
+    sessionId,
+    accessCreateForm + "//input[@name='code']",
+    'KEY-HALL-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    accessCreateForm + "//input[@name='label']",
+    'Entrance Hall spare key',
+  );
+  await selectOptionXpath(
+    sessionId,
+    accessCreateForm + "//select[@name='spaceId']",
+    setupHallSpaceId,
+  );
+  await clickXpath(
+    sessionId,
+    accessCreateForm + "//button[normalize-space()='Create AccessItem']",
+  );
+
+  const hallKey =
+    "//article[contains(@class,'access-item-card')][@data-access-item-code='KEY-HALL-BRW']";
+  await waitForElement(
+    sessionId,
+    'xpath',
+    hallKey + "//h3[normalize-space()='Entrance Hall spare key']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    hallKey + "//*[contains(normalize-space(),'Entrance Hall')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    hallKey + "//span[contains(@class,'status-chip') and normalize-space()='available']",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return window.__portfolioAccessItemTransactionCountFor('" +
+        setupHallKeyId +
+        "');",
+    ),
+    0,
+    'Space-scoped spare key has independent empty custody ledger',
+  );
+
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//span[contains(@class,'status-chip') and normalize-space()='retired']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    entryCard + "//span[contains(@class,'status-chip') and normalize-space()='issued']",
   );
 
   await clickXpath(sessionId, "//a[normalize-space()='Tenancies']");
