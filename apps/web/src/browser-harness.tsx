@@ -216,6 +216,12 @@ const setupOrchestrationInspectionSectionInstanceId =
   'b1000000-0000-4000-8000-000000000062';
 const setupOrchestrationOtherStaffId =
   'b1000000-0000-4000-8000-000000000050';
+const setupLuzernerFinalDocumentId =
+  'b1000000-0000-4000-8000-000000000065';
+const setupLuzernerFinalDocumentVersionId =
+  'b1000000-0000-4000-8000-000000000066';
+const setupLuzernerFinalDocumentLinkId =
+  'b1000000-0000-4000-8000-000000000067';
 const orchestrationPropertyId =
   'd2000000-0000-4000-8000-000000000001';
 const orchestrationUnitId =
@@ -1235,6 +1241,8 @@ type BrowserHarnessWindow = Window & {
   __portfolioFailNextSignedOriginalLink?: boolean;
   __portfolioFailNextLuzernerFormSaveAfterCommit?: boolean;
   __portfolioLuzernerFormPutCount?: number;
+  __portfolioLuzernerPdfPreviewCount?: number;
+  __portfolioLuzernerFinalDocumentCount?: number;
   __portfolioPendingUnitCreate?: boolean;
   __portfolioPendingSpaceCreate?: boolean;
   __portfolioPendingTenancyMutation?: boolean;
@@ -1269,6 +1277,8 @@ const browserHarnessWindow = window as BrowserHarnessWindow;
 browserHarnessWindow.__portfolioBinaryReads = 0;
 browserHarnessWindow.__portfolioDocumentUploadCount = 0;
 browserHarnessWindow.__portfolioLuzernerFormPutCount = 0;
+browserHarnessWindow.__portfolioLuzernerPdfPreviewCount = 0;
+browserHarnessWindow.__portfolioLuzernerFinalDocumentCount = 0;
 browserHarnessWindow.__portfolioInspectionSectionPatchCount = 0;
 browserHarnessWindow.__portfolioInspectionSchemaCreateCount = 0;
 browserHarnessWindow.__portfolioInspectionSchemaPublishCount = 0;
@@ -3926,6 +3936,111 @@ globalThis.fetch = async (
   const setupAgreement = setupAgreements.find((item) =>
     path.startsWith('/agreements/' + item.id),
   );
+
+  if (
+    setupAgreement &&
+    path === '/agreements/' + setupAgreement.id + '/luzerner-form/pdf' &&
+    (!init?.method || init.method === 'GET')
+  ) {
+    requirePortfolioAuth(init);
+    if (!setupLuzernerForms.has(setupAgreement.id)) {
+      return apiError(
+        404,
+        'LUZERNER_LEASE_FORM_NOT_FOUND',
+        'No Luzerner lease form exists for this agreement.',
+      );
+    }
+    browserHarnessWindow.__portfolioLuzernerPdfPreviewCount =
+      (browserHarnessWindow.__portfolioLuzernerPdfPreviewCount ?? 0) + 1;
+    return new Response(
+      new TextEncoder().encode('%PDF-browser-luzerner-preview'),
+      {
+        status: 200,
+        headers: {
+          'content-type': 'application/pdf',
+          'cache-control': 'private, no-store',
+        },
+      },
+    );
+  }
+
+  if (
+    setupAgreement &&
+    path ===
+      '/agreements/' + setupAgreement.id + '/luzerner-form/final-document' &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    if (!['signed', 'superseded', 'terminated'].includes(setupAgreement.status)) {
+      return apiError(
+        422,
+        'LUZERNER_FINAL_DOCUMENT_STATE_INVALID',
+        'Final Luzerner PDF requires a signed legal Agreement.',
+      );
+    }
+
+    const existingLink = setupDocumentLinks.find(
+      (candidate) =>
+        candidate.relation === 'signed_original' &&
+        candidate.targetType === 'lease_agreement' &&
+        candidate.targetId === setupAgreement.id,
+    );
+    if (existingLink?.documentVersionId) {
+      const existingVersion = setupDocumentVersions.find(
+        (candidate) => candidate.id === existingLink.documentVersionId,
+      );
+      if (existingVersion) return json(existingVersion);
+    }
+
+    if (!setupLuzernerForms.has(setupAgreement.id)) {
+      return apiError(
+        404,
+        'LUZERNER_LEASE_FORM_NOT_FOUND',
+        'No Luzerner lease form exists for this agreement.',
+      );
+    }
+
+    const existingVersion = setupDocumentVersions.find(
+      (candidate) => candidate.id === setupLuzernerFinalDocumentVersionId,
+    );
+    if (existingVersion) return json(existingVersion);
+
+    const document: DocumentResponse = {
+      id: setupLuzernerFinalDocumentId,
+      code: 'LUZERNER-FINAL-' + setupAgreement.code,
+      title: setupAgreement.code + ' Luzerner Mietvertrag',
+      category: 'legal',
+      status: 'active',
+      latestVersionNumber: 1,
+      revision: 2,
+    };
+    const version: DocumentVersionResponse = {
+      id: setupLuzernerFinalDocumentVersionId,
+      documentId: document.id,
+      versionNumber: 1,
+      fileName: 'mietvertrag-' + setupAgreement.code + '.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 29,
+      sha256: '7'.repeat(64),
+      status: 'final',
+      finalizedAt: '2027-06-15T12:00:00.000Z',
+    };
+    const link: DocumentLinkResponse = {
+      id: setupLuzernerFinalDocumentLinkId,
+      documentId: document.id,
+      documentVersionId: version.id,
+      relation: 'signed_original',
+      targetType: 'lease_agreement',
+      targetId: setupAgreement.id,
+    };
+
+    setupDocuments.push(document);
+    setupDocumentVersions.push(version);
+    setupDocumentLinks.push(link);
+    browserHarnessWindow.__portfolioLuzernerFinalDocumentCount =
+      (browserHarnessWindow.__portfolioLuzernerFinalDocumentCount ?? 0) + 1;
+    return json(version);
+  }
 
   if (
     setupAgreement &&

@@ -2,7 +2,12 @@ import { PostgresApiRateLimiter } from './api-rate-limit.js';
 import { isPublicHealthRuntimePath } from './runtime-path.js';
 import { createSupabaseContext } from '@supabase/server';
 import postgres from 'postgres';
-import type { FileStoragePort, PdfPort, StaffAuthAdminPort } from '@portfolio/application';
+import type {
+  FileStoragePort,
+  LuzernerLeasePdfPort,
+  PdfPort,
+  StaffAuthAdminPort,
+} from '@portfolio/application';
 import {
   createObservedHttpHandler,
   createPortfolioHttpHandler,
@@ -37,6 +42,7 @@ export interface SupabaseApiConfig {
   readonly databaseUrl: string;
   readonly fileStorage: FileStoragePort;
   readonly pdfPort: PdfPort;
+  readonly luzernerLeasePdfPort?: LuzernerLeasePdfPort;
   readonly staffAuthAdmin: StaffAuthAdminPort;
   readonly basePath?: string;
   readonly serviceVersion?: string;
@@ -110,6 +116,9 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
       ownershipRepository,
       tenancyRepository,
       leaseRepository,
+      ...(config.luzernerLeasePdfPort === undefined
+        ? {}
+        : { luzernerLeasePdfPort: config.luzernerLeasePdfPort }),
       documentRepository,
       inspectionRepository,
       improvementRepository,
@@ -253,6 +262,8 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
 }
 
 export * from './canonical-inspection-pdf-renderer.js';
+export * from './canonical-luzerner-pdf-renderer.js';
+export * from './luzerner-2020-template/source-wording.js';
 
 export * from './runtime-path.js';
 

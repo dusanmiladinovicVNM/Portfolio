@@ -53,6 +53,19 @@ describe('Document domain', () => {
     ).toThrowError(/Only a stored document version/);
   });
 
+  it('requires generated_contract to identify an exact lease agreement version', () => {
+    expect(() =>
+      createDocumentLink({
+        id: asDocumentLinkId('10000000-0000-4000-8000-000000000005'),
+        documentId: document.id,
+        documentVersionId: null,
+        relation: 'generated_contract',
+        targetType: 'lease_agreement',
+        targetId: asLeaseAgreementId('10000000-0000-4000-8000-000000000004'),
+      }),
+    ).toThrowError(/exact final document version/);
+  });
+
   it('requires signed_original to identify an exact legal document version', () => {
     expect(() =>
       createDocumentLink({

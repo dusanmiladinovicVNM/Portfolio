@@ -13,6 +13,7 @@ import {
   type ImprovementRepository,
   type InspectionRepository,
   type LeaseRepository,
+  type LuzernerLeasePdfPort,
   type MaintenanceRepository,
   type MeterRepository,
   type OwnershipRepository,
@@ -61,6 +62,7 @@ export interface PortfolioHttpDependencies {
   readonly ownershipRepository: OwnershipRepository;
   readonly tenancyRepository: TenancyRepository;
   readonly leaseRepository: LeaseRepository;
+  readonly luzernerLeasePdfPort?: LuzernerLeasePdfPort;
   readonly documentRepository: DocumentRepository;
   readonly inspectionRepository: InspectionRepository;
   readonly improvementRepository: ImprovementRepository;
@@ -132,7 +134,11 @@ function errorStatus(code: string): number {
     code === 'DOCUMENT_STORAGE_VERIFICATION_FAILED'
   ) return 502;
   if (code === 'DOCUMENT_BINARY_UPLOAD_LIMIT_EXCEEDED') return 413;
-  if (code === 'STAFF_AUTH_RECONCILIATION_REQUIRED' || code === 'STAFF_ADMINISTRATION_UNAVAILABLE') return 503;
+  if (
+    code === 'STAFF_AUTH_RECONCILIATION_REQUIRED' ||
+    code === 'STAFF_ADMINISTRATION_UNAVAILABLE' ||
+    code === 'LUZERNER_PDF_RENDERER_UNAVAILABLE'
+  ) return 503;
   if (code === 'STAFF_AUTH_INVITE_FAILED') return 502;
   if (
     code === 'DOCUMENT_BINARY_DELIVERY_LIMIT_EXCEEDED' ||
@@ -443,6 +449,14 @@ export function createPortfolioHttpHandler(
               leaseRepository: deps.leaseRepository,
               tenancyRepository: deps.tenancyRepository,
               partyRepository: deps.partyRepository,
+              portfolioRepository: deps.portfolioRepository,
+              documentRepository: deps.documentRepository,
+              fileStorage: deps.fileStorage,
+              sha256: deps.sha256,
+              clock: deps.clock,
+              ...(deps.luzernerLeasePdfPort === undefined
+                ? {}
+                : { luzernerLeasePdfPort: deps.luzernerLeasePdfPort }),
               idGenerator: deps.idGenerator,
             },
             actor,

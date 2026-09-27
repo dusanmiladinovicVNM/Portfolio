@@ -3,6 +3,7 @@ import type { TransactionSql } from 'postgres';
 import type {
   AgreementSupersession,
   LeaseRepository,
+  LuzernerLeasePdfSnapshot,
 } from '@portfolio/application';
 import {
   DomainError,
@@ -67,6 +68,17 @@ interface LuzernerLeaseFormRow {
   template_code: string;
   revision: number;
   content: LuzernerLeaseFormContent;
+}
+
+interface LuzernerLeasePdfSnapshotRow {
+  agreement_id: string;
+  form_revision: number;
+  template_code: string;
+  template_revision: number;
+  content: Omit<
+    LuzernerLeasePdfSnapshot,
+    'formRevision' | 'templateCode' | 'templateRevision'
+  >;
 }
 
 interface AmendmentRow {
@@ -188,6 +200,29 @@ function mapLuzernerLeaseForm(
     revision: row.revision,
     content: normalizeLuzernerLeaseFormContent(row.content),
   };
+}
+
+function mapLuzernerLeasePdfSnapshot(
+  row: LuzernerLeasePdfSnapshotRow,
+): LuzernerLeasePdfSnapshot {
+  return {
+    formRevision: row.form_revision,
+    templateCode: row.template_code,
+    templateRevision: row.template_revision,
+    ...row.content,
+  };
+}
+
+function luzernerPdfSnapshotJson(
+  snapshot: LuzernerLeasePdfSnapshot,
+): ReturnType<typeof JSON.parse> {
+  const {
+    formRevision: _formRevision,
+    templateCode: _templateCode,
+    templateRevision: _templateRevision,
+    ...content
+  } = snapshot;
+  return JSON.parse(JSON.stringify(content));
 }
 
 function mapAmendment(row: AmendmentRow): LeaseAmendment {
@@ -472,6 +507,7 @@ export class PostgresLeaseRepository implements LeaseRepository {
     terms: TenancyTermVersion,
     predecessorToSupersede?: AgreementSupersession,
     expectedLuzernerFormRevision?: number | null,
+    luzernerPdfSnapshot?: LuzernerLeasePdfSnapshot | null,
   ): Promise<void> {
     await withTranslatedErrors(async () => {
       await this.sql.begin(async (tx) => {
@@ -496,18 +532,60 @@ export class PostgresLeaseRepository implements LeaseRepository {
         }
 
         if (expectedLuzernerFormRevision !== undefined) {
-          const formRows = await tx<{ revision: number }[]>`
-            select revision
+          const formRows = await tx<
+            { revision: number; template_code: string }[]
+          >`
+            select revision, template_code
             from public.lease_agreement_luzerner_forms
             where agreement_id = ${agreement.id}
           `;
           const actualRevision = formRows[0]?.revision ?? null;
+          const actualTemplateCode = formRows[0]?.template_code ?? null;
           if (actualRevision !== expectedLuzernerFormRevision) {
             throw new DomainError(
               'LUZERNER_LEASE_FORM_REVISION_CONFLICT',
               'The Luzerner lease form changed while Agreement signing was in progress.',
             );
           }
+
+          if (
+            actualRevision !== null &&
+            (
+              luzernerPdfSnapshot == null ||
+              luzernerPdfSnapshot.formRevision !== actualRevision ||
+              luzernerPdfSnapshot.templateCode !== actualTemplateCode
+            )
+          ) {
+            throw new DomainError(
+              'LUZERNER_PDF_SIGNED_SNAPSHOT_MISSING',
+              'Signing a Luzerner Agreement requires the exact immutable PDF presentation snapshot.',
+            );
+          }
+
+          if (actualRevision === null && luzernerPdfSnapshot != null) {
+            throw new DomainError(
+              'LUZERNER_PDF_SIGNED_SNAPSHOT_MISMATCH',
+              'A Luzerner PDF presentation snapshot cannot exist without a Luzerner form.',
+            );
+          }
+        }
+
+        if (luzernerPdfSnapshot != null) {
+          await tx`
+            insert into public.lease_agreement_luzerner_pdf_snapshots (
+              agreement_id,
+              form_revision,
+              template_code,
+              template_revision,
+              content
+            ) values (
+              ${agreement.id},
+              ${luzernerPdfSnapshot.formRevision},
+              ${luzernerPdfSnapshot.templateCode},
+              ${luzernerPdfSnapshot.templateRevision},
+              ${tx.json(luzernerPdfSnapshotJson(luzernerPdfSnapshot))}
+            )
+          `;
         }
 
         if (predecessorToSupersede) {
@@ -568,6 +646,25 @@ export class PostgresLeaseRepository implements LeaseRepository {
       limit 1
     `;
     return rows.length === 0 ? null : mapLuzernerLeaseForm(rows[0]!);
+  }
+
+  async getLuzernerLeasePdfSnapshot(
+    agreementId: LeaseAgreementId,
+  ): Promise<LuzernerLeasePdfSnapshot | null> {
+    const rows = await this.sql<LuzernerLeasePdfSnapshotRow[]>`
+      select
+        agreement_id,
+        form_revision,
+        template_code,
+        template_revision,
+        content
+      from public.lease_agreement_luzerner_pdf_snapshots
+      where agreement_id = ${agreementId}
+      limit 1
+    `;
+    return rows.length === 0
+      ? null
+      : mapLuzernerLeasePdfSnapshot(rows[0]!);
   }
 
   async insertLuzernerLeaseForm(

@@ -110,6 +110,24 @@ export interface LinkDocumentDependencies extends DocumentDependencies {
   readonly leaseRepository: LeaseRepository;
 }
 
+const SYSTEM_OWNED_DOCUMENT_CODE_PREFIXES = ['LUZERNER-FINAL-'] as const;
+
+function isSystemOwnedDocumentCode(code: string): boolean {
+  const normalized = code.trim().toUpperCase();
+  return SYSTEM_OWNED_DOCUMENT_CODE_PREFIXES.some((prefix) =>
+    normalized.startsWith(prefix),
+  );
+}
+
+function assertGenericDocumentOwnership(document: Document): void {
+  if (isSystemOwnedDocumentCode(document.code)) {
+    throw new DomainError(
+      'DOCUMENT_SYSTEM_OWNED',
+      'This Document is owned by a dedicated system workflow.',
+    );
+  }
+}
+
 async function requireDocument(
   repository: DocumentRepository,
   id: DocumentId,
@@ -141,6 +159,12 @@ export async function createDocumentCommand(
   input: CreateDocumentCommandInput,
 ): Promise<Document> {
   requireCapability(actor, 'documents:write');
+  if (isSystemOwnedDocumentCode(input.code)) {
+    throw new DomainError(
+      'DOCUMENT_CODE_RESERVED',
+      'This Document code namespace is reserved for a dedicated system workflow.',
+    );
+  }
   return createDocumentRecord(deps, input);
 }
 
@@ -154,6 +178,8 @@ export async function uploadDocumentVersionCommand(
   input: UploadDocumentVersionCommandInput,
 ): Promise<DocumentVersion> {
   authorizeDocumentVersionUploadCommand(actor);
+  const document = await requireDocument(deps.documentRepository, input.documentId);
+  assertGenericDocumentOwnership(document);
   return uploadDocumentVersionRecord(deps, input);
 }
 
@@ -163,6 +189,12 @@ export async function finalizeDocumentVersionCommand(
   versionId: DocumentVersionId,
 ): Promise<DocumentVersion> {
   requireCapability(actor, 'documents:write');
+  const version = await requireVersion(deps.documentRepository, versionId);
+  const document = await requireDocument(
+    deps.documentRepository,
+    version.documentId,
+  );
+  assertGenericDocumentOwnership(document);
   return finalizeDocumentVersionRecord(deps, versionId);
 }
 
@@ -210,6 +242,15 @@ async function assertTargetExists(
           'A signed original may only be linked to a signed legal record.',
         );
       }
+      if (
+        input.relation === 'generated_contract' &&
+        !['signed', 'superseded', 'terminated'].includes(agreement.status)
+      ) {
+        throw new DomainError(
+          'DOCUMENT_GENERATED_CONTRACT_TARGET_NOT_FINAL',
+          'A generated contract may only be linked to a signed legal record.',
+        );
+      }
       return;
     }
     case 'lease_amendment': {
@@ -241,11 +282,18 @@ export async function linkDocumentCommand(
   input: LinkDocumentCommandInput,
 ): Promise<DocumentLink> {
   requireCapability(actor, 'documents:write');
+  if (input.relation === 'generated_contract') {
+    throw new DomainError(
+      'DOCUMENT_LINK_RELATION_SYSTEM_OWNED',
+      'generated_contract links may only be created by the canonical contract generator.',
+    );
+  }
 
   const document = await requireDocument(
     deps.documentRepository,
     input.documentId,
   );
+  assertGenericDocumentOwnership(document);
 
   let version: DocumentVersion | null = null;
   if (input.documentVersionId !== undefined && input.documentVersionId !== null) {
@@ -267,7 +315,6 @@ export async function linkDocumentCommand(
       'signed_original requires a finalized immutable document version.',
     );
   }
-
   await assertTargetExists(deps, input);
 
   const common = {

@@ -1895,6 +1895,42 @@ try {
       "//button[normalize-space()='Create Agreement draft' and not(@disabled)]",
   );
 
+  const luzernerPdfPreviewsBefore = await executeScript(
+    sessionId,
+    'return window.__portfolioLuzernerPdfPreviewCount || 0;',
+  );
+  await clickXpath(
+    sessionId,
+    luzernerForm + "//button[normalize-space()='Generate PDF preview']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    luzernerForm +
+      "//*[contains(normalize-space(),'PDF generated from canonical revision 1.')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    luzernerForm + "//a[normalize-space()='Open generated PDF']",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioLuzernerPdfPreviewCount || 0;',
+    ),
+    luzernerPdfPreviewsBefore + 1,
+    'Saved canonical Luzerner form produces exactly one PDF preview request',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      luzernerForm + "//button[normalize-space()='Store final signed PDF']",
+    ),
+    false,
+    'Draft Agreement does not expose final Luzerner Document storage',
+  );
+
   await typeXpath(
     sessionId,
     luzernerForm +
@@ -2289,6 +2325,19 @@ try {
     ),
     false,
     'Agreement signed-original workflow closes after recovery link',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    luzernerForm + "//button[normalize-space()='Final PDF stored' and @disabled]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioLuzernerFinalDocumentCount || 0;',
+    ),
+    0,
+    'Existing signed original closes automatic Luzerner final storage without duplicate generation',
   );
 
 

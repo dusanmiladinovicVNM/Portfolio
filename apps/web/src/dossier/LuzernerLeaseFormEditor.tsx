@@ -1,4 +1,5 @@
 import {
+  documentVersionResponseSchema,
   luzernerLeaseFormResponseSchema,
   type LeaseAgreementResponse,
   type LuzernerLeaseFormContentRequest,
@@ -15,7 +16,11 @@ import {
   type LuzernerSharedUseKey,
 } from '@portfolio/domain';
 import { useEffect, useRef, useState } from 'react';
-import { agreementLuzernerFormPath } from '../api/paths.js';
+import {
+  agreementLuzernerFinalDocumentPath,
+  agreementLuzernerFormPath,
+  agreementLuzernerPdfPath,
+} from '../api/paths.js';
 import type { SetNavigationBlocker } from '../navigation/use-workspace-navigation.js';
 import {
   isAmbiguousWriteFailure,
@@ -26,6 +31,8 @@ import {
 interface LuzernerLeaseFormEditorProps {
   readonly api: PortfolioApi;
   readonly agreement: LeaseAgreementResponse;
+  readonly hasSignedOriginal: boolean;
+  readonly onDocumentWrite: () => void;
   readonly onWriteBlockChange: (blocked: boolean) => void;
   readonly setNavigationBlocker: SetNavigationBlocker;
 }
@@ -134,6 +141,8 @@ function setCustomAncillaryValue(
 export function LuzernerLeaseFormEditor({
   api,
   agreement,
+  hasSignedOriginal,
+  onDocumentWrite,
   onWriteBlockChange,
   setNavigationBlocker,
 }: LuzernerLeaseFormEditorProps) {
@@ -145,6 +154,9 @@ export function LuzernerLeaseFormEditor({
   const draftRef = useRef<LuzernerLeaseFormContentRequest>(draft);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [finalDocumentLoading, setFinalDocumentLoading] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -161,6 +173,12 @@ export function LuzernerLeaseFormEditor({
       mountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
+    };
+  }, [pdfPreviewUrl]);
 
   useEffect(() => {
     return () => {
@@ -253,6 +271,7 @@ export function LuzernerLeaseFormEditor({
     draftRef.current = next;
     setDraft(next);
     setDirty(true);
+    setPdfPreviewUrl(null);
     setSuccess(null);
     setError(null);
   }
@@ -270,7 +289,90 @@ export function LuzernerLeaseFormEditor({
     setDraft(value.content);
     setDirty(false);
     setOutcomeAmbiguous(false);
+    setPdfPreviewUrl(null);
     ambiguousAttemptRef.current = null;
+  }
+
+  async function generatePdfPreview(): Promise<void> {
+    if (
+      canonical === null ||
+      dirty ||
+      saving ||
+      outcomeAmbiguous ||
+      pdfLoading
+    ) {
+      return;
+    }
+
+    setPdfLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const blob = await api.getBinary(
+        agreementLuzernerPdfPath(agreement.id),
+      );
+      if (!mountedRef.current) return;
+
+      const url = URL.createObjectURL(
+        blob.type === 'application/pdf'
+          ? blob
+          : new Blob([blob], { type: 'application/pdf' }),
+      );
+      setPdfPreviewUrl(url);
+      setSuccess(
+        `PDF generated from canonical revision ${canonical.revision}.`,
+      );
+    } catch (cause) {
+      if (!mountedRef.current) return;
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Luzerner PDF could not be generated.',
+      );
+    } finally {
+      if (mountedRef.current) setPdfLoading(false);
+    }
+  }
+
+  async function generateFinalDocument(): Promise<void> {
+    if (
+      canonical === null ||
+      dirty ||
+      saving ||
+      outcomeAmbiguous ||
+      finalDocumentLoading ||
+      hasSignedOriginal ||
+      !['signed', 'superseded', 'terminated'].includes(agreement.status)
+    ) {
+      return;
+    }
+
+    setFinalDocumentLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const version = await api.post(
+        agreementLuzernerFinalDocumentPath(agreement.id),
+        {},
+        documentVersionResponseSchema,
+      );
+      if (!mountedRef.current) return;
+      onDocumentWrite();
+      setSuccess(
+        `Final Luzerner PDF stored as immutable DocumentVersion ${version.versionNumber}.`,
+      );
+    } catch (cause) {
+      if (!mountedRef.current) return;
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Final Luzerner PDF could not be stored.',
+      );
+    } finally {
+      if (mountedRef.current) setFinalDocumentLoading(false);
+    }
   }
 
   async function recoverAmbiguousAttempt(): Promise<boolean> {
@@ -1045,9 +1147,55 @@ export function LuzernerLeaseFormEditor({
 
       <div className="setup-form-actions">
         <span className="setup-hint">
-          Property, Unit and Party identity stay canonical outside this
-          template-specific draft. PDF generation will consume both sources.
+          {agreement.status === 'draft'
+            ? 'Draft PDF preview uses the saved form revision plus current Property, Unit and Party identity.'
+            : 'Signed PDF output uses the immutable Property, Unit and Party presentation snapshot captured at Agreement signing.'}
         </span>
+        <button
+          className="button-secondary"
+          disabled={
+            canonical === null ||
+            dirty ||
+            saving ||
+            outcomeAmbiguous ||
+            pdfLoading
+          }
+          onClick={() => void generatePdfPreview()}
+          type="button"
+        >
+          {pdfLoading ? 'Generating PDF…' : 'Generate PDF preview'}
+        </button>
+        {pdfPreviewUrl ? (
+          <a
+            className="button-secondary"
+            href={pdfPreviewUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
+            Open generated PDF
+          </a>
+        ) : null}
+        {['signed', 'superseded', 'terminated'].includes(agreement.status) ? (
+          <button
+            className="button-secondary"
+            disabled={
+              canonical === null ||
+              dirty ||
+              saving ||
+              outcomeAmbiguous ||
+              finalDocumentLoading ||
+              hasSignedOriginal
+            }
+            onClick={() => void generateFinalDocument()}
+            type="button"
+          >
+            {hasSignedOriginal
+              ? 'Final PDF stored'
+              : finalDocumentLoading
+                ? 'Storing final PDF…'
+                : 'Store final signed PDF'}
+          </button>
+        ) : null}
         <button
           className="button-primary"
           disabled={

@@ -27,10 +27,17 @@ import {
   type TermSnapshotInput,
 } from '@portfolio/domain';
 import { requireCapability, type Actor } from '../security/access.js';
+import { ApplicationError } from '../shared/application-error.js';
+import type { LuzernerLeasePdfPort } from './luzerner-lease-pdf-port.js';
 import type { IdGenerator } from '../shared/id-generator.js';
 import type { PartyRepository } from '../parties/party-repository.js';
+import type { PortfolioRepository } from '../portfolio/portfolio-repository.js';
 import type { TenancyRepository } from '../tenancy/tenancy-repository.js';
 import type { AgreementSupersession, LeaseRepository } from './lease-repository.js';
+import {
+  buildLuzernerLeasePdfSnapshot,
+  renderFrozenLuzernerLeasePdf,
+} from './luzerner-lease-pdf-commands.js';
 
 export interface LeaseAgreementPartyCommandInput {
   partyId: PartyId;
@@ -60,6 +67,11 @@ export interface LeaseDependencies {
   tenancyRepository: TenancyRepository;
   partyRepository: PartyRepository;
   idGenerator: IdGenerator;
+}
+
+export interface SignLeaseAgreementDependencies extends LeaseDependencies {
+  portfolioRepository: PortfolioRepository;
+  luzernerLeasePdfPort?: LuzernerLeasePdfPort;
 }
 
 function moneyCents(value: string | null): bigint {
@@ -344,7 +356,7 @@ export async function createLeaseAgreementCommand(
 }
 
 export async function signLeaseAgreementCommand(
-  deps: LeaseDependencies,
+  deps: SignLeaseAgreementDependencies,
   actor: Actor,
   agreementId: LeaseAgreementId,
   expectedVersion: number,
@@ -432,8 +444,34 @@ export async function signLeaseAgreementCommand(
       : {}),
   });
 
+  let luzernerPdfSnapshot = null;
   if (luzernerForm !== null) {
     assertLuzernerLeaseSignConsistency(luzernerForm, signed, termVersion);
+    if (!deps.luzernerLeasePdfPort) {
+      throw new ApplicationError(
+        'LUZERNER_PDF_RENDERER_UNAVAILABLE',
+        'Luzerner PDF rendering is required before a Luzerner Agreement can be signed.',
+      );
+    }
+    const templateIdentity =
+      deps.luzernerLeasePdfPort.getCurrentTemplateIdentity();
+    if (templateIdentity.templateCode !== luzernerForm.templateCode) {
+      throw new ApplicationError(
+        'LUZERNER_PDF_TEMPLATE_MISMATCH',
+        'Current Luzerner PDF renderer does not match the contract template being signed.',
+      );
+    }
+    luzernerPdfSnapshot = await buildLuzernerLeasePdfSnapshot(
+      deps,
+      signed,
+      luzernerForm.revision,
+      templateIdentity,
+    );
+    await renderFrozenLuzernerLeasePdf(
+      deps.luzernerLeasePdfPort,
+      luzernerPdfSnapshot,
+      luzernerForm.content,
+    );
   }
 
   await deps.leaseRepository.signAgreement(
@@ -442,6 +480,7 @@ export async function signLeaseAgreementCommand(
     termVersion,
     predecessorToSupersede,
     luzernerForm?.revision ?? null,
+    luzernerPdfSnapshot,
   );
 
   return signed;

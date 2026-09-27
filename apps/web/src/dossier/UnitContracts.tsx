@@ -845,7 +845,15 @@ export function UnitContracts({
           <LuzernerLeaseFormEditor
             agreement={selectedAgreement}
             api={api}
+            hasSignedOriginal={
+              agreementDocuments?.some(
+                (reference) => reference.link.relation === 'signed_original',
+              ) ?? false
+            }
             key={selectedAgreement.id}
+            onDocumentWrite={() =>
+              setDocumentRevision((revision) => revision + 1)
+            }
             onWriteBlockChange={setLuzernerFormBlocksWrites}
             setNavigationBlocker={setNavigationBlocker}
           />

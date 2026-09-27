@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ApplicationError,
   type Actor,
   type AgreementSupersession,
   type IdGenerator,
   type LeaseRepository,
+  type LuzernerLeasePdfPort,
+  type LuzernerLeasePdfRenderInput,
+  type LuzernerLeasePdfSnapshot,
   type OwnershipRepository,
   type PartyRepository,
   type PortfolioRepository,
@@ -16,6 +20,7 @@ import {
   asLeaseAgreementId,
   asLeaseAmendmentId,
   asPartyId,
+  asPropertyId,
   asTenancyId,
   asTenancyPartyId,
   asUnitId,
@@ -216,6 +221,10 @@ class InMemoryLeaseRepository implements LeaseRepository {
   readonly amendments = new Map<LeaseAmendmentId, LeaseAmendment>();
   readonly terms: TenancyTermVersion[] = [];
   readonly luzernerForms = new Map<LeaseAgreementId, LuzernerLeaseFormDraft>();
+  readonly luzernerPdfSnapshots = new Map<
+    LeaseAgreementId,
+    LuzernerLeasePdfSnapshot
+  >();
   beforeAgreementSign: (() => void) | null = null;
 
   async getAgreementById(id: LeaseAgreementId): Promise<LeaseAgreement | null> {
@@ -252,6 +261,7 @@ class InMemoryLeaseRepository implements LeaseRepository {
     terms: TenancyTermVersion,
     predecessorToSupersede?: AgreementSupersession,
     expectedLuzernerFormRevision?: number | null,
+    luzernerPdfSnapshot?: LuzernerLeasePdfSnapshot | null,
   ): Promise<void> {
     const current = this.agreements.get(agreement.id);
     if (!current || current.version !== expectedVersion) {
@@ -271,6 +281,27 @@ class InMemoryLeaseRepository implements LeaseRepository {
           'The Luzerner lease form changed while Agreement signing was in progress.',
         );
       }
+    }
+
+    const actualFormRevision =
+      this.luzernerForms.get(agreement.id)?.revision ?? null;
+    if (
+      actualFormRevision !== null &&
+      (
+        luzernerPdfSnapshot == null ||
+        luzernerPdfSnapshot.formRevision !== actualFormRevision
+      )
+    ) {
+      throw new DomainError(
+        'LUZERNER_PDF_SIGNED_SNAPSHOT_MISSING',
+        'Signing a Luzerner Agreement requires its exact PDF presentation snapshot.',
+      );
+    }
+    if (actualFormRevision === null && luzernerPdfSnapshot != null) {
+      throw new DomainError(
+        'LUZERNER_PDF_SIGNED_SNAPSHOT_MISMATCH',
+        'A Luzerner PDF presentation snapshot requires a Luzerner form.',
+      );
     }
 
     if (
@@ -308,6 +339,9 @@ class InMemoryLeaseRepository implements LeaseRepository {
     }
     this.agreements.set(agreement.id, agreement);
     this.terms.push(terms);
+    if (luzernerPdfSnapshot) {
+      this.luzernerPdfSnapshots.set(agreement.id, luzernerPdfSnapshot);
+    }
   }
 
   async cancelAgreement(
@@ -327,6 +361,12 @@ class InMemoryLeaseRepository implements LeaseRepository {
     agreementId: LeaseAgreementId,
   ): Promise<LuzernerLeaseFormDraft | null> {
     return this.luzernerForms.get(agreementId) ?? null;
+  }
+
+  async getLuzernerLeasePdfSnapshot(
+    agreementId: LeaseAgreementId,
+  ): Promise<LuzernerLeasePdfSnapshot | null> {
+    return this.luzernerPdfSnapshots.get(agreementId) ?? null;
   }
 
   async insertLuzernerLeaseForm(form: LuzernerLeaseFormDraft): Promise<void> {
@@ -451,6 +491,7 @@ class InMemoryLeaseRepository implements LeaseRepository {
 
 const TENANCY_ID = asTenancyId('10000000-0000-4000-8000-000000000001');
 const UNIT_ID = asUnitId('10000000-0000-4000-8000-000000000002');
+const PROPERTY_ID = asPropertyId('10000000-0000-4000-8000-000000000007');
 const TENANT_ID = asPartyId('10000000-0000-4000-8000-000000000003');
 const LANDLORD_ID = asPartyId('10000000-0000-4000-8000-000000000004');
 const OTHER_ID = asPartyId('10000000-0000-4000-8000-000000000005');
@@ -470,7 +511,20 @@ function person(id: PartyId, code: string, firstName: string): Party {
   };
 }
 
-function buildHandler() {
+function buildHandler(options?: {
+  readonly luzernerLeasePdfPort?: LuzernerLeasePdfPort;
+}) {
+  const defaultLuzernerLeasePdfPort: LuzernerLeasePdfPort = {
+    getCurrentTemplateIdentity() {
+      return { templateCode: 'lu-2020', templateRevision: 1 };
+    },
+    async renderLuzernerLeaseAgreement(input) {
+      return {
+        fileName: `mietvertrag-${input.agreementCode}.pdf`,
+        content: new TextEncoder().encode('%PDF-test'),
+      };
+    },
+  };
   const partyRepository = new InMemoryPartyRepository();
   partyRepository.parties.set(TENANT_ID, person(TENANT_ID, 'PTY-TENANT', 'Tenant'));
   partyRepository.parties.set(LANDLORD_ID, person(LANDLORD_ID, 'PTY-LANDLORD', 'Landlord'));
@@ -502,6 +556,54 @@ function buildHandler() {
 
   const leaseRepository = new InMemoryLeaseRepository();
 
+  const portfolioRepository: PortfolioRepository = {
+    async getPropertyById(id) {
+      if (id !== PROPERTY_ID) return null;
+      return {
+        id: PROPERTY_ID,
+        code: 'LU-TEST',
+        name: 'Luzern Test Property',
+        propertyType: 'apartment_building',
+        street: 'Seestrasse',
+        houseNumber: '12',
+        postalCode: '6003',
+        city: 'Luzern',
+        countryCode: 'CH',
+        yearBuilt: null,
+        status: 'active',
+      };
+    },
+    async getUnitById(id) {
+      if (id !== UNIT_ID) return null;
+      return {
+        id: UNIT_ID,
+        propertyId: PROPERTY_ID,
+        code: 'LU-301',
+        unitNumber: '3.01',
+        unitType: 'apartment',
+        floor: '3. OG',
+        areaM2: 82,
+        rooms: 3.5,
+        status: 'active',
+        notes: '',
+      };
+    },
+    async getSpaceById(_id) { return null; },
+    async listProperties() { return []; },
+    async listUnitsByProperty(_propertyId) { return []; },
+    async listSpacesByUnit(_unitId) { return []; },
+    async propertyCodeExists(_code) { return false; },
+    async unitCodeExists(_code) { return false; },
+    async unitNumberExists(_propertyId, _unitNumber) { return false; },
+    async spaceCodeExists(_unitId, _code) { return false; },
+    async insertProperty(_property) {},
+    async insertUnit(_unit) {},
+    async insertSpace(_space) {},
+  };
+
+  const documentRepository = new InMemoryDocumentRepository();
+  const fileStorage = new MemoryFileStorage();
+
   const handler = createPortfolioHttpHandler({
     accessItemRepository: new InMemoryAccessItemRepository(),
     meterRepository: new InMemoryMeterRepository(),
@@ -513,15 +615,17 @@ function buildHandler() {
     improvementRepository: new InMemoryImprovementRepository(),
     costRepository: new InMemoryCostRepository(),
     maintenanceRepository: new InMemoryMaintenanceRepository(),
-    portfolioRepository: new EmptyPortfolioRepository(),
+    portfolioRepository,
     partyRepository,
     ownershipRepository: new EmptyOwnershipRepository(),
     tenancyRepository,
     leaseRepository,
-    documentRepository: new InMemoryDocumentRepository(),
+    luzernerLeasePdfPort:
+      options?.luzernerLeasePdfPort ?? defaultLuzernerLeasePdfPort,
+    documentRepository,
     inspectionRepository: new InMemoryInspectionRepository(),
     staffDirectoryRepository: new InMemoryStaffDirectoryRepository(),
-    fileStorage: new MemoryFileStorage(),
+    fileStorage,
     pdfPort: unusedPdfPort,
     sha256: testSha256,
     clock: new FixedClock(),
@@ -542,10 +646,509 @@ function buildHandler() {
     ]),
   });
 
-  return { handler, leaseRepository };
+  return {
+    handler,
+    leaseRepository,
+    partyRepository,
+    documentRepository,
+    fileStorage,
+  };
 }
 
+describe('System-owned generated contract boundaries', () => {
+  it('rejects generic generated_contract links at the transport boundary', async () => {
+    const { handler } = buildHandler();
+
+    const response = await handler(
+      new Request(
+        'https://portfolio.test/documents/20000000-0000-4000-8000-000000000099/links',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            documentVersionId: '20000000-0000-4000-8000-000000000098',
+            relation: 'generated_contract',
+            targetType: 'lease_agreement',
+            targetId: '20000000-0000-4000-8000-000000000097',
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+
+    expect(response.status).toBe(400);
+  });
+
+  it('rejects generic creation inside the reserved LUZERNER-FINAL namespace', async () => {
+    const { handler } = buildHandler();
+
+    const response = await handler(
+      new Request('https://portfolio.test/documents', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'luzerner-final-AGR-SPOOF',
+          title: 'Spoofed canonical contract',
+          category: 'legal',
+        }),
+      }),
+      adminIdentity,
+    );
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'DOCUMENT_CODE_RESERVED' },
+    });
+  });
+});
+
 describe('Lease HTTP lifecycle', () => {
+  it('renders a canonical Luzerner PDF preview from saved form and dossier identity', async () => {
+    let captured: LuzernerLeasePdfRenderInput | null = null;
+    const luzernerLeasePdfPort: LuzernerLeasePdfPort = {
+      getCurrentTemplateIdentity() {
+        return { templateCode: 'lu-2020', templateRevision: 1 };
+      },
+      async renderLuzernerLeaseAgreement(input) {
+        captured = input;
+        return {
+          fileName: 'mietvertrag-AGR-0001.pdf',
+          content: new TextEncoder().encode('%PDF-preview'),
+        };
+      },
+    };
+
+    const { handler } = buildHandler({ luzernerLeasePdfPort });
+
+    const created = await handler(
+      new Request(`https://portfolio.test/tenancies/${TENANCY_ID}/agreements`, {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'AGR-0001',
+          agreementType: 'initial',
+          effectiveFrom: '2026-10-01',
+          effectiveTo: '2027-09-30',
+          parties: [
+            { partyId: LANDLORD_ID, role: 'landlord' },
+            { partyId: TENANT_ID, role: 'tenant' },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(created.status).toBe(201);
+    const agreement = (await created.json()).data as { id: string };
+
+    const empty = emptyLuzernerLeaseFormContent();
+    const saved = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedRevision: null,
+            content: {
+              ...empty,
+              useType: 'apartment',
+              moveInDate: '2026-10-01',
+              durationKind: 'indefinite',
+              terminationSchedule: 'monthly_except_december',
+              noticePeriodKind: 'residential_3_months',
+              netRent: '1500.00',
+              paymentFrequency: 'monthly',
+              rentAdjustmentMode: 'termination_date',
+              rentAdjustmentAdvanceMonths: 3,
+              ancillaryClosingDate: 'december_31',
+              placeOfSigning: 'Luzern',
+              signingDate: '2026-09-25',
+            },
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(saved.status).toBe(200);
+
+    const preview = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form/pdf`,
+      ),
+      adminIdentity,
+    );
+
+    expect(preview.status).toBe(200);
+    expect(preview.headers.get('content-type')).toBe('application/pdf');
+    expect(preview.headers.get('cache-control')).toBe('private, no-store');
+    expect(preview.headers.get('content-disposition')).toContain(
+      'mietvertrag-AGR-0001.pdf',
+    );
+    expect(await preview.text()).toBe('%PDF-preview');
+    expect(captured).not.toBeNull();
+    expect(captured!.agreementCode).toBe('AGR-0001');
+    expect(captured!.agreementEffectiveFrom).toBe('2026-10-01');
+    expect(captured!.property).toMatchObject({
+      street: 'Seestrasse',
+      houseNumber: '12',
+      postalCode: '6003',
+      city: 'Luzern',
+    });
+    expect(captured!.unit).toMatchObject({
+      unitNumber: '3.01',
+      unitType: 'apartment',
+      rooms: 3.5,
+    });
+    expect(captured!.landlords[0]?.displayName).toBe('Landlord Test');
+    expect(captured!.tenants[0]?.displayName).toBe('Tenant Test');
+    expect(captured!.form.netRent).toBe('1500.00');
+  });
+
+  it('freezes one idempotent generated Luzerner PDF without occupying signed_original', async () => {
+    let renderCount = 0;
+    let currentTemplateRevision = 1;
+    const renderInputs: LuzernerLeasePdfRenderInput[] = [];
+    const renderedTemplateRevisions: number[] = [];
+    const luzernerLeasePdfPort: LuzernerLeasePdfPort = {
+      getCurrentTemplateIdentity() {
+        return {
+          templateCode: 'lu-2020',
+          templateRevision: currentTemplateRevision,
+        };
+      },
+      async renderLuzernerLeaseAgreement(input, templateIdentity) {
+        renderCount += 1;
+        renderInputs.push(input);
+        renderedTemplateRevisions.push(
+          templateIdentity?.templateRevision ?? currentTemplateRevision,
+        );
+        return {
+          fileName: 'mietvertrag-final.pdf',
+          content: new TextEncoder().encode('%PDF-final-contract'),
+        };
+      },
+    };
+
+    const { handler, leaseRepository, partyRepository } = buildHandler({
+      luzernerLeasePdfPort,
+    });
+    const created = await handler(
+      new Request(`https://portfolio.test/tenancies/${TENANCY_ID}/agreements`, {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'AGR-FINAL-1',
+          agreementType: 'initial',
+          effectiveFrom: '2026-10-01',
+          parties: [
+            { partyId: LANDLORD_ID, role: 'landlord' },
+            { partyId: TENANT_ID, role: 'tenant' },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(created.status).toBe(201);
+    const agreement = (await created.json()).data as {
+      id: string;
+      version: number;
+    };
+
+    const base = emptyLuzernerLeaseFormContent();
+    const saved = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedRevision: null,
+            content: {
+              ...base,
+              useType: 'apartment',
+              moveInDate: '2026-10-01',
+              durationKind: 'indefinite',
+              terminationSchedule: 'monthly_except_december',
+              noticePeriodKind: 'residential_3_months',
+              netRent: '1500.00',
+              paymentFrequency: 'monthly',
+              rentAdjustmentMode: 'termination_date',
+              rentAdjustmentAdvanceMonths: 3,
+              ancillaryClosingDate: 'december_31',
+              placeOfSigning: 'Luzern',
+              signingDate: '2026-09-25',
+            },
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(saved.status).toBe(200);
+
+    const signed = await handler(
+      new Request(`https://portfolio.test/agreements/${agreement.id}/sign`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: agreement.version,
+          signedAt: '2026-09-25',
+          terms: {
+            currency: 'CHF',
+            baseRent: '1500.00',
+            billingFrequency: 'monthly',
+          },
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(signed.status).toBe(200);
+
+    const frozenSnapshot = leaseRepository.luzernerPdfSnapshots.get(
+      agreement.id as LeaseAgreementId,
+    );
+    expect(frozenSnapshot).toMatchObject({
+      formRevision: 1,
+      templateCode: 'lu-2020',
+      templateRevision: 1,
+      agreementCode: 'AGR-FINAL-1',
+      property: {
+        street: 'Seestrasse',
+        houseNumber: '12',
+        postalCode: '6003',
+        city: 'Luzern',
+      },
+      unit: {
+        unitNumber: '3.01',
+        unitType: 'apartment',
+        rooms: 3.5,
+      },
+      landlords: [{ displayName: 'Landlord Test' }],
+      tenants: [{ displayName: 'Tenant Test' }],
+    });
+
+    const landlord = partyRepository.parties.get(LANDLORD_ID)!;
+    partyRepository.parties.set(LANDLORD_ID, {
+      ...landlord,
+      displayName: 'Renamed Landlord After Signing',
+    });
+    const tenant = partyRepository.parties.get(TENANT_ID)!;
+    partyRepository.parties.set(TENANT_ID, {
+      ...tenant,
+      displayName: 'Renamed Tenant After Signing',
+    });
+
+    currentTemplateRevision = 2;
+
+    const signedPreview = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form/pdf`,
+      ),
+      adminIdentity,
+    );
+    expect(signedPreview.status).toBe(200);
+    const signedPreviewInput = renderInputs.at(-1);
+    expect(signedPreviewInput?.landlords[0]?.displayName).toBe('Landlord Test');
+    expect(signedPreviewInput?.tenants[0]?.displayName).toBe('Tenant Test');
+    expect(renderedTemplateRevisions.at(-1)).toBe(1);
+
+    renderCount = 0;
+    renderInputs.length = 0;
+    renderedTemplateRevisions.length = 0;
+
+    const first = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form/final-document`,
+        { method: 'POST', body: '{}' },
+      ),
+      adminIdentity,
+    );
+    expect(first.status).toBe(200);
+    const firstVersion = (await first.json()).data as {
+      id: string;
+      status: string;
+      mimeType: string;
+    };
+    expect(firstVersion).toMatchObject({
+      status: 'final',
+      mimeType: 'application/pdf',
+    });
+
+    const second = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form/final-document`,
+        { method: 'POST', body: '{}' },
+      ),
+      adminIdentity,
+    );
+    expect(second.status).toBe(200);
+    expect((await second.json()).data).toMatchObject({
+      id: firstVersion.id,
+      status: 'final',
+    });
+    expect(renderCount).toBe(2);
+    expect(renderedTemplateRevisions).toEqual([1, 1]);
+
+    const documents = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/documents`,
+      ),
+      adminIdentity,
+    );
+    expect(documents.status).toBe(200);
+    expect(await documents.json()).toMatchObject({
+      data: {
+        items: [
+          {
+            document: { category: 'legal' },
+            link: {
+              relation: 'generated_contract',
+              documentVersionId: firstVersion.id,
+            },
+            linkedVersion: {
+              id: firstVersion.id,
+              status: 'final',
+              mimeType: 'application/pdf',
+            },
+          },
+        ],
+      },
+    });
+  });
+
+  it('rejects a pre-seeded reserved DocumentVersion whose bytes do not match the canonical render', async () => {
+    const renderedBytes = new TextEncoder().encode('%PDF-canonical-expected');
+    const luzernerLeasePdfPort: LuzernerLeasePdfPort = {
+      getCurrentTemplateIdentity() {
+        return { templateCode: 'lu-2020', templateRevision: 1 };
+      },
+      async renderLuzernerLeaseAgreement() {
+        return {
+          fileName: 'mietvertrag-final.pdf',
+          content: renderedBytes,
+        };
+      },
+    };
+
+    const {
+      handler,
+      documentRepository,
+      fileStorage,
+    } = buildHandler({ luzernerLeasePdfPort });
+
+    const created = await handler(
+      new Request(`https://portfolio.test/tenancies/${TENANCY_ID}/agreements`, {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'AGR-SPOOF-HASH',
+          agreementType: 'initial',
+          effectiveFrom: '2026-10-01',
+          parties: [
+            { partyId: LANDLORD_ID, role: 'landlord' },
+            { partyId: TENANT_ID, role: 'tenant' },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+    const agreement = (await created.json()).data as {
+      id: string;
+      version: number;
+    };
+
+    const base = emptyLuzernerLeaseFormContent();
+    await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedRevision: null,
+            content: {
+              ...base,
+              useType: 'apartment',
+              moveInDate: '2026-10-01',
+              durationKind: 'indefinite',
+              terminationSchedule: 'monthly_except_december',
+              noticePeriodKind: 'residential_3_months',
+              netRent: '1500.00',
+              paymentFrequency: 'monthly',
+              rentAdjustmentMode: 'termination_date',
+              rentAdjustmentAdvanceMonths: 3,
+              ancillaryClosingDate: 'december_31',
+              placeOfSigning: 'Luzern',
+              signingDate: '2026-09-25',
+            },
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+
+    const signed = await handler(
+      new Request(`https://portfolio.test/agreements/${agreement.id}/sign`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: agreement.version,
+          signedAt: '2026-09-25',
+          terms: {
+            currency: 'CHF',
+            baseRent: '1500.00',
+            billingFrequency: 'monthly',
+          },
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(signed.status).toBe(200);
+
+    const documentId = '20000000-0000-4000-8000-000000000090' as never;
+    const versionId = '20000000-0000-4000-8000-000000000091' as never;
+    const spoofBytes = new TextEncoder().encode('%PDF-spoofed');
+    const spoofSha = await testSha256.digest(spoofBytes);
+
+    documentRepository.documents.set(documentId, {
+      id: documentId,
+      code: 'LUZERNER-FINAL-AGR-SPOOF-HASH',
+      title: 'Spoofed final contract',
+      category: 'legal',
+      status: 'active',
+      latestVersionNumber: 1,
+      revision: 2,
+    });
+    documentRepository.versions.set(versionId, {
+      id: versionId,
+      documentId,
+      versionNumber: 1,
+      fileName: 'spoofed.pdf',
+      mimeType: 'application/pdf',
+      byteSize: spoofBytes.byteLength,
+      sha256: spoofSha,
+      status: 'final',
+      finalizedAt: '2026-09-27T12:00:00.000Z',
+    });
+    const objectKey = `document-version:${versionId}`;
+    documentRepository.storage.set(versionId, {
+      provider: 'memory',
+      objectId: objectKey,
+      objectKey,
+    });
+    fileStorage.objects.set(objectKey, {
+      provider: 'memory',
+      objectId: objectKey,
+      objectKey,
+      byteSize: spoofBytes.byteLength,
+      sha256: spoofSha,
+      disposition: 'created',
+    });
+    fileStorage.contents.set(objectKey, spoofBytes);
+
+    const response = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form/final-document`,
+        { method: 'POST', body: '{}' },
+      ),
+      adminIdentity,
+    );
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'LUZERNER_FINAL_DOCUMENT_HASH_MISMATCH' },
+    });
+  });
+
   it('preserves exact historical terms through agreement and amendment snapshots', async () => {
     const { handler } = buildHandler();
 
@@ -1207,6 +1810,78 @@ describe('Luzerner lease form HTTP', () => {
     expect(await mismatchedSign.json()).toMatchObject({
       error: { code: 'LUZERNER_LEASE_FORM_SIGN_MISMATCH' },
     });
+  });
+
+  it('keeps a Luzerner Agreement draft when PDF renderability preflight fails', async () => {
+    const failingPort: LuzernerLeasePdfPort = {
+      getCurrentTemplateIdentity() {
+        return { templateCode: 'lu-2020', templateRevision: 1 };
+      },
+      async renderLuzernerLeaseAgreement() {
+        throw new ApplicationError(
+          'LUZERNER_PDF_TEXT_OVERFLOW',
+          'Synthetic renderability failure.',
+        );
+      },
+    };
+    const { handler, leaseRepository } = buildHandler({
+      luzernerLeasePdfPort: failingPort,
+    });
+    const agreement = await createDraftAgreement(handler);
+    const base = emptyLuzernerLeaseFormContent();
+
+    const saved = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/luzerner-form`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedRevision: null,
+            content: {
+              ...base,
+              useType: 'apartment',
+              moveInDate: '2026-10-01',
+              durationKind: 'indefinite',
+              terminationSchedule: 'monthly_except_december',
+              noticePeriodKind: 'residential_3_months',
+              netRent: '1850.00',
+              paymentFrequency: 'monthly',
+              rentAdjustmentMode: 'termination_date',
+              rentAdjustmentAdvanceMonths: 3,
+              ancillaryClosingDate: 'december_31',
+              placeOfSigning: 'Luzern',
+              signingDate: '2026-09-26',
+            },
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(saved.status).toBe(200);
+
+    const sign = await handler(
+      new Request(`https://portfolio.test/agreements/${agreement.id}/sign`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: 1,
+          signedAt: '2026-09-26',
+          terms: { currency: 'CHF', baseRent: '1850.00' },
+        }),
+      }),
+      adminIdentity,
+    );
+
+    expect(sign.status).toBe(422);
+    expect(await sign.json()).toMatchObject({
+      error: { code: 'LUZERNER_PDF_TEXT_OVERFLOW' },
+    });
+    expect(
+      leaseRepository.agreements.get(agreement.id as LeaseAgreementId)?.status,
+    ).toBe('draft');
+    expect(leaseRepository.terms).toHaveLength(0);
+    expect(leaseRepository.luzernerPdfSnapshots.has(
+      agreement.id as LeaseAgreementId,
+    )).toBe(false);
   });
 
   it('rejects Agreement signing when the exact Luzerner revision changes after validation', async () => {

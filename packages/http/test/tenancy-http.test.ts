@@ -266,6 +266,7 @@ class EmptyLeaseRepository implements LeaseRepository {
   async getLuzernerLeaseForm(
     _agreementId: LeaseAgreementId,
   ): Promise<LuzernerLeaseFormDraft | null> { return null; }
+  async getLuzernerLeasePdfSnapshot() { return null; }
   async insertLuzernerLeaseForm(
     _form: LuzernerLeaseFormDraft,
   ): Promise<void> {}
