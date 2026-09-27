@@ -1147,9 +1147,9 @@ export function LuzernerLeaseFormEditor({
 
       <div className="setup-form-actions">
         <span className="setup-hint">
-          Property, Unit and Party identity stay canonical outside this
-          template-specific draft. PDF generation consumes the saved canonical
-          revision plus those records.
+          {agreement.status === 'draft'
+            ? 'Draft PDF preview uses the saved form revision plus current Property, Unit and Party identity.'
+            : 'Signed PDF output uses the immutable Property, Unit and Party presentation snapshot captured at Agreement signing.'}
         </span>
         <button
           className="button-secondary"
