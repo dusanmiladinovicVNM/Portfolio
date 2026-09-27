@@ -45,6 +45,54 @@ describe('AccessItem UI ownership', () => {
     ).not.toThrow();
   });
 
+  it('rejects custody state that disagrees with the last ledger event', () => {
+    const entry: AccessItemEntryResponse = {
+      item: item(),
+      state: {
+        kind: 'issued',
+        tenancyId: '66666666-6666-4666-8666-666666666666',
+        lastTransaction: {
+          id: '77777777-7777-4777-8777-777777777777',
+          accessItemId: itemId,
+          tenancyId: '66666666-6666-4666-8666-666666666666',
+          type: 'lost',
+          sequence: 2,
+          occurredAt: '2026-09-27T11:00:00.000Z',
+          recordedAt: '2026-09-27T11:00:01.000Z',
+          recordedByUserId: userId,
+          note: null,
+        },
+      },
+    };
+    expect(() =>
+      assertUnitAccessItemsOwner(propertyId, unitId, [entry]),
+    ).toThrow(/inconsistent custody state/);
+  });
+
+  it('rejects available state unless the last ledger event is returned or absent', () => {
+    const entry: AccessItemEntryResponse = {
+      item: item(),
+      state: {
+        kind: 'available',
+        tenancyId: null,
+        lastTransaction: {
+          id: '77777777-7777-4777-8777-777777777778',
+          accessItemId: itemId,
+          tenancyId: '66666666-6666-4666-8666-666666666666',
+          type: 'issued',
+          sequence: 1,
+          occurredAt: '2026-09-27T11:00:00.000Z',
+          recordedAt: '2026-09-27T11:00:01.000Z',
+          recordedByUserId: userId,
+          note: null,
+        },
+      },
+    };
+    expect(() =>
+      assertUnitAccessItemsOwner(propertyId, unitId, [entry]),
+    ).toThrow(/inconsistent custody state/);
+  });
+
   it('rejects wrong-Unit list state', () => {
     const entry: AccessItemEntryResponse = {
       item: item({ unitId: '55555555-5555-4555-8555-555555555555' }),

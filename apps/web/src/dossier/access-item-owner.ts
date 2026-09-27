@@ -40,13 +40,15 @@ export function assertUnitAccessItemsOwner(
         'Unit Keys list contains custody state owned by another AccessItem.',
       );
     }
-    if (
+    const stateIsConsistent =
       entry.state.kind === 'available'
-        ? entry.state.tenancyId !== null
-        : entry.state.tenancyId === null ||
-          last === null ||
-          last.tenancyId !== entry.state.tenancyId
-    ) {
+        ? entry.state.tenancyId === null &&
+          (last === null || last.type === 'returned')
+        : entry.state.tenancyId !== null &&
+          last !== null &&
+          last.tenancyId === entry.state.tenancyId &&
+          last.type === entry.state.kind;
+    if (!stateIsConsistent) {
       throw new Error('Unit Keys list contains inconsistent custody state.');
     }
   }
