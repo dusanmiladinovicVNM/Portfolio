@@ -46,6 +46,7 @@ import {
 } from '../presentation/format.js';
 import {
   assertAccessItemLabelMutationOwner,
+  assertAccessItemReferences,
   assertAccessItemRetirementOwner,
   assertAccessItemTransactionOwner,
   assertCreatedAccessItem,
@@ -143,11 +144,45 @@ function CreateAccessItemForm({
       setKind('key');
       onCommitted();
     } catch (cause) {
-      setError(
-        isAmbiguousWriteFailure(cause)
-          ? 'AccessItem creation outcome is unconfirmed. Canonical Keys state was reloaded.'
-          : accessItemError(cause, 'AccessItem could not be created.'),
-      );
+      if (isAmbiguousWriteFailure(cause)) {
+        try {
+          const canonical = await api.get(
+            unitAccessItemsPath(unitId),
+            accessItemListResponseSchema,
+          );
+          assertUnitAccessItemsOwner(propertyId, unitId, canonical.items);
+          const matches = canonical.items.filter(
+            (entry) =>
+              entry.item.code.toLowerCase() ===
+              parsed.data.code.toLowerCase(),
+          );
+          if (matches.length === 1) {
+            assertCreatedAccessItem(
+              {
+                code: parsed.data.code,
+                kind: parsed.data.kind,
+                propertyId,
+                unitId,
+                spaceId,
+                label: parsed.data.label,
+              },
+              matches[0]!.item,
+            );
+            setError(null);
+            formElement.reset();
+            setKind('key');
+            onCommitted();
+            return;
+          }
+        } catch {
+          // Preserve the ambiguous outcome when canonical reconciliation fails.
+        }
+        setError(
+          'AccessItem creation outcome is unconfirmed. Canonical Keys state was reloaded.',
+        );
+      } else {
+        setError(accessItemError(cause, 'AccessItem could not be created.'));
+      }
       onCommitted();
     } finally {
       localSubmission.finish();
@@ -279,6 +314,11 @@ export function UnitKeys({
         assertUnitAccessItemsOwner(propertyId, unitId, accessResponse.items);
         assertUnitSpacesOwner(unitId, spaceResponse.items);
         assertUnitTenanciesOwner(unitId, tenancyResponse.items);
+        assertAccessItemReferences(
+          accessResponse.items,
+          spaceResponse.items,
+          tenancyResponse.items,
+        );
         setEntries(accessResponse.items);
         setSpaces(spaceResponse.items);
         setTenancies(tenancyResponse.items);

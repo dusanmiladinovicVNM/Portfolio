@@ -1276,6 +1276,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioFailNextServiceEventCreateAfterCommit?: boolean;
   __portfolioFailNextServiceEventLink?: boolean;
   __portfolioFailNextMeterReadingAfterCommit?: boolean;
+  __portfolioFailNextAccessItemCreateAfterCommit?: boolean;
   __portfolioFailNextMeterBoundaryAfterCommit?: boolean;
   __portfolioFailNextAssetMoveAfterCommit?: boolean;
   __portfolioConcurrentAssetMoveAcrossProperty?: boolean;
@@ -1993,6 +1994,14 @@ globalThis.fetch = async (
       recordedByUserId: inspectionUserId,
     };
     setupAccessItems.push(created);
+    if (browserHarnessWindow.__portfolioFailNextAccessItemCreateAfterCommit) {
+      browserHarnessWindow.__portfolioFailNextAccessItemCreateAfterCommit = false;
+      return apiError(
+        503,
+        'ACCESS_ITEM_CREATE_TEST_ACK_LOST',
+        'Intentional AccessItem create acknowledgement loss.',
+      );
+    }
     return json(created, 201);
   }
 

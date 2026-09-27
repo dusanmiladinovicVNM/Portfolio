@@ -5,6 +5,7 @@ import type {
 } from '@portfolio/contracts';
 import {
   assertAccessItemLabelMutationOwner,
+  assertAccessItemReferences,
   assertCreatedAccessItem,
   assertUnitAccessItemsOwner,
 } from '../src/dossier/access-item-owner.js';
@@ -101,6 +102,40 @@ describe('AccessItem UI ownership', () => {
     expect(() =>
       assertUnitAccessItemsOwner(propertyId, unitId, [entry]),
     ).toThrow(/another Property\/Unit/);
+  });
+
+  it('rejects missing Space and Tenancy references instead of degrading scope/custody labels', () => {
+    const spaceScoped: AccessItemEntryResponse = {
+      item: item({
+        spaceId: '88888888-8888-4888-8888-888888888888',
+      }),
+      state: { kind: 'available', tenancyId: null, lastTransaction: null },
+    };
+    expect(() =>
+      assertAccessItemReferences([spaceScoped], [], []),
+    ).toThrow(/Space missing/);
+
+    const issued: AccessItemEntryResponse = {
+      item: item(),
+      state: {
+        kind: 'issued',
+        tenancyId: '66666666-6666-4666-8666-666666666666',
+        lastTransaction: {
+          id: '77777777-7777-4777-8777-777777777779',
+          accessItemId: itemId,
+          tenancyId: '66666666-6666-4666-8666-666666666666',
+          type: 'issued',
+          sequence: 1,
+          occurredAt: '2026-09-27T11:00:00.000Z',
+          recordedAt: '2026-09-27T11:00:01.000Z',
+          recordedByUserId: userId,
+          note: null,
+        },
+      },
+    };
+    expect(() =>
+      assertAccessItemReferences([issued], [], []),
+    ).toThrow(/Tenancy missing/);
   });
 
   it('locks create and label response ownership', () => {

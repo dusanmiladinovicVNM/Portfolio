@@ -2,6 +2,8 @@ import type {
   AccessItemEntryResponse,
   AccessItemResponse,
   AccessItemTransactionResponse,
+  SpaceResponse,
+  TenancyResponse,
 } from '@portfolio/contracts';
 
 function sameImmutableIdentity(
@@ -50,6 +52,31 @@ export function assertUnitAccessItemsOwner(
           last.type === entry.state.kind;
     if (!stateIsConsistent) {
       throw new Error('Unit Keys list contains inconsistent custody state.');
+    }
+  }
+}
+
+export function assertAccessItemReferences(
+  entries: readonly AccessItemEntryResponse[],
+  spaces: readonly SpaceResponse[],
+  tenancies: readonly TenancyResponse[],
+): void {
+  const spaceIds = new Set(spaces.map((space) => space.id));
+  const tenancyIds = new Set(tenancies.map((tenancy) => tenancy.id));
+
+  for (const entry of entries) {
+    if (entry.item.spaceId !== null && !spaceIds.has(entry.item.spaceId)) {
+      throw new Error(
+        'Unit Keys list references a Space missing from the selected Unit.',
+      );
+    }
+
+    const custodyTenancyId =
+      entry.state.tenancyId ?? entry.state.lastTransaction?.tenancyId ?? null;
+    if (custodyTenancyId !== null && !tenancyIds.has(custodyTenancyId)) {
+      throw new Error(
+        'Unit Keys list references a Tenancy missing from the selected Unit.',
+      );
     }
   }
 }

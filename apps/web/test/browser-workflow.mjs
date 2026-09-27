@@ -1300,6 +1300,10 @@ try {
     accessCreateForm + "//select[@name='spaceId']",
     setupSpaceId,
   );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextAccessItemCreateAfterCommit = true; return true;',
+  );
   await clickXpath(
     sessionId,
     accessCreateForm + "//button[normalize-space()='Create AccessItem']",
@@ -1310,6 +1314,14 @@ try {
     sessionId,
     'xpath',
     accessCard + "//h3[normalize-space()='Apartment entrance key']",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[contains(normalize-space(),'AccessItem creation outcome is unconfirmed')]",
+    ),
+    false,
+    'Committed AccessItem create is reconciled after acknowledgement loss',
   );
   await waitForElement(
     sessionId,
