@@ -66,7 +66,11 @@ const setupMeterMoveInReadingId = 'b1000000-0000-4000-8000-000000000039';
 const setupMeterMoveOutReadingId = 'b1000000-0000-4000-8000-000000000040';
 const setupInspectionFindingId = 'b1000000-0000-4000-8000-000000000044';
 const setupMaintenanceIssueId = 'b1000000-0000-4000-8000-000000000045';
+const setupOvenMaintenanceIssueId = 'b1000000-0000-4000-8000-000000000100';
+const setupSmokeMaintenanceIssueId = 'b1000000-0000-4000-8000-000000000101';
 const setupMaintenanceWorkOrderId = 'b1000000-0000-4000-8000-000000000046';
+const setupOvenMaintenanceWorkOrderId = 'b1000000-0000-4000-8000-000000000102';
+const setupSmokeMaintenanceWorkOrderId = 'b1000000-0000-4000-8000-000000000103';
 const setupServiceEventId = 'b1000000-0000-4000-8000-000000000047';
 const setupWarrantyId = 'b1000000-0000-4000-8000-000000000057';
 const setupWarrantyClaimId = 'b1000000-0000-4000-8000-000000000058';
@@ -4464,6 +4468,219 @@ try {
     sessionId,
     'xpath',
     "//a[contains(@class,'asset-card')][.//span[normalize-space()='AST-OVEN-BRW']][.//dd[normalize-space()='Kitchen']]",
+  );
+
+  await clickXpath(sessionId, "//a[normalize-space()='Maintenance']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[@data-maintenance-form='create-issue']",
+  );
+
+  const realCompanyIssueCreateForm =
+    "//form[@data-maintenance-form='create-issue']";
+
+  await typeXpath(
+    sessionId,
+    realCompanyIssueCreateForm + "//input[@name='code']",
+    'ISS-OVEN-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    realCompanyIssueCreateForm + "//input[@name='title']",
+    'Oven not heating',
+  );
+  await typeXpath(
+    sessionId,
+    realCompanyIssueCreateForm + "//textarea[@name='description']",
+    'Tenant reported that the oven no longer reaches temperature',
+  );
+  await selectOptionXpath(
+    sessionId,
+    realCompanyIssueCreateForm + "//select[@name='assetId']",
+    setupOvenAssetId,
+  );
+  await clickXpath(
+    sessionId,
+    realCompanyIssueCreateForm + "//button[normalize-space()='Create Issue']",
+  );
+
+  const ovenIssueCard =
+    "//a[contains(@class,'maintenance-issue-card')][.//span[normalize-space()='ISS-OVEN-BRW']]";
+  await waitForElement(sessionId, 'xpath', ovenIssueCard);
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'maintenance-admin-panel')]//h2[normalize-space()='ISS-OVEN-BRW · Oven not heating']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'maintenance-admin-panel')]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='KIT-SETUP']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='AST-OVEN-BRW']]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=maintenance&issueId=' + setupOvenMaintenanceIssueId +
+      '&asOf=2025-06-30',
+    'Kitchen Oven Maintenance Issue deep-link',
+  );
+
+  let realCompanyWorkOrderCreateForm =
+    "//form[@data-maintenance-form='create-work-order']";
+  await typeXpath(
+    sessionId,
+    realCompanyWorkOrderCreateForm + "//input[@name='code']",
+    'WO-OVEN-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    realCompanyWorkOrderCreateForm + "//input[@name='title']",
+    'Diagnose oven heating',
+  );
+  await clickXpath(
+    sessionId,
+    realCompanyWorkOrderCreateForm +
+      "//button[normalize-space()='Create WorkOrder']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//button[contains(@class,'maintenance-order-card')][.//span[normalize-space()='WO-OVEN-BRW']][.//strong[normalize-space()='Diagnose oven heating']]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=maintenance&issueId=' + setupOvenMaintenanceIssueId +
+      '&workOrderId=' + setupOvenMaintenanceWorkOrderId +
+      '&asOf=2025-06-30',
+    'Kitchen Oven WorkOrder deep-link',
+  );
+
+  await typeXpath(
+    sessionId,
+    realCompanyIssueCreateForm + "//input[@name='code']",
+    'ISS-SMOKE-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    realCompanyIssueCreateForm + "//input[@name='title']",
+    'Smoke detector battery alert',
+  );
+  await typeXpath(
+    sessionId,
+    realCompanyIssueCreateForm + "//textarea[@name='description']",
+    'Entrance Hall detector emits a recurring battery warning',
+  );
+  await selectOptionXpath(
+    sessionId,
+    realCompanyIssueCreateForm + "//select[@name='assetId']",
+    setupSmokeDetectorAssetId,
+  );
+  await clickXpath(
+    sessionId,
+    realCompanyIssueCreateForm + "//button[normalize-space()='Create Issue']",
+  );
+
+  const smokeIssueCard =
+    "//a[contains(@class,'maintenance-issue-card')][.//span[normalize-space()='ISS-SMOKE-BRW']]";
+  await waitForElement(sessionId, 'xpath', smokeIssueCard);
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'maintenance-admin-panel')]//h2[normalize-space()='ISS-SMOKE-BRW · Smoke detector battery alert']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'maintenance-admin-panel')]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='HALL-SETUP']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='AST-SMOKE-BRW']]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=maintenance&issueId=' + setupSmokeMaintenanceIssueId +
+      '&asOf=2025-06-30',
+    'Smoke Detector Maintenance Issue deep-link',
+  );
+
+  realCompanyWorkOrderCreateForm =
+    "//form[@data-maintenance-form='create-work-order']";
+  await typeXpath(
+    sessionId,
+    realCompanyWorkOrderCreateForm + "//input[@name='code']",
+    'WO-SMOKE-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    realCompanyWorkOrderCreateForm + "//input[@name='title']",
+    'Inspect smoke detector',
+  );
+  await clickXpath(
+    sessionId,
+    realCompanyWorkOrderCreateForm +
+      "//button[normalize-space()='Create WorkOrder']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//button[contains(@class,'maintenance-order-card')][.//span[normalize-space()='WO-SMOKE-BRW']][.//strong[normalize-space()='Inspect smoke detector']]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=maintenance&issueId=' + setupSmokeMaintenanceIssueId +
+      '&workOrderId=' + setupSmokeMaintenanceWorkOrderId +
+      '&asOf=2025-06-30',
+    'Smoke Detector WorkOrder deep-link',
+  );
+
+  await navigateWithPopState(
+    sessionId,
+    '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=maintenance&issueId=' + setupOvenMaintenanceIssueId +
+      '&asOf=2025-06-30',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'maintenance-admin-panel')]//h2[normalize-space()='ISS-OVEN-BRW · Oven not heating']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//button[contains(@class,'maintenance-order-card')][.//span[normalize-space()='WO-OVEN-BRW']]",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//button[contains(@class,'maintenance-order-card')][.//span[normalize-space()='WO-SMOKE-BRW']]",
+    ),
+    false,
+    'Smoke WorkOrder cannot bleed into Kitchen Oven Issue',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'maintenance-issue-card')][.//span[normalize-space()='ISS-SETUP-BRW']][.//span[contains(@class,'status-chip') and normalize-space()='resolved']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    ovenIssueCard + "//span[contains(@class,'status-chip') and normalize-space()='open']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    smokeIssueCard + "//span[contains(@class,'status-chip') and normalize-space()='open']",
   );
 
   await clickXpath(sessionId, "//a[normalize-space()='Spaces']");
