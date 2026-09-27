@@ -6,7 +6,11 @@ import { PAGE_5_FIXED_DATA } from './luzerner-2020-template/page-05-data.js';
 import { PAGE_6_FIXED_DATA } from './luzerner-2020-template/page-06-data.js';
 import { PAGE_7_FIXED_DATA } from './luzerner-2020-template/page-07-data.js';
 import { PAGE_8_FIXED_DATA } from './luzerner-2020-template/page-08-data.js';
-import { LUZERNER_2020_PAGE_COUNT } from './luzerner-2020-template/source-wording.js';
+import {
+  LUZERNER_2020_PAGE_COUNT,
+  LUZERNER_2020_TEMPLATE_CODE,
+  LUZERNER_2020_TEMPLATE_REVISION,
+} from './luzerner-2020-template/source-wording.js';
 import type {
   Luzerner2020FixedTextLine,
   Luzerner2020FixedTextTuple,
@@ -17,6 +21,7 @@ import {
   type LuzernerLeasePdfParty,
   type LuzernerLeasePdfPort,
   type LuzernerLeasePdfRenderInput,
+  type LuzernerLeasePdfTemplateIdentity,
   type PdfRenderResult,
 } from '@portfolio/application';
 
@@ -183,6 +188,26 @@ function addTextAt(
       winAnsiHex(normalized) +
       '> Tj ET',
   );
+}
+
+function addTextAtBounded(
+  commands: Commands,
+  value: string | null | undefined,
+  x: number,
+  y: number,
+  maxWidth: number,
+  preferred = 9,
+): void {
+  const normalized = value?.trim();
+  if (!normalized) return;
+  const size = fitSize(normalized, maxWidth, preferred);
+  if (estimatedWidth(normalized, size) > maxWidth) {
+    throw new ApplicationError(
+      'LUZERNER_PDF_TEXT_OVERFLOW',
+      'Text does not fit in the physical Luzerner 2020 form area.',
+    );
+  }
+  addTextAt(commands, normalized, x, y, size);
 }
 
 function addCheck(commands: Commands, target: Rect): void {
@@ -379,8 +404,8 @@ function pageOne(input: LuzernerLeasePdfRenderInput): Commands {
     (input.property.postalCode + ' ' + input.property.city).trim(),
     box(133.706, 313.472, 536.578, 336.904),
   );
-  addTextAt(c, form.ewid, 497.8, 377, 7.2);
-  addTextAt(c, form.egid, 415.5, 348, 7.2);
+  addTextAtBounded(c, form.ewid, 497.8, 377, 39, 7.2);
+  addTextAtBounded(c, form.egid, 415.5, 348, 121, 7.2);
   addText(
     c,
     form.intendedForPersonCount === null
@@ -495,7 +520,7 @@ function pageOne(input: LuzernerLeasePdfRenderInput): Commands {
   } else if (form.terminationSchedule === 'quarter_ends') {
     addCheck(c, box(383.678, 92.722, 391.718, 101.242));
   } else if (form.terminationSchedule === 'custom') {
-    addTextAt(c, form.terminationScheduleCustom, 403, 94, 7.5);
+    addTextAtBounded(c, form.terminationScheduleCustom, 403, 94, 133, 7.5);
   }
 
   const noticeChecks = {
@@ -563,7 +588,7 @@ function pageTwo(input: LuzernerLeasePdfRenderInput): Commands {
     );
   } else if (form.rentAdjustmentMode === 'indexation') {
     addCheck(c, box(48, 457.08, 56.88, 466.44));
-    addTextAt(c, form.consumerPriceIndexPoints, 365, 459.3, 8);
+    addTextAtBounded(c, form.consumerPriceIndexPoints, 365, 459.3, 40, 8);
   } else if (form.rentAdjustmentMode === 'graduated') {
     addCheck(c, box(47.52, 434.28, 56.28, 443.64));
   }
@@ -635,11 +660,12 @@ function pageTwo(input: LuzernerLeasePdfRenderInput): Commands {
     227.1, 239.2, 252.7, 265.9, 278.9, 291.6,
   ];
   custom.forEach((entry, index) => {
-    addTextAt(
+    addTextAtBounded(
       c,
       entry.label,
       58.5,
       PAGE_HEIGHT - topBaselines[10 + index]!,
+      466,
       8.5,
     );
   });
@@ -999,9 +1025,27 @@ function fileSafe(value: string): string {
 }
 
 export class CanonicalLuzernerPdfRenderer implements LuzernerLeasePdfPort {
+  getCurrentTemplateIdentity(): LuzernerLeasePdfTemplateIdentity {
+    return {
+      templateCode: LUZERNER_2020_TEMPLATE_CODE,
+      templateRevision: LUZERNER_2020_TEMPLATE_REVISION,
+    };
+  }
+
   async renderLuzernerLeaseAgreement(
     input: LuzernerLeasePdfRenderInput,
+    templateIdentity: LuzernerLeasePdfTemplateIdentity =
+      this.getCurrentTemplateIdentity(),
   ): Promise<PdfRenderResult> {
+    if (
+      templateIdentity.templateCode !== LUZERNER_2020_TEMPLATE_CODE ||
+      templateIdentity.templateRevision !== LUZERNER_2020_TEMPLATE_REVISION
+    ) {
+      throw new ApplicationError(
+        'LUZERNER_PDF_TEMPLATE_REVISION_UNSUPPORTED',
+        'The requested frozen Luzerner PDF template revision is not supported by this renderer.',
+      );
+    }
     const first: Commands = [
       ...pageOneStructure(),
       ...PAGE_1_FIXED_TEXT.filter(
