@@ -33,6 +33,8 @@ const inspectionKitchenInstanceId =
   'a9000000-0000-4000-8000-000000000006';
 const inspectionBathroomInstanceId =
   'a9000000-0000-4000-8000-000000000007';
+const inspectionRoomItemId =
+  'a9000000-0000-4000-8000-000000000002';
 const inspectionNotesItemId = 'a1000000-0000-4000-8000-000000000005';
 const inspectionUserId = 'a1000000-0000-4000-8000-000000000006';
 const setupPropertyId = 'b1000000-0000-4000-8000-000000000001';
