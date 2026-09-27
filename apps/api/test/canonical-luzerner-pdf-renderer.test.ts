@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LuzernerLeasePdfRenderInput } from '@portfolio/application';
 import { CanonicalLuzernerPdfRenderer } from '../src/canonical-luzerner-pdf-renderer.js';
+import { embeddedLuzernerTemplateBytes } from '../src/embedded-luzerner-template.js';
 
 const BLOCK_BYTES = 32768;
 
@@ -145,6 +146,33 @@ function fixture(): LuzernerLeasePdfRenderInput {
 }
 
 describe('CanonicalLuzernerPdfRenderer', () => {
+  it('loads the reviewed embedded LU-2020 template with exact bytes and checksum', async () => {
+    const bytes = embeddedLuzernerTemplateBytes();
+    const digest = await crypto.subtle.digest(
+      'SHA-256',
+      bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength,
+      ),
+    );
+    const sha256 = [...new Uint8Array(digest)]
+      .map((byte) => byte.toString(16).padStart(2, '0'))
+      .join('');
+
+    expect(bytes.byteLength).toBe(578_564);
+    expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe('%PDF-');
+    expect(sha256).toBe(
+      '2d36e644e11fe4ef62728bed5b694a36ba2cfb071ee044fc2e43eff04184ced5',
+    );
+
+    const rendered = await new CanonicalLuzernerPdfRenderer(
+      bytes,
+    ).renderLuzernerLeaseAgreement(fixture());
+
+    expect(rendered.content.byteLength).toBe(bytes.byteLength);
+    expect(new TextDecoder().decode(rendered.content.slice(0, 5))).toBe('%PDF-');
+  });
+
   it('renders the canonical LU form deterministically into the eight reserved page overlays', async () => {
     const renderer = new CanonicalLuzernerPdfRenderer(template());
     const input = fixture();
