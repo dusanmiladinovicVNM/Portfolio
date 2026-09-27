@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ApplicationError,
   type Actor,
   type AgreementSupersession,
   type IdGenerator,
