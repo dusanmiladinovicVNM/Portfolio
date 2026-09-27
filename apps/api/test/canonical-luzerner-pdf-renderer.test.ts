@@ -1,6 +1,4 @@
 import { createHash } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { LuzernerLeasePdfRenderInput } from '@portfolio/application';
 import { CanonicalLuzernerPdfRenderer } from '../src/canonical-luzerner-pdf-renderer.js';
@@ -169,12 +167,6 @@ describe('CanonicalLuzernerPdfRenderer', () => {
     const first = await renderer.renderLuzernerLeaseAgreement(input);
     const second = await renderer.renderLuzernerLeaseAgreement(input);
     const source = new TextDecoder().decode(first.content);
-    const visualProofPath = process.env['LUZERNER_VISUAL_PROOF_PATH'];
-    if (visualProofPath) {
-      mkdirSync(dirname(visualProofPath), { recursive: true });
-      writeFileSync(visualProofPath, first.content);
-    }
-
     expect(first.fileName).toBe('mietvertrag-AGR-LU-2027-001.pdf');
     expect(first.content).toEqual(second.content);
     expect(source.startsWith('%PDF-1.4')).toBe(true);
@@ -182,6 +174,8 @@ describe('CanonicalLuzernerPdfRenderer', () => {
     expect(source).not.toContain('PORTFOLIO_LUZERNER_OVERLAY');
     expect(source).toContain('<416C6C67656D65696E6520426564696E67756E67656E');
     expect(source).toContain('<382E204265736F6E646572652042657374696D6D756E67656E');
+    expect(source).toContain('<46FC7220646965205665727465696C756E672064657220616E646572656E20> Tj');
+    expect(source).toContain('95 Tz');
 
     expect(source).toContain('<506F7274666F6C696F20496D6D6F62696C69656E2041472C20');
     expect(source).toContain('<56657277616C74756E67204D75737465722041472C20');
