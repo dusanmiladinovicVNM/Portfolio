@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type { LuzernerLeasePdfRenderInput } from '@portfolio/application';
 import { CanonicalLuzernerPdfRenderer } from '../src/canonical-luzerner-pdf-renderer.js';
+import { PAGE_2_FIXED_TEXT } from '../src/luzerner-2020-template/page-02.js';
 import {
   LUZERNER_2020_FIXED_WORDING,
   LUZERNER_2020_FIXED_WORDING_SHA256,
@@ -186,6 +187,8 @@ describe('CanonicalLuzernerPdfRenderer', () => {
     expect(source).toContain('<446163687465727261737365> Tj');
     expect(source).toContain('536F6C61727374726F6D20416C6C67656D65696E');
     expect(source).toContain('<4C757A65726E2C2031352E30362E32303237> Tj');
+    expect(PAGE_2_FIXED_TEXT.filter((line) => line.text === '*')).toHaveLength(0);
+    expect(source.match(/<2A> Tj/g)).toHaveLength(4);
   });
 
   it('rejects more tenant parties than the LU 2020 contract layout can display', async () => {
@@ -212,6 +215,23 @@ describe('CanonicalLuzernerPdfRenderer', () => {
         ],
       }),
     ).rejects.toMatchObject({ code: 'LUZERNER_PDF_TENANT_CAPACITY' });
+  });
+
+  it('fails closed when a single-line field still overflows at minimum font size', async () => {
+    const input = fixture();
+    const renderer = new CanonicalLuzernerPdfRenderer();
+
+    await expect(
+      renderer.renderLuzernerLeaseAgreement({
+        ...input,
+        landlords: [
+          {
+            ...input.landlords[0]!,
+            displayName: 'Extremely Long Landlord Name '.repeat(40),
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: 'LUZERNER_PDF_TEXT_OVERFLOW' });
   });
 
   it('fails explicitly rather than corrupting characters outside WinAnsi', async () => {

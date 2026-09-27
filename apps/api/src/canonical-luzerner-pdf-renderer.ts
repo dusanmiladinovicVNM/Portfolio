@@ -135,7 +135,14 @@ function addText(
 ): void {
   const normalized = value?.trim();
   if (!normalized) return;
-  const size = fitSize(normalized, target.x1 - target.x0 - 2, preferred);
+  const availableWidth = target.x1 - target.x0 - 2;
+  const size = fitSize(normalized, availableWidth, preferred);
+  if (estimatedWidth(normalized, size) > availableWidth) {
+    throw new ApplicationError(
+      'LUZERNER_PDF_TEXT_OVERFLOW',
+      'Text does not fit in the physical Luzerner 2020 form area.',
+    );
+  }
   const y =
     target.y0 +
     Math.max(1.5, ((target.y1 - target.y0) - size) * 0.46);
