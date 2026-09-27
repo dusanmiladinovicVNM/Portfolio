@@ -13,6 +13,7 @@ export const DOSSIER_TABS = [
   'timeline',
   'documents',
   'assets',
+  'keys',
   'meters',
   'maintenance',
 ] as const;

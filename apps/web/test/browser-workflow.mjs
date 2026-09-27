@@ -53,6 +53,7 @@ const setupAgreementDocumentVersionId = 'b1000000-0000-4000-8000-000000000026';
 const setupAssetId = 'b1000000-0000-4000-8000-000000000029';
 const setupReplacementAssetId = 'b1000000-0000-4000-8000-000000000030';
 const setupMeterId = 'b1000000-0000-4000-8000-000000000038';
+const setupAccessItemId = 'b1000000-0000-4000-8000-000000000068';
 const setupMeterMoveInReadingId = 'b1000000-0000-4000-8000-000000000039';
 const setupMeterMoveOutReadingId = 'b1000000-0000-4000-8000-000000000040';
 const setupInspectionFindingId = 'b1000000-0000-4000-8000-000000000044';
@@ -1272,6 +1273,340 @@ try {
     'xpath',
     "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//span[contains(@class,'status-chip') and normalize-space()='active']",
   );
+
+  await clickXpath(sessionId, "//a[normalize-space()='Keys']");
+  const accessCreateForm = "//form[@data-access-item-form='create']";
+  await waitForElement(sessionId, 'xpath', accessCreateForm);
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=keys&asOf=2025-06-30',
+    'Setup Unit Keys URL',
+  );
+  await typeXpath(
+    sessionId,
+    accessCreateForm + "//input[@name='code']",
+    'KEY-SETUP-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    accessCreateForm + "//input[@name='label']",
+    'Apartment entrance key',
+  );
+  await selectOptionXpath(
+    sessionId,
+    accessCreateForm + "//select[@name='spaceId']",
+    setupSpaceId,
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextAccessItemCreateAfterCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    accessCreateForm + "//button[normalize-space()='Create AccessItem']",
+  );
+  const accessCard =
+    "//article[contains(@class,'access-item-card')][@data-access-item-code='KEY-SETUP-BRW']";
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//h3[normalize-space()='Apartment entrance key']",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[contains(normalize-space(),'AccessItem creation outcome is unconfirmed')]",
+    ),
+    false,
+    'Committed AccessItem create is reconciled after acknowledgement loss',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//*[contains(normalize-space(),'Setup Bedroom')]",
+  );
+
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioSimulateAccessItemAvailabilityCycle();',
+    ),
+    true,
+    'Simulate unseen AccessItem issue-return cycle',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioAccessItemTransactionCount();',
+    ),
+    2,
+    'Unseen availability cycle has two canonical events',
+  );
+
+  const accessIssueForm =
+    accessCard + "//form[@data-access-item-form='issue']";
+  await selectOptionXpath(
+    sessionId,
+    accessIssueForm + "//select[@name='tenancyId']",
+    setupTenancyId,
+  );
+  await setInputValueXpath(
+    sessionId,
+    accessIssueForm + "//input[@name='date']",
+    '2026-10-01',
+  );
+  await setInputValueXpath(
+    sessionId,
+    accessIssueForm + "//input[@name='time']",
+    '10:00',
+  );
+  await typeXpath(
+    sessionId,
+    accessIssueForm + "//input[@name='note']",
+    'Move-in handover',
+  );
+  await clickXpath(
+    sessionId,
+    accessIssueForm + "//button[normalize-space()='Issue AccessItem']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'This AccessItem changed on the server')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioAccessItemTransactionCount();',
+    ),
+    2,
+    'Stale issue appends no transaction after unseen issue-return cycle',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//span[contains(@class,'status-chip') and normalize-space()='available']",
+  );
+
+  await selectOptionXpath(
+    sessionId,
+    accessIssueForm + "//select[@name='tenancyId']",
+    setupTenancyId,
+  );
+  await setInputValueXpath(
+    sessionId,
+    accessIssueForm + "//input[@name='date']",
+    '2026-10-01',
+  );
+  await setInputValueXpath(
+    sessionId,
+    accessIssueForm + "//input[@name='time']",
+    '10:00',
+  );
+  await typeXpath(
+    sessionId,
+    accessIssueForm + "//input[@name='note']",
+    'Move-in handover after refresh',
+  );
+  await clickXpath(
+    sessionId,
+    accessIssueForm + "//button[normalize-space()='Issue AccessItem']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//span[contains(@class,'status-chip') and normalize-space()='issued']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//*[contains(normalize-space(),'TEN-SETUP-BRW')]",
+  );
+
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioSimulateAccessItemHandoff();',
+    ),
+    true,
+    'Simulate concurrent handoff from TEN-SETUP-BRW to TEN-CONCURRENT-1',
+  );
+  const beforeStaleReturnCount = await executeScript(
+    sessionId,
+    'return window.__portfolioAccessItemTransactionCount();',
+  );
+  const staleReturnForm =
+    accessCard + "//form[@data-access-item-form='return']";
+  await setInputValueXpath(
+    sessionId,
+    staleReturnForm + "//input[@name='date']",
+    '2026-10-02',
+  );
+  await setInputValueXpath(
+    sessionId,
+    staleReturnForm + "//input[@name='time']",
+    '09:00',
+  );
+  await typeXpath(
+    sessionId,
+    staleReturnForm + "//input[@name='note']",
+    'Stale TEN-A return must not affect TEN-B',
+  );
+  await clickXpath(
+    sessionId,
+    staleReturnForm + "//button[normalize-space()='Record return']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'This AccessItem changed on the server')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioAccessItemTransactionCount();',
+    ),
+    beforeStaleReturnCount,
+    'Stale return appends no transaction for the newer holder',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//*[contains(normalize-space(),'TEN-CONCURRENT-1')]",
+  );
+
+  const accessLossForm =
+    accessCard + "//form[@data-access-item-form='loss']";
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioSimulateAccessItemHandoff();',
+    ),
+    true,
+    'Simulate concurrent handoff from TEN-CONCURRENT-1 to TEN-CONCURRENT-2',
+  );
+  const beforeStaleLossCount = await executeScript(
+    sessionId,
+    'return window.__portfolioAccessItemTransactionCount();',
+  );
+  await setInputValueXpath(
+    sessionId,
+    accessLossForm + "//input[@name='date']",
+    '2026-10-02',
+  );
+  await setInputValueXpath(
+    sessionId,
+    accessLossForm + "//input[@name='time']",
+    '10:00',
+  );
+  await typeXpath(
+    sessionId,
+    accessLossForm + "//input[@name='note']",
+    'Tenant reported key missing',
+  );
+  await clickXpath(
+    sessionId,
+    accessLossForm + "//button[normalize-space()='Report lost']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'This AccessItem changed on the server')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioAccessItemTransactionCount();',
+    ),
+    beforeStaleLossCount,
+    'Stale lost appends no transaction for the newer holder',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//*[contains(normalize-space(),'TEN-CONCURRENT-2')]",
+  );
+
+  const freshLossForm =
+    accessCard + "//form[@data-access-item-form='loss']";
+  await setInputValueXpath(
+    sessionId,
+    freshLossForm + "//input[@name='date']",
+    '2026-10-02',
+  );
+  await setInputValueXpath(
+    sessionId,
+    freshLossForm + "//input[@name='time']",
+    '10:30',
+  );
+  await typeXpath(
+    sessionId,
+    freshLossForm + "//input[@name='note']",
+    'Current holder reported key missing',
+  );
+  await clickXpath(
+    sessionId,
+    freshLossForm + "//button[normalize-space()='Report lost']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//span[contains(@class,'status-chip') and normalize-space()='lost']",
+  );
+
+  const accessReturnForm =
+    accessCard + "//form[@data-access-item-form='return']";
+  await setInputValueXpath(
+    sessionId,
+    accessReturnForm + "//input[@name='date']",
+    '2026-10-03',
+  );
+  await setInputValueXpath(
+    sessionId,
+    accessReturnForm + "//input[@name='time']",
+    '10:00',
+  );
+  await typeXpath(
+    sessionId,
+    accessReturnForm + "//input[@name='note']",
+    'Recovered and returned',
+  );
+  await clickXpath(
+    sessionId,
+    accessReturnForm + "//button[normalize-space()='Record return']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//span[contains(@class,'status-chip') and normalize-space()='available']",
+  );
+
+  const accessRetireForm =
+    accessCard + "//form[@data-access-item-form='retire']";
+  await typeXpath(
+    sessionId,
+    accessRetireForm + "//input[@name='retirementReason']",
+    'Lock cylinder replaced',
+  );
+  await clickXpath(
+    sessionId,
+    accessRetireForm + "//button[normalize-space()='Retire AccessItem']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//span[contains(@class,'status-chip') and normalize-space()='retired']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//*[contains(normalize-space(),'Lock cylinder replaced')]",
+  );
+
+  await clickXpath(sessionId, "//a[normalize-space()='Tenancies']");
 
   await typeXpath(
     sessionId,

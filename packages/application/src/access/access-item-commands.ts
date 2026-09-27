@@ -12,6 +12,7 @@ import {
   type AccessItemId,
   type AccessItemKind,
   type AccessItemTransaction,
+  type AccessItemTransactionId,
   type PropertyId,
   type SpaceId,
   type Tenancy,
@@ -124,6 +125,18 @@ async function assertTenancyScope(
   }
 }
 
+function assertExpectedLastTransaction(
+  current: AccessItemTransaction | null,
+  expectedLastTransactionId: AccessItemTransactionId | null,
+): void {
+  if ((current?.id ?? null) !== expectedLastTransactionId) {
+    throw new DomainError(
+      'ACCESS_ITEM_TRANSACTION_CONFLICT',
+      'AccessItem custody history changed since the caller last read it.',
+    );
+  }
+}
+
 async function appendCustodyTransaction(
   deps: Pick<
     AccessItemDependencies,
@@ -134,11 +147,13 @@ async function appendCustodyTransaction(
   tenancyId: TenancyId,
   type: 'issued' | 'returned' | 'lost',
   input: {
+    readonly expectedLastTransactionId: AccessItemTransactionId | null;
     readonly occurredAt: string;
     readonly note?: string | null;
   },
 ): Promise<AccessItemTransaction> {
   const previous = await deps.accessItemRepository.getLastTransaction(item.id);
+  assertExpectedLastTransaction(previous, input.expectedLastTransactionId);
   const transaction = createAccessItemTransaction({
     id: asAccessItemTransactionId(deps.idGenerator.next()),
     item,
@@ -241,6 +256,7 @@ export async function issueAccessItemCommand(
   accessItemId: AccessItemId,
   input: {
     readonly tenancyId: TenancyId;
+    readonly expectedLastTransactionId: AccessItemTransactionId | null;
     readonly occurredAt: string;
     readonly note?: string | null;
   },
@@ -248,6 +264,12 @@ export async function issueAccessItemCommand(
   requireCapability(actor, 'access_items:write');
 
   const item = await requireItem(deps.accessItemRepository, accessItemId);
+  const observedPrevious =
+    await deps.accessItemRepository.getLastTransaction(item.id);
+  assertExpectedLastTransaction(
+    observedPrevious,
+    input.expectedLastTransactionId,
+  );
   const tenancy = await requireTenancy(deps.tenancyRepository, input.tenancyId);
 
   if (item.status !== 'active') {
@@ -302,6 +324,7 @@ export async function returnAccessItemCommand(
   actor: Actor,
   accessItemId: AccessItemId,
   input: {
+    readonly expectedLastTransactionId: AccessItemTransactionId | null;
     readonly occurredAt: string;
     readonly note?: string | null;
   },
@@ -309,6 +332,7 @@ export async function returnAccessItemCommand(
   requireCapability(actor, 'access_items:write');
   const item = await requireItem(deps.accessItemRepository, accessItemId);
   const previous = await deps.accessItemRepository.getLastTransaction(item.id);
+  assertExpectedLastTransaction(previous, input.expectedLastTransactionId);
   const state = deriveAccessItemState(previous);
 
   if (state.tenancyId === null) {
@@ -333,6 +357,7 @@ export async function reportAccessItemLostCommand(
   actor: Actor,
   accessItemId: AccessItemId,
   input: {
+    readonly expectedLastTransactionId: AccessItemTransactionId | null;
     readonly occurredAt: string;
     readonly note?: string | null;
   },
@@ -340,6 +365,7 @@ export async function reportAccessItemLostCommand(
   requireCapability(actor, 'access_items:write');
   const item = await requireItem(deps.accessItemRepository, accessItemId);
   const previous = await deps.accessItemRepository.getLastTransaction(item.id);
+  assertExpectedLastTransaction(previous, input.expectedLastTransactionId);
   const state = deriveAccessItemState(previous);
 
   if (state.kind !== 'issued' || state.tenancyId === null) {

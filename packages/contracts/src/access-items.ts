@@ -18,6 +18,7 @@ export const createAccessItemRequestSchema = z.object({
 
 export const issueAccessItemRequestSchema = z.object({
   tenancyId: entityIdSchema,
+  expectedLastTransactionId: entityIdSchema.nullable(),
   occurredAt: instantSchema,
   note: z.string().trim().min(1).nullable().optional(),
 });
@@ -33,6 +34,7 @@ export const retireAccessItemRequestSchema = z.object({
 });
 
 export const accessItemCustodyEventRequestSchema = z.object({
+  expectedLastTransactionId: entityIdSchema.nullable(),
   occurredAt: instantSchema,
   note: z.string().trim().min(1).nullable().optional(),
 });
@@ -81,6 +83,10 @@ export const accessItemDetailResponseSchema = accessItemEntryResponseSchema.exte
   transactions: z.array(accessItemTransactionResponseSchema),
 });
 
+export const accessItemListResponseSchema = z.object({
+  items: z.array(accessItemEntryResponseSchema),
+});
+
 export type CreateAccessItemRequest = z.infer<typeof createAccessItemRequestSchema>;
 export type IssueAccessItemRequest = z.infer<typeof issueAccessItemRequestSchema>;
 export type UpdateAccessItemRequest = z.infer<typeof updateAccessItemRequestSchema>;
@@ -95,3 +101,4 @@ export type AccessItemTransactionResponse = z.infer<
 export type AccessItemStateResponse = z.infer<typeof accessItemStateResponseSchema>;
 export type AccessItemEntryResponse = z.infer<typeof accessItemEntryResponseSchema>;
 export type AccessItemDetailResponse = z.infer<typeof accessItemDetailResponseSchema>;
+export type AccessItemListResponse = z.infer<typeof accessItemListResponseSchema>;

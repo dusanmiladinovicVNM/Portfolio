@@ -269,6 +269,34 @@ export function servicePlanStatusPath(planId: string): string {
   return `/service-plans/${encodeURIComponent(planId)}/status`;
 }
 
+export function accessItemsPath(): string {
+  return '/access-items';
+}
+
+export function unitAccessItemsPath(unitId: string): string {
+  return `${unitPath(unitId)}/access-items`;
+}
+
+export function accessItemPath(accessItemId: string): string {
+  return `/access-items/${encodeURIComponent(accessItemId)}`;
+}
+
+export function accessItemIssuePath(accessItemId: string): string {
+  return `${accessItemPath(accessItemId)}/issue`;
+}
+
+export function accessItemReturnPath(accessItemId: string): string {
+  return `${accessItemPath(accessItemId)}/return`;
+}
+
+export function accessItemLossPath(accessItemId: string): string {
+  return `${accessItemPath(accessItemId)}/loss`;
+}
+
+export function accessItemRetirePath(accessItemId: string): string {
+  return `${accessItemPath(accessItemId)}/retire`;
+}
+
 export function metersPath(): string {
   return '/meters';
 }
