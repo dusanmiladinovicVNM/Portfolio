@@ -394,7 +394,7 @@ export function UnitKeys({
         {
           tenancyId: parsed.data.tenancyId,
           type: 'issued',
-          occurredAt,
+          occurredAt: parsed.data.occurredAt,
           note,
         },
         response,
@@ -439,7 +439,7 @@ export function UnitKeys({
         {
           tenancyId: entry.state.tenancyId!,
           type,
-          occurredAt,
+          occurredAt: parsed.data.occurredAt,
           note,
         },
         response,

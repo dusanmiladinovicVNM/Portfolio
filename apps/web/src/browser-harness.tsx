@@ -2089,8 +2089,7 @@ globalThis.fetch = async (
     const type = path.endsWith('/loss') ? 'lost' : 'returned';
     if (
       state.tenancyId === null ||
-      (type === 'lost' && state.kind !== 'issued') ||
-      (type === 'returned' && state.kind === 'available')
+      (type === 'lost' && state.kind !== 'issued')
     ) {
       return apiError(
         422,
