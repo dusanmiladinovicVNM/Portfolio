@@ -4007,7 +4007,7 @@ globalThis.fetch = async (
 
     const document: DocumentResponse = {
       id: setupLuzernerFinalDocumentId,
-      code: 'LUZERNER-FINAL-' + setupAgreement.id,
+      code: 'LUZERNER-FINAL-' + setupAgreement.code,
       title: setupAgreement.code + ' Luzerner Mietvertrag',
       category: 'legal',
       status: 'active',
