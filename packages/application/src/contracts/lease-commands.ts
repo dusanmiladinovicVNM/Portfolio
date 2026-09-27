@@ -27,6 +27,7 @@ import {
   type TermSnapshotInput,
 } from '@portfolio/domain';
 import { requireCapability, type Actor } from '../security/access.js';
+import { ApplicationError } from '../shared/application-error.js';
 import type { LuzernerLeasePdfPort } from './luzerner-lease-pdf-port.js';
 import type { IdGenerator } from '../shared/id-generator.js';
 import type { PartyRepository } from '../parties/party-repository.js';
@@ -70,7 +71,7 @@ export interface LeaseDependencies {
 
 export interface SignLeaseAgreementDependencies extends LeaseDependencies {
   portfolioRepository: PortfolioRepository;
-  luzernerLeasePdfPort: LuzernerLeasePdfPort;
+  luzernerLeasePdfPort?: LuzernerLeasePdfPort;
 }
 
 function moneyCents(value: string | null): bigint {
@@ -451,6 +452,12 @@ export async function signLeaseAgreementCommand(
       signed,
       luzernerForm.revision,
     );
+    if (!deps.luzernerLeasePdfPort) {
+      throw new ApplicationError(
+        'LUZERNER_PDF_RENDERER_UNAVAILABLE',
+        'Luzerner PDF rendering is required before a Luzerner Agreement can be signed.',
+      );
+    }
     await renderFrozenLuzernerLeasePdf(
       deps.luzernerLeasePdfPort,
       luzernerPdfSnapshot,
