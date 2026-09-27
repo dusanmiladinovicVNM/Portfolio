@@ -267,10 +267,11 @@ function addMultiline(
   if (!value?.trim()) return;
   const words = value.trim().split(/\s+/u);
   const lines: string[] = [];
+  const availableWidth = target.x1 - target.x0 - 4;
   let line = '';
   for (const word of words) {
     const candidate = line ? line + ' ' + word : word;
-    if (estimatedWidth(candidate, size) <= target.x1 - target.x0 - 4) {
+    if (estimatedWidth(candidate, size) <= availableWidth) {
       line = candidate;
     } else {
       if (line) lines.push(line);
@@ -278,6 +279,12 @@ function addMultiline(
     }
   }
   if (line) lines.push(line);
+  if (lines.some((entry) => estimatedWidth(entry, size) > availableWidth)) {
+    throw new ApplicationError(
+      'LUZERNER_PDF_TEXT_OVERFLOW',
+      'Text does not fit in the physical Luzerner 2020 form area.',
+    );
+  }
   const maxLines = Math.max(
     1,
     Math.floor((target.y1 - target.y0 - 4) / leading),
