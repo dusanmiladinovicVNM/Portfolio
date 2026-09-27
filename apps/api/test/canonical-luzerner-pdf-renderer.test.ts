@@ -148,13 +148,9 @@ function fixture(): LuzernerLeasePdfRenderInput {
 describe('CanonicalLuzernerPdfRenderer', () => {
   it('loads the reviewed embedded LU-2020 template with exact bytes and checksum', async () => {
     const bytes = embeddedLuzernerTemplateBytes();
-    const digest = await crypto.subtle.digest(
-      'SHA-256',
-      bytes.buffer.slice(
-        bytes.byteOffset,
-        bytes.byteOffset + bytes.byteLength,
-      ),
-    );
+    const digestInput = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(digestInput).set(bytes);
+    const digest = await crypto.subtle.digest('SHA-256', digestInput);
     const sha256 = [...new Uint8Array(digest)]
       .map((byte) => byte.toString(16).padStart(2, '0'))
       .join('');
