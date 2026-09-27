@@ -34,6 +34,8 @@ const inspectionUserId = 'a1000000-0000-4000-8000-000000000006';
 const setupPropertyId = 'b1000000-0000-4000-8000-000000000001';
 const setupUnitId = 'b1000000-0000-4000-8000-000000000002';
 const setupSpaceId = 'b1000000-0000-4000-8000-000000000003';
+const setupHallSpaceId = 'b1000000-0000-4000-8000-000000000080';
+const setupKitchenSpaceId = 'b1000000-0000-4000-8000-000000000082';
 const setupDestinationUnitId = 'c1000000-0000-4000-8000-000000000001';
 const setupDestinationSpaceId = 'c1000000-0000-4000-8000-000000000002';
 const setupRecoveryPropertyId = 'c2000000-0000-4000-8000-000000000001';
@@ -52,6 +54,8 @@ const setupAmendmentDocumentVersionId = 'b1000000-0000-4000-8000-000000000025';
 const setupAgreementDocumentVersionId = 'b1000000-0000-4000-8000-000000000026';
 const setupAssetId = 'b1000000-0000-4000-8000-000000000029';
 const setupReplacementAssetId = 'b1000000-0000-4000-8000-000000000030';
+const setupOvenAssetId = 'b1000000-0000-4000-8000-000000000085';
+const setupSmokeDetectorAssetId = 'b1000000-0000-4000-8000-000000000086';
 const setupMeterId = 'b1000000-0000-4000-8000-000000000038';
 const setupAccessItemId = 'b1000000-0000-4000-8000-000000000068';
 const setupMeterMoveInReadingId = 'b1000000-0000-4000-8000-000000000039';
@@ -4131,6 +4135,112 @@ try {
     sessionId,
     'xpath',
     "//form[@data-asset-form='create']",
+  );
+
+  const realCompanyAssetCreateForm = "//form[@data-asset-form='create']";
+  await typeXpath(
+    sessionId,
+    realCompanyAssetCreateForm + "//input[@name='code']",
+    'AST-OVEN-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    realCompanyAssetCreateForm + "//input[@name='name']",
+    'Kitchen Oven',
+  );
+  await typeXpath(
+    sessionId,
+    realCompanyAssetCreateForm + "//input[@name='manufacturer']",
+    'Siemens',
+  );
+  await typeXpath(
+    sessionId,
+    realCompanyAssetCreateForm + "//input[@name='model']",
+    'HB578ABS0',
+  );
+  await selectOptionXpath(
+    sessionId,
+    realCompanyAssetCreateForm + "//select[@name='spaceId']",
+    setupKitchenSpaceId,
+  );
+  await typeXpath(
+    sessionId,
+    realCompanyAssetCreateForm +
+      "//div[contains(@class,'asset-identifier-row')]//input[@placeholder='Serial / inventory tag']",
+    'SN-OVEN-001',
+  );
+  await clickXpath(
+    sessionId,
+    realCompanyAssetCreateForm + "//button[normalize-space()='Create Asset']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'asset-card')][.//span[normalize-space()='AST-OVEN-BRW']][.//h3[normalize-space()='Kitchen Oven']][.//dd[normalize-space()='Kitchen']][.//dd[normalize-space()='SN-OVEN-001']]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=assets&assetId=' + setupOvenAssetId +
+      '&asOf=2025-06-30',
+    'Kitchen Oven deep-link uses exact Unit owner',
+  );
+
+  await typeXpath(
+    sessionId,
+    realCompanyAssetCreateForm + "//input[@name='code']",
+    'AST-SMOKE-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    realCompanyAssetCreateForm + "//input[@name='name']",
+    'Entrance Smoke Detector',
+  );
+  await typeXpath(
+    sessionId,
+    realCompanyAssetCreateForm + "//input[@name='manufacturer']",
+    'Ei Electronics',
+  );
+  await typeXpath(
+    sessionId,
+    realCompanyAssetCreateForm + "//input[@name='model']",
+    'Ei650',
+  );
+  await selectOptionXpath(
+    sessionId,
+    realCompanyAssetCreateForm + "//select[@name='spaceId']",
+    setupHallSpaceId,
+  );
+  await typeXpath(
+    sessionId,
+    realCompanyAssetCreateForm +
+      "//div[contains(@class,'asset-identifier-row')]//input[@placeholder='Serial / inventory tag']",
+    'SD-HALL-001',
+  );
+  await clickXpath(
+    sessionId,
+    realCompanyAssetCreateForm + "//button[normalize-space()='Create Asset']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'asset-card')][.//span[normalize-space()='AST-SMOKE-BRW']][.//h3[normalize-space()='Entrance Smoke Detector']][.//dd[normalize-space()='Entrance Hall']][.//dd[normalize-space()='SD-HALL-001']]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=assets&assetId=' + setupSmokeDetectorAssetId +
+      '&asOf=2025-06-30',
+    'Smoke Detector deep-link uses exact Unit owner',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'asset-card')][.//span[normalize-space()='AST-OVEN-BRW']][.//dd[normalize-space()='Kitchen']]",
   );
 
   await clickXpath(sessionId, "//a[normalize-space()='Spaces']");
