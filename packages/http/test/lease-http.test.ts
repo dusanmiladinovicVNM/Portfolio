@@ -515,6 +515,9 @@ function buildHandler(options?: {
   readonly luzernerLeasePdfPort?: LuzernerLeasePdfPort;
 }) {
   const defaultLuzernerLeasePdfPort: LuzernerLeasePdfPort = {
+    getCurrentTemplateIdentity() {
+      return { templateCode: 'lu-2020', templateRevision: 1 };
+    },
     async renderLuzernerLeaseAgreement(input) {
       return {
         fileName: `mietvertrag-${input.agreementCode}.pdf`,
@@ -647,6 +650,9 @@ describe('Lease HTTP lifecycle', () => {
   it('renders a canonical Luzerner PDF preview from saved form and dossier identity', async () => {
     let captured: LuzernerLeasePdfRenderInput | null = null;
     const luzernerLeasePdfPort: LuzernerLeasePdfPort = {
+      getCurrentTemplateIdentity() {
+        return { templateCode: 'lu-2020', templateRevision: 1 };
+      },
       async renderLuzernerLeaseAgreement(input) {
         captured = input;
         return {
@@ -742,11 +748,22 @@ describe('Lease HTTP lifecycle', () => {
 
   it('freezes one idempotent generated Luzerner PDF without occupying signed_original', async () => {
     let renderCount = 0;
+    let currentTemplateRevision = 1;
     const renderInputs: LuzernerLeasePdfRenderInput[] = [];
+    const renderedTemplateRevisions: number[] = [];
     const luzernerLeasePdfPort: LuzernerLeasePdfPort = {
-      async renderLuzernerLeaseAgreement(input) {
+      getCurrentTemplateIdentity() {
+        return {
+          templateCode: 'lu-2020',
+          templateRevision: currentTemplateRevision,
+        };
+      },
+      async renderLuzernerLeaseAgreement(input, templateIdentity) {
         renderCount += 1;
         renderInputs.push(input);
+        renderedTemplateRevisions.push(
+          templateIdentity?.templateRevision ?? currentTemplateRevision,
+        );
         return {
           fileName: 'mietvertrag-final.pdf',
           content: new TextEncoder().encode('%PDF-final-contract'),
@@ -830,6 +847,8 @@ describe('Lease HTTP lifecycle', () => {
     );
     expect(frozenSnapshot).toMatchObject({
       formRevision: 1,
+      templateCode: 'lu-2020',
+      templateRevision: 1,
       agreementCode: 'AGR-FINAL-1',
       property: {
         street: 'Seestrasse',
@@ -857,6 +876,8 @@ describe('Lease HTTP lifecycle', () => {
       displayName: 'Renamed Tenant After Signing',
     });
 
+    currentTemplateRevision = 2;
+
     const signedPreview = await handler(
       new Request(
         `https://portfolio.test/agreements/${agreement.id}/luzerner-form/pdf`,
@@ -867,9 +888,11 @@ describe('Lease HTTP lifecycle', () => {
     const signedPreviewInput = renderInputs.at(-1);
     expect(signedPreviewInput?.landlords[0]?.displayName).toBe('Landlord Test');
     expect(signedPreviewInput?.tenants[0]?.displayName).toBe('Tenant Test');
+    expect(renderedTemplateRevisions.at(-1)).toBe(1);
 
     renderCount = 0;
     renderInputs.length = 0;
+    renderedTemplateRevisions.length = 0;
 
     const first = await handler(
       new Request(
@@ -902,6 +925,7 @@ describe('Lease HTTP lifecycle', () => {
       status: 'final',
     });
     expect(renderCount).toBe(1);
+    expect(renderedTemplateRevisions).toEqual([1]);
 
     const documents = await handler(
       new Request(
@@ -1595,6 +1619,9 @@ describe('Luzerner lease form HTTP', () => {
 
   it('keeps a Luzerner Agreement draft when PDF renderability preflight fails', async () => {
     const failingPort: LuzernerLeasePdfPort = {
+      getCurrentTemplateIdentity() {
+        return { templateCode: 'lu-2020', templateRevision: 1 };
+      },
       async renderLuzernerLeaseAgreement() {
         throw new ApplicationError(
           'LUZERNER_PDF_TEXT_OVERFLOW',
