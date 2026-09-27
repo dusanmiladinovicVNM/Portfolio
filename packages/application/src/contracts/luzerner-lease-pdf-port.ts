@@ -28,6 +28,13 @@ export interface LuzernerLeasePdfRenderInput {
   readonly tenants: readonly LuzernerLeasePdfParty[];
 }
 
+export type LuzernerLeasePdfSnapshot = Omit<
+  LuzernerLeasePdfRenderInput,
+  'form'
+> & {
+  readonly formRevision: number;
+};
+
 export interface LuzernerLeasePdfPort {
   renderLuzernerLeaseAgreement(
     input: LuzernerLeasePdfRenderInput,
