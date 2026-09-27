@@ -1375,7 +1375,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[contains(normalize-space(),'custody history changed')]",
+    "//*[contains(normalize-space(),'This AccessItem changed on the server')]",
   );
   assertEqual(
     await executeScript(
@@ -1462,7 +1462,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[contains(normalize-space(),'custody history changed')]",
+    "//*[contains(normalize-space(),'This AccessItem changed on the server')]",
   );
   assertEqual(
     await executeScript(
@@ -1514,7 +1514,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[contains(normalize-space(),'custody history changed')]",
+    "//*[contains(normalize-space(),'This AccessItem changed on the server')]",
   );
   assertEqual(
     await executeScript(
