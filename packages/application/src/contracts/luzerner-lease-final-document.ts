@@ -109,7 +109,7 @@ export async function generateLuzernerLeaseFinalDocumentCommand(
   const existing = await resolveExistingSignedOriginal(deps, agreement.id);
   if (existing) return existing;
 
-  const documentCode = `LUZERNER-FINAL-${agreement.id}`;
+  const documentCode = `LUZERNER-FINAL-${agreement.code}`;
   const findDocument = async () =>
     (await deps.documentRepository.listDocuments()).find(
       (document) =>
