@@ -188,6 +188,18 @@ const setupAccessItemTransactionIds = [
   'b1000000-0000-4000-8000-000000000069',
   'b1000000-0000-4000-8000-000000000070',
   'b1000000-0000-4000-8000-000000000071',
+  'b1000000-0000-4000-8000-000000000072',
+  'b1000000-0000-4000-8000-000000000073',
+  'b1000000-0000-4000-8000-000000000074',
+  'b1000000-0000-4000-8000-000000000075',
+  'b1000000-0000-4000-8000-000000000076',
+  'b1000000-0000-4000-8000-000000000077',
+  'b1000000-0000-4000-8000-000000000078',
+  'b1000000-0000-4000-8000-000000000079',
+] as const;
+const setupAccessConcurrencyTenancyIds = [
+  'b2000000-0000-4000-8000-000000000001',
+  'b2000000-0000-4000-8000-000000000002',
 ] as const;
 const setupMeterReadingIds = [
   'b1000000-0000-4000-8000-000000000039',
@@ -354,6 +366,8 @@ let setupAccessItems: AccessItemResponse[] = [];
 let setupAccessItemTransactions: AccessItemTransactionResponse[] = [];
 let setupAccessItemTransactionSequence = 0;
 let setupAccessItemClockSequence = 0;
+let setupAccessConcurrencyTenancies: TenancyResponse[] = [];
+let setupAccessHandoffSequence = 0;
 let setupMeterReadings: MeterReadingResponse[] = [];
 let setupMeterBoundaries: MeterReadingBoundaryResponse[] = [];
 let setupMeterReadingSequence = 0;
@@ -430,16 +444,57 @@ function replaceSetupWorkOrder(workOrder: MaintenanceWorkOrderResponse): void {
 
 
 function nextSetupAccessItemAt(): string {
-  const instants = [
-    '2026-10-01T08:00:00.000Z',
-    '2026-10-01T08:05:00.000Z',
-    '2026-10-02T08:05:00.000Z',
-    '2026-10-03T08:05:00.000Z',
-    '2026-10-04T08:05:00.000Z',
-  ];
-  const value = instants[setupAccessItemClockSequence++];
-  if (!value) throw new Error('Setup AccessItem clock exhausted.');
+  const value = new Date(
+    Date.UTC(2027, 9, 1, 12, setupAccessItemClockSequence),
+  ).toISOString();
+  setupAccessItemClockSequence += 1;
   return value;
+}
+
+function appendSetupAccessTransaction(
+  tenancyId: string,
+  type: AccessItemTransactionResponse['type'],
+  occurredAt = '2026-10-01T08:00:00.000Z',
+  note: string | null = 'Concurrent custody change',
+): AccessItemTransactionResponse {
+  const id = setupAccessItemTransactionIds[setupAccessItemTransactionSequence++];
+  if (!id) throw new Error('Setup AccessItem transaction id pool exhausted.');
+  const transaction: AccessItemTransactionResponse = {
+    id,
+    accessItemId: setupAccessItemId,
+    tenancyId,
+    type,
+    sequence: setupAccessItemTransactions.length + 1,
+    occurredAt,
+    recordedAt: nextSetupAccessItemAt(),
+    recordedByUserId: inspectionUserId,
+    note,
+  };
+  setupAccessItemTransactions.push(transaction);
+  return transaction;
+}
+
+function ensureAccessConcurrencyTenancy(index: number): TenancyResponse {
+  const existing = setupAccessConcurrencyTenancies[index];
+  if (existing) return existing;
+  const id = setupAccessConcurrencyTenancyIds[index];
+  if (!id) throw new Error('Setup AccessItem concurrency Tenancy pool exhausted.');
+  const tenancy: TenancyResponse = {
+    id,
+    code: `TEN-CONCURRENT-${index + 1}`,
+    unitId: setupUnitId,
+    status: 'active',
+    plannedStart: '2026-10-01',
+    plannedEnd: null,
+    actualStart: '2026-10-01',
+    actualEnd: null,
+    noticeGivenAt: null,
+    terminationEffectiveAt: null,
+    version: 3,
+    parties: [],
+  };
+  setupAccessConcurrencyTenancies.push(tenancy);
+  return tenancy;
 }
 
 function setupAccessItemEntry(item: AccessItemResponse) {
@@ -1277,6 +1332,9 @@ type BrowserHarnessWindow = Window & {
   __portfolioFailNextServiceEventLink?: boolean;
   __portfolioFailNextMeterReadingAfterCommit?: boolean;
   __portfolioFailNextAccessItemCreateAfterCommit?: boolean;
+  __portfolioSimulateAccessItemAvailabilityCycle?: () => boolean;
+  __portfolioSimulateAccessItemHandoff?: () => boolean;
+  __portfolioAccessItemTransactionCount?: () => number;
   __portfolioFailNextMeterBoundaryAfterCommit?: boolean;
   __portfolioFailNextAssetMoveAfterCommit?: boolean;
   __portfolioConcurrentAssetMoveAcrossProperty?: boolean;
@@ -1327,6 +1385,26 @@ browserHarnessWindow.__portfolioInspectionSectionPatchCount = 0;
 browserHarnessWindow.__portfolioInspectionSchemaCreateCount = 0;
 browserHarnessWindow.__portfolioInspectionSchemaPublishCount = 0;
 browserHarnessWindow.__portfolioFinalReportRenderCount = 0;
+browserHarnessWindow.__portfolioAccessItemTransactionCount = () =>
+  setupAccessItemTransactions.length;
+browserHarnessWindow.__portfolioSimulateAccessItemAvailabilityCycle = () => {
+  const item = setupAccessItems.find((candidate) => candidate.id === setupAccessItemId);
+  if (!item || setupAccessItemEntry(item).state.kind !== 'available') return false;
+  const tenancy = ensureAccessConcurrencyTenancy(0);
+  appendSetupAccessTransaction(tenancy.id, 'issued');
+  appendSetupAccessTransaction(tenancy.id, 'returned');
+  return true;
+};
+browserHarnessWindow.__portfolioSimulateAccessItemHandoff = () => {
+  const item = setupAccessItems.find((candidate) => candidate.id === setupAccessItemId);
+  if (!item) return false;
+  const state = setupAccessItemEntry(item).state;
+  if (state.kind !== 'issued' || state.tenancyId === null) return false;
+  const target = ensureAccessConcurrencyTenancy(setupAccessHandoffSequence++);
+  appendSetupAccessTransaction(state.tenancyId, 'returned');
+  appendSetupAccessTransaction(target.id, 'issued');
+  return true;
+};
 
 let heldUnitCreate:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
@@ -2048,6 +2126,7 @@ globalThis.fetch = async (
     requirePortfolioAuth(init);
     const body = JSON.parse(String(init.body)) as {
       tenancyId: string;
+      expectedLastTransactionId: string | null;
       occurredAt: string;
       note?: string | null;
     };
@@ -2059,6 +2138,15 @@ globalThis.fetch = async (
       );
     }
     const state = setupAccessItemEntry(setupAccessItem).state;
+    if (
+      (state.lastTransaction?.id ?? null) !== body.expectedLastTransactionId
+    ) {
+      return apiError(
+        409,
+        'ACCESS_ITEM_TRANSACTION_CONFLICT',
+        'AccessItem custody history changed since the caller last read it.',
+      );
+    }
     if (state.kind !== 'available' || setupAccessItem.status !== 'active') {
       return apiError(
         422,
@@ -2066,20 +2154,12 @@ globalThis.fetch = async (
         'Only an available AccessItem can be issued.',
       );
     }
-    const id = setupAccessItemTransactionIds[setupAccessItemTransactionSequence++];
-    if (!id) throw new Error('Setup AccessItem transaction id pool exhausted.');
-    const transaction: AccessItemTransactionResponse = {
-      id,
-      accessItemId: setupAccessItem.id,
-      tenancyId: body.tenancyId,
-      type: 'issued',
-      sequence: setupAccessItemTransactions.length + 1,
-      occurredAt: body.occurredAt,
-      recordedAt: nextSetupAccessItemAt(),
-      recordedByUserId: inspectionUserId,
-      note: body.note ?? null,
-    };
-    setupAccessItemTransactions.push(transaction);
+    const transaction = appendSetupAccessTransaction(
+      body.tenancyId,
+      'issued',
+      body.occurredAt,
+      body.note ?? null,
+    );
     return json(transaction, 201);
   }
 
@@ -2091,10 +2171,20 @@ globalThis.fetch = async (
   ) {
     requirePortfolioAuth(init);
     const body = JSON.parse(String(init.body)) as {
+      expectedLastTransactionId: string | null;
       occurredAt: string;
       note?: string | null;
     };
     const state = setupAccessItemEntry(setupAccessItem).state;
+    if (
+      (state.lastTransaction?.id ?? null) !== body.expectedLastTransactionId
+    ) {
+      return apiError(
+        409,
+        'ACCESS_ITEM_TRANSACTION_CONFLICT',
+        'AccessItem custody history changed since the caller last read it.',
+      );
+    }
     const type = path.endsWith('/loss') ? 'lost' : 'returned';
     if (
       state.tenancyId === null ||
@@ -2106,20 +2196,12 @@ globalThis.fetch = async (
         'AccessItem custody transition is invalid.',
       );
     }
-    const id = setupAccessItemTransactionIds[setupAccessItemTransactionSequence++];
-    if (!id) throw new Error('Setup AccessItem transaction id pool exhausted.');
-    const transaction: AccessItemTransactionResponse = {
-      id,
-      accessItemId: setupAccessItem.id,
-      tenancyId: state.tenancyId,
+    const transaction = appendSetupAccessTransaction(
+      state.tenancyId,
       type,
-      sequence: setupAccessItemTransactions.length + 1,
-      occurredAt: body.occurredAt,
-      recordedAt: nextSetupAccessItemAt(),
-      recordedByUserId: inspectionUserId,
-      note: body.note ?? null,
-    };
-    setupAccessItemTransactions.push(transaction);
+      body.occurredAt,
+      body.note ?? null,
+    );
     return json(transaction, 201);
   }
 
@@ -3997,6 +4079,7 @@ globalThis.fetch = async (
       items: [
         ...(setupTenancy ? [setupTenancy] : []),
         ...(setupSecondaryTenancy ? [setupSecondaryTenancy] : []),
+        ...setupAccessConcurrencyTenancies,
       ],
     });
   }

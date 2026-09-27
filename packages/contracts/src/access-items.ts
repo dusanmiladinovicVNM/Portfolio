@@ -18,6 +18,7 @@ export const createAccessItemRequestSchema = z.object({
 
 export const issueAccessItemRequestSchema = z.object({
   tenancyId: entityIdSchema,
+  expectedLastTransactionId: entityIdSchema.nullable(),
   occurredAt: instantSchema,
   note: z.string().trim().min(1).nullable().optional(),
 });
@@ -33,6 +34,7 @@ export const retireAccessItemRequestSchema = z.object({
 });
 
 export const accessItemCustodyEventRequestSchema = z.object({
+  expectedLastTransactionId: entityIdSchema.nullable(),
   occurredAt: instantSchema,
   note: z.string().trim().min(1).nullable().optional(),
 });

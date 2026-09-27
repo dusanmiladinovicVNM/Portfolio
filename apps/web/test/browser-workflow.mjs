@@ -1329,6 +1329,23 @@ try {
     accessCard + "//*[contains(normalize-space(),'Setup Bedroom')]",
   );
 
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioSimulateAccessItemAvailabilityCycle();',
+    ),
+    true,
+    'Simulate unseen AccessItem issue-return cycle',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioAccessItemTransactionCount();',
+    ),
+    2,
+    'Unseen availability cycle has two canonical events',
+  );
+
   const accessIssueForm =
     accessCard + "//form[@data-access-item-form='issue']";
   await selectOptionXpath(
@@ -1358,6 +1375,49 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
+    "//*[contains(normalize-space(),'custody history changed')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioAccessItemTransactionCount();',
+    ),
+    2,
+    'Stale issue appends no transaction after unseen issue-return cycle',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//span[contains(@class,'status-chip') and normalize-space()='available']",
+  );
+
+  await selectOptionXpath(
+    sessionId,
+    accessIssueForm + "//select[@name='tenancyId']",
+    setupTenancyId,
+  );
+  await setInputValueXpath(
+    sessionId,
+    accessIssueForm + "//input[@name='date']",
+    '2026-10-01',
+  );
+  await setInputValueXpath(
+    sessionId,
+    accessIssueForm + "//input[@name='time']",
+    '10:00',
+  );
+  await typeXpath(
+    sessionId,
+    accessIssueForm + "//input[@name='note']",
+    'Move-in handover after refresh',
+  );
+  await clickXpath(
+    sessionId,
+    accessIssueForm + "//button[normalize-space()='Issue AccessItem']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
     accessCard + "//span[contains(@class,'status-chip') and normalize-space()='issued']",
   );
   await waitForElement(
@@ -1366,8 +1426,72 @@ try {
     accessCard + "//*[contains(normalize-space(),'TEN-SETUP-BRW')]",
   );
 
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioSimulateAccessItemHandoff();',
+    ),
+    true,
+    'Simulate concurrent handoff from TEN-SETUP-BRW to TEN-CONCURRENT-1',
+  );
+  const beforeStaleReturnCount = await executeScript(
+    sessionId,
+    'return window.__portfolioAccessItemTransactionCount();',
+  );
+  const staleReturnForm =
+    accessCard + "//form[@data-access-item-form='return']";
+  await setInputValueXpath(
+    sessionId,
+    staleReturnForm + "//input[@name='date']",
+    '2026-10-02',
+  );
+  await setInputValueXpath(
+    sessionId,
+    staleReturnForm + "//input[@name='time']",
+    '09:00',
+  );
+  await typeXpath(
+    sessionId,
+    staleReturnForm + "//input[@name='note']",
+    'Stale TEN-A return must not affect TEN-B',
+  );
+  await clickXpath(
+    sessionId,
+    staleReturnForm + "//button[normalize-space()='Record return']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'custody history changed')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioAccessItemTransactionCount();',
+    ),
+    beforeStaleReturnCount,
+    'Stale return appends no transaction for the newer holder',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//*[contains(normalize-space(),'TEN-CONCURRENT-1')]",
+  );
+
   const accessLossForm =
     accessCard + "//form[@data-access-item-form='loss']";
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioSimulateAccessItemHandoff();',
+    ),
+    true,
+    'Simulate concurrent handoff from TEN-CONCURRENT-1 to TEN-CONCURRENT-2',
+  );
+  const beforeStaleLossCount = await executeScript(
+    sessionId,
+    'return window.__portfolioAccessItemTransactionCount();',
+  );
   await setInputValueXpath(
     sessionId,
     accessLossForm + "//input[@name='date']",
@@ -1386,6 +1510,46 @@ try {
   await clickXpath(
     sessionId,
     accessLossForm + "//button[normalize-space()='Report lost']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'custody history changed')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioAccessItemTransactionCount();',
+    ),
+    beforeStaleLossCount,
+    'Stale lost appends no transaction for the newer holder',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//*[contains(normalize-space(),'TEN-CONCURRENT-2')]",
+  );
+
+  const freshLossForm =
+    accessCard + "//form[@data-access-item-form='loss']";
+  await setInputValueXpath(
+    sessionId,
+    freshLossForm + "//input[@name='date']",
+    '2026-10-02',
+  );
+  await setInputValueXpath(
+    sessionId,
+    freshLossForm + "//input[@name='time']",
+    '10:30',
+  );
+  await typeXpath(
+    sessionId,
+    freshLossForm + "//input[@name='note']",
+    'Current holder reported key missing',
+  );
+  await clickXpath(
+    sessionId,
+    freshLossForm + "//button[normalize-space()='Report lost']",
   );
   await waitForElement(
     sessionId,

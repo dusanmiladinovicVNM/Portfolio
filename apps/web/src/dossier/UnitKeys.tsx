@@ -416,6 +416,7 @@ export function UnitKeys({
     const note = optionalString(form, 'note') ?? null;
     const parsed = issueAccessItemRequestSchema.safeParse({
       tenancyId: requiredString(form, 'tenancyId'),
+      expectedLastTransactionId: entry.state.lastTransaction?.id ?? null,
       occurredAt,
       note,
     });
@@ -459,6 +460,7 @@ export function UnitKeys({
     );
     const note = optionalString(form, 'note') ?? null;
     const parsed = accessItemCustodyEventRequestSchema.safeParse({
+      expectedLastTransactionId: entry.state.lastTransaction?.id ?? null,
       occurredAt,
       note,
     });

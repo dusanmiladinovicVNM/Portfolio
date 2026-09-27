@@ -22,6 +22,7 @@ import {
 } from '@portfolio/contracts';
 import {
   asAccessItemId,
+  asAccessItemTransactionId,
   asPropertyId,
   asSpaceId,
   asTenancyId,
@@ -140,6 +141,10 @@ export async function handleAccessItemHttp(
       asAccessItemId(id.data),
       {
         tenancyId: asTenancyId(parsed.data.tenancyId),
+        expectedLastTransactionId:
+          parsed.data.expectedLastTransactionId === null
+            ? null
+            : asAccessItemTransactionId(parsed.data.expectedLastTransactionId),
         occurredAt: parsed.data.occurredAt,
         ...(parsed.data.note !== undefined ? { note: parsed.data.note } : {}),
       },
@@ -161,6 +166,10 @@ export async function handleAccessItemHttp(
       actor,
       asAccessItemId(id.data),
       {
+        expectedLastTransactionId:
+          parsed.data.expectedLastTransactionId === null
+            ? null
+            : asAccessItemTransactionId(parsed.data.expectedLastTransactionId),
         occurredAt: parsed.data.occurredAt,
         ...(parsed.data.note !== undefined ? { note: parsed.data.note } : {}),
       },
@@ -182,6 +191,10 @@ export async function handleAccessItemHttp(
       actor,
       asAccessItemId(id.data),
       {
+        expectedLastTransactionId:
+          parsed.data.expectedLastTransactionId === null
+            ? null
+            : asAccessItemTransactionId(parsed.data.expectedLastTransactionId),
         occurredAt: parsed.data.occurredAt,
         ...(parsed.data.note !== undefined ? { note: parsed.data.note } : {}),
       },
