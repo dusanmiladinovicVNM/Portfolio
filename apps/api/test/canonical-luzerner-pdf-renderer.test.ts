@@ -224,6 +224,33 @@ describe('CanonicalLuzernerPdfRenderer', () => {
     ).rejects.toMatchObject({ code: 'LUZERNER_PDF_TENANT_CAPACITY' });
   });
 
+  it('accepts the exact single-line width boundary and rejects the next glyph', async () => {
+    const input = fixture();
+    const renderer = new CanonicalLuzernerPdfRenderer();
+    const party = {
+      ...input.landlords[0]!,
+      addressLine: null,
+      postalCode: null,
+      city: null,
+    };
+
+    await expect(
+      renderer.renderLuzernerLeaseAgreement({
+        ...input,
+        landlords: [{ ...party, displayName: 'W'.repeat(84) }],
+      }),
+    ).resolves.toMatchObject({
+      fileName: 'mietvertrag-AGR-LU-2027-001.pdf',
+    });
+
+    await expect(
+      renderer.renderLuzernerLeaseAgreement({
+        ...input,
+        landlords: [{ ...party, displayName: 'W'.repeat(85) }],
+      }),
+    ).rejects.toMatchObject({ code: 'LUZERNER_PDF_TEXT_OVERFLOW' });
+  });
+
   it('fails closed when a single-line field still overflows at minimum font size', async () => {
     const input = fixture();
     const renderer = new CanonicalLuzernerPdfRenderer();

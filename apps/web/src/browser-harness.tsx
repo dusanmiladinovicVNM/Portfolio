@@ -3981,7 +3981,7 @@ globalThis.fetch = async (
 
     const existingLink = setupDocumentLinks.find(
       (candidate) =>
-        candidate.relation === 'signed_original' &&
+        candidate.relation === 'generated_contract' &&
         candidate.targetType === 'lease_agreement' &&
         candidate.targetId === setupAgreement.id,
     );
@@ -4029,7 +4029,7 @@ globalThis.fetch = async (
       id: setupLuzernerFinalDocumentLinkId,
       documentId: document.id,
       documentVersionId: version.id,
-      relation: 'signed_original',
+      relation: 'generated_contract',
       targetType: 'lease_agreement',
       targetId: setupAgreement.id,
     };
