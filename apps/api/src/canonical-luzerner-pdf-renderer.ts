@@ -976,7 +976,7 @@ function pageEightFixed(): Commands {
     );
     const footer = line.text.startsWith('Eine Dienstleistung');
     const size = footer ? 7.2 : label ? 9.2 : 8.7;
-    commands.push(
+    c.push(
       'BT 0 0 0 rg ' +
         (label ? BOLD_FONT : FONT) +
         ' ' +
