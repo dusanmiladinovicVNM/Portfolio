@@ -321,6 +321,7 @@ export async function handleLeaseHttp(
         leaseRepository: deps.leaseRepository,
         tenancyRepository: deps.tenancyRepository,
         partyRepository: deps.partyRepository,
+        portfolioRepository: deps.portfolioRepository,
         idGenerator: deps.idGenerator,
       },
       actor,
