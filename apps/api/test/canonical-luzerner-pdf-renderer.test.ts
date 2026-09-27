@@ -234,6 +234,62 @@ describe('CanonicalLuzernerPdfRenderer', () => {
     ).rejects.toMatchObject({ code: 'LUZERNER_PDF_TEXT_OVERFLOW' });
   });
 
+  it('fails closed when a custom ancillary label exceeds its physical row width', async () => {
+    const input = fixture();
+    const renderer = new CanonicalLuzernerPdfRenderer();
+
+    await expect(
+      renderer.renderLuzernerLeaseAgreement({
+        ...input,
+        form: {
+          ...input.form,
+          customAncillaryCosts: [
+            {
+              label: 'Extremely long ancillary cost description '.repeat(40),
+              mode: 'advance',
+            },
+          ],
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'LUZERNER_PDF_TEXT_OVERFLOW' });
+  });
+
+  it('fails closed when a custom termination schedule exceeds its physical field width', async () => {
+    const input = fixture();
+    const renderer = new CanonicalLuzernerPdfRenderer();
+
+    await expect(
+      renderer.renderLuzernerLeaseAgreement({
+        ...input,
+        form: {
+          ...input.form,
+          terminationSchedule: 'custom',
+          terminationScheduleCustom:
+            'Extremely long custom termination schedule '.repeat(30),
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'LUZERNER_PDF_TEXT_OVERFLOW' });
+  });
+
+  it('dispatches only the explicitly requested frozen template revision', async () => {
+    const input = fixture();
+    const renderer = new CanonicalLuzernerPdfRenderer();
+
+    expect(renderer.getCurrentTemplateIdentity()).toEqual({
+      templateCode: 'lu-2020',
+      templateRevision: 1,
+    });
+
+    await expect(
+      renderer.renderLuzernerLeaseAgreement(input, {
+        templateCode: 'lu-2020',
+        templateRevision: 2,
+      }),
+    ).rejects.toMatchObject({
+      code: 'LUZERNER_PDF_TEMPLATE_REVISION_UNSUPPORTED',
+    });
+  });
+
   it('fails explicitly rather than corrupting characters outside WinAnsi', async () => {
     const input = fixture();
     const renderer = new CanonicalLuzernerPdfRenderer();
