@@ -34,6 +34,7 @@ const inspectionUserId = 'a1000000-0000-4000-8000-000000000006';
 const setupPropertyId = 'b1000000-0000-4000-8000-000000000001';
 const setupUnitId = 'b1000000-0000-4000-8000-000000000002';
 const setupSpaceId = 'b1000000-0000-4000-8000-000000000003';
+const setupBathroomSpaceId = 'b1000000-0000-4000-8000-000000000083';
 const setupHallSpaceId = 'b1000000-0000-4000-8000-000000000080';
 const setupKitchenSpaceId = 'b1000000-0000-4000-8000-000000000082';
 const setupDestinationUnitId = 'c1000000-0000-4000-8000-000000000001';
@@ -57,6 +58,7 @@ const setupReplacementAssetId = 'b1000000-0000-4000-8000-000000000030';
 const setupOvenAssetId = 'b1000000-0000-4000-8000-000000000085';
 const setupSmokeDetectorAssetId = 'b1000000-0000-4000-8000-000000000086';
 const setupMeterId = 'b1000000-0000-4000-8000-000000000038';
+const setupWaterMeterId = 'b1000000-0000-4000-8000-000000000091';
 const setupAccessItemId = 'b1000000-0000-4000-8000-000000000068';
 const setupMeterMoveInReadingId = 'b1000000-0000-4000-8000-000000000039';
 const setupMeterMoveOutReadingId = 'b1000000-0000-4000-8000-000000000040';
@@ -2899,11 +2901,6 @@ try {
     meterCreateForm + "//input[@name='label']",
     'Main electricity meter',
   );
-  await selectOptionXpath(
-    sessionId,
-    meterCreateForm + "//select[@name='spaceId']",
-    setupSpaceId,
-  );
   await setInputValueXpath(
     sessionId,
     meterCreateForm + "//input[@name='installedDate']",
@@ -2928,7 +2925,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//a[contains(@class,'meter-card')][.//span[normalize-space()='MTR-SETUP-BRW']][.//h3[normalize-space()='Main electricity meter']]",
+    "//a[contains(@class,'meter-card')][.//span[normalize-space()='MTR-SETUP-BRW']][.//h3[normalize-space()='Main electricity meter']][.//dt[normalize-space()='Utility']/following-sibling::dd[normalize-space()='Electricity']][.//dt[normalize-space()='Unit']/following-sibling::dd[normalize-space()='kwh']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='Unit level']]",
   );
   await waitForElement(
     sessionId,
@@ -3158,6 +3155,81 @@ try {
     sessionId,
     'xpath',
     "//section[contains(@class,'meter-admin-panel')]//dd[normalize-space()='Meter replaced after tenancy']",
+  );
+
+  await typeXpath(
+    sessionId,
+    meterCreateForm + "//input[@name='code']",
+    'MTR-WATER-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    meterCreateForm + "//input[@name='serialNumber']",
+    'SN-WATER-SETUP-001',
+  );
+  await selectOptionXpath(
+    sessionId,
+    meterCreateForm + "//label[starts-with(normalize-space(.),'Utility')]//select",
+    'water',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    meterCreateForm + "//label[starts-with(normalize-space(.),'Measurement unit')]//select/option[@value='m3']",
+  );
+  await selectOptionXpath(
+    sessionId,
+    meterCreateForm + "//label[starts-with(normalize-space(.),'Measurement unit')]//select",
+    'm3',
+  );
+  await typeXpath(
+    sessionId,
+    meterCreateForm + "//input[@name='label']",
+    'Bathroom water meter',
+  );
+  await selectOptionXpath(
+    sessionId,
+    meterCreateForm + "//select[@name='spaceId']",
+    setupBathroomSpaceId,
+  );
+  await setInputValueXpath(
+    sessionId,
+    meterCreateForm + "//input[@name='installedDate']",
+    '2026-09-01',
+  );
+  await setInputValueXpath(
+    sessionId,
+    meterCreateForm + "//input[@name='installedTime']",
+    '08:30',
+  );
+  await clickXpath(
+    sessionId,
+    meterCreateForm + "//button[normalize-space()='Create Meter']",
+  );
+
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'meter-card')][.//span[normalize-space()='MTR-WATER-BRW']][.//h3[normalize-space()='Bathroom water meter']][.//dt[normalize-space()='Serial']/following-sibling::dd[normalize-space()='SN-WATER-SETUP-001']][.//dt[normalize-space()='Utility']/following-sibling::dd[normalize-space()='Water']][.//dt[normalize-space()='Unit']/following-sibling::dd[normalize-space()='m3']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='Bathroom']]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=meters&meterId=' + setupWaterMeterId +
+      '&asOf=2025-06-30',
+    'Bathroom water Meter deep-link uses exact Unit owner',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'meter-admin-panel')]//h2[normalize-space()='MTR-WATER-BRW · Bathroom water meter']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'meter-card')][.//span[normalize-space()='MTR-SETUP-BRW']][.//span[contains(@class,'status-chip') and normalize-space()='retired']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='Unit level']]",
   );
 
   await clickXpath(sessionId, "//a[normalize-space()='Tenancies']");

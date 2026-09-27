@@ -195,7 +195,10 @@ const setupAssetLocationIds = [
 ] as const;
 const setupAssetReplacementId =
   'b1000000-0000-4000-8000-000000000036';
-const setupMeterId = 'b1000000-0000-4000-8000-000000000038';
+const setupMeterIds = [
+  'b1000000-0000-4000-8000-000000000038',
+  'b1000000-0000-4000-8000-000000000091',
+] as const;
 const setupAccessItemId = 'b1000000-0000-4000-8000-000000000068';
 const setupAccessItemTransactionIds = [
   'b1000000-0000-4000-8000-000000000069',
@@ -376,6 +379,7 @@ let setupAssetIdentifierSequence = 0;
 let setupAssetLocationSequence = 0;
 let setupAssetMutationSequence = 0;
 let setupMeters: MeterResponse[] = [];
+let setupMeterSequence = 0;
 let setupAccessItems: AccessItemResponse[] = [];
 let setupAccessItemTransactions: AccessItemTransactionResponse[] = [];
 let setupAccessItemTransactionSequence = 0;
@@ -2301,8 +2305,10 @@ globalThis.fetch = async (
       );
     }
 
+    const id = setupMeterIds[setupMeterSequence++];
+    if (!id) throw new Error('Setup Meter id pool exhausted.');
     const created: MeterResponse = {
-      id: setupMeterId,
+      id,
       code: body.code,
       serialNumber: body.serialNumber,
       utilityType: body.utilityType,
