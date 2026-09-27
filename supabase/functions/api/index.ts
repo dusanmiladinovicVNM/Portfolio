@@ -1,6 +1,6 @@
 import {
   CanonicalInspectionPdfRenderer,
-  createEmbeddedLuzernerPdfRenderer,
+  CanonicalLuzernerPdfRenderer,
   createSupabaseApi,
   SupabaseStaffAuthAdmin,
 } from '@portfolio/api';
@@ -28,7 +28,7 @@ const api = createSupabaseApi({
     accessTokenProvider,
   }),
   pdfPort: new CanonicalInspectionPdfRenderer(),
-  luzernerLeasePdfPort: createEmbeddedLuzernerPdfRenderer(),
+  luzernerLeasePdfPort: new CanonicalLuzernerPdfRenderer(),
   staffAuthAdmin: new SupabaseStaffAuthAdmin({
     supabaseUrl: config.supabaseUrl,
     serviceRoleKey: config.serviceRoleKey,

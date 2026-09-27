@@ -1,18 +1,14 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type { LuzernerLeasePdfRenderInput } from '@portfolio/application';
 import { CanonicalLuzernerPdfRenderer } from '../src/canonical-luzerner-pdf-renderer.js';
-import { embeddedLuzernerTemplateBytes } from '../src/embedded-luzerner-template.js';
-
-const BLOCK_BYTES = 32768;
-
-function template(): Uint8Array {
-  const blocks = Array.from({ length: 8 }, (_, index) => {
-    const marker =
-      '%%PORTFOLIO_LUZERNER_OVERLAY_PAGE_' + (index + 1) + '%%';
-    return marker + ' '.repeat(BLOCK_BYTES - marker.length);
-  });
-  return new TextEncoder().encode(blocks.join(''));
-}
+import {
+  LUZERNER_2020_FIXED_WORDING,
+  LUZERNER_2020_FIXED_WORDING_SHA256,
+  LUZERNER_2020_PAGE_COUNT,
+  LUZERNER_2020_TEMPLATE_CODE,
+  LUZERNER_2020_TEMPLATE_REVISION,
+} from '../src/luzerner-2020-template/source-wording.js';
 
 function fixture(): LuzernerLeasePdfRenderInput {
   return {
@@ -146,31 +142,24 @@ function fixture(): LuzernerLeasePdfRenderInput {
 }
 
 describe('CanonicalLuzernerPdfRenderer', () => {
-  it('loads the reviewed embedded LU-2020 template with exact bytes and checksum', async () => {
-    const bytes = embeddedLuzernerTemplateBytes();
-    const digestInput = new ArrayBuffer(bytes.byteLength);
-    new Uint8Array(digestInput).set(bytes);
-    const digest = await crypto.subtle.digest('SHA-256', digestInput);
-    const sha256 = [...new Uint8Array(digest)]
-      .map((byte) => byte.toString(16).padStart(2, '0'))
-      .join('');
+  it('locks the reviewed LU-2020 wording and excludes source-specific sample clauses', () => {
+    const canonical = LUZERNER_2020_FIXED_WORDING.join('\n\f\n');
+    const sha256 = createHash('sha256').update(canonical, 'utf8').digest('hex');
 
-    expect(bytes.byteLength).toBe(578_564);
-    expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe('%PDF-');
-    expect(sha256).toBe(
-      '2d36e644e11fe4ef62728bed5b694a36ba2cfb071ee044fc2e43eff04184ced5',
-    );
+    expect(LUZERNER_2020_TEMPLATE_CODE).toBe('lu-2020');
+    expect(LUZERNER_2020_TEMPLATE_REVISION).toBe(1);
+    expect(LUZERNER_2020_PAGE_COUNT).toBe(8);
+    expect(LUZERNER_2020_FIXED_WORDING).toHaveLength(8);
+    expect(sha256).toBe(LUZERNER_2020_FIXED_WORDING_SHA256);
 
-    const rendered = await new CanonicalLuzernerPdfRenderer(
-      bytes,
-    ).renderLuzernerLeaseAgreement(fixture());
-
-    expect(rendered.content.byteLength).toBe(bytes.byteLength);
-    expect(new TextDecoder().decode(rendered.content.slice(0, 5))).toBe('%PDF-');
+    expect(canonical).toContain('Allgemeine Bedingungen');
+    expect(canonical).toContain('3.4 Verrechnung und Sicherheitsleistung');
+    expect(canonical).toContain('8. Besondere Bestimmungen');
+    expect(canonical).not.toContain('Mietverhältnis wird übernommen;');
   });
 
-  it('renders the canonical LU form deterministically into the eight reserved page overlays', async () => {
-    const renderer = new CanonicalLuzernerPdfRenderer(template());
+  it('builds a deterministic native eight-page PDF without binary-template overlays', async () => {
+    const renderer = new CanonicalLuzernerPdfRenderer();
     const input = fixture();
 
     const first = await renderer.renderLuzernerLeaseAgreement(input);
@@ -179,7 +168,9 @@ describe('CanonicalLuzernerPdfRenderer', () => {
 
     expect(first.fileName).toBe('mietvertrag-AGR-LU-2027-001.pdf');
     expect(first.content).toEqual(second.content);
-    expect(source).not.toContain('%%PORTFOLIO_LUZERNER_OVERLAY_PAGE_');
+    expect(source.startsWith('%PDF-1.4')).toBe(true);
+    expect(source).toContain('/Count 8');
+    expect(source).not.toContain('PORTFOLIO_LUZERNER_OVERLAY');
 
     expect(source).toContain('<506F7274666F6C696F20496D6D6F62696C69656E2041472C20');
     expect(source).toContain('<56657277616C74756E67204D75737465722041472C20');
@@ -192,9 +183,9 @@ describe('CanonicalLuzernerPdfRenderer', () => {
     expect(source).toContain('<4C757A65726E2C2031352E30362E32303237> Tj');
   });
 
-  it('rejects more tenant parties than the physical LU 2020 form can display', async () => {
+  it('rejects more tenant parties than the LU 2020 contract layout can display', async () => {
     const input = fixture();
-    const renderer = new CanonicalLuzernerPdfRenderer(template());
+    const renderer = new CanonicalLuzernerPdfRenderer();
 
     await expect(
       renderer.renderLuzernerLeaseAgreement({
@@ -220,7 +211,7 @@ describe('CanonicalLuzernerPdfRenderer', () => {
 
   it('fails explicitly rather than corrupting characters outside WinAnsi', async () => {
     const input = fixture();
-    const renderer = new CanonicalLuzernerPdfRenderer(template());
+    const renderer = new CanonicalLuzernerPdfRenderer();
 
     await expect(
       renderer.renderLuzernerLeaseAgreement({
@@ -233,11 +224,5 @@ describe('CanonicalLuzernerPdfRenderer', () => {
         ],
       }),
     ).rejects.toMatchObject({ code: 'LUZERNER_PDF_UNSUPPORTED_CHARACTER' });
-  });
-
-  it('rejects a template whose fixed-size page overlay markers are incomplete', () => {
-    expect(
-      () => new CanonicalLuzernerPdfRenderer(new TextEncoder().encode('not-a-template')),
-    ).toThrowError(/overlay marker/u);
   });
 });

@@ -1,3 +1,13 @@
+import { PAGE_1_FIXED_TEXT } from './luzerner-2020-template/page-01.js';
+import { PAGE_2_FIXED_TEXT } from './luzerner-2020-template/page-02.js';
+import {
+  LUZERNER_2020_FIXED_WORDING,
+  LUZERNER_2020_PAGE_COUNT,
+} from './luzerner-2020-template/source-wording.js';
+import type {
+  Luzerner2020FixedTextLine,
+  Luzerner2020Rgb,
+} from './luzerner-2020-template/types.js';
 import {
   ApplicationError,
   type LuzernerLeasePdfParty,
@@ -23,10 +33,11 @@ const LUZERNER_ANCILLARY_COST_KEYS: readonly LuzernerAncillaryCostKey[] = [
   'administration_share',
 ];
 
-const PAGE_COUNT = 8;
+const PAGE_COUNT = LUZERNER_2020_PAGE_COUNT;
+const PAGE_WIDTH = 595.276;
 const PAGE_HEIGHT = 841.89;
-const OVERLAY_BLOCK_BYTES = 32768;
 const FONT = '/FPortfolio';
+const BOLD_FONT = '/FPortfolioBold';
 
 interface Rect {
   readonly x0: number;
@@ -652,45 +663,422 @@ function pageEight(input: LuzernerLeasePdfRenderInput): Commands {
   return c;
 }
 
-function marker(page: number): Uint8Array {
-  return new TextEncoder().encode(
-    '%%PORTFOLIO_LUZERNER_OVERLAY_PAGE_' + page + '%%',
+
+function rgb(color: Luzerner2020Rgb): string {
+  return color.map((value) => pdfNumber(value)).join(' ');
+}
+
+function addFixedTextLine(
+  commands: Commands,
+  line: Luzerner2020FixedTextLine,
+): void {
+  commands.push(
+    'BT ' +
+      rgb(line.color) +
+      ' rg ' +
+      (line.bold ? BOLD_FONT : FONT) +
+      ' ' +
+      pdfNumber(line.size) +
+      ' Tf ' +
+      pdfNumber(line.x) +
+      ' ' +
+      pdfNumber(line.y) +
+      ' Td <' +
+      winAnsiHex(line.text) +
+      '> Tj ET',
   );
 }
 
-function findUnique(haystack: Uint8Array, needle: Uint8Array): number {
-  let found = -1;
-  outer: for (let i = 0; i <= haystack.length - needle.length; i += 1) {
-    for (let j = 0; j < needle.length; j += 1) {
-      if (haystack[i + j] !== needle[j]) continue outer;
-    }
-    if (found !== -1) return -2;
-    found = i;
-  }
-  return found;
+function fillRect(
+  commands: Commands,
+  target: Rect,
+  color = '0.956 0.966 0.996',
+): void {
+  commands.push(
+    'q ' +
+      color +
+      ' rg ' +
+      pdfNumber(target.x0) +
+      ' ' +
+      pdfNumber(target.y0) +
+      ' ' +
+      pdfNumber(target.x1 - target.x0) +
+      ' ' +
+      pdfNumber(target.y1 - target.y0) +
+      ' re f Q',
+  );
 }
 
-function fillBlock(
-  target: Uint8Array,
-  page: number,
+function strokeRect(
   commands: Commands,
+  target: Rect,
+  width = 0.55,
+  color = '0 0 0',
 ): void {
-  const offset = findUnique(target, marker(page));
-  if (offset < 0) {
+  commands.push(
+    'q ' +
+      color +
+      ' RG ' +
+      pdfNumber(width) +
+      ' w ' +
+      pdfNumber(target.x0) +
+      ' ' +
+      pdfNumber(target.y0) +
+      ' ' +
+      pdfNumber(target.x1 - target.x0) +
+      ' ' +
+      pdfNumber(target.y1 - target.y0) +
+      ' re S Q',
+  );
+}
+
+function checkbox(commands: Commands, target: Rect): void {
+  fillRect(commands, target, '0.91 0.95 0.99');
+}
+
+function pageOneStructure(): Commands {
+  const c: Commands = [];
+  strokeRect(c, box(41.5, 424, 548, 604));
+  strokeRect(c, box(41.5, 188, 548, 406));
+  strokeRect(c, box(41.5, 45, 548, 184));
+
+  const fields: Rect[] = [
+    box(133.741, 574.65, 536.987, 598.01),
+    box(133.741, 545.082, 536.987, 569.164),
+    ...tenantSlots.flatMap((slot) => [slot.name, slot.address, slot.postal]),
+    box(133.366, 370.456, 460.189, 393.908),
+    box(133.741, 342.516, 382.642, 366.081),
+    box(133.706, 313.472, 536.578, 336.904),
+    box(157.336, 294.413, 203.836, 309.745),
+    box(254.618, 255.835, 287.946, 274.017),
+    box(385.609, 254.997, 425.864, 273.09),
+    box(446.7, 258.208, 536.672, 273.09),
+    box(446.754, 227.172, 536.7, 241.876),
+    box(446.79, 210.918, 536.674, 225.963),
+    box(366.245, 194.53, 536.7, 209.136),
+    box(106.507, 152.417, 294.034, 181.945),
+    box(414.982, 152.09, 547.091, 182.109),
+    box(310.145, 110.854, 367.473, 127.672),
+    box(480.131, 110.69, 537.13, 127.617),
+    box(403, 89, 537, 103),
+    box(275.454, 53.527, 318.109, 68.436),
+  ];
+  fields.forEach((target) => fillRect(c, target));
+
+  const checks: Rect[] = [
+    box(130.784, 298.522, 141.368, 309.371),
+    box(253.56, 300.12, 261.48, 308.64),
+    box(350.64, 300, 358.68, 308.52),
+    box(491.891, 298.413, 502.405, 309.417),
+    box(131.741, 277.058, 142.512, 287.83),
+    box(205.036, 276.799, 215.673, 287.763),
+    box(251.755, 276.649, 262.391, 287.36),
+    box(431.768, 276.745, 442.336, 287.845),
+    box(132.239, 259.61, 142.793, 270.615),
+    box(303.954, 259.536, 314.536, 270.608),
+    box(432.153, 259.488, 442.861, 270.533),
+    box(47.9455, 228.99, 58.5, 240.158),
+    box(131.993, 229.092, 142.568, 240.138),
+    box(204.975, 229.051, 215.611, 240.097),
+    box(305.325, 229.092, 316.043, 240.179),
+    box(47.9864, 211.767, 58.7045, 222.895),
+    box(132.464, 211.829, 143.059, 222.854),
+    box(204.975, 211.829, 215.55, 222.874),
+    box(305.154, 211.832, 315.804, 222.908),
+    box(432.354, 228.908, 442.936, 240.117),
+    box(432.354, 211.808, 443.018, 222.908),
+    box(131.911, 197.04, 142.527, 208.045),
+    box(204.518, 197.054, 215.1, 208.045),
+    box(131.585, 130.855, 139.625, 139.375),
+    box(220.2, 130.8, 228.12, 139.32),
+    box(376.56, 129.84, 384.48, 138.36),
+    box(150.12, 93.6, 158.16, 102),
+    box(383.678, 92.722, 391.718, 101.242),
+    box(149.719, 71.215, 157.759, 79.735),
+    box(274.44, 71.16, 281.4, 79.68),
+    box(413.88, 70.2, 420.12, 78.72),
+    box(150, 57.36, 157.92, 65.88),
+  ];
+  checks.forEach((target) => checkbox(c, target));
+  return c;
+}
+
+function pageTwoStructure(): Commands {
+  const c: Commands = [];
+  strokeRect(c, box(43.5, 504, 550, 787));
+  const fields: Rect[] = [
+    box(487.276, 768.154, 548.476, 777.915),
+    box(486.791, 752.772, 548.482, 762.54),
+    box(486.983, 737.427, 548.713, 747.155),
+    box(486.154, 722.864, 547.905, 732.642),
+    box(487.017, 523.763, 548.714, 538.672),
+    box(255.109, 479.24, 304.855, 492.731),
+    box(391.848, 391.04, 547.411, 404.684),
+    box(485.421, 363.13, 546.622, 376.621),
+    box(313.711, 345.972, 542.941, 359.613),
+    box(200.864, 305.847, 243.085, 319.072),
+    box(395.127, 306.017, 438.085, 319.181),
+    box(201.048, 287.08, 242.693, 300.162),
+    box(305.918, 288.338, 348.931, 301.491),
+    box(394.855, 287.414, 437.978, 300.69),
+    box(354.764, 259.647, 405.222, 272.834),
+    box(417.856, 259.32, 468.456, 272.855),
+    box(118.957, 184.282, 547.214, 241.965),
+    box(44.918, 100.054, 204.695, 113.575),
+  ];
+  fields.forEach((target) => fillRect(c, target));
+
+  const checks = [
+    box(162.145, 513.944, 169.945, 523.304),
+    box(235.32, 514.08, 244.08, 523.44),
+    box(322.44, 514.08, 331.2, 523.44),
+    box(47.826, 480.398, 56.585, 489.758),
+    box(48, 457.08, 56.88, 466.44),
+    box(47.52, 434.28, 56.28, 443.64),
+    box(246.24, 393.96, 255, 403.32),
+    box(299.88, 393.72, 308.76, 403.08),
+    box(374.88, 393.6, 383.64, 402.96),
+    box(49.001, 348.919, 57.881, 358.279),
+    box(150.48, 331.44, 159.24, 340.8),
+    box(179.337, 331.328, 188.097, 340.688),
+    box(48.355, 260.354, 57.194, 270.564),
+    box(118.933, 170.916, 127.752, 181.055),
+  ];
+  checks.forEach((target) => checkbox(c, target));
+
+  addLine(c, 44, 250, 548, 250);
+  addLine(c, 44, 116, 548, 116);
+  addLine(c, 207, 65, 338, 65);
+  addLine(c, 389, 65, 548, 65);
+  return c;
+}
+
+function isLegalHeading(value: string): boolean {
+  return /^(?:\d+\.|\d+\.\d+)(?:\s|$)/u.test(value) ||
+    value.startsWith('Allgemeine Bedingungen') ||
+    value.startsWith('zum Luzerner Mietvertrag') ||
+    value === 'ZENTRALSCHWEIZ';
+}
+
+function wrapLegalLine(value: string, width: number, size: number): string[] {
+  const words = value.trim().split(/\s+/u);
+  if (words.length === 0 || !words[0]) return [];
+  const result: string[] = [];
+  let current = '';
+  for (const word of words) {
+    const candidate = current ? current + ' ' + word : word;
+    if (current && estimatedWidth(candidate, size) > width) {
+      result.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) result.push(current);
+  return result;
+}
+
+interface LegalVisualLine {
+  readonly text: string;
+  readonly heading: boolean;
+}
+
+function legalVisualLines(source: string, width: number): LegalVisualLine[] {
+  const result: LegalVisualLine[] = [];
+  for (const raw of source.split('\n')) {
+    const text = raw.trim();
+    if (!text) continue;
+    const heading = isLegalHeading(text);
+    const size = heading ? 9.1 : 8.55;
+    for (const wrapped of wrapLegalLine(text, width, size)) {
+      result.push({ text: wrapped, heading });
+    }
+  }
+  return result;
+}
+
+function addLegalColumn(
+  commands: Commands,
+  lines: readonly LegalVisualLine[],
+  x: number,
+  topY: number,
+): void {
+  let y = topY;
+  for (const line of lines) {
+    const major = /^\d+\.\s/u.test(line.text);
+    const size = line.heading ? (major ? 10.3 : 8.9) : 8.35;
+    const color = major ? '0 0.4078 0.7059' : line.heading ? '0.32 0.32 0.32' : '0 0 0';
+    commands.push(
+      'BT ' +
+        color +
+        ' rg ' +
+        (line.heading ? BOLD_FONT : FONT) +
+        ' ' +
+        pdfNumber(size) +
+        ' Tf ' +
+        pdfNumber(x) +
+        ' ' +
+        pdfNumber(y) +
+        ' Td <' +
+        winAnsiHex(line.text) +
+        '> Tj ET',
+    );
+    y -= line.heading ? 11.4 : 10.15;
+    if (y < 24) {
+      throw new ApplicationError(
+        'LUZERNER_PDF_TEXT_OVERFLOW',
+        'Fixed Luzerner legal wording exceeds its native page column.',
+      );
+    }
+  }
+}
+
+function legalBodyPage(pageNumber: number): Commands {
+  const source = LUZERNER_2020_FIXED_WORDING[pageNumber - 1];
+  if (source === undefined) {
     throw new ApplicationError(
       'LUZERNER_PDF_TEMPLATE_INVALID',
-      'Template overlay marker for page ' + page + ' is missing or duplicated.',
+      'Missing fixed wording for Luzerner page ' + pageNumber + '.',
     );
   }
-  const payload = new TextEncoder().encode(commands.join('\n') + '\n');
-  if (payload.byteLength > OVERLAY_BLOCK_BYTES) {
+  const c: Commands = [];
+  const width = 252;
+  const lines = legalVisualLines(source, width);
+  const split = Math.ceil(lines.length / 2);
+  addLegalColumn(c, lines.slice(0, split), 35.5, 792);
+  addLegalColumn(c, lines.slice(split), 304.5, 792);
+  return c;
+}
+
+function pageEightFixed(): Commands {
+  const source = LUZERNER_2020_FIXED_WORDING[7];
+  if (source === undefined) {
     throw new ApplicationError(
-      'LUZERNER_PDF_OVERLAY_TOO_LARGE',
-      'Rendered overlay for page ' + page + ' exceeds reserved capacity.',
+      'LUZERNER_PDF_TEMPLATE_INVALID',
+      'Missing fixed wording for Luzerner page 8.',
     );
   }
-  target.fill(0x20, offset, offset + OVERLAY_BLOCK_BYTES);
-  target.set(payload, offset);
+  const marker =
+    'Die Vermieterschaft und die Mieterschaft bestätigen mit';
+  const splitAt = source.indexOf(marker);
+  const left = splitAt < 0 ? source : source.slice(0, splitAt);
+  const right = splitAt < 0 ? '' : source.slice(splitAt);
+  const c: Commands = [];
+
+  const leftLines = legalVisualLines(left, 250);
+  addLegalColumn(c, leftLines, 35.5, 792);
+
+  const rightLines = legalVisualLines(right, 252);
+  let y = 360;
+  for (const line of rightLines) {
+    const label = /^(?:Ort, Datum:|Mieterschaft I:|Mieterschaft II:|Vermieterschaft:)/u.test(
+      line.text,
+    );
+    const footer = line.text.startsWith('Eine Dienstleistung');
+    const size = footer ? 7.2 : label ? 9.2 : 8.7;
+    commands.push(
+      'BT 0 0 0 rg ' +
+        (label ? BOLD_FONT : FONT) +
+        ' ' +
+        pdfNumber(size) +
+        ' Tf 304.7 ' +
+        pdfNumber(y) +
+        ' Td <' +
+        winAnsiHex(line.text) +
+        '> Tj ET',
+    );
+    y -= label ? 26 : 10.5;
+  }
+
+  [286, 214, 142, 70].forEach((lineY) =>
+    addLine(c, 304.7, lineY, 559.8, lineY),
+  );
+  fillRect(c, box(304.7, 380, 559.8, 806), '0.985 0.988 0.998');
+  strokeRect(c, box(304.7, 380, 559.8, 806), 0.35, '0.78 0.82 0.9');
+  return c;
+}
+
+function buildNativePdf(pages: readonly Commands[]): Uint8Array {
+  if (pages.length !== PAGE_COUNT) {
+    throw new ApplicationError(
+      'LUZERNER_PDF_TEMPLATE_INVALID',
+      'The native Luzerner renderer must emit exactly eight pages.',
+    );
+  }
+
+  const objects = new Map<number, string>();
+  const pageObjectNumbers: number[] = [];
+  objects.set(1, '<< /Type /Catalog /Pages 2 0 R >>');
+  objects.set(
+    3,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+  );
+  objects.set(
+    4,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
+  );
+
+  let nextObject = 5;
+  for (const commands of pages) {
+    const pageObject = nextObject++;
+    const contentObject = nextObject++;
+    pageObjectNumbers.push(pageObject);
+    const stream = commands.join('\n');
+    const byteLength = new TextEncoder().encode(stream).byteLength;
+    objects.set(
+      contentObject,
+      '<< /Length ' +
+        byteLength +
+        ' >>\nstream\n' +
+        stream +
+        '\nendstream',
+    );
+    objects.set(
+      pageObject,
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' +
+        pdfNumber(PAGE_WIDTH) +
+        ' ' +
+        pdfNumber(PAGE_HEIGHT) +
+        '] /Resources << /Font << /FPortfolio 3 0 R /FPortfolioBold 4 0 R >> >> /Contents ' +
+        contentObject +
+        ' 0 R >>',
+    );
+  }
+
+  objects.set(
+    2,
+    '<< /Type /Pages /Count ' +
+      pageObjectNumbers.length +
+      ' /Kids [' +
+      pageObjectNumbers.map((number) => number + ' 0 R').join(' ') +
+      '] >>',
+  );
+
+  const maxObject = nextObject - 1;
+  let pdf = '%PDF-1.4\n%Portfolio Luzerner 2020\n';
+  const offsets = new Array<number>(maxObject + 1).fill(0);
+  for (let objectNumber = 1; objectNumber <= maxObject; objectNumber += 1) {
+    const body = objects.get(objectNumber);
+    if (!body) throw new Error('Missing PDF object ' + objectNumber + '.');
+    offsets[objectNumber] = new TextEncoder().encode(pdf).byteLength;
+    pdf += objectNumber + ' 0 obj\n' + body + '\nendobj\n';
+  }
+
+  const xrefOffset = new TextEncoder().encode(pdf).byteLength;
+  pdf += 'xref\n0 ' + (maxObject + 1) + '\n';
+  pdf += '0000000000 65535 f \n';
+  for (let objectNumber = 1; objectNumber <= maxObject; objectNumber += 1) {
+    pdf +=
+      String(offsets[objectNumber]).padStart(10, '0') + ' 00000 n \n';
+  }
+  pdf +=
+    'trailer\n<< /Size ' +
+    (maxObject + 1) +
+    ' /Root 1 0 R >>\nstartxref\n' +
+    xrefOffset +
+    '\n%%EOF\n';
+
+  return new TextEncoder().encode(pdf);
 }
 
 function fileSafe(value: string): string {
@@ -703,43 +1091,42 @@ function fileSafe(value: string): string {
 }
 
 export class CanonicalLuzernerPdfRenderer implements LuzernerLeasePdfPort {
-  private readonly template: Uint8Array;
-
-  constructor(template: Uint8Array) {
-    if (template.byteLength === 0) {
-      throw new ApplicationError(
-        'LUZERNER_PDF_TEMPLATE_INVALID',
-        'Luzerner PDF template is empty.',
-      );
-    }
-    this.template = new Uint8Array(template);
-    for (let page = 1; page <= PAGE_COUNT; page += 1) {
-      if (findUnique(this.template, marker(page)) < 0) {
-        throw new ApplicationError(
-          'LUZERNER_PDF_TEMPLATE_INVALID',
-          'Luzerner PDF template must contain one overlay marker for page ' +
-            page +
-            '.',
-        );
-      }
-    }
-  }
-
   async renderLuzernerLeaseAgreement(
     input: LuzernerLeasePdfRenderInput,
   ): Promise<PdfRenderResult> {
-    const content = new Uint8Array(this.template);
-    const pages: readonly Commands[] = [
-      pageOne(input),
-      pageTwo(input),
-      [],
-      [],
-      [],
-      [],
-      [],
-      pageEight(input),
+    const first: Commands = [
+      ...pageOneStructure(),
+      ...PAGE_1_FIXED_TEXT.flatMap((line) => {
+        const commands: Commands = [];
+        addFixedTextLine(commands, line);
+        return commands;
+      }),
+      ...pageOne(input),
     ];
-    pages.forEach((commands, index) => fillBlock(content, index + 1, commands));
+    const second: Commands = [
+      ...pageTwoStructure(),
+      ...PAGE_2_FIXED_TEXT.flatMap((line) => {
+        const commands: Commands = [];
+        addFixedTextLine(commands, line);
+        return commands;
+      }),
+      ...pageTwo(input),
+    ];
+    const eighth: Commands = [
+      ...pageEightFixed(),
+      ...pageEight(input),
+    ];
+
+    const content = buildNativePdf([
+      first,
+      second,
+      legalBodyPage(3),
+      legalBodyPage(4),
+      legalBodyPage(5),
+      legalBodyPage(6),
+      legalBodyPage(7),
+      eighth,
+    ]);
 
     return {
       fileName: 'mietvertrag-' + fileSafe(input.agreementCode) + '.pdf',

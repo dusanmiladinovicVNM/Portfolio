@@ -263,7 +263,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
 
 export * from './canonical-inspection-pdf-renderer.js';
 export * from './canonical-luzerner-pdf-renderer.js';
-export * from './embedded-luzerner-template.js';
+export * from './luzerner-2020-template/source-wording.js';
 
 export * from './runtime-path.js';
 
