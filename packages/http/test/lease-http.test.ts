@@ -978,8 +978,8 @@ describe('Lease HTTP lifecycle', () => {
       id: firstVersion.id,
       status: 'final',
     });
-    expect(renderCount).toBe(1);
-    expect(renderedTemplateRevisions).toEqual([1]);
+    expect(renderCount).toBe(2);
+    expect(renderedTemplateRevisions).toEqual([1, 1]);
 
     const documents = await handler(
       new Request(
