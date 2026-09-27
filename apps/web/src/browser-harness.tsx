@@ -1440,7 +1440,9 @@ browserHarnessWindow.__portfolioSimulateAccessItemAvailabilityCycle = () => {
   return true;
 };
 browserHarnessWindow.__portfolioSimulateAccessItemHandoff = () => {
-  const item = setupAccessItems.find((candidate) => candidate.id === setupAccessItemId);
+  const item = setupAccessItems.find(
+    (candidate) => candidate.id === setupPrimaryAccessItemId,
+  );
   if (!item) return false;
   const state = setupAccessItemEntry(item).state;
   if (state.kind !== 'issued' || state.tenancyId === null) return false;
