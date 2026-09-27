@@ -734,11 +734,11 @@ describe('Lease HTTP lifecycle', () => {
 
   it('freezes one idempotent final Luzerner PDF as the Agreement signed original', async () => {
     let renderCount = 0;
-    let lastRenderInput: LuzernerLeasePdfRenderInput | null = null;
+    const renderInputs: LuzernerLeasePdfRenderInput[] = [];
     const luzernerLeasePdfPort: LuzernerLeasePdfPort = {
       async renderLuzernerLeaseAgreement(input) {
         renderCount += 1;
-        lastRenderInput = input;
+        renderInputs.push(input);
         return {
           fileName: 'mietvertrag-final.pdf',
           content: new TextEncoder().encode('%PDF-final-contract'),
@@ -856,11 +856,12 @@ describe('Lease HTTP lifecycle', () => {
       adminIdentity,
     );
     expect(signedPreview.status).toBe(200);
-    expect(lastRenderInput?.landlords[0]?.displayName).toBe('Landlord Test');
-    expect(lastRenderInput?.tenants[0]?.displayName).toBe('Tenant Test');
+    const signedPreviewInput = renderInputs.at(-1);
+    expect(signedPreviewInput?.landlords[0]?.displayName).toBe('Landlord Test');
+    expect(signedPreviewInput?.tenants[0]?.displayName).toBe('Tenant Test');
 
     renderCount = 0;
-    lastRenderInput = null;
+    renderInputs.length = 0;
 
     const first = await handler(
       new Request(
