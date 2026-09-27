@@ -315,13 +315,6 @@ export async function linkDocumentCommand(
       'signed_original requires a finalized immutable document version.',
     );
   }
-  if (input.relation === 'generated_contract' && version?.status !== 'final') {
-    throw new DomainError(
-      'DOCUMENT_GENERATED_CONTRACT_VERSION_NOT_FINAL',
-      'generated_contract requires a finalized immutable document version.',
-    );
-  }
-
   await assertTargetExists(deps, input);
 
   const common = {
