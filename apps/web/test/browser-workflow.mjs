@@ -53,6 +53,7 @@ const setupAgreementDocumentVersionId = 'b1000000-0000-4000-8000-000000000026';
 const setupAssetId = 'b1000000-0000-4000-8000-000000000029';
 const setupReplacementAssetId = 'b1000000-0000-4000-8000-000000000030';
 const setupMeterId = 'b1000000-0000-4000-8000-000000000038';
+const setupAccessItemId = 'b1000000-0000-4000-8000-000000000068';
 const setupMeterMoveInReadingId = 'b1000000-0000-4000-8000-000000000039';
 const setupMeterMoveOutReadingId = 'b1000000-0000-4000-8000-000000000040';
 const setupInspectionFindingId = 'b1000000-0000-4000-8000-000000000044';
@@ -1272,6 +1273,164 @@ try {
     'xpath',
     "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//span[contains(@class,'status-chip') and normalize-space()='active']",
   );
+
+  await clickXpath(sessionId, "//a[normalize-space()='Keys']");
+  const accessCreateForm = "//form[@data-access-item-form='create']";
+  await waitForElement(sessionId, 'xpath', accessCreateForm);
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=keys&asOf=2025-06-30',
+    'Setup Unit Keys URL',
+  );
+  await typeXpath(
+    sessionId,
+    accessCreateForm + "//input[@name='code']",
+    'KEY-SETUP-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    accessCreateForm + "//input[@name='label']",
+    'Apartment entrance key',
+  );
+  await selectOptionXpath(
+    sessionId,
+    accessCreateForm + "//select[@name='spaceId']",
+    setupSpaceId,
+  );
+  await clickXpath(
+    sessionId,
+    accessCreateForm + "//button[normalize-space()='Create AccessItem']",
+  );
+  const accessCard =
+    "//article[contains(@class,'access-item-card')][@data-access-item-code='KEY-SETUP-BRW']";
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//h3[normalize-space()='Apartment entrance key']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//*[contains(normalize-space(),'Setup Bedroom')]",
+  );
+
+  const accessIssueForm =
+    accessCard + "//form[@data-access-item-form='issue']";
+  await selectOptionXpath(
+    sessionId,
+    accessIssueForm + "//select[@name='tenancyId']",
+    setupTenancyId,
+  );
+  await setInputValueXpath(
+    sessionId,
+    accessIssueForm + "//input[@name='date']",
+    '2026-10-01',
+  );
+  await setInputValueXpath(
+    sessionId,
+    accessIssueForm + "//input[@name='time']",
+    '10:00',
+  );
+  await typeXpath(
+    sessionId,
+    accessIssueForm + "//input[@name='note']",
+    'Move-in handover',
+  );
+  await clickXpath(
+    sessionId,
+    accessIssueForm + "//button[normalize-space()='Issue AccessItem']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//span[contains(@class,'status-chip') and normalize-space()='issued']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//*[contains(normalize-space(),'TEN-SETUP-BRW')]",
+  );
+
+  const accessLossForm =
+    accessCard + "//form[@data-access-item-form='loss']";
+  await setInputValueXpath(
+    sessionId,
+    accessLossForm + "//input[@name='date']",
+    '2026-10-02',
+  );
+  await setInputValueXpath(
+    sessionId,
+    accessLossForm + "//input[@name='time']",
+    '10:00',
+  );
+  await typeXpath(
+    sessionId,
+    accessLossForm + "//input[@name='note']",
+    'Tenant reported key missing',
+  );
+  await clickXpath(
+    sessionId,
+    accessLossForm + "//button[normalize-space()='Report lost']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//span[contains(@class,'status-chip') and normalize-space()='lost']",
+  );
+
+  const accessReturnForm =
+    accessCard + "//form[@data-access-item-form='return']";
+  await setInputValueXpath(
+    sessionId,
+    accessReturnForm + "//input[@name='date']",
+    '2026-10-03',
+  );
+  await setInputValueXpath(
+    sessionId,
+    accessReturnForm + "//input[@name='time']",
+    '10:00',
+  );
+  await typeXpath(
+    sessionId,
+    accessReturnForm + "//input[@name='note']",
+    'Recovered and returned',
+  );
+  await clickXpath(
+    sessionId,
+    accessReturnForm + "//button[normalize-space()='Record return']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//span[contains(@class,'status-chip') and normalize-space()='available']",
+  );
+
+  const accessRetireForm =
+    accessCard + "//form[@data-access-item-form='retire']";
+  await typeXpath(
+    sessionId,
+    accessRetireForm + "//input[@name='retirementReason']",
+    'Lock cylinder replaced',
+  );
+  await clickXpath(
+    sessionId,
+    accessRetireForm + "//button[normalize-space()='Retire AccessItem']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//span[contains(@class,'status-chip') and normalize-space()='retired']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    accessCard + "//*[contains(normalize-space(),'Lock cylinder replaced')]",
+  );
+
+  await clickXpath(sessionId, "//a[normalize-space()='Tenancies']");
 
   await typeXpath(
     sessionId,

@@ -7,6 +7,8 @@ import type {
   AssetLocationHistoryResponse,
   AssetReplacementResponse,
   AssetResponse,
+  AccessItemResponse,
+  AccessItemTransactionResponse,
   DocumentLinkResponse,
   DocumentResponse,
   DocumentVersionResponse,
@@ -181,6 +183,12 @@ const setupAssetLocationIds = [
 const setupAssetReplacementId =
   'b1000000-0000-4000-8000-000000000036';
 const setupMeterId = 'b1000000-0000-4000-8000-000000000038';
+const setupAccessItemId = 'b1000000-0000-4000-8000-000000000068';
+const setupAccessItemTransactionIds = [
+  'b1000000-0000-4000-8000-000000000069',
+  'b1000000-0000-4000-8000-000000000070',
+  'b1000000-0000-4000-8000-000000000071',
+] as const;
 const setupMeterReadingIds = [
   'b1000000-0000-4000-8000-000000000039',
   'b1000000-0000-4000-8000-000000000040',
@@ -342,6 +350,10 @@ let setupAssetIdentifierSequence = 0;
 let setupAssetLocationSequence = 0;
 let setupAssetMutationSequence = 0;
 let setupMeters: MeterResponse[] = [];
+let setupAccessItems: AccessItemResponse[] = [];
+let setupAccessItemTransactions: AccessItemTransactionResponse[] = [];
+let setupAccessItemTransactionSequence = 0;
+let setupAccessItemClockSequence = 0;
 let setupMeterReadings: MeterReadingResponse[] = [];
 let setupMeterBoundaries: MeterReadingBoundaryResponse[] = [];
 let setupMeterReadingSequence = 0;
@@ -416,6 +428,37 @@ function replaceSetupWorkOrder(workOrder: MaintenanceWorkOrderResponse): void {
   );
 }
 
+
+function nextSetupAccessItemAt(): string {
+  const instants = [
+    '2026-10-01T08:00:00.000Z',
+    '2026-10-01T08:05:00.000Z',
+    '2026-10-02T08:05:00.000Z',
+    '2026-10-03T08:05:00.000Z',
+    '2026-10-04T08:05:00.000Z',
+  ];
+  const value = instants[setupAccessItemClockSequence++];
+  if (!value) throw new Error('Setup AccessItem clock exhausted.');
+  return value;
+}
+
+function setupAccessItemEntry(item: AccessItemResponse) {
+  const last =
+    setupAccessItemTransactions
+      .filter((transaction) => transaction.accessItemId === item.id)
+      .sort((left, right) => right.sequence - left.sequence)[0] ?? null;
+  return {
+    item,
+    state:
+      last === null || last.type === 'returned'
+        ? { kind: 'available' as const, tenancyId: null, lastTransaction: last }
+        : {
+            kind: last.type === 'issued' ? ('issued' as const) : ('lost' as const),
+            tenancyId: last.tenancyId,
+            lastTransaction: last,
+          },
+  };
+}
 
 function nextSetupMeterRecordedAt(): string {
   const instants = [
@@ -1895,6 +1938,212 @@ globalThis.fetch = async (
 
   if (setupUnit && path === '/units/' + setupUnitId + '/spaces') {
     return json({ items: setupSpace ? [setupSpace] : [] });
+  }
+
+  if (setupUnit && path === '/units/' + setupUnitId + '/access-items') {
+    return json({
+      items: setupAccessItems
+        .filter((item) => item.unitId === setupUnitId)
+        .map(setupAccessItemEntry),
+    });
+  }
+
+  if (path === '/access-items' && init?.method === 'POST') {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      code: string;
+      kind: AccessItemResponse['kind'];
+      propertyId: string;
+      unitId?: string | null;
+      spaceId?: string | null;
+      label: string;
+    };
+    if (
+      body.propertyId !== setupPropertyId ||
+      body.unitId !== setupUnitId ||
+      (body.spaceId != null && body.spaceId !== setupSpaceId)
+    ) {
+      throw new Error('Setup AccessItem was created for the wrong scope.');
+    }
+    if (
+      setupAccessItems.some(
+        (item) => item.code.toLowerCase() === body.code.toLowerCase(),
+      )
+    ) {
+      return apiError(
+        409,
+        'ACCESS_ITEM_CODE_ALREADY_EXISTS',
+        'AccessItem code already exists.',
+      );
+    }
+    const created: AccessItemResponse = {
+      id: setupAccessItemId,
+      code: body.code,
+      kind: body.kind,
+      propertyId: setupPropertyId,
+      unitId: setupUnitId,
+      spaceId: body.spaceId ?? null,
+      label: body.label,
+      status: 'active',
+      retiredAt: null,
+      retiredByUserId: null,
+      retirementReason: null,
+      version: 1,
+      recordedAt: nextSetupAccessItemAt(),
+      recordedByUserId: inspectionUserId,
+    };
+    setupAccessItems.push(created);
+    return json(created, 201);
+  }
+
+  const setupAccessItem = setupAccessItems.find((item) =>
+    path.startsWith('/access-items/' + item.id),
+  );
+
+  if (
+    setupAccessItem &&
+    path === '/access-items/' + setupAccessItem.id &&
+    init?.method === 'PATCH'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      label: string;
+    };
+    if (body.expectedVersion !== setupAccessItem.version) {
+      return apiError(
+        409,
+        'ACCESS_ITEM_VERSION_CONFLICT',
+        'AccessItem version conflict.',
+      );
+    }
+    const updated: AccessItemResponse = {
+      ...setupAccessItem,
+      label: body.label,
+      version:
+        body.label === setupAccessItem.label
+          ? setupAccessItem.version
+          : setupAccessItem.version + 1,
+    };
+    setupAccessItems = setupAccessItems.map((item) =>
+      item.id === updated.id ? updated : item,
+    );
+    return json(updated);
+  }
+
+  if (
+    setupAccessItem &&
+    path === '/access-items/' + setupAccessItem.id + '/issue' &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      tenancyId: string;
+      occurredAt: string;
+      note?: string | null;
+    };
+    if (body.tenancyId !== setupTenancyId || setupTenancy?.status !== 'active') {
+      return apiError(
+        422,
+        'ACCESS_ITEM_TENANCY_NOT_ELIGIBLE',
+        'AccessItem can only be issued to a current Tenancy.',
+      );
+    }
+    const state = setupAccessItemEntry(setupAccessItem).state;
+    if (state.kind !== 'available' || setupAccessItem.status !== 'active') {
+      return apiError(
+        422,
+        'ACCESS_ITEM_NOT_AVAILABLE',
+        'Only an available AccessItem can be issued.',
+      );
+    }
+    const id = setupAccessItemTransactionIds[setupAccessItemTransactionSequence++];
+    if (!id) throw new Error('Setup AccessItem transaction id pool exhausted.');
+    const transaction: AccessItemTransactionResponse = {
+      id,
+      accessItemId: setupAccessItem.id,
+      tenancyId: body.tenancyId,
+      type: 'issued',
+      sequence: setupAccessItemTransactions.length + 1,
+      occurredAt: body.occurredAt,
+      recordedAt: nextSetupAccessItemAt(),
+      recordedByUserId: inspectionUserId,
+      note: body.note ?? null,
+    };
+    setupAccessItemTransactions.push(transaction);
+    return json(transaction, 201);
+  }
+
+  if (
+    setupAccessItem &&
+    (path === '/access-items/' + setupAccessItem.id + '/return' ||
+      path === '/access-items/' + setupAccessItem.id + '/loss') &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      occurredAt: string;
+      note?: string | null;
+    };
+    const state = setupAccessItemEntry(setupAccessItem).state;
+    const type = path.endsWith('/loss') ? 'lost' : 'returned';
+    if (
+      state.tenancyId === null ||
+      (type === 'lost' && state.kind !== 'issued') ||
+      (type === 'returned' && state.kind === 'available')
+    ) {
+      return apiError(
+        422,
+        'ACCESS_ITEM_NOT_ASSIGNED',
+        'AccessItem custody transition is invalid.',
+      );
+    }
+    const id = setupAccessItemTransactionIds[setupAccessItemTransactionSequence++];
+    if (!id) throw new Error('Setup AccessItem transaction id pool exhausted.');
+    const transaction: AccessItemTransactionResponse = {
+      id,
+      accessItemId: setupAccessItem.id,
+      tenancyId: state.tenancyId,
+      type,
+      sequence: setupAccessItemTransactions.length + 1,
+      occurredAt: body.occurredAt,
+      recordedAt: nextSetupAccessItemAt(),
+      recordedByUserId: inspectionUserId,
+      note: body.note ?? null,
+    };
+    setupAccessItemTransactions.push(transaction);
+    return json(transaction, 201);
+  }
+
+  if (
+    setupAccessItem &&
+    path === '/access-items/' + setupAccessItem.id + '/retire' &&
+    init?.method === 'POST'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      retirementReason: string;
+    };
+    if (body.expectedVersion !== setupAccessItem.version) {
+      return apiError(
+        409,
+        'ACCESS_ITEM_VERSION_CONFLICT',
+        'AccessItem version conflict.',
+      );
+    }
+    const retired: AccessItemResponse = {
+      ...setupAccessItem,
+      status: 'retired',
+      retiredAt: nextSetupAccessItemAt(),
+      retiredByUserId: inspectionUserId,
+      retirementReason: body.retirementReason,
+      version: setupAccessItem.version + 1,
+    };
+    setupAccessItems = setupAccessItems.map((item) =>
+      item.id === retired.id ? retired : item,
+    );
+    return json(retired);
   }
 
   if (setupUnit && path === '/units/' + setupUnitId + '/meters') {

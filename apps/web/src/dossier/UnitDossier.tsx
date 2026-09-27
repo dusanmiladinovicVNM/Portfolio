@@ -18,6 +18,7 @@ import type {
 import { UnitAssets } from './UnitAssets.js';
 import { UnitDocuments } from './UnitDocuments.js';
 import { UnitInspections } from './UnitInspections.js';
+import { UnitKeys } from './UnitKeys.js';
 import { UnitMeters } from './UnitMeters.js';
 import { UnitMaintenance } from './UnitMaintenance.js';
 import { UnitOverview } from './UnitOverview.js';
@@ -210,6 +211,14 @@ export function UnitDossier({
               Assets
             </WorkspaceLink>
             <WorkspaceLink
+              ariaCurrent={tab === 'keys' ? 'page' : undefined}
+              className={`dossier-tab ${tab === 'keys' ? 'dossier-tab-active' : ''}`}
+              navigate={navigate}
+              route={unitRoute(propertyId, unitId, asOf, 'keys')}
+            >
+              Keys
+            </WorkspaceLink>
+            <WorkspaceLink
               ariaCurrent={tab === 'meters' ? 'page' : undefined}
               className={`dossier-tab ${tab === 'meters' ? 'dossier-tab-active' : ''}`}
               navigate={navigate}
@@ -294,6 +303,14 @@ export function UnitDossier({
               asOf={asOf}
               assetId={assetId}
               navigate={navigate}
+              propertyId={propertyId}
+              setNavigationBlocker={setNavigationBlocker}
+              unitId={unitId}
+            />
+          ) : null}
+          {tab === 'keys' ? (
+            <UnitKeys
+              api={api}
               propertyId={propertyId}
               setNavigationBlocker={setNavigationBlocker}
               unitId={unitId}
