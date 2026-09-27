@@ -31,7 +31,7 @@ import {
 interface LuzernerLeaseFormEditorProps {
   readonly api: PortfolioApi;
   readonly agreement: LeaseAgreementResponse;
-  readonly hasSignedOriginal: boolean;
+  readonly hasGeneratedContract: boolean;
   readonly onDocumentWrite: () => void;
   readonly onWriteBlockChange: (blocked: boolean) => void;
   readonly setNavigationBlocker: SetNavigationBlocker;
@@ -141,7 +141,7 @@ function setCustomAncillaryValue(
 export function LuzernerLeaseFormEditor({
   api,
   agreement,
-  hasSignedOriginal,
+  hasGeneratedContract,
   onDocumentWrite,
   onWriteBlockChange,
   setNavigationBlocker,
@@ -342,7 +342,7 @@ export function LuzernerLeaseFormEditor({
       saving ||
       outcomeAmbiguous ||
       finalDocumentLoading ||
-      hasSignedOriginal ||
+      hasGeneratedContract ||
       !['signed', 'superseded', 'terminated'].includes(agreement.status)
     ) {
       return;
@@ -361,14 +361,14 @@ export function LuzernerLeaseFormEditor({
       if (!mountedRef.current) return;
       onDocumentWrite();
       setSuccess(
-        `Final Luzerner PDF stored as immutable DocumentVersion ${version.versionNumber}.`,
+        `Generated Luzerner contract PDF stored as immutable DocumentVersion ${version.versionNumber}.`,
       );
     } catch (cause) {
       if (!mountedRef.current) return;
       setError(
         cause instanceof Error
           ? cause.message
-          : 'Final Luzerner PDF could not be stored.',
+          : 'Generated Luzerner contract PDF could not be stored.',
       );
     } finally {
       if (mountedRef.current) setFinalDocumentLoading(false);
@@ -1184,16 +1184,16 @@ export function LuzernerLeaseFormEditor({
               saving ||
               outcomeAmbiguous ||
               finalDocumentLoading ||
-              hasSignedOriginal
+              hasGeneratedContract
             }
             onClick={() => void generateFinalDocument()}
             type="button"
           >
-            {hasSignedOriginal
-              ? 'Final PDF stored'
+            {hasGeneratedContract
+              ? 'Generated contract PDF stored'
               : finalDocumentLoading
-                ? 'Storing final PDF…'
-                : 'Store final signed PDF'}
+                ? 'Storing generated contract PDF…'
+                : 'Store generated contract PDF'}
           </button>
         ) : null}
         <button

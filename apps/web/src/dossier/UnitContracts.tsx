@@ -845,9 +845,9 @@ export function UnitContracts({
           <LuzernerLeaseFormEditor
             agreement={selectedAgreement}
             api={api}
-            hasSignedOriginal={
+            hasGeneratedContract={
               agreementDocuments?.some(
-                (reference) => reference.link.relation === 'signed_original',
+                (reference) => reference.link.relation === 'generated_contract',
               ) ?? false
             }
             key={selectedAgreement.id}

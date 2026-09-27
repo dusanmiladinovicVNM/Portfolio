@@ -1925,7 +1925,7 @@ try {
   assertEqual(
     await elementExistsXpath(
       sessionId,
-      luzernerForm + "//button[normalize-space()='Store final signed PDF']",
+      luzernerForm + "//button[normalize-space()='Store generated contract PDF']",
     ),
     false,
     'Draft Agreement does not expose final Luzerner Document storage',
@@ -2329,7 +2329,8 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    luzernerForm + "//button[normalize-space()='Final PDF stored' and @disabled]",
+    luzernerForm +
+      "//button[normalize-space()='Store generated contract PDF' and not(@disabled)]",
   );
   assertEqual(
     await executeScript(
@@ -2337,7 +2338,38 @@ try {
       'return window.__portfolioLuzernerFinalDocumentCount || 0;',
     ),
     0,
-    'Existing signed original closes automatic Luzerner final storage without duplicate generation',
+    'Signed original does not occupy the generated-contract slot',
+  );
+  await clickXpath(
+    sessionId,
+    luzernerForm +
+      "//button[normalize-space()='Store generated contract PDF' and not(@disabled)]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementDocumentsSection +
+      "//*[normalize-space()='mietvertrag-AGR-REPLACEMENT-BRW.pdf']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    luzernerForm +
+      "//button[normalize-space()='Generated contract PDF stored' and @disabled]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioLuzernerFinalDocumentCount || 0;',
+    ),
+    1,
+    'Generated contract is stored exactly once alongside the signed original',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementDocumentsSection +
+      "//*[normalize-space()='portfolio-agreement-signed-original.pdf']",
   );
 
 
