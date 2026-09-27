@@ -1096,7 +1096,9 @@ export class CanonicalLuzernerPdfRenderer implements LuzernerLeasePdfPort {
   ): Promise<PdfRenderResult> {
     const first: Commands = [
       ...pageOneStructure(),
-      ...PAGE_1_FIXED_TEXT.flatMap((line) => {
+      ...PAGE_1_FIXED_TEXT.filter(
+        (line) => !(line.text.trim() === '.' && line.y < 200),
+      ).flatMap((line) => {
         const commands: Commands = [];
         addFixedTextLine(commands, line);
         return commands;

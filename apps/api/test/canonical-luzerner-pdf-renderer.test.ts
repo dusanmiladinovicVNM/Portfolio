@@ -156,6 +156,7 @@ describe('CanonicalLuzernerPdfRenderer', () => {
     expect(canonical).toContain('3.4 Verrechnung und Sicherheitsleistung');
     expect(canonical).toContain('8. Besondere Bestimmungen');
     expect(canonical).not.toContain('Mietverhältnis wird übernommen;');
+    expect(canonical).not.toContain('￾');
   });
 
   it('builds a deterministic native eight-page PDF without binary-template overlays', async () => {
@@ -171,6 +172,8 @@ describe('CanonicalLuzernerPdfRenderer', () => {
     expect(source.startsWith('%PDF-1.4')).toBe(true);
     expect(source).toContain('/Count 8');
     expect(source).not.toContain('PORTFOLIO_LUZERNER_OVERLAY');
+    expect(source).toContain('<416C6C67656D65696E6520426564696E67756E67656E');
+    expect(source).toContain('<382E204265736F6E646572652042657374696D6D756E67656E');
 
     expect(source).toContain('<506F7274666F6C696F20496D6D6F62696C69656E2041472C20');
     expect(source).toContain('<56657277616C74756E67204D75737465722041472C20');
