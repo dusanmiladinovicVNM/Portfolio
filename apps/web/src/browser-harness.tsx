@@ -239,10 +239,16 @@ const setupMeterBoundaryIds = [
 ] as const;
 const setupInspectionFindingId =
   'b1000000-0000-4000-8000-000000000044';
-const setupMaintenanceIssueId =
-  'b1000000-0000-4000-8000-000000000045';
-const setupMaintenanceWorkOrderId =
-  'b1000000-0000-4000-8000-000000000046';
+const setupMaintenanceIssueIds = [
+  'b1000000-0000-4000-8000-000000000045',
+  'b1000000-0000-4000-8000-000000000100',
+  'b1000000-0000-4000-8000-000000000101',
+] as const;
+const setupMaintenanceWorkOrderIds = [
+  'b1000000-0000-4000-8000-000000000046',
+  'b1000000-0000-4000-8000-000000000102',
+  'b1000000-0000-4000-8000-000000000103',
+] as const;
 const setupServiceEventId =
   'b1000000-0000-4000-8000-000000000047';
 const setupWarrantyId =
@@ -404,7 +410,9 @@ let setupMeterReadingSequence = 0;
 let setupMeterBoundarySequence = 0;
 let setupMeterClockSequence = 0;
 let setupMaintenanceIssues: MaintenanceIssueResponse[] = [];
+let setupMaintenanceIssueSequence = 0;
 let setupMaintenanceWorkOrders: MaintenanceWorkOrderEntryResponse[] = [];
+let setupMaintenanceWorkOrderSequence = 0;
 let setupWarranties: WarrantyResponse[] = [];
 let setupWarrantyClaims: WarrantyClaimResponse[] = [];
 let setupServicePlans: ServicePlanResponse[] = [];
@@ -458,6 +466,10 @@ function nextSetupMaintenanceAt(): string {
     '2027-10-01T09:46:00.000Z',
     '2027-10-01T09:50:00.000Z',
     '2027-10-01T09:55:00.000Z',
+    '2027-10-01T10:00:00.000Z',
+    '2027-10-01T10:05:00.000Z',
+    '2027-10-01T10:10:00.000Z',
+    '2027-10-01T10:15:00.000Z',
   ];
   const value = instants[setupMaintenanceClockSequence++];
   if (!value) throw new Error('Setup Maintenance clock exhausted.');
@@ -3324,8 +3336,10 @@ globalThis.fetch = async (
     }
 
     const recordedAt = nextSetupMaintenanceAt();
+    const id = setupMaintenanceIssueIds[setupMaintenanceIssueSequence++];
+    if (!id) throw new Error('Setup Maintenance Issue id pool exhausted.');
     const created: MaintenanceIssueResponse = {
-      id: setupMaintenanceIssueId,
+      id,
       code: body.code,
       propertyId: setupPropertyId,
       unitId: setupUnitId,
@@ -3416,8 +3430,11 @@ globalThis.fetch = async (
           'WorkOrders require an open Issue.',
         );
       }
+      const id =
+        setupMaintenanceWorkOrderIds[setupMaintenanceWorkOrderSequence++];
+      if (!id) throw new Error('Setup Maintenance WorkOrder id pool exhausted.');
       const order: MaintenanceWorkOrderResponse = {
-        id: setupMaintenanceWorkOrderId,
+        id,
         issueId: setupMaintenanceIssue.id,
         code: body.code,
         title: body.title,
