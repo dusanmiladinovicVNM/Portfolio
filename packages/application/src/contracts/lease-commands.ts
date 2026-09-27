@@ -29,8 +29,10 @@ import {
 import { requireCapability, type Actor } from '../security/access.js';
 import type { IdGenerator } from '../shared/id-generator.js';
 import type { PartyRepository } from '../parties/party-repository.js';
+import type { PortfolioRepository } from '../portfolio/portfolio-repository.js';
 import type { TenancyRepository } from '../tenancy/tenancy-repository.js';
 import type { AgreementSupersession, LeaseRepository } from './lease-repository.js';
+import { buildLuzernerLeasePdfSnapshot } from './luzerner-lease-pdf-commands.js';
 
 export interface LeaseAgreementPartyCommandInput {
   partyId: PartyId;
@@ -60,6 +62,10 @@ export interface LeaseDependencies {
   tenancyRepository: TenancyRepository;
   partyRepository: PartyRepository;
   idGenerator: IdGenerator;
+}
+
+export interface SignLeaseAgreementDependencies extends LeaseDependencies {
+  portfolioRepository: PortfolioRepository;
 }
 
 function moneyCents(value: string | null): bigint {
@@ -344,7 +350,7 @@ export async function createLeaseAgreementCommand(
 }
 
 export async function signLeaseAgreementCommand(
-  deps: LeaseDependencies,
+  deps: SignLeaseAgreementDependencies,
   actor: Actor,
   agreementId: LeaseAgreementId,
   expectedVersion: number,
@@ -432,8 +438,14 @@ export async function signLeaseAgreementCommand(
       : {}),
   });
 
+  let luzernerPdfSnapshot = null;
   if (luzernerForm !== null) {
     assertLuzernerLeaseSignConsistency(luzernerForm, signed, termVersion);
+    luzernerPdfSnapshot = await buildLuzernerLeasePdfSnapshot(
+      deps,
+      signed,
+      luzernerForm.revision,
+    );
   }
 
   await deps.leaseRepository.signAgreement(
@@ -442,6 +454,7 @@ export async function signLeaseAgreementCommand(
     termVersion,
     predecessorToSupersede,
     luzernerForm?.revision ?? null,
+    luzernerPdfSnapshot,
   );
 
   return signed;
