@@ -447,17 +447,26 @@ export async function signLeaseAgreementCommand(
   let luzernerPdfSnapshot = null;
   if (luzernerForm !== null) {
     assertLuzernerLeaseSignConsistency(luzernerForm, signed, termVersion);
-    luzernerPdfSnapshot = await buildLuzernerLeasePdfSnapshot(
-      deps,
-      signed,
-      luzernerForm.revision,
-    );
     if (!deps.luzernerLeasePdfPort) {
       throw new ApplicationError(
         'LUZERNER_PDF_RENDERER_UNAVAILABLE',
         'Luzerner PDF rendering is required before a Luzerner Agreement can be signed.',
       );
     }
+    const templateIdentity =
+      deps.luzernerLeasePdfPort.getCurrentTemplateIdentity();
+    if (templateIdentity.templateCode !== luzernerForm.templateCode) {
+      throw new ApplicationError(
+        'LUZERNER_PDF_TEMPLATE_MISMATCH',
+        'Current Luzerner PDF renderer does not match the contract template being signed.',
+      );
+    }
+    luzernerPdfSnapshot = await buildLuzernerLeasePdfSnapshot(
+      deps,
+      signed,
+      luzernerForm.revision,
+      templateIdentity,
+    );
     await renderFrozenLuzernerLeasePdf(
       deps.luzernerLeasePdfPort,
       luzernerPdfSnapshot,
