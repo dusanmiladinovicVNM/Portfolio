@@ -3169,17 +3169,17 @@ try {
   );
   await selectOptionXpath(
     sessionId,
-    meterCreateForm + "//select[@name='utilityType']",
+    meterCreateForm + "//label[normalize-space()[1]='Utility']//select",
     'water',
   );
   await waitForElement(
     sessionId,
     'xpath',
-    meterCreateForm + "//select[@name='measurementUnit']/option[@value='m3']",
+    meterCreateForm + "//label[normalize-space()[1]='Measurement unit']//select/option[@value='m3']",
   );
   await selectOptionXpath(
     sessionId,
-    meterCreateForm + "//select[@name='measurementUnit']",
+    meterCreateForm + "//label[normalize-space()[1]='Measurement unit']//select",
     'm3',
   );
   await typeXpath(
