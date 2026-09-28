@@ -669,6 +669,21 @@ export function UnitInspections({
     );
   }, [routeBundle, selectedSectionInstance]);
 
+  const selectedSectionIndex = selectedSectionInstance
+    ? orderedSectionInstances.findIndex(
+        (instance) => instance.id === selectedSectionInstance.id,
+      )
+    : -1;
+  const previousSectionInstance =
+    selectedSectionIndex > 0
+      ? orderedSectionInstances[selectedSectionIndex - 1] ?? null
+      : null;
+  const nextSectionInstance =
+    selectedSectionIndex >= 0 &&
+    selectedSectionIndex < orderedSectionInstances.length - 1
+      ? orderedSectionInstances[selectedSectionIndex + 1] ?? null
+      : null;
+
   const activeSectionIdRef = useRef<string | undefined>(
     selectedSectionInstance?.id,
   );
@@ -802,6 +817,16 @@ export function UnitInspections({
     );
   const hasUnsavedChanges = patch !== null;
   const sectionWritePending = inFlightSectionSaves.size > 0;
+  const autosaveStatus = conflict
+    ? 'Autosave paused · resolve the server conflict'
+    : saveError &&
+        autosaveBlockedChangeRevision === draftChangeRevision
+      ? 'Autosave paused after save failure · use Save now to retry'
+      : saving
+        ? 'Saving section…'
+        : patch
+          ? 'Unsaved changes · autosave pending'
+          : 'All section changes saved';
 
   const inspectionWriteGate: InspectionWriteGate = {
     pending: inspectionWritePending,
@@ -1370,6 +1395,76 @@ export function UnitInspections({
 
             {selectedSection ? (
               <form className="inspection-section-form" onSubmit={saveSection}>
+                <div
+                  className="inspection-field-toolbar"
+                  data-inspection-field-toolbar
+                >
+                  <div className="inspection-field-navigation">
+                    {previousSectionInstance ? (
+                      <WorkspaceLink
+                        className="inspection-field-navigation-link"
+                        navigate={navigate}
+                        route={unitRoute(
+                          propertyId,
+                          unitId,
+                          asOf,
+                          'inspections',
+                          {
+                            inspectionId: routeBundle.inspection.id,
+                            inspectionSectionInstanceId:
+                              previousSectionInstance.id,
+                          },
+                        )}
+                      >
+                        ← Previous
+                      </WorkspaceLink>
+                    ) : (
+                      <span
+                        aria-disabled="true"
+                        className="inspection-field-navigation-link inspection-field-navigation-link-disabled"
+                      >
+                        ← Previous
+                      </span>
+                    )}
+                    <strong className="inspection-field-position">
+                      Section {selectedSectionIndex + 1} of{' '}
+                      {orderedSectionInstances.length}
+                    </strong>
+                    {nextSectionInstance ? (
+                      <WorkspaceLink
+                        className="inspection-field-navigation-link"
+                        navigate={navigate}
+                        route={unitRoute(
+                          propertyId,
+                          unitId,
+                          asOf,
+                          'inspections',
+                          {
+                            inspectionId: routeBundle.inspection.id,
+                            inspectionSectionInstanceId:
+                              nextSectionInstance.id,
+                          },
+                        )}
+                      >
+                        Next →
+                      </WorkspaceLink>
+                    ) : (
+                      <span
+                        aria-disabled="true"
+                        className="inspection-field-navigation-link inspection-field-navigation-link-disabled"
+                      >
+                        Next →
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    className="inspection-field-save-status"
+                    data-inspection-field-save-status
+                  >
+                    {autosaveStatus}
+                  </span>
+                </div>
+
                 <div className="section-heading">
                   <div>
                     <p className="eyebrow">
@@ -1478,16 +1573,7 @@ export function UnitInspections({
                     className="muted"
                     data-inspection-autosave-status
                   >
-                    {conflict
-                      ? 'Autosave paused · resolve the server conflict'
-                      : saveError &&
-                          autosaveBlockedChangeRevision === draftChangeRevision
-                        ? 'Autosave paused after save failure · use Save now to retry'
-                        : saving
-                          ? 'Saving section…'
-                          : patch
-                            ? 'Unsaved changes · autosave pending'
-                            : 'All section changes saved'}
+                    {autosaveStatus}
                   </span>
                   <button
                     disabled={

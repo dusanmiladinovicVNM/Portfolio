@@ -5291,6 +5291,35 @@ try {
 
   await clickXpath(
     sessionId,
+    "//*[@data-inspection-field-toolbar]//a[normalize-space()='Next →']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[contains(@class,'inspection-section-form')]//h3[normalize-space()='Hallway']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${inspectionHallwayInstanceId}&asOf=2025-06-30`,
+    'Next field-work navigation preserves exact SectionInstance deep-link',
+  );
+  await clickXpath(
+    sessionId,
+    "//*[@data-inspection-field-toolbar]//a[normalize-space()='← Previous']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[contains(@class,'inspection-section-form')]//h3[normalize-space()='General condition']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'Previous field-work navigation returns to the exact prior SectionInstance',
+  );
+
+  await clickXpath(
+    sessionId,
     "//button[normalize-space()='Start Inspection']",
   );
   await waitForElement(
@@ -5362,6 +5391,22 @@ try {
   await typeXpath(sessionId, notesInput, 'Window scratch');
   await clickAndDismissConfirm(
     sessionId,
+    "//*[@data-inspection-field-toolbar]//a[normalize-space()='Next →']",
+    'This Inspection section has unsaved changes. Leave and discard them?',
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'Dirty Inspection blocks Previous/Next field-work navigation during the autosave debounce window',
+  );
+  assertEqual(
+    await elementValueXpath(sessionId, notesInput),
+    'Window scratch',
+    'Dirty Inspection answer survives cancelled field-work navigation before autosave',
+  );
+
+  await clickAndDismissConfirm(
+    sessionId,
     "//a[normalize-space()='Timeline']",
     'This Inspection section has unsaved changes. Leave and discard them?',
   );
@@ -5373,7 +5418,7 @@ try {
   assertEqual(
     await elementValueXpath(sessionId, notesInput),
     'Window scratch',
-    'Dirty Inspection answer survives cancelled navigation before autosave',
+    'Dirty Inspection answer survives cancelled dossier navigation before autosave',
   );
 
   await waitForScriptTruthy(
