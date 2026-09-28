@@ -5977,7 +5977,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//div[contains(@class,'inspection-content-card')][.//strong[normalize-space()='Current section Findings']]//li[.//strong[contains(normalize-space(),'Kitchen ventilation staining')]]//small[normalize-space()='Room note']",
+    "//div[contains(@class,'inspection-content-card')][.//strong[normalize-space()='Findings in Kitchen']]//li[.//strong[contains(normalize-space(),'Kitchen ventilation staining')]]//small[normalize-space()='Room note']",
   );
 
   await clickXpath(
