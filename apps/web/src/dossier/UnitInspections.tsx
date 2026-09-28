@@ -1231,7 +1231,9 @@ export function UnitInspections({
           </div>
 
           <InspectionWorkflowStepper
-            requiredResponsesComplete={requiredProgress?.complete ?? false}
+            requiredResponsesComplete={Boolean(
+              requiredProgress?.complete && !hasUnsavedChanges,
+            )}
             status={routeBundle.inspection.status}
           />
 

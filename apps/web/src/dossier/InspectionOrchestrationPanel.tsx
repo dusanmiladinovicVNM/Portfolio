@@ -428,6 +428,18 @@ export function InspectionOrchestrationPanel({
 
   return (
     <>
+      {loadError ? (
+        <p className="form-error" role="alert">{loadError}</p>
+      ) : null}
+      {writeError ? (
+        <p className="form-error" role="alert">{writeError}</p>
+      ) : null}
+      {writeSuccess ? (
+        <p className="setup-form-success" aria-live="polite">
+          {writeSuccess}
+        </p>
+      ) : null}
+
       {showCreate ? (
         <section className="panel inspection-orchestration-panel">
         <div className="section-heading">
@@ -439,18 +451,6 @@ export function InspectionOrchestrationPanel({
             Assignment + schedule stay operational metadata
           </span>
         </div>
-
-        {loadError ? (
-          <p className="form-error" role="alert">{loadError}</p>
-        ) : null}
-        {writeError ? (
-          <p className="form-error" role="alert">{writeError}</p>
-        ) : null}
-        {writeSuccess ? (
-          <p className="setup-form-success" aria-live="polite">
-            {writeSuccess}
-          </p>
-        ) : null}
 
         {schemas && staff && tenancies ? (
           <form
