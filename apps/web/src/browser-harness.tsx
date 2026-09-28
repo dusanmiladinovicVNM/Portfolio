@@ -93,6 +93,7 @@ const inspectionNotesResponseId = 'a1000000-0000-4000-8000-000000000008';
 const inspectionFindingIds = [
   'a1000000-0000-4000-8000-000000000009',
   'a1000000-0000-4000-8000-000000000010',
+  'a1000000-0000-4000-8000-000000000025',
 ] as const;
 const inspectionEvidenceIds = [
   'a1000000-0000-4000-8000-000000000011',
@@ -1398,6 +1399,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioHoldInspectionSectionSave?: boolean;
   __portfolioHoldInspectionEvidence?: boolean;
   __portfolioHoldInspectionLifecycle?: boolean;
+  __portfolioHoldInspectionLockBeforeCommit?: boolean;
   __portfolioHoldInspectionReviewRead?: boolean;
   __portfolioFailNextInspectionCreateAfterCommit?: boolean;
   __portfolioFailNextInspectionFindingAfterCommit?: boolean;
@@ -1442,6 +1444,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioPendingInspectionSectionSave?: boolean;
   __portfolioPendingInspectionEvidence?: boolean;
   __portfolioPendingInspectionLifecycle?: boolean;
+  __portfolioPendingInspectionLockBeforeCommit?: boolean;
   __portfolioPendingInspectionReviewRead?: boolean;
   __portfolioInspectionSectionPatchCount?: number;
   __portfolioInspectionSchemaCreateCount?: number;
@@ -1458,7 +1461,9 @@ type BrowserHarnessWindow = Window & {
   __portfolioReleaseInspectionSectionSave?: () => boolean;
   __portfolioReleaseInspectionEvidence?: () => boolean;
   __portfolioReleaseInspectionLifecycle?: () => boolean;
+  __portfolioReleaseInspectionLockBeforeCommit?: () => boolean;
   __portfolioReleaseInspectionReviewRead?: () => boolean;
+  __portfolioSimulateConcurrentInspectionFinding?: () => boolean;
 };
 
 const browserHarnessWindow = window as BrowserHarnessWindow;
@@ -1508,6 +1513,29 @@ browserHarnessWindow.__portfolioSimulateAccessItemHandoff = () => {
   return true;
 };
 
+browserHarnessWindow.__portfolioSimulateConcurrentInspectionFinding = () => {
+  if (inspectionStatus !== 'in_progress') return false;
+  const id = inspectionFindingIds[inspectionFindingSequence++];
+  if (!id) throw new Error('Inspection Finding id pool exhausted.');
+  inspectionFindings = [
+    ...inspectionFindings,
+    {
+      id,
+      inspectionId,
+      sectionInstanceId: inspectionSectionInstanceId,
+      sectionId: inspectionSectionId,
+      itemId: inspectionNotesItemId,
+      severity: 'info',
+      title: 'Concurrent lock-race Finding',
+      description: 'Written after Review and before the lock command commits.',
+      createdByUserId: inspectionUserId,
+      createdAt: '2025-06-30T09:04:30.000Z',
+    },
+  ];
+  inspectionContentRevision += 1;
+  return true;
+};
+
 let heldUnitCreate:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
   | null = null;
@@ -1540,6 +1568,12 @@ let heldInspectionEvidence:
   | null = null;
 let heldInspectionLifecycle:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
+  | null = null;
+let heldInspectionLockBeforeCommit:
+  | {
+      readonly commit: () => Promise<Response>;
+      readonly resolve: (response: Response) => void;
+    }
   | null = null;
 let heldInspectionReviewRead:
   | { readonly response: Response; readonly resolve: (response: Response) => void }
@@ -1668,6 +1702,19 @@ function maybeHoldInspectionLifecycle(response: Response): Promise<Response> {
   });
 }
 
+function maybeHoldInspectionLockBeforeCommit(
+  commit: () => Promise<Response>,
+): Promise<Response> {
+  if (!browserHarnessWindow.__portfolioHoldInspectionLockBeforeCommit) {
+    return commit();
+  }
+
+  browserHarnessWindow.__portfolioPendingInspectionLockBeforeCommit = true;
+  return new Promise<Response>((resolve) => {
+    heldInspectionLockBeforeCommit = { commit, resolve };
+  });
+}
+
 function maybeHoldInspectionReviewRead(response: Response): Promise<Response> {
   if (!browserHarnessWindow.__portfolioHoldInspectionReviewRead) {
     return Promise.resolve(response);
@@ -1787,6 +1834,16 @@ browserHarnessWindow.__portfolioReleaseInspectionLifecycle = () => {
   browserHarnessWindow.__portfolioHoldInspectionLifecycle = false;
   browserHarnessWindow.__portfolioPendingInspectionLifecycle = false;
   held.resolve(held.response);
+  return true;
+};
+
+browserHarnessWindow.__portfolioReleaseInspectionLockBeforeCommit = () => {
+  if (!heldInspectionLockBeforeCommit) return false;
+  const held = heldInspectionLockBeforeCommit;
+  heldInspectionLockBeforeCommit = null;
+  browserHarnessWindow.__portfolioHoldInspectionLockBeforeCommit = false;
+  browserHarnessWindow.__portfolioPendingInspectionLockBeforeCommit = false;
+  void held.commit().then(held.resolve);
   return true;
 };
 
@@ -5346,40 +5403,53 @@ globalThis.fetch = async (
     init?.method === 'POST'
   ) {
     requireInspectionAuth(init);
-    const body = JSON.parse(String(init.body)) as { expectedVersion: number };
-    if (
-      body.expectedVersion !== inspectionVersion ||
-      inspectionStatus !== 'in_progress'
-    ) {
-      return apiError(
-        409,
-        'INSPECTION_VERSION_CONFLICT',
-        'Inspection changed before it could be locked.',
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      expectedContentRevision: number;
+    };
+
+    return maybeHoldInspectionLockBeforeCommit(async () => {
+      if (
+        body.expectedVersion !== inspectionVersion ||
+        inspectionStatus !== 'in_progress'
+      ) {
+        return apiError(
+          409,
+          'INSPECTION_VERSION_CONFLICT',
+          'Inspection changed before it could be locked.',
+        );
+      }
+      if (body.expectedContentRevision !== inspectionContentRevision) {
+        return apiError(
+          409,
+          'INSPECTION_CONTENT_REVISION_CONFLICT',
+          'Inspection content changed since the reviewed revision.',
+        );
+      }
+      const condition = inspectionResponses.find(
+        (response) =>
+          response.sectionInstanceId === inspectionSectionInstanceId &&
+          response.itemId === inspectionConditionItemId,
       );
-    }
-    const condition = inspectionResponses.find(
-      (response) =>
-        response.sectionInstanceId === inspectionSectionInstanceId &&
-        response.itemId === inspectionConditionItemId,
-    );
-    const notes = inspectionResponses.find(
-      (response) =>
-        response.sectionInstanceId === inspectionSectionInstanceId &&
-        response.itemId === inspectionNotesItemId,
-    );
-    if (
-      !condition ||
-      (condition.value === 'damaged' && !notes)
-    ) {
-      return apiError(
-        422,
-        'INSPECTION_REQUIRED_RESPONSES_MISSING',
-        'Required Inspection responses are missing.',
+      const notes = inspectionResponses.find(
+        (response) =>
+          response.sectionInstanceId === inspectionSectionInstanceId &&
+          response.itemId === inspectionNotesItemId,
       );
-    }
-    inspectionStatus = 'locked';
-    inspectionVersion += 1;
-    return maybeHoldInspectionLifecycle(json(inspectionRecord()));
+      if (
+        !condition ||
+        (condition.value === 'damaged' && !notes)
+      ) {
+        return apiError(
+          422,
+          'INSPECTION_REQUIRED_RESPONSES_MISSING',
+          'Required Inspection responses are missing.',
+        );
+      }
+      inspectionStatus = 'locked';
+      inspectionVersion += 1;
+      return maybeHoldInspectionLifecycle(json(inspectionRecord()));
+    });
   }
 
   if (

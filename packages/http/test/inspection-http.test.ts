@@ -865,12 +865,30 @@ describe('Inspection HTTP backbone', () => {
       error: { code: 'INSPECTION_SECTION_REVISION_CONFLICT' },
     });
 
-    const prematureLock = await handler(
+    const unfencedLock = await handler(
       new Request(
         `https://portfolio.test/inspections/${inspection.id}/lock`,
         {
           method: 'POST',
           body: JSON.stringify({ expectedVersion: 2 }),
+        },
+      ),
+      inspectorIdentity,
+    );
+    expect(unfencedLock.status).toBe(400);
+    expect(await unfencedLock.json()).toMatchObject({
+      error: { code: 'VALIDATION_ERROR' },
+    });
+
+    const prematureLock = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/lock`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            expectedVersion: 2,
+            expectedContentRevision: 1,
+          }),
         },
       ),
       inspectorIdentity,
@@ -948,6 +966,17 @@ describe('Inspection HTTP backbone', () => {
       data: { revision: 4, contentRevision: 4 },
     });
 
+    const reviewedBeforeFinding = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      inspectorIdentity,
+    );
+    const reviewedBeforeFindingData = (await reviewedBeforeFinding.json()).data
+      .inspection as { version: number; contentRevision: number };
+    expect(reviewedBeforeFindingData).toMatchObject({
+      version: 2,
+      contentRevision: 4,
+    });
+
     const finding = await handler(
       new Request(
         `https://portfolio.test/inspections/${inspection.id}/findings`,
@@ -966,12 +995,49 @@ describe('Inspection HTTP backbone', () => {
     );
     expect(finding.status).toBe(201);
 
+    const staleReviewedLock = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/lock`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            expectedVersion: reviewedBeforeFindingData.version,
+            expectedContentRevision:
+              reviewedBeforeFindingData.contentRevision,
+          }),
+        },
+      ),
+      inspectorIdentity,
+    );
+    expect(staleReviewedLock.status).toBe(409);
+    expect(await staleReviewedLock.json()).toMatchObject({
+      error: { code: 'INSPECTION_CONTENT_REVISION_CONFLICT' },
+    });
+
+    const afterRejectedLock = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      inspectorIdentity,
+    );
+    expect(await afterRejectedLock.json()).toMatchObject({
+      data: {
+        inspection: {
+          status: 'in_progress',
+          version: 2,
+          contentRevision: 5,
+        },
+        findings: [{ title: 'Wall scratch' }],
+      },
+    });
+
     const locked = await handler(
       new Request(
         `https://portfolio.test/inspections/${inspection.id}/lock`,
         {
           method: 'POST',
-          body: JSON.stringify({ expectedVersion: 2 }),
+          body: JSON.stringify({
+            expectedVersion: 2,
+            expectedContentRevision: 5,
+          }),
         },
       ),
       inspectorIdentity,
@@ -1389,12 +1455,15 @@ describe('Inspection HTTP backbone', () => {
       new Request(`https://portfolio.test/inspections/${inspection.id}`),
       inspectorIdentity,
     );
-    const lockVersion = (await currentBeforeLock.json()).data.inspection
-      .version as number;
+    const currentBeforeLockData = (await currentBeforeLock.json()).data
+      .inspection as { version: number; contentRevision: number };
     await handler(
       new Request(`https://portfolio.test/inspections/${inspection.id}/lock`, {
         method: 'POST',
-        body: JSON.stringify({ expectedVersion: lockVersion }),
+        body: JSON.stringify({
+          expectedVersion: currentBeforeLockData.version,
+          expectedContentRevision: currentBeforeLockData.contentRevision,
+        }),
       }),
       inspectorIdentity,
     );
@@ -1468,10 +1537,17 @@ describe('Inspection HTTP backbone', () => {
       },
     });
 
+    const unlockedData = (await unlocked.json()).data as {
+      version: number;
+      contentRevision: number;
+    };
     await handler(
       new Request(`https://portfolio.test/inspections/${inspection.id}/lock`, {
         method: 'POST',
-        body: JSON.stringify({ expectedVersion: 4 }),
+        body: JSON.stringify({
+          expectedVersion: unlockedData.version,
+          expectedContentRevision: unlockedData.contentRevision,
+        }),
       }),
       inspectorIdentity,
     );

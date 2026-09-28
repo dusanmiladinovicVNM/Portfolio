@@ -174,6 +174,18 @@ function assertExpectedVersion(
   }
 }
 
+function assertExpectedContentRevision(
+  inspection: Inspection,
+  expectedContentRevision: number,
+): void {
+  if (inspection.contentRevision !== expectedContentRevision) {
+    throw new DomainError(
+      'INSPECTION_CONTENT_REVISION_CONFLICT',
+      'Inspection content changed since the caller reviewed it.',
+    );
+  }
+}
+
 function assertInspectionAccess(actor: Actor, inspection: Inspection): void {
   if (
     actor.role === 'inspector' &&
@@ -520,11 +532,13 @@ export async function lockInspectionCommand(
   actor: Actor,
   id: InspectionId,
   expectedVersion: number,
+  expectedContentRevision: number,
 ): Promise<Inspection> {
   requireCapability(actor, 'inspections:write');
   const current = await requireInspection(deps.inspectionRepository, id);
   assertInspectionAccess(actor, current);
   assertExpectedVersion(current, expectedVersion);
+  assertExpectedContentRevision(current, expectedContentRevision);
 
   const schema = await requireSchema(
     deps.inspectionRepository,
@@ -565,8 +579,8 @@ export async function lockInspectionCommand(
   const updated = lockInspection(current, deps.clock.now());
   await deps.inspectionRepository.updateLifecycle(
     updated,
-    current.version,
-    current.contentRevision,
+    expectedVersion,
+    expectedContentRevision,
   );
   return updated;
 }

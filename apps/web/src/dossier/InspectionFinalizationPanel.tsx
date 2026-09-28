@@ -404,12 +404,30 @@ export function InspectionFinalizationPanel({
       try {
         const locked = await api.post(
           inspectionLockPath(before.id),
-          { expectedVersion: before.version },
+          {
+            expectedVersion: reviewBundle.inspection.version,
+            expectedContentRevision:
+              reviewBundle.inspection.contentRevision,
+          },
           inspectionResponseSchema,
         );
         acknowledged = true;
         assertInspectionLockTransition(before, locked);
       } catch (cause) {
+        if (
+          cause instanceof PortfolioApiError &&
+          cause.code === 'INSPECTION_CONTENT_REVISION_CONFLICT'
+        ) {
+          setReviewBundle(null);
+          const canonical = await readCanonical();
+          applyCanonical(canonical);
+          if (mountedRef.current) {
+            setError(
+              'Inspection content changed before lock. The new canonical state is loaded; run a fresh Review before locking.',
+            );
+          }
+          return;
+        }
         if (!isAmbiguousWriteFailure(cause)) throw cause;
         ambiguous = true;
         const canonical = await readCanonical();

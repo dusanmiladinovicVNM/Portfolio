@@ -6240,6 +6240,85 @@ try {
 
   await executeScript(
     sessionId,
+    'window.__portfolioHoldInspectionLockBeforeCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Confirm review & lock Inspection']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    'return window.__portfolioPendingInspectionLockBeforeCommit === true;',
+    'held Inspection lock before commit',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioSimulateConcurrentInspectionFinding?.() === true;',
+    ),
+    true,
+    'Concurrent writer adds a Finding after Review but before lock commit',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioReleaseInspectionLockBeforeCommit?.() === true;',
+    ),
+    true,
+    'Release fenced Inspection lock request after concurrent Finding',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Inspection content changed before lock. The new canonical state is loaded; run a fresh Review before locking.')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//span[contains(@class,'status-chip') and normalize-space()='in_progress']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//strong[contains(normalize-space(),'Concurrent lock-race Finding')]",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-inspection-pre-lock-review]",
+    ),
+    false,
+    'ContentRevision lock conflict invalidates the reviewed snapshot',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//button[normalize-space()='Confirm review & lock Inspection']",
+    ),
+    false,
+    'Old Review cannot authorize a lock retry after contentRevision conflict',
+  );
+
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Review before lock']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-pre-lock-review]//*[contains(normalize-space(),'Concurrent lock-race Finding')]",
+  );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      "//button[normalize-space()='Confirm review & lock Inspection']",
+    ),
+    false,
+    'Fresh Review over the concurrent Finding can authorize lock',
+  );
+
+  await executeScript(
+    sessionId,
     'window.__portfolioHoldInspectionLifecycle = true; return true;',
   );
   await clickXpath(
