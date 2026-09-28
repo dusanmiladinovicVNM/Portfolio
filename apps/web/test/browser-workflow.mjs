@@ -5334,6 +5334,20 @@ try {
   );
   await clickXpath(
     sessionId,
+    "//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='Kitchen']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[contains(@class,'inspection-section-form')]//h3[normalize-space()='Kitchen']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${inspectionKitchenInstanceId}&asOf=2025-06-30`,
+    'Incomplete Review can start away from the missing SectionInstance',
+  );
+  await clickXpath(
+    sessionId,
     "//button[normalize-space()='Review before lock']",
   );
   await waitForElement(
@@ -5341,17 +5355,32 @@ try {
     'xpath',
     "//*[@data-inspection-pre-lock-review]",
   );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-review-missing-summary][contains(normalize-space(),'1 required response needs attention')]",
+  );
   assertEqual(
     await elementDisabledXpath(
       sessionId,
       "//button[normalize-space()='Confirm review & lock Inspection']",
     ),
     true,
-    'Incomplete canonical required responses disable lock confirmation inside review',
+    'Incomplete fresh canonical Review disables lock confirmation',
   );
   await clickXpath(
     sessionId,
-    "//button[normalize-space()='Close review']",
+    `//*[@data-inspection-review-fix-section='${inspectionSectionInstanceId}']`,
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[contains(@class,'inspection-section-form')]//h3[normalize-space()='General condition']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'Review Fix action jumps to the exact missing SectionInstance deep-link',
   );
   assertEqual(
     await elementExistsXpath(
@@ -5359,7 +5388,7 @@ try {
       "//*[@data-inspection-pre-lock-review]",
     ),
     false,
-    'Incomplete pre-lock review can be closed to resume field work',
+    'Fix action closes Review and returns to field work',
   );
   await waitForElement(
     sessionId,
