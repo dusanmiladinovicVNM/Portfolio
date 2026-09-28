@@ -287,6 +287,168 @@ describe('CanonicalInspectionPdfRenderer', () => {
     expect(source).toContain('BED-2');
   });
 
+  it('renders room-owned Kitchen Findings and Bathroom Evidence into the final PDF artifact', async () => {
+    const snapshot = snapshotFixture();
+    const mutablePayload = snapshot.payload as unknown as {
+      schema: {
+        sections: Array<{
+          id: string;
+          key: string;
+          title: string;
+          description: string | null;
+          sortOrder: number;
+          scope: 'unit' | 'space';
+          spaceTypes: string[];
+          items: Array<{
+            id: string;
+            sectionId: string;
+            key: string;
+            type: string;
+            label: string;
+            required: boolean;
+            sortOrder: number;
+            options: unknown[];
+            visibleWhen: unknown;
+            requiredWhen: unknown;
+          }>;
+        }>;
+      };
+      sectionInstances: Array<{
+        id: string;
+        inspectionId: string;
+        sectionId: string;
+        scope: 'unit' | 'space';
+        spaceId: string | null;
+        spaceCode: string | null;
+        spaceName: string | null;
+        spaceType: string | null;
+        spaceSortOrder: number | null;
+      }>;
+      findings: Array<{
+        id: string;
+        inspectionId: string;
+        sectionInstanceId: string;
+        sectionId: string;
+        itemId: string | null;
+        severity: string;
+        title: string;
+        description: string | null;
+        createdByUserId: string;
+        createdAt: string;
+      }>;
+      evidence: Array<{
+        evidence: {
+          id: string;
+          inspectionId: string;
+          sectionInstanceId: string | null;
+          sectionId: string | null;
+          itemId: string | null;
+          documentVersionId: string;
+          kind: string;
+          caption: string | null;
+          createdByUserId: string;
+          createdAt: string;
+        };
+        documentVersion: { fileName: string };
+      }>;
+    };
+
+    const templateSection = mutablePayload.schema.sections[0]!;
+    const templateItem = templateSection.items[0]!;
+    const roomSectionId = '14111111-1111-4111-8111-111111111111';
+    const roomItemId = '15111111-1111-4111-8111-111111111111';
+    const kitchenInstanceId = '16111111-1111-4111-8111-111111111111';
+    const bathroomInstanceId = '16111111-1111-4111-8111-111111111112';
+
+    mutablePayload.schema.sections.push({
+      ...templateSection,
+      id: roomSectionId,
+      key: 'room',
+      title: 'Room condition',
+      description: 'Room-scoped inspection content.',
+      sortOrder: 1,
+      scope: 'space',
+      spaceTypes: ['kitchen', 'bathroom'],
+      items: [{
+        ...templateItem,
+        id: roomItemId,
+        sectionId: roomSectionId,
+        key: 'room_note',
+        label: 'Room note',
+        required: false,
+      }],
+    });
+
+    mutablePayload.sectionInstances.push(
+      {
+        id: kitchenInstanceId,
+        inspectionId: snapshot.inspectionId,
+        sectionId: roomSectionId,
+        scope: 'space',
+        spaceId: '17111111-1111-4111-8111-111111111111',
+        spaceCode: 'KIT-01',
+        spaceName: 'Kitchen',
+        spaceType: 'kitchen',
+        spaceSortOrder: 4,
+      },
+      {
+        id: bathroomInstanceId,
+        inspectionId: snapshot.inspectionId,
+        sectionId: roomSectionId,
+        scope: 'space',
+        spaceId: '17111111-1111-4111-8111-111111111112',
+        spaceCode: 'BATH-01',
+        spaceName: 'Bathroom',
+        spaceType: 'bathroom',
+        spaceSortOrder: 5,
+      },
+    );
+
+    const templateFinding = mutablePayload.findings[0]!;
+    mutablePayload.findings.push({
+      ...templateFinding,
+      id: '18111111-1111-4111-8111-111111111111',
+      sectionInstanceId: kitchenInstanceId,
+      sectionId: roomSectionId,
+      itemId: roomItemId,
+      severity: 'major',
+      title: 'Kitchen ventilation staining',
+      description: 'Visible staining above the cooking area.',
+    });
+
+    const templateEvidence = mutablePayload.evidence[0]!;
+    mutablePayload.evidence.push({
+      evidence: {
+        ...templateEvidence.evidence,
+        id: '19111111-1111-4111-8111-111111111111',
+        sectionInstanceId: bathroomInstanceId,
+        sectionId: roomSectionId,
+        itemId: null,
+        documentVersionId: '20111111-1111-4111-8111-111111111111',
+        kind: 'photo',
+        caption: 'Bathroom moisture evidence',
+      },
+      documentVersion: {
+        fileName: 'bathroom-moisture.jpg',
+      },
+    });
+
+    const rendered = await new CanonicalInspectionPdfRenderer()
+      .renderInspectionFinalReport(snapshot);
+    const source = new TextDecoder().decode(rendered.content);
+
+    expect(source).toContain('MAJOR - Kitchen ventilation staining');
+    expect(source).toContain('Kitchen - Room note');
+    expect(source).toContain('Visible staining above the cooking area.');
+
+    expect(source).toContain('Photo - bathroom-moisture.jpg');
+    expect(source).toContain('(Bathroom) Tj');
+    expect(source).toContain('Bathroom moisture evidence');
+
+    expect(source).toContain('Immutable final snapshot');
+    expect(source).toContain('%%EOF');
+  });
+
   it('keeps old snapshots renderable when presentation context is absent', async () => {
     const snapshot = snapshotFixture() as unknown as {
       payload: { reportContext?: unknown };
