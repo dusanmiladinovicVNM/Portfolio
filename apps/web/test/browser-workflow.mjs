@@ -5224,6 +5224,15 @@ try {
 
   await clickXpath(
     sessionId,
+    "//a[normalize-space()='← All Inspections']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//button[contains(@class,'inspection-assigned-work-card')][.//strong[normalize-space()='INS-BRW-001']]",
+  );
+  await clickXpath(
+    sessionId,
     "//button[contains(@class,'inspection-assigned-work-card')][.//strong[normalize-space()='INS-BRW-001']]",
   );
   await waitForElement(
@@ -5386,59 +5395,28 @@ try {
     "//*[@data-inspection-autosave-status][contains(normalize-space(),'Saving section')]",
   );
 
-  const dirtyCreateForm =
-    "//form[@data-inspection-form='create']";
-  await typeXpath(
-    sessionId,
-    dirtyCreateForm + "//input[@name='code']",
-    'INS-DIRTY-BRW',
-  );
-  await selectOptionXpath(
-    sessionId,
-    dirtyCreateForm + "//select[@name='schemaVersionId']",
-    inspectionSchemaVersionId,
-  );
-  await selectOptionXpath(
-    sessionId,
-    dirtyCreateForm + "//select[@name='assignedToUserId']",
-    inspectionUserId,
-  );
-
-  const dirtyCreateButton =
-    dirtyCreateForm + "//button[normalize-space()='Create Inspection']";
   assertEqual(
-    await elementDisabledXpath(sessionId, dirtyCreateButton),
-    true,
-    'Dirty field section disables Create Inspection',
+    await elementExistsXpath(
+      sessionId,
+      "//form[@data-inspection-form='create']",
+    ),
+    false,
+    'Focused Inspection detail does not expose Create Inspection',
   );
-  await waitForElement(
+  await clickXpath(
     sessionId,
-    'xpath',
-    "//*[contains(normalize-space(),'Save or discard the current section before creating another Inspection.')]",
-  );
-
-  await executeScript(
-    sessionId,
-    "document.querySelector('form[data-inspection-form=\"create\"]').requestSubmit(); return true;",
+    "//a[normalize-space()='← All Inspections']",
   );
   await new Promise((resolve) => setTimeout(resolve, 150));
   assertEqual(
     await currentUrl(sessionId),
     inspectionUrl,
-    'Programmatic create submit cannot replace dirty Inspection owner',
+    'In-flight dirty section save blocks return to the list/Create workspace',
   );
   assertEqual(
     await elementValueXpath(sessionId, notesInput),
     'Window scratch',
-    'Dirty Inspection answer survives blocked Create Inspection',
-  );
-  assertEqual(
-    await elementExistsXpath(
-      sessionId,
-      "//a[contains(@class,'inspection-card')][.//strong[normalize-space()='INS-DIRTY-BRW']]",
-    ),
-    false,
-    'Blocked dirty create does not create another Inspection',
+    'Dirty Inspection answer survives blocked return to the list workspace',
   );
 
   const findingForm =
