@@ -5426,6 +5426,16 @@ try {
     'return window.__portfolioPendingInspectionSectionSave === true;',
     'held Inspection section autosave',
   );
+  await clickXpath(
+    sessionId,
+    "//*[@data-inspection-field-toolbar]//a[normalize-space()='Next →']",
+  );
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'In-flight section PATCH hard-blocks Next field-work navigation',
+  );
   assertEqual(
     await executeScript(
       sessionId,
@@ -5771,6 +5781,10 @@ try {
     "//ul[contains(@class,'inspection-content-list')]//span[normalize-space()='Scoped field evidence']",
   );
 
+  await clickXpath(
+    sessionId,
+    "//details[contains(@class,'inspection-evidence-advanced')]/summary",
+  );
   await setInputValueXpath(
     sessionId,
     evidenceDocumentForm + "//input[@name='code']",
@@ -6033,10 +6047,18 @@ try {
     inspectionUrl,
     'Room-specific content returns to canonical General Inspection owner',
   );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//ul[contains(@class,'inspection-content-list')]//li[.//span[normalize-space()='Bathroom moisture evidence']]",
+    ),
+    false,
+    'Bathroom Evidence is hidden after returning to a different active SectionInstance',
+  );
   await waitForElement(
     sessionId,
     'xpath',
-    "//ul[contains(@class,'inspection-content-list')]//li[.//span[normalize-space()='Bathroom moisture evidence']]//small[normalize-space()='Bathroom']",
+    "//*[@data-inspection-content-context-summary][contains(normalize-space(),'evidence item(s) belong to other sections')]",
   );
 
   const sectionPatchCountBeforeConflict = await executeScript(

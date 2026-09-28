@@ -1393,6 +1393,7 @@ export function UnitInspections({
               })}
             </nav>
 
+            <div className="inspection-active-section-column">
             {selectedSection ? (
               <form className="inspection-section-form" onSubmit={saveSection}>
                 <div
@@ -1592,30 +1593,31 @@ export function UnitInspections({
             ) : (
               <p className="muted">This Inspection schema has no sections.</p>
             )}
-          </div>
 
-          {selectedSection && selectedSectionInstance ? (
-            <InspectionFindingsEvidence
-              api={api}
-              blockedByDirtySection={hasUnsavedChanges}
-              bundle={routeBundle}
-              key={`${routeBundle.inspection.id}:${selectedSectionInstance.id}`}
-              onCanonicalBundle={(targetInspectionId, canonical) => {
-                if (activeInspectionIdRef.current !== targetInspectionId) return;
-                assertInspectionBundleOwner(targetInspectionId, unitId, canonical);
-                setBundle(canonical);
-                setInspections((current) =>
-                  current?.map((item) =>
-                    item.id === canonical.inspection.id
-                      ? canonical.inspection
-                      : item,
-                  ) ?? current,
-                );
-              }}
-              selectedSectionInstanceId={selectedSectionInstance.id}
-              writeGate={inspectionWriteGate}
-            />
-          ) : null}
+            {selectedSection && selectedSectionInstance ? (
+              <InspectionFindingsEvidence
+                api={api}
+                blockedByDirtySection={hasUnsavedChanges}
+                bundle={routeBundle}
+                key={`${routeBundle.inspection.id}:${selectedSectionInstance.id}`}
+                onCanonicalBundle={(targetInspectionId, canonical) => {
+                  if (activeInspectionIdRef.current !== targetInspectionId) return;
+                  assertInspectionBundleOwner(targetInspectionId, unitId, canonical);
+                  setBundle(canonical);
+                  setInspections((current) =>
+                    current?.map((item) =>
+                      item.id === canonical.inspection.id
+                        ? canonical.inspection
+                        : item,
+                    ) ?? current,
+                  );
+                }}
+                selectedSectionInstanceId={selectedSectionInstance.id}
+                writeGate={inspectionWriteGate}
+              />
+            ) : null}
+            </div>
+          </div>
 
           <InspectionFinalizationPanel
             api={api}
