@@ -1823,6 +1823,63 @@ input:focus-visible {
   display: grid;
   gap: 14px;
 }
+.inspection-review-authority-note {
+  margin: 0;
+  color: #4f534b;
+  font-size: .78rem;
+  font-weight: 700;
+}
+.inspection-review-workspace {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #cfc8bc;
+  border-radius: 13px;
+  background: #f7f4ee;
+}
+.inspection-review-workspace-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: start;
+}
+.inspection-review-workspace-heading h3 {
+  margin: 0;
+}
+.inspection-review-missing-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  padding: 14px;
+  border: 1px solid #d9a49b;
+  border-radius: 10px;
+  background: #fff7f5;
+}
+.inspection-review-missing-summary p {
+  margin: 5px 0 0;
+  color: #6a5652;
+  font-size: .8rem;
+}
+.inspection-review-missing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.inspection-review-ready {
+  margin: 0;
+  padding: 11px 12px;
+  border: 1px solid #b9cbb8;
+  border-radius: 9px;
+  background: #f3f8f2;
+  color: #365f3d;
+  font-size: .82rem;
+  font-weight: 700;
+}
+.inspection-review-fix-button {
+  min-height: 34px;
+}
 .inspection-pre-lock-intro {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
@@ -1918,6 +1975,11 @@ input:focus-visible {
   color: #62665d;
   font-size: .75rem;
 }
+.inspection-review-section-status {
+  display: grid;
+  justify-items: end;
+  gap: 7px;
+}
 .inspection-review-items {
   display: grid;
   gap: 8px;
@@ -1994,14 +2056,22 @@ input:focus-visible {
     grid-template-columns: 1fr;
   }
   .inspection-pre-lock-intro,
-  .inspection-pre-lock-summary {
+  .inspection-pre-lock-summary,
+  .inspection-review-missing-summary {
     grid-template-columns: 1fr;
   }
+  .inspection-review-workspace-heading,
   .inspection-review-section-heading,
   .inspection-review-item-heading {
     align-items: flex-start;
     flex-direction: column;
     gap: 4px;
+  }
+  .inspection-review-missing-actions {
+    justify-content: flex-start;
+  }
+  .inspection-review-section-status {
+    justify-items: start;
   }
 }
 

@@ -5334,6 +5334,20 @@ try {
   );
   await clickXpath(
     sessionId,
+    "//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='Kitchen']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[contains(@class,'inspection-section-form')]//h3[normalize-space()='Kitchen']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${inspectionKitchenInstanceId}&asOf=2025-06-30`,
+    'Incomplete Review can start away from the missing SectionInstance',
+  );
+  await clickXpath(
+    sessionId,
     "//button[normalize-space()='Review before lock']",
   );
   await waitForElement(
@@ -5341,17 +5355,32 @@ try {
     'xpath',
     "//*[@data-inspection-pre-lock-review]",
   );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-review-missing-summary][contains(normalize-space(),'1 required response needs attention')]",
+  );
   assertEqual(
     await elementDisabledXpath(
       sessionId,
       "//button[normalize-space()='Confirm review & lock Inspection']",
     ),
     true,
-    'Incomplete canonical required responses disable lock confirmation inside review',
+    'Incomplete fresh canonical Review disables lock confirmation',
   );
   await clickXpath(
     sessionId,
-    "//button[normalize-space()='Close review']",
+    `//*[@data-inspection-review-fix-section='${inspectionSectionInstanceId}']`,
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[contains(@class,'inspection-section-form')]//h3[normalize-space()='General condition']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'Review Fix action jumps to the exact missing SectionInstance deep-link',
   );
   assertEqual(
     await elementExistsXpath(
@@ -5359,7 +5388,7 @@ try {
       "//*[@data-inspection-pre-lock-review]",
     ),
     false,
-    'Incomplete pre-lock review can be closed to resume field work',
+    'Fix action closes Review and returns to field work',
   );
   await waitForElement(
     sessionId,
@@ -6207,6 +6236,85 @@ try {
     ),
     false,
     'Refreshed canonical review re-enables lock confirmation',
+  );
+
+  await executeScript(
+    sessionId,
+    'window.__portfolioHoldInspectionLockBeforeCommit = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Confirm review & lock Inspection']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    'return window.__portfolioPendingInspectionLockBeforeCommit === true;',
+    'held Inspection lock before commit',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioSimulateConcurrentInspectionFinding?.() === true;',
+    ),
+    true,
+    'Concurrent writer adds a Finding after Review but before lock commit',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioReleaseInspectionLockBeforeCommit?.() === true;',
+    ),
+    true,
+    'Release fenced Inspection lock request after concurrent Finding',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Inspection content changed before lock. The new canonical state is loaded; run a fresh Review before locking.')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//span[contains(@class,'status-chip') and normalize-space()='in_progress']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//strong[contains(normalize-space(),'Concurrent lock-race Finding')]",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-inspection-pre-lock-review]",
+    ),
+    false,
+    'ContentRevision lock conflict invalidates the reviewed snapshot',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//button[normalize-space()='Confirm review & lock Inspection']",
+    ),
+    false,
+    'Old Review cannot authorize a lock retry after contentRevision conflict',
+  );
+
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Review before lock']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-pre-lock-review]//*[contains(normalize-space(),'Concurrent lock-race Finding')]",
+  );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      "//button[normalize-space()='Confirm review & lock Inspection']",
+    ),
+    false,
+    'Fresh Review over the concurrent Finding can authorize lock',
   );
 
   await executeScript(

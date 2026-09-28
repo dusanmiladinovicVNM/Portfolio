@@ -1876,6 +1876,7 @@ describe('PostgreSQL infrastructure', () => {
       actor,
       inspection.id,
       beforeLock.version,
+      beforeLock.contentRevision,
     );
 
     await expect(
@@ -2098,6 +2099,7 @@ describe('PostgreSQL infrastructure', () => {
       actor,
       inspection.id,
       unlocked.version,
+      unlocked.contentRevision,
     );
 
     await addInspectionSignatureCommand(
@@ -3696,6 +3698,7 @@ describe('PostgreSQL infrastructure', () => {
         actor,
         inspection.id,
         2,
+        1,
       ),
     ).rejects.toMatchObject({
       code: 'INSPECTION_CONTENT_REVISION_CONFLICT',
@@ -3778,6 +3781,7 @@ describe('PostgreSQL infrastructure', () => {
       actor,
       inspection.id,
       2,
+      5,
     );
     expect(locked.status).toBe('locked');
     expect(locked.contentRevision).toBe(5);
@@ -4396,6 +4400,7 @@ describe('PostgreSQL infrastructure', () => {
         actor,
         inspection.id,
         started.version,
+        3,
       ),
     ).rejects.toMatchObject({
       code: 'INSPECTION_REQUIRED_RESPONSES_MISSING',
@@ -4428,6 +4433,7 @@ describe('PostgreSQL infrastructure', () => {
       actor,
       inspection.id,
       started.version,
+      4,
     );
     expect(locked.status).toBe('locked');
 

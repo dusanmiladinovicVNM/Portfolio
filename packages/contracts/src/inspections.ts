@@ -87,6 +87,11 @@ export const expectedInspectionVersionRequestSchema = z.object({
   expectedVersion: z.number().int().positive(),
 });
 
+export const lockInspectionRequestSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+  expectedContentRevision: z.number().int().nonnegative(),
+});
+
 export const updateInspectionOrchestrationRequestSchema = z.object({
   expectedVersion: z.number().int().positive(),
   assignedToUserId: entityIdSchema,

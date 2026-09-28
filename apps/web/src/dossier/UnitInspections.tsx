@@ -1624,8 +1624,20 @@ export function UnitInspections({
             blockedByDirtySection={hasUnsavedChanges}
             bundle={routeBundle}
             key={`${routeBundle.inspection.id}:finalization`}
-            missingRequiredResponses={requiredProgress?.missingRequired ?? 0}
-            requiredResponsesComplete={requiredProgress?.complete ?? false}
+            onEditSectionInstance={(sectionInstanceId) =>
+              navigate(
+                unitRoute(
+                  propertyId,
+                  unitId,
+                  asOf,
+                  'inspections',
+                  {
+                    inspectionId: routeBundle.inspection.id,
+                    inspectionSectionInstanceId: sectionInstanceId,
+                  },
+                ),
+              )
+            }
             onCanonicalBundle={(targetInspectionId, canonical) => {
               if (activeInspectionIdRef.current !== targetInspectionId) return;
               assertInspectionBundleOwner(targetInspectionId, unitId, canonical);

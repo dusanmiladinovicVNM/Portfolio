@@ -4,6 +4,7 @@ import type { InspectionPreLockReview } from './inspection-pre-lock-review.js';
 interface InspectionPreLockReviewProps {
   readonly review: InspectionPreLockReview;
   readonly stale: boolean;
+  readonly onFixSectionInstance: (sectionInstanceId: string) => void;
 }
 
 function countLabel(count: number, singular: string, plural: string): string {
@@ -13,7 +14,12 @@ function countLabel(count: number, singular: string, plural: string): string {
 export function InspectionPreLockReviewPanel({
   review,
   stale,
+  onFixSectionInstance,
 }: InspectionPreLockReviewProps) {
+  const missingSections = review.sections.filter(
+    (section) => section.missingRequired > 0,
+  );
+
   return (
     <div
       className={`inspection-pre-lock-review ${stale ? 'inspection-pre-lock-review-stale' : ''}`}
@@ -59,6 +65,48 @@ export function InspectionPreLockReviewPanel({
         </p>
       ) : null}
 
+      {!review.complete ? (
+        <section
+          className="inspection-review-missing-summary"
+          data-inspection-review-missing-summary
+        >
+          <div>
+            <strong>
+              {countLabel(
+                review.missingRequired,
+                'required response needs attention',
+                'required responses need attention',
+              )}
+            </strong>
+            <p>
+              This summary comes from the fresh canonical pre-lock reread.
+              Open the exact SectionInstance below to fix missing responses.
+            </p>
+          </div>
+          <div className="inspection-review-missing-actions">
+            {missingSections.map((section) => (
+              <button
+                className="button-secondary inspection-review-fix-button"
+                data-inspection-review-fix-section={section.sectionInstanceId}
+                disabled={stale}
+                key={section.sectionInstanceId}
+                onClick={() =>
+                  onFixSectionInstance(section.sectionInstanceId)
+                }
+                type="button"
+              >
+                Fix {section.title} · {section.missingRequired} missing
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : (
+        <p className="inspection-review-ready" role="status">
+          Canonical review is complete. The Inspection is ready for the lock
+          confirmation below.
+        </p>
+      )}
+
       {review.generalEvidence.length > 0 ? (
         <section className="inspection-review-general-evidence">
           <strong>Inspection-wide evidence</strong>
@@ -92,9 +140,24 @@ export function InspectionPreLockReviewPanel({
                   </small>
                 ) : null}
               </div>
-              <span>
-                {section.requiredAnswered}/{section.requiredTotal} required
-              </span>
+              <div className="inspection-review-section-status">
+                <span>
+                  {section.requiredAnswered}/{section.requiredTotal} required
+                </span>
+                {section.missingRequired > 0 ? (
+                  <button
+                    className="button-secondary inspection-review-fix-button"
+                    data-inspection-review-fix-section={section.sectionInstanceId}
+                    disabled={stale}
+                    onClick={() =>
+                      onFixSectionInstance(section.sectionInstanceId)
+                    }
+                    type="button"
+                  >
+                    Fix missing
+                  </button>
+                ) : null}
+              </div>
             </div>
 
             <div className="inspection-review-items">

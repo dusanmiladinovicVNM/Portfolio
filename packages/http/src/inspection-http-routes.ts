@@ -46,6 +46,7 @@ import {
   expectedInspectionVersionRequestSchema,
   finalizeInspectionRequestSchema,
   inspectionBinaryPurposeSchema,
+  lockInspectionRequestSchema,
   saveInspectionSectionRequestSchema,
   unlockInspectionRequestSchema,
   updateInspectionOrchestrationRequestSchema,
@@ -345,7 +346,6 @@ export async function handleInspectionHttp(
 
   for (const [suffix, command] of [
     ['start', startInspectionCommand],
-    ['lock', lockInspectionCommand],
     ['cancel', cancelInspectionCommand],
   ] as const) {
     const match = new RegExp(
@@ -369,6 +369,27 @@ export async function handleInspectionHttp(
       );
       return json({ data: toInspectionResponse(inspection) });
     }
+  }
+
+  const lockMatch = /^\/inspections\/([^/]+)\/lock$/.exec(path);
+  if (method === 'POST' && lockMatch) {
+    const parsedId = entityIdSchema.safeParse(lockMatch[1]);
+    const parsedBody = lockInspectionRequestSchema.safeParse(
+      await requestJson(request),
+    );
+    if (!parsedId.success || !parsedBody.success) return validationFailure();
+
+    const inspection = await lockInspectionCommand(
+      {
+        inspectionRepository: deps.inspectionRepository,
+        clock: deps.clock,
+      },
+      actor,
+      asInspectionId(parsedId.data),
+      parsedBody.data.expectedVersion,
+      parsedBody.data.expectedContentRevision,
+    );
+    return json({ data: toInspectionResponse(inspection) });
   }
 
   const sectionInstanceMatch =

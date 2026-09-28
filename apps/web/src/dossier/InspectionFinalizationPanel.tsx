@@ -59,9 +59,8 @@ interface InspectionFinalizationPanelProps {
   readonly api: PortfolioApi;
   readonly bundle: InspectionBundleResponse;
   readonly blockedByDirtySection: boolean;
-  readonly missingRequiredResponses: number;
-  readonly requiredResponsesComplete: boolean;
   readonly writeGate: InspectionWriteGate;
+  readonly onEditSectionInstance: (sectionInstanceId: string) => void;
   readonly onCanonicalBundle: (
     targetInspectionId: string,
     canonical: InspectionBundleResponse,
@@ -144,9 +143,8 @@ export function InspectionFinalizationPanel({
   api,
   bundle,
   blockedByDirtySection,
-  missingRequiredResponses,
-  requiredResponsesComplete,
   writeGate,
+  onEditSectionInstance,
   onCanonicalBundle,
 }: InspectionFinalizationPanelProps) {
   const mountedRef = useRef(true);
@@ -406,12 +404,30 @@ export function InspectionFinalizationPanel({
       try {
         const locked = await api.post(
           inspectionLockPath(before.id),
-          { expectedVersion: before.version },
+          {
+            expectedVersion: reviewBundle.inspection.version,
+            expectedContentRevision:
+              reviewBundle.inspection.contentRevision,
+          },
           inspectionResponseSchema,
         );
         acknowledged = true;
         assertInspectionLockTransition(before, locked);
       } catch (cause) {
+        if (
+          cause instanceof PortfolioApiError &&
+          cause.code === 'INSPECTION_CONTENT_REVISION_CONFLICT'
+        ) {
+          setReviewBundle(null);
+          const canonical = await readCanonical();
+          applyCanonical(canonical);
+          if (mountedRef.current) {
+            setError(
+              'Inspection content changed before lock. The new canonical state is loaded; run a fresh Review before locking.',
+            );
+          }
+          return;
+        }
         if (!isAmbiguousWriteFailure(cause)) throw cause;
         ambiguous = true;
         const canonical = await readCanonical();
@@ -814,13 +830,21 @@ export function InspectionFinalizationPanel({
 
   const partyOptions = parties ?? [];
   const blocked = writeGate.pending;
+  const lifecycleHeading =
+    inspection.status === 'in_progress'
+      ? { eyebrow: 'Review stage', title: 'Review & lock' }
+      : inspection.status === 'locked'
+        ? { eyebrow: 'Signature stage', title: 'Sign & complete' }
+        : inspection.status === 'finalized'
+          ? { eyebrow: 'Completed Inspection', title: 'Final snapshot & report' }
+          : { eyebrow: 'Controlled lifecycle', title: 'Inspection lifecycle' };
 
   return (
     <div className="inspection-finalization-workspace">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Controlled lifecycle</p>
-          <h3>Lock, signatures + final snapshot</h3>
+          <p className="eyebrow">{lifecycleHeading.eyebrow}</p>
+          <h3>{lifecycleHeading.title}</h3>
         </div>
         <span className="section-note">
           lifecycle v{inspection.version} · content r{inspection.contentRevision}
@@ -836,26 +860,14 @@ export function InspectionFinalizationPanel({
         <div className="inspection-pre-lock-workspace">
           <div className="inspection-finalization-card inspection-pre-lock-intro">
             <div>
-              <strong>Review before locking</strong>
+              <strong>Canonical Review</strong>
               <p className="muted">
-                Review the canonical saved responses, findings and evidence that
-                will be frozen. Lock still rechecks canonical state and required
-                responses on the server.
+                Load a fresh server reread of saved responses, Findings and
+                Evidence before deciding whether this Inspection can be locked.
               </p>
-              <p
-                className={
-                  requiredResponsesComplete
-                    ? 'inspection-completeness-note inspection-completeness-note-complete'
-                    : 'inspection-completeness-note inspection-completeness-note-missing'
-                }
-              >
-                {requiredResponsesComplete
-                  ? 'Canonical required responses are complete.'
-                  : `${missingRequiredResponses} required ${
-                      missingRequiredResponses === 1
-                        ? 'response remains'
-                        : 'responses remain'
-                    } to be completed and saved.`}
+              <p className="inspection-review-authority-note">
+                Field progress is guidance only. This fresh canonical reread is
+                the Review source of truth.
               </p>
             </div>
             <button
@@ -877,8 +889,22 @@ export function InspectionFinalizationPanel({
           </div>
 
           {preLockReview && reviewBundle ? (
-            <>
+            <section className="inspection-review-workspace">
+              <div className="inspection-review-workspace-heading">
+                <div>
+                  <p className="eyebrow">Review stage</p>
+                  <h3>Review canonical Inspection</h3>
+                </div>
+                <span className="section-note">
+                  Fresh source · r{preLockReview.contentRevision}
+                </span>
+              </div>
               <InspectionPreLockReviewPanel
+                onFixSectionInstance={(sectionInstanceId) => {
+                  setReviewBundle(null);
+                  setError(null);
+                  onEditSectionInstance(sectionInstanceId);
+                }}
                 review={preLockReview}
                 stale={reviewStale}
               />
@@ -892,7 +918,7 @@ export function InspectionFinalizationPanel({
                   }}
                   type="button"
                 >
-                  Close review
+                  Back to field work
                 </button>
                 <button
                   className="button-primary"
@@ -910,7 +936,7 @@ export function InspectionFinalizationPanel({
                     : 'Confirm review & lock Inspection'}
                 </button>
               </div>
-            </>
+            </section>
           ) : null}
         </div>
       ) : null}
