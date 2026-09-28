@@ -213,8 +213,8 @@ export function InspectionSignaturePad({
         <p className="setup-form-error" role="alert">{error}</p>
       ) : (
         <p className="setup-hint">
-          Drawing stays local until Add drawn signature stores it through the
-          Inspection-scoped binary flow and registers the signer relation.
+          Drawing stays local until Add drawn signature stores it with this
+          Inspection and registers it for the selected signer.
         </p>
       )}
     </div>

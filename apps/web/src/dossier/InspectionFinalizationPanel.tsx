@@ -1078,7 +1078,7 @@ export function InspectionFinalizationPanel({
               <label>
                 Signer role
                 <select
-                  disabled={blocked || signatureVersion !== null}
+                  disabled={blocked}
                   defaultValue={missingRoles[0] ?? 'tenant'}
                   name="signerRole"
                 >
@@ -1091,11 +1091,7 @@ export function InspectionFinalizationPanel({
               <label>
                 Party
                 <select
-                  disabled={
-                    blocked ||
-                    parties === null ||
-                    signatureVersion !== null
-                  }
+                  disabled={blocked || parties === null}
                   defaultValue=""
                   name="signerPartyId"
                 >
@@ -1110,7 +1106,7 @@ export function InspectionFinalizationPanel({
               <label>
                 Signer name
                 <input
-                  disabled={blocked || signatureVersion !== null}
+                  disabled={blocked}
                   name="signerName"
                   required
                 />
@@ -1145,8 +1141,8 @@ export function InspectionFinalizationPanel({
                   />
                 </label>
                 <p className="setup-hint">
-                  The file still uses the same Inspection-scoped binary route and
-                  becomes one exact final DocumentVersion before registration.
+                  The file is stored with this Inspection and then registered
+                  against the signer selected above.
                 </p>
                 <button
                   className="button-primary"

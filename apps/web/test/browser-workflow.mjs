@@ -6493,7 +6493,11 @@ try {
     "//*[contains(normalize-space(),'Correct field content after first signature')]",
   );
 
-  // Re-add the required tenant signature in one file-based action.
+  // Re-add the required tenant signature and prove relation recovery reuses one stored binary.
+  const uploadsBeforeTenantRetry = await executeScript(
+    sessionId,
+    'return window.__portfolioDocumentUploadCount || 0;',
+  );
   await selectOptionXpath(
     sessionId,
     signatureForm + "//select[@name='signerRole']",
@@ -6502,7 +6506,7 @@ try {
   await selectOptionXpath(
     sessionId,
     signatureForm + "//select[@name='signerPartyId']",
-    tenantPartyId,
+    landlordPartyId,
   );
   await setInputValueXpath(
     sessionId,
@@ -6525,7 +6529,42 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
+    "//*[@data-inspection-signature-recovery][contains(normalize-space(),'registration pending')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Signature file is stored, but registration failed')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    uploadsBeforeTenantRetry + 1,
+    'Signer relation failure retains exactly one stored signature binary',
+  );
+  await selectOptionXpath(
+    sessionId,
+    signatureForm + "//select[@name='signerPartyId']",
+    tenantPartyId,
+  );
+  await clickXpath(
+    sessionId,
+    signatureForm + "//button[normalize-space()='Retry registration']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
     "//*[contains(normalize-space(),'Tenant signature added.')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    uploadsBeforeTenantRetry + 1,
+    'Retry registration does not upload a second signature binary',
   );
 
   // Capture the second required role through the same unified flow.
@@ -6543,6 +6582,10 @@ try {
     sessionId,
     signatureForm + "//input[@name='signerName']",
     'Browser Landlord Ltd',
+  );
+  await clickXpath(
+    sessionId,
+    signatureForm + "//summary[normalize-space()='Use an existing signature file instead']",
   );
   await setFileXpath(
     sessionId,
