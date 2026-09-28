@@ -171,7 +171,9 @@ feature/PR verification
 → create a Vercel Preview manually only when hosted-browser validation is specifically needed
 ~~~
 
-The checked-in `vercel.json` enforces this with overlapping branch rules (`"*": false`, `"main": true`). Vercel deploys a branch when any matching rule is enabled, so `main` remains automatic while feature branches are suppressed. Manual/CLI deployments remain available when an explicit Preview is useful. This avoids spending a Vercel build on every iterative reviewer/fix commit.
+The checked-in `vercel.json` enforces this with overlapping branch rules (`"**": false`, `"main": true`). Vercel evaluates `deploymentEnabled` branch keys with minimatch semantics. The globstar catch-all is intentional: unlike a single `*`, it also covers branch names containing path separators such as `feature/foo`, `ux/inspection-workspace-shell`, or `claude/something`. Vercel deploys a branch when any matching rule is enabled, so the exact `main` rule keeps Production automatic while the catch-all suppresses every other Git branch. Unspecified branches default to enabled, so replacing `**` with a narrower pattern is a quota regression. Manual/CLI deployments remain available when an explicit Preview is useful.
+
+CI also treats any additional non-`main` `true` deployment rule as a contract failure and checks representative plain and slash branch names. This avoids spending a Vercel build on every iterative reviewer/fix commit.
 
 The SPA fallback is required because Portfolio uses History API routes such as `/dashboard` and `/properties/<id>/units/<id>`. A direct browser refresh of one of those URLs must return the same `index.html` shell rather than a host-level 404.
 
