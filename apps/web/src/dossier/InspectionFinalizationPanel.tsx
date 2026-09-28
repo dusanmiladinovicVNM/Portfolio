@@ -812,13 +812,21 @@ export function InspectionFinalizationPanel({
 
   const partyOptions = parties ?? [];
   const blocked = writeGate.pending;
+  const lifecycleHeading =
+    inspection.status === 'in_progress'
+      ? { eyebrow: 'Review stage', title: 'Review & lock' }
+      : inspection.status === 'locked'
+        ? { eyebrow: 'Signature stage', title: 'Sign & complete' }
+        : inspection.status === 'finalized'
+          ? { eyebrow: 'Completed Inspection', title: 'Final snapshot & report' }
+          : { eyebrow: 'Controlled lifecycle', title: 'Inspection lifecycle' };
 
   return (
     <div className="inspection-finalization-workspace">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Controlled lifecycle</p>
-          <h3>Lock, signatures + final snapshot</h3>
+          <p className="eyebrow">{lifecycleHeading.eyebrow}</p>
+          <h3>{lifecycleHeading.title}</h3>
         </div>
         <span className="section-note">
           lifecycle v{inspection.version} · content r{inspection.contentRevision}
