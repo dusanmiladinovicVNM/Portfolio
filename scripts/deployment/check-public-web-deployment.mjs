@@ -37,12 +37,65 @@ const deploymentEnabled = config.git?.deploymentEnabled;
 if (
   typeof deploymentEnabled !== 'object' ||
   deploymentEnabled === null ||
-  deploymentEnabled['*'] !== false ||
+  deploymentEnabled['**'] !== false ||
   deploymentEnabled.main !== true
 ) {
   failures.push(
-    'vercel.json must auto-deploy main and suppress automatic deployments for non-main branches.',
+    'vercel.json must use the globstar catch-all to suppress every non-main Git branch while keeping main enabled.',
   );
+}
+
+if (
+  typeof deploymentEnabled === 'object' &&
+  deploymentEnabled !== null
+) {
+  if (Object.prototype.hasOwnProperty.call(deploymentEnabled, '*')) {
+    failures.push(
+      'vercel.json must not use "*" as the deployment catch-all; minimatch "*" does not cover slash branch names.',
+    );
+  }
+
+  const unexpectedEnabledPatterns = Object.entries(deploymentEnabled)
+    .filter(([pattern, enabled]) => pattern !== 'main' && enabled === true)
+    .map(([pattern]) => pattern);
+
+  if (unexpectedEnabledPatterns.length > 0) {
+    failures.push(
+      `vercel.json must not enable automatic deployment for additional branch patterns: ${unexpectedEnabledPatterns.join(', ')}.`,
+    );
+  }
+
+  const canonicalDeploymentDecision = (branch) => {
+    const matchingDecisions = [];
+
+    if (deploymentEnabled['**'] === false) {
+      matchingDecisions.push(false);
+    }
+    if (branch === 'main' && deploymentEnabled.main === true) {
+      matchingDecisions.push(true);
+    }
+
+    // Vercel defaults an unspecified branch to enabled. If more than one
+    // pattern matches, any true rule permits deployment.
+    return matchingDecisions.length === 0
+      ? true
+      : matchingDecisions.some(Boolean);
+  };
+
+  for (const [branch, expectedEnabled] of [
+    ['main', true],
+    ['plain-branch', false],
+    ['feature/foo', false],
+    ['ux/inspection-workspace-shell', false],
+    ['claude/something', false],
+  ]) {
+    const actualEnabled = canonicalDeploymentDecision(branch);
+    if (actualEnabled !== expectedEnabled) {
+      failures.push(
+        `Vercel Git deployment policy is wrong for ${branch}: expected ${expectedEnabled ? 'enabled' : 'disabled'}.`,
+      );
+    }
+  }
 }
 
 const rootPackage = await readJson('package.json');
