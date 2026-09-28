@@ -2251,3 +2251,90 @@ input:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Focused Inspection workspace shell */
+.inspection-detail-navigation {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 0 2px;
+}
+.inspection-detail-navigation > span {
+  color: #62665d;
+  font-size: .78rem;
+  font-weight: 700;
+}
+.inspection-workflow-stepper {
+  overflow-x: auto;
+  padding: 2px 0;
+}
+.inspection-workflow-stepper ol {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(105px, 1fr));
+  gap: 8px;
+  min-width: 585px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.inspection-workflow-step {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  padding: 10px 11px;
+  border: 1px solid #ded8cd;
+  border-radius: 10px;
+  background: #faf8f3;
+  color: #6a6e65;
+}
+.inspection-workflow-step-current {
+  border-color: #899180;
+  background: #f0f3eb;
+  color: #263126;
+}
+.inspection-workflow-step-complete {
+  border-color: #b9c9b5;
+  background: #f4f7f1;
+  color: #365f3d;
+}
+.inspection-workflow-step-number {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 800;
+}
+.inspection-technical-details {
+  justify-self: start;
+  color: #62665d;
+  font-size: .76rem;
+}
+.inspection-technical-details summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.inspection-technical-details > span {
+  display: block;
+  margin-top: 6px;
+}
+.inspection-workflow-cancelled {
+  padding: 10px 12px;
+  border: 1px solid #d8d2c8;
+  border-radius: 10px;
+  background: #f3f1eb;
+  color: #62665d;
+  font-weight: 750;
+}
+@media (max-width: 680px) {
+  .inspection-detail-navigation {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+}

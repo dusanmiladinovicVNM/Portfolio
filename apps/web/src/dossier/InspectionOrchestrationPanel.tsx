@@ -65,6 +65,9 @@ interface InspectionOrchestrationPanelProps {
   readonly inspections: readonly InspectionResponseDto[];
   readonly selectedInspection: InspectionResponseDto | null;
   readonly createBlockedByDirtySection: boolean;
+  readonly showCreate: boolean;
+  readonly showAssignedWork: boolean;
+  readonly showDraftOrchestration: boolean;
   readonly navigate: NavigateWorkspace;
   readonly writeGate: InspectionWriteGate;
   readonly onCreated: (inspection: InspectionResponseDto) => void;
@@ -94,6 +97,9 @@ export function InspectionOrchestrationPanel({
   inspections,
   selectedInspection,
   createBlockedByDirtySection,
+  showCreate,
+  showAssignedWork,
+  showDraftOrchestration,
   navigate,
   writeGate,
   onCreated,
@@ -177,9 +183,11 @@ export function InspectionOrchestrationPanel({
   }, [api, unitId]);
 
   useEffect(() => {
-    const controller = new AbortController();
     setAssignedWork(null);
     setAssignedWorkError(null);
+    if (!showAssignedWork) return;
+
+    const controller = new AbortController();
 
     void api
       .get(
@@ -203,7 +211,7 @@ export function InspectionOrchestrationPanel({
       });
 
     return () => controller.abort();
-  }, [api, unitId, workRevision]);
+  }, [api, showAssignedWork, unitId, workRevision]);
 
   const publishedSchemas = useMemo(
     () =>
@@ -420,7 +428,8 @@ export function InspectionOrchestrationPanel({
 
   return (
     <>
-      <section className="panel inspection-orchestration-panel">
+      {showCreate ? (
+        <section className="panel inspection-orchestration-panel">
         <div className="section-heading">
           <div>
             <p className="eyebrow">Office orchestration</p>
@@ -564,9 +573,12 @@ export function InspectionOrchestrationPanel({
             Loading Inspection orchestration context…
           </p>
         )}
-      </section>
+        </section>
+      ) : null}
 
-      {selectedInspection?.status === 'draft' && staff ? (
+      {showDraftOrchestration &&
+      selectedInspection?.status === 'draft' &&
+      staff ? (
         <section className="panel inspection-orchestration-panel">
           <div className="section-heading">
             <div>
@@ -622,7 +634,8 @@ export function InspectionOrchestrationPanel({
         </section>
       ) : null}
 
-      <section className="panel inspection-assigned-work-panel">
+      {showAssignedWork ? (
+        <section className="panel inspection-assigned-work-panel">
         <div className="section-heading">
           <div>
             <p className="eyebrow">Assigned work</p>
@@ -679,7 +692,8 @@ export function InspectionOrchestrationPanel({
             ))}
           </div>
         ) : null}
-      </section>
+        </section>
+      ) : null}
     </>
   );
 }

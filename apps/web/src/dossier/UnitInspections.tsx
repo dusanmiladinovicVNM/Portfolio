@@ -43,6 +43,7 @@ import {
 import { InspectionFinalizationPanel } from './InspectionFinalizationPanel.js';
 import { InspectionFindingsEvidence } from './InspectionFindingsEvidence.js';
 import { InspectionOrchestrationPanel } from './InspectionOrchestrationPanel.js';
+import { InspectionWorkflowStepper } from './InspectionWorkflowStepper.js';
 import { assertInspectionBundleOwner } from './inspection-content-owner.js';
 import {
   buildInspectionRequiredProgress,
@@ -1089,6 +1090,19 @@ export function UnitInspections({
 
   return (
     <div className="inspection-workspace">
+      {inspectionId ? (
+        <div className="inspection-detail-navigation">
+          <WorkspaceLink
+            className="back-link"
+            navigate={navigate}
+            route={unitRoute(propertyId, unitId, asOf, 'inspections')}
+          >
+            ← All Inspections
+          </WorkspaceLink>
+          <span>Focused Inspection workspace</span>
+        </div>
+      ) : null}
+
       {routeInspections ? (
         <InspectionOrchestrationPanel
           api={api}
@@ -1131,64 +1145,64 @@ export function UnitInspections({
           selectedInspection={
             routeBundle?.inspection ?? selectedListInspection
           }
+          showAssignedWork={!inspectionId}
+          showCreate={!inspectionId}
+          showDraftOrchestration={Boolean(inspectionId)}
           unitId={unitId}
           writeGate={inspectionWriteGate}
           key={unitId}
         />
       ) : null}
 
-      <section className="panel">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Field workflow</p>
-            <h2>Inspections</h2>
+      {!inspectionId ? (
+        <section className="panel">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Field workflow</p>
+              <h2>Inspections</h2>
+            </div>
+            <span className="section-note">
+              Select one Inspection to enter its focused workspace
+            </span>
           </div>
-          <span className="section-note">
-            Debounced autosave · explicit retry · offline comes later
-          </span>
-        </div>
 
-        {listError ? <p className="form-error" role="alert">{listError}</p> : null}
-        {!listError && routeInspections === null ? (
-          <p className="muted" aria-live="polite">Loading Inspections…</p>
-        ) : null}
-        {routeInspections?.length === 0 ? (
-          <p className="muted">No Inspections are assigned to this Unit.</p>
-        ) : null}
+          {listError ? <p className="form-error" role="alert">{listError}</p> : null}
+          {!listError && routeInspections === null ? (
+            <p className="muted" aria-live="polite">Loading Inspections…</p>
+          ) : null}
+          {routeInspections?.length === 0 ? (
+            <p className="muted">No Inspections are assigned to this Unit.</p>
+          ) : null}
 
-        {routeInspections && routeInspections.length > 0 ? (
-          <div className="inspection-list">
-            {routeInspections.map((inspection) => (
-              <WorkspaceLink
-                ariaCurrent={inspection.id === inspectionId ? 'page' : undefined}
-                className={`inspection-card ${
-                  inspection.id === inspectionId
-                    ? 'inspection-card-active'
-                    : ''
-                }`}
-                key={inspection.id}
-                navigate={navigate}
-                route={unitRoute(
-                  propertyId,
-                  unitId,
-                  asOf,
-                  'inspections',
-                  { inspectionId: inspection.id },
-                )}
-              >
-                <div>
-                  <strong>{inspection.code}</strong>
-                  <span>{formatDetailKey(inspection.inspectionType)}</span>
-                </div>
-                <div>
-                  <span className="status-chip">{inspection.status}</span>
-                  <small>{inspection.scheduledFor ? formatSwissDate(inspection.scheduledFor) : 'Unscheduled'}</small>
-                </div>
-              </WorkspaceLink>
-            ))}
-          </div>
-        ) : null}
-      </section>
+          {routeInspections && routeInspections.length > 0 ? (
+            <div className="inspection-list">
+              {routeInspections.map((inspection) => (
+                <WorkspaceLink
+                  className="inspection-card"
+                  key={inspection.id}
+                  navigate={navigate}
+                  route={unitRoute(
+                    propertyId,
+                    unitId,
+                    asOf,
+                    'inspections',
+                    { inspectionId: inspection.id },
+                  )}
+                >
+                  <div>
+                    <strong>{inspection.code}</strong>
+                    <span>{formatDetailKey(inspection.inspectionType)}</span>
+                  </div>
+                  <div>
+                    <span className="status-chip">{inspection.status}</span>
+                    <small>{inspection.scheduledFor ? formatSwissDate(inspection.scheduledFor) : 'Unscheduled'}</small>
+                  </div>
+                </WorkspaceLink>
+              ))}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {bundleError ? (
         <section className="panel state-panel" role="alert">
@@ -1211,13 +1225,23 @@ export function UnitInspections({
                 {formatDetailKey(routeBundle.inspection.inspectionType)}
               </p>
               <h2>{routeBundle.inspection.code}</h2>
-              <p className="muted">
-                {routeBundle.schema.title} · lifecycle v{routeBundle.inspection.version} ·
-                content r{routeBundle.inspection.contentRevision}
-              </p>
+              <p className="muted">{routeBundle.schema.title}</p>
             </div>
             <span className="status-chip">{routeBundle.inspection.status}</span>
           </div>
+
+          <InspectionWorkflowStepper
+            requiredResponsesComplete={requiredProgress?.complete ?? false}
+            status={routeBundle.inspection.status}
+          />
+
+          <details className="inspection-technical-details">
+            <summary>Technical details</summary>
+            <span>
+              lifecycle v{routeBundle.inspection.version} · content r
+              {routeBundle.inspection.contentRevision}
+            </span>
+          </details>
 
           {routeBundle.inspection.status === 'draft' ? (
             <div className="inspection-start-callout">
