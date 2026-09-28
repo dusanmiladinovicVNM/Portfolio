@@ -29,6 +29,12 @@ const inspectionLivingRoomInstanceId =
   'a9000000-0000-4000-8000-000000000004';
 const inspectionBedroomInstanceId =
   'a9000000-0000-4000-8000-000000000005';
+const inspectionKitchenInstanceId =
+  'a9000000-0000-4000-8000-000000000006';
+const inspectionBathroomInstanceId =
+  'a9000000-0000-4000-8000-000000000007';
+const inspectionRoomItemId =
+  'a9000000-0000-4000-8000-000000000002';
 const inspectionNotesItemId = 'a1000000-0000-4000-8000-000000000005';
 const inspectionUserId = 'a1000000-0000-4000-8000-000000000006';
 const setupPropertyId = 'b1000000-0000-4000-8000-000000000001';
@@ -5240,6 +5246,8 @@ try {
     ['Hallway', inspectionHallwayInstanceId],
     ['Living room', inspectionLivingRoomInstanceId],
     ['Bedroom 1', inspectionBedroomInstanceId],
+    ['Kitchen', inspectionKitchenInstanceId],
+    ['Bathroom', inspectionBathroomInstanceId],
   ]) {
     await clickXpath(
       sessionId,
@@ -5883,6 +5891,131 @@ try {
     'Lost Evidence-link acknowledgement never re-uploads the stored binary',
   );
 
+  await clickXpath(
+    sessionId,
+    "//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='Kitchen']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[contains(@class,'inspection-section-form')]//h3[normalize-space()='Kitchen']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${inspectionKitchenInstanceId}&asOf=2025-06-30`,
+    'Kitchen Inspection section-instance owner',
+  );
+  await selectOptionXpath(
+    sessionId,
+    findingForm + "//select[@name='itemId']",
+    inspectionRoomItemId,
+  );
+  await selectOptionXpath(
+    sessionId,
+    findingForm + "//select[@name='severity']",
+    'major',
+  );
+  await setInputValueXpath(
+    sessionId,
+    findingForm + "//input[@name='title']",
+    'Kitchen ventilation staining',
+  );
+  await setInputValueXpath(
+    sessionId,
+    findingForm + "//textarea[@name='description']",
+    'Visible staining above the cooking area.',
+  );
+  await clickXpath(
+    sessionId,
+    findingForm + "//button[normalize-space()='Record Finding']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//div[contains(@class,'inspection-content-card')][.//strong[normalize-space()='Current section Findings']]//li[.//strong[contains(normalize-space(),'Kitchen ventilation staining')]]//small[normalize-space()='Room note']",
+  );
+
+  await clickXpath(
+    sessionId,
+    "//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='Bathroom']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[contains(@class,'inspection-section-form')]//h3[normalize-space()='Bathroom']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${inspectionBathroomInstanceId}&asOf=2025-06-30`,
+    'Bathroom Inspection section-instance owner',
+  );
+
+  const bathroomScopedEvidenceForm =
+    "//form[@data-inspection-content-form='evidence-scoped-upload']";
+  const bathroomEvidenceAttachForm =
+    "//form[@data-inspection-content-form='evidence-attach']";
+  await setFileXpath(
+    sessionId,
+    bathroomScopedEvidenceForm + "//input[@name='file']",
+    inspectionEvidencePhotoPath,
+  );
+  await clickXpath(
+    sessionId,
+    bathroomScopedEvidenceForm +
+      "//button[normalize-space()='Upload Inspection evidence']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Inspection photo stored without unnecessary recompression.')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    bathroomEvidenceAttachForm +
+      "//button[normalize-space()='Attach exact version' and not(@disabled)]",
+  );
+  await selectOptionXpath(
+    sessionId,
+    bathroomEvidenceAttachForm + "//select[@name='scope']",
+    'section',
+  );
+  await setInputValueXpath(
+    sessionId,
+    bathroomEvidenceAttachForm + "//textarea[@name='caption']",
+    'Bathroom moisture evidence',
+  );
+  await clickXpath(
+    sessionId,
+    bathroomEvidenceAttachForm +
+      "//button[normalize-space()='Attach exact version']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//ul[contains(@class,'inspection-content-list')]//li[.//span[normalize-space()='Bathroom moisture evidence']]//small[normalize-space()='Bathroom']",
+  );
+
+  await clickXpath(
+    sessionId,
+    "//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='General condition']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[contains(@class,'inspection-section-form')]//h3[normalize-space()='General condition']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'Room-specific content returns to canonical General Inspection owner',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//ul[contains(@class,'inspection-content-list')]//li[.//span[normalize-space()='Bathroom moisture evidence']]//small[normalize-space()='Bathroom']",
+  );
+
   const sectionPatchCountBeforeConflict = await executeScript(
     sessionId,
     'return window.__portfolioInspectionSectionPatchCount || 0;',
@@ -5965,6 +6098,16 @@ try {
     sessionId,
     'xpath',
     "//*[@data-inspection-pre-lock-review]//*[contains(normalize-space(),'Lost acknowledgement relation')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-pre-lock-review]//*[contains(normalize-space(),'Kitchen ventilation staining')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-pre-lock-review]//*[contains(normalize-space(),'Bathroom moisture evidence')]",
   );
   assertEqual(
     await elementDisabledXpath(

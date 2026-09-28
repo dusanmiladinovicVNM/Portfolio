@@ -81,6 +81,10 @@ const inspectionLivingRoomInstanceId =
   'a9000000-0000-4000-8000-000000000004';
 const inspectionBedroomInstanceId =
   'a9000000-0000-4000-8000-000000000005';
+const inspectionKitchenInstanceId =
+  'a9000000-0000-4000-8000-000000000006';
+const inspectionBathroomInstanceId =
+  'a9000000-0000-4000-8000-000000000007';
 const inspectionConditionItemId = 'a1000000-0000-4000-8000-000000000004';
 const inspectionNotesItemId = 'a1000000-0000-4000-8000-000000000005';
 const inspectionUserId = 'a1000000-0000-4000-8000-000000000006';
@@ -926,7 +930,7 @@ const inspectionSchema: InspectionSchemaVersionResponse = {
       description: 'Record room-specific observations.',
       sortOrder: 1,
       scope: 'space',
-      spaceTypes: ['hall', 'living_room', 'bedroom'],
+      spaceTypes: ['hall', 'living_room', 'bedroom', 'kitchen', 'bathroom'],
       items: [
         {
           id: inspectionRoomItemId,
@@ -1115,6 +1119,28 @@ function inspectionBundle() {
         spaceType: 'bedroom' as const,
         spaceSortOrder: 3,
       },
+      {
+        id: inspectionKitchenInstanceId,
+        inspectionId,
+        sectionId: inspectionRoomSectionId,
+        scope: 'space',
+        spaceId: 'a9000000-0000-4000-8000-000000000014',
+        spaceCode: 'SP-KITCHEN',
+        spaceName: 'Kitchen',
+        spaceType: 'kitchen' as const,
+        spaceSortOrder: 4,
+      },
+      {
+        id: inspectionBathroomInstanceId,
+        inspectionId,
+        sectionId: inspectionRoomSectionId,
+        scope: 'space',
+        spaceId: 'a9000000-0000-4000-8000-000000000015',
+        spaceCode: 'SP-BATH',
+        spaceName: 'Bathroom',
+        spaceType: 'bathroom' as const,
+        spaceSortOrder: 5,
+      },
     ],
     sectionStates: [
       {
@@ -1134,6 +1160,16 @@ function inspectionBundle() {
       },
       {
         sectionInstanceId: inspectionBedroomInstanceId,
+        sectionId: inspectionRoomSectionId,
+        revision: 0,
+      },
+      {
+        sectionInstanceId: inspectionKitchenInstanceId,
+        sectionId: inspectionRoomSectionId,
+        revision: 0,
+      },
+      {
+        sectionInstanceId: inspectionBathroomInstanceId,
         sectionId: inspectionRoomSectionId,
         revision: 0,
       },
@@ -5702,11 +5738,19 @@ globalThis.fetch = async (
       title: string;
       description?: string | null;
     };
+    const targetInstance = inspectionBundle().sectionInstances.find(
+      (instance) => instance.id === body.sectionInstanceId,
+    );
+    const targetSection = targetInstance
+      ? inspectionSchema.sections.find(
+          (section) => section.id === targetInstance.sectionId,
+        )
+      : undefined;
     if (
-      body.sectionInstanceId !== inspectionSectionInstanceId ||
+      !targetInstance ||
+      !targetSection ||
       (body.itemId != null &&
-        body.itemId !== inspectionConditionItemId &&
-        body.itemId !== inspectionNotesItemId)
+        !targetSection.items.some((item) => item.id === body.itemId))
     ) {
       return apiError(
         422,
@@ -5721,7 +5765,7 @@ globalThis.fetch = async (
       id,
       inspectionId,
       sectionInstanceId: body.sectionInstanceId,
-      sectionId: inspectionSectionId,
+      sectionId: targetInstance.sectionId,
       itemId: body.itemId ?? null,
       severity: body.severity,
       title: body.title.trim(),
@@ -5767,9 +5811,20 @@ globalThis.fetch = async (
         'Evidence version is not canonical.',
       );
     }
+    const targetInstance =
+      body.sectionInstanceId === undefined
+        ? undefined
+        : inspectionBundle().sectionInstances.find(
+            (instance) => instance.id === body.sectionInstanceId,
+          );
+    const targetSection = targetInstance
+      ? inspectionSchema.sections.find(
+          (section) => section.id === targetInstance.sectionId,
+        )
+      : undefined;
     if (
       body.sectionInstanceId !== undefined &&
-      body.sectionInstanceId !== inspectionSectionInstanceId
+      (!targetInstance || !targetSection)
     ) {
       return apiError(
         422,
@@ -5779,9 +5834,8 @@ globalThis.fetch = async (
     }
     if (
       body.itemId !== undefined &&
-      (body.sectionInstanceId !== inspectionSectionInstanceId ||
-        (body.itemId !== inspectionConditionItemId &&
-          body.itemId !== inspectionNotesItemId))
+      (!targetSection ||
+        !targetSection.items.some((item) => item.id === body.itemId))
     ) {
       return apiError(
         422,
@@ -5796,8 +5850,7 @@ globalThis.fetch = async (
       id,
       inspectionId,
       sectionInstanceId: body.sectionInstanceId ?? null,
-      sectionId:
-        body.sectionInstanceId === undefined ? null : inspectionSectionId,
+      sectionId: targetInstance?.sectionId ?? null,
       itemId: body.itemId ?? null,
       documentVersionId: body.documentVersionId,
       kind: body.kind,
