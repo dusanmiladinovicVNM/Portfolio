@@ -877,7 +877,7 @@ describe('Inspection HTTP backbone', () => {
     );
     expect(unfencedLock.status).toBe(400);
     expect(await unfencedLock.json()).toMatchObject({
-      error: { code: 'VALIDATION_ERROR' },
+      error: { code: 'INVALID_REQUEST' },
     });
 
     const prematureLock = await handler(
