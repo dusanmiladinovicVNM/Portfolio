@@ -33,6 +33,18 @@ if (!spaRewrite) {
   );
 }
 
+const deploymentEnabled = config.git?.deploymentEnabled;
+if (
+  typeof deploymentEnabled !== 'object' ||
+  deploymentEnabled === null ||
+  deploymentEnabled['*'] !== false ||
+  deploymentEnabled.main !== true
+) {
+  failures.push(
+    'vercel.json must auto-deploy main and suppress automatic deployments for non-main branches.',
+  );
+}
+
 const rootPackage = await readJson('package.json');
 if (rootPackage.engines?.node !== '>=24 <25') {
   failures.push('Root Node engine must remain pinned to Node 24.');

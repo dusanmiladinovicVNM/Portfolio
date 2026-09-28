@@ -157,6 +157,22 @@ output directory: apps/web/dist
 SPA fallback:     /(.*) -> /index.html
 ~~~
 
+Automatic Git deployment policy is intentionally conservative for the Hobby-plan deployment budget and Portfolio's review-heavy workflow:
+
+~~~text
+main
+→ automatic Vercel Production deployment
+
+all other Git branches
+→ no automatic Vercel deployment
+
+feature/PR verification
+→ GitHub CI is authoritative by default
+→ create a Vercel Preview manually only when hosted-browser validation is specifically needed
+~~~
+
+The checked-in `vercel.json` enforces this with overlapping branch rules (`"*": false`, `"main": true`). Vercel deploys a branch when any matching rule is enabled, so `main` remains automatic while feature branches are suppressed. Manual/CLI deployments remain available when an explicit Preview is useful. This avoids spending a Vercel build on every iterative reviewer/fix commit.
+
 The SPA fallback is required because Portfolio uses History API routes such as `/dashboard` and `/properties/<id>/units/<id>`. A direct browser refresh of one of those URLs must return the same `index.html` shell rather than a host-level 404.
 
 Configure these build-time variables in the Vercel Production environment:
