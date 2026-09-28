@@ -254,6 +254,20 @@ export function InspectionFindingsEvidence({
   const sectionFindings = bundle.findings.filter(
     (finding) => finding.sectionInstanceId === activeSectionInstance.id,
   );
+  const activeSectionLabel =
+    activeSectionInstance.scope === 'space'
+      ? activeSectionInstance.spaceName ?? activeSection.title
+      : activeSection.title;
+  const sectionEvidence = bundle.evidence.filter(
+    (evidence) => evidence.sectionInstanceId === activeSectionInstance.id,
+  );
+  const inspectionLevelEvidence = bundle.evidence.filter(
+    (evidence) => evidence.sectionInstanceId === null,
+  );
+  const otherSectionEvidenceCount =
+    bundle.evidence.length -
+    sectionEvidence.length -
+    inspectionLevelEvidence.length;
 
   function rejectContentWriteBlocked(): boolean {
     if (blockedByDirtySection) {
@@ -832,13 +846,16 @@ export function InspectionFindingsEvidence({
 
   return (
     <div className="inspection-content-workspace">
-      <div className="section-heading">
+      <div className="section-heading inspection-content-heading">
         <div>
-          <p className="eyebrow">Canonical field evidence</p>
-          <h3>Findings + evidence</h3>
+          <p className="eyebrow">Active section</p>
+          <h3>{activeSectionLabel} · Findings + Evidence</h3>
+          <p className="muted">
+            Field content stays owned by this exact SectionInstance.
+          </p>
         </div>
         <span className="section-note">
-          Exact Inspection owner · exact DocumentVersion
+          {sectionFindings.length} finding(s) · {sectionEvidence.length} evidence
         </span>
       </div>
 
@@ -863,12 +880,8 @@ export function InspectionFindingsEvidence({
       <div className="inspection-content-grid">
         <div className="inspection-content-card">
           <div className="tenancy-form-heading">
-            <strong>Current section Findings</strong>
-            <span>
-              {activeSectionInstance.scope === 'space'
-                ? activeSectionInstance.spaceName ?? activeSection.title
-                : activeSection.title}
-            </span>
+            <strong>Findings in {activeSectionLabel}</strong>
+            <span>Current SectionInstance only</span>
           </div>
           {sectionFindings.length === 0 ? (
             <p className="muted">No Findings recorded in this section.</p>
@@ -935,14 +948,14 @@ export function InspectionFindingsEvidence({
 
         <div className="inspection-content-card">
           <div className="tenancy-form-heading">
-            <strong>Attached Evidence</strong>
-            <span>{bundle.evidence.length} canonical relation(s)</span>
+            <strong>Evidence in {activeSectionLabel}</strong>
+            <span>{sectionEvidence.length} current-section relation(s)</span>
           </div>
-          {bundle.evidence.length === 0 ? (
-            <p className="muted">No Evidence attached to this Inspection.</p>
+          {sectionEvidence.length === 0 ? (
+            <p className="muted">No Evidence attached to this section.</p>
           ) : (
             <ul className="inspection-content-list">
-              {bundle.evidence.map((evidence) => (
+              {sectionEvidence.map((evidence) => (
                 <li key={evidence.id}>
                   <strong>{formatDetailKey(evidence.kind)}</strong>
                   {evidence.caption ? <span>{evidence.caption}</span> : null}
@@ -984,11 +997,32 @@ export function InspectionFindingsEvidence({
           )}
         </div>
 
+        {(inspectionLevelEvidence.length > 0 ||
+          otherSectionEvidenceCount > 0) ? (
+          <div
+            className="inspection-content-context-summary"
+            data-inspection-content-context-summary
+          >
+            {inspectionLevelEvidence.length > 0 ? (
+              <span>
+                {inspectionLevelEvidence.length} Inspection-level evidence item(s)
+                remain visible at Inspection scope.
+              </span>
+            ) : null}
+            {otherSectionEvidenceCount > 0 ? (
+              <span>
+                {otherSectionEvidenceCount} evidence item(s) belong to other
+                sections and are intentionally hidden from this room context.
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="inspection-content-card inspection-evidence-workflow">
           <div className="tenancy-form-heading">
-            <strong>Evidence binary workflow</strong>
+            <strong>Add Evidence to {activeSectionLabel}</strong>
             <span>
-              Field upload or reuse Document → attach exact version
+              Upload for the field workflow or reuse an exact DocumentVersion
             </span>
           </div>
           <p className="muted">
@@ -1063,6 +1097,9 @@ export function InspectionFindingsEvidence({
               </button>
             </form>
 
+            <details className="inspection-evidence-advanced">
+              <summary>Advanced: reuse or manage a Document version</summary>
+              <div className="inspection-evidence-advanced-body">
             <form
               className="inspection-evidence-step setup-form"
               data-inspection-content-form="evidence-document"
@@ -1230,9 +1267,11 @@ export function InspectionFindingsEvidence({
                 </div>
               ) : null}
             </div>
+              </div>
+            </details>
 
             <form
-              className="inspection-evidence-step setup-form"
+              className="inspection-evidence-step setup-form inspection-evidence-attach"
               data-inspection-content-form="evidence-attach"
               onSubmit={attachEvidence}
             >
@@ -1258,8 +1297,8 @@ export function InspectionFindingsEvidence({
                   value={evidenceScope}
                 >
                   <option value="inspection">Whole Inspection</option>
-                  <option value="section">Current section</option>
-                  <option value="item">Current section item</option>
+                  <option value="section">{activeSectionLabel}</option>
+                  <option value="item">{activeSectionLabel} item</option>
                 </select>
               </label>
               {evidenceScope === 'item' ? (
