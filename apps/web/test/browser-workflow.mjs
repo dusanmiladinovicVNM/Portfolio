@@ -5914,10 +5914,18 @@ try {
     'xpath',
     "//*[contains(normalize-space(),'Evidence relation was committed and recovered.')]",
   );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//ul[contains(@class,'inspection-content-list')]//span[normalize-space()='Lost acknowledgement relation']",
+    ),
+    false,
+    'Inspection-level Evidence is not misrepresented as active-section Evidence',
+  );
   await waitForElement(
     sessionId,
     'xpath',
-    "//ul[contains(@class,'inspection-content-list')]//span[normalize-space()='Lost acknowledgement relation']",
+    "//*[@data-inspection-content-context-summary][contains(normalize-space(),'Inspection-level evidence item(s)')]",
   );
   assertEqual(
     await executeScript(
