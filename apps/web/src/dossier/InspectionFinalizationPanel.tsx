@@ -83,6 +83,16 @@ interface StableUpload {
 }
 
 const MAX_BINARY_BYTES = 16 * 1024 * 1024;
+const signatureDraftSchema = addInspectionSignatureRequestSchema.pick({
+  signerRole: true,
+  signerPartyId: true,
+  signerName: true,
+});
+
+type SignatureDraft = Pick<
+  InspectionSignatureRegistration,
+  'signerRole' | 'signerPartyId' | 'signerName'
+>;
 
 function errorMessage(cause: unknown, fallback: string): string {
   return cause instanceof Error ? cause.message : fallback;
@@ -165,6 +175,7 @@ export function InspectionFinalizationPanel({
     blockedByDirtySection,
   };
   const signatureUploadRef = useRef<StableUpload | null>(null);
+  const signatureFormRef = useRef<HTMLFormElement | null>(null);
   const [parties, setParties] = useState<readonly PartyResponse[] | null>(null);
   const [partiesError, setPartiesError] = useState<string | null>(null);
   const [signatureVersion, setSignatureVersion] =
@@ -462,20 +473,50 @@ export function InspectionFinalizationPanel({
     }
   }
 
+  function readSignatureDraft(
+    formElement: HTMLFormElement,
+  ): SignatureDraft | null {
+    const form = new FormData(formElement);
+    const parsed = signatureDraftSchema.safeParse({
+      signerRole: requiredString(form, 'signerRole'),
+      signerPartyId: requiredString(form, 'signerPartyId') || null,
+      signerName: requiredString(form, 'signerName'),
+    });
+    if (!parsed.success) {
+      setError(contractErrorMessage());
+      return null;
+    }
+
+    const draft: SignatureDraft = {
+      signerRole: parsed.data.signerRole,
+      signerPartyId: parsed.data.signerPartyId ?? null,
+      signerName: parsed.data.signerName,
+    };
+    if (
+      (draft.signerRole === 'landlord' || draft.signerRole === 'tenant') &&
+      draft.signerPartyId === null
+    ) {
+      setError(
+        `${formatDetailKey(draft.signerRole)} signatures require an exact Party.`,
+      );
+      return null;
+    }
+    return draft;
+  }
+
   async function uploadSignatureFile(
     fileValue: File,
-    formElement: HTMLFormElement | null = null,
-  ): Promise<void> {
-    if (inspection.status !== 'locked') return;
+  ): Promise<DocumentVersionResponse | null> {
+    if (inspection.status !== 'locked') return null;
     if (fileValue.size === 0) {
       setError('Choose a non-empty signature file.');
-      return;
+      return null;
     }
     if (fileValue.size > MAX_BINARY_BYTES) {
       setError('Signature files are currently limited to 16 MiB.');
-      return;
+      return null;
     }
-    if (!begin('signature-upload', { allowDirty: true })) return;
+    if (!begin('signature-upload', { allowDirty: true })) return null;
 
     try {
       const fingerprint = await fileFingerprint(fileValue);
@@ -520,12 +561,8 @@ export function InspectionFinalizationPanel({
       signatureUploadRef.current = null;
       if (mountedRef.current) {
         setSignatureVersion(version);
-        formElement?.reset();
-        setSignaturePadResetRevision((revision) => revision + 1);
-        setSuccess(
-          'Signature binary stored as one final Inspection-scoped DocumentVersion.',
-        );
       }
+      return version;
     } catch (cause) {
       if (mountedRef.current) {
         const ambiguous = isAmbiguousWriteFailure(cause);
@@ -533,45 +570,27 @@ export function InspectionFinalizationPanel({
         setError(
           ambiguous
             ? `Signature upload outcome is still ambiguous: ${errorMessage(cause, 'request failed')}. Retry the same signature; the exact bytes and stable upload key will be reused while this editor remains open.`
-            : errorMessage(cause, 'Signature binary could not be uploaded.'),
+            : errorMessage(cause, 'Signature file could not be stored.'),
         );
       }
+      return null;
     } finally {
       finish();
     }
   }
 
-  async function uploadSignatureBinary(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function registerSignatureVersion(
+    formElement: HTMLFormElement,
+    version: DocumentVersionResponse,
+    draft: SignatureDraft,
+  ): Promise<void> {
     if (inspection.status !== 'locked') return;
-    const formElement = event.currentTarget;
-    const fileValue = new FormData(formElement).get('file');
-    if (!(fileValue instanceof File)) {
-      setError('Choose a non-empty signature file.');
-      return;
-    }
-    await uploadSignatureFile(fileValue, formElement);
-  }
-
-  async function captureSignature(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (inspection.status !== 'locked' || !signatureVersion) return;
-
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    const role = requiredString(form, 'signerRole');
-    const partyId = requiredString(form, 'signerPartyId') || null;
-    const signerName = requiredString(form, 'signerName');
-    if ((role === 'landlord' || role === 'tenant') && partyId === null) {
-      setError('Landlord and tenant signatures require an exact Party.');
-      return;
-    }
 
     const parsed = addInspectionSignatureRequestSchema.safeParse({
-      signerRole: role,
-      signerPartyId: partyId,
-      signerName,
-      signatureDocumentVersionId: signatureVersion.id,
+      signerRole: draft.signerRole,
+      signerPartyId: draft.signerPartyId,
+      signerName: draft.signerName,
+      signatureDocumentVersionId: version.id,
     });
     if (!parsed.success) {
       setError(contractErrorMessage());
@@ -611,14 +630,16 @@ export function InspectionFinalizationPanel({
         applyCanonical(canonical);
         if (!recovered) {
           throw new Error(
-            'Signature acknowledgement was lost and canonical state does not prove the exact new signature. Do not upload another binary; reload before retrying the relation.',
+            'Signature acknowledgement was lost and canonical state does not prove the exact new signature. Keep the stored signature file and reload before retrying registration.',
           );
         }
         if (mountedRef.current) {
           setSignatureVersion(null);
           formElement.reset();
           setSignaturePadResetRevision((revision) => revision + 1);
-          setSuccess('Signature relation recovered from canonical Inspection state.');
+          setSuccess(
+            `${formatDetailKey(draft.signerRole)} signature added after canonical recovery.`,
+          );
         }
         return;
       }
@@ -635,21 +656,56 @@ export function InspectionFinalizationPanel({
         setSignatureVersion(null);
         formElement.reset();
         setSignaturePadResetRevision((revision) => revision + 1);
-        setSuccess('Signature captured against the exact final DocumentVersion.');
+        setSuccess(`${formatDetailKey(draft.signerRole)} signature added.`);
       }
     } catch (cause) {
       if (mountedRef.current) {
         setError(
           acknowledged
-            ? `Signature was acknowledged, but canonical verification failed: ${errorMessage(cause, 'verification failed')}. Do not upload another binary; reload first.`
+            ? `Signature was acknowledged, but canonical verification failed: ${errorMessage(cause, 'verification failed')}. The stored signature file is retained; reload before retrying registration.`
             : ambiguous
-              ? `Signature outcome is unconfirmed: ${errorMessage(cause, 'canonical reread failed')}. Keep the existing signature binary and check canonical Inspection state before retrying the relation.`
-              : errorMessage(cause, 'Signature could not be captured.'),
+              ? `Signature registration outcome is unconfirmed: ${errorMessage(cause, 'canonical reread failed')}. Keep the stored signature file and check canonical Inspection state before retrying.`
+              : `Signature file is stored, but registration failed: ${errorMessage(cause, 'request failed')}. Correct the signer details if needed and retry registration without uploading another file.`,
         );
       }
     } finally {
       finish();
     }
+  }
+
+  async function addSignatureFromFile(
+    fileValue: File,
+    formElement: HTMLFormElement | null,
+  ): Promise<void> {
+    if (inspection.status !== 'locked' || !formElement) return;
+    const draft = readSignatureDraft(formElement);
+    if (!draft) return;
+
+    setError(null);
+    setSuccess(null);
+    const version = await uploadSignatureFile(fileValue);
+    if (!version) return;
+    await registerSignatureVersion(formElement, version, draft);
+  }
+
+  async function addUploadedSignature(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (inspection.status !== 'locked') return;
+    const formElement = event.currentTarget;
+    const fileValue = new FormData(formElement).get('file');
+    if (!(fileValue instanceof File) || fileValue.size === 0) {
+      setError('Choose a non-empty signature file.');
+      return;
+    }
+    await addSignatureFromFile(fileValue, formElement);
+  }
+
+  async function retryStoredSignatureRegistration(): Promise<void> {
+    const formElement = signatureFormRef.current;
+    if (!formElement || !signatureVersion) return;
+    const draft = readSignatureDraft(formElement);
+    if (!draft) return;
+    await registerSignatureVersion(formElement, signatureVersion, draft);
   }
 
   async function unlockInspection(event: FormEvent<HTMLFormElement>) {
@@ -942,27 +998,43 @@ export function InspectionFinalizationPanel({
       ) : null}
 
       {inspection.status === 'locked' ? (
-        <div className="inspection-finalization-grid">
-          <div className="inspection-finalization-card">
-            <strong>Required signatures</strong>
+        <div className="inspection-finalization-grid inspection-signature-workspace">
+          <div className="inspection-finalization-card inspection-signature-progress-card">
+            <div className="tenancy-form-heading">
+              <strong>Signature progress</strong>
+              <span>
+                {missingRoles.length === 0
+                  ? 'All required signatures collected'
+                  : `${missingRoles.length} required ${missingRoles.length === 1 ? 'signature' : 'signatures'} missing`}
+              </span>
+            </div>
             {bundle.schema.requiredSignatureRoles.length === 0 ? (
               <p className="muted">This schema requires no signatures.</p>
             ) : (
-              <ul className="inspection-content-list">
+              <ul className="inspection-content-list inspection-signature-role-list">
                 {bundle.schema.requiredSignatureRoles.map((role) => {
-                  const signed = active.some((item) => item.signerRole === role);
+                  const signed = active.find((item) => item.signerRole === role);
                   return (
                     <li key={role}>
                       <strong>{formatDetailKey(role)}</strong>
-                      <small>{signed ? 'active signature present' : 'missing'}</small>
+                      <small>
+                        {signed
+                          ? `Signed · ${signed.signerName}`
+                          : 'Required · missing'}
+                      </small>
+                      {signed ? (
+                        <small>{formatSwissDateTime(signed.signedAt)}</small>
+                      ) : null}
                     </li>
                   );
                 })}
               </ul>
             )}
             {bundle.signatures.length > 0 ? (
-              <>
-                <strong>Signature history</strong>
+              <details className="inspection-signature-history">
+                <summary>
+                  Signature history · {bundle.signatures.length}
+                </summary>
                 <ul className="inspection-content-list">
                   {bundle.signatures.map((signature) => (
                     <li key={signature.id}>
@@ -982,103 +1054,145 @@ export function InspectionFinalizationPanel({
                     </li>
                   ))}
                 </ul>
-              </>
+              </details>
             ) : null}
           </div>
 
           <form
-            className="inspection-finalization-card setup-form"
-            data-inspection-finalization-form="signature-upload"
-            onSubmit={uploadSignatureBinary}
+            className="inspection-finalization-card setup-form inspection-signature-flow-card"
+            data-inspection-finalization-form="signature"
+            key={`signature-flow:${active.length}:${missingRoles.join(',')}`}
+            onSubmit={addUploadedSignature}
+            ref={signatureFormRef}
           >
             <div className="tenancy-form-heading">
-              <strong>1 · Capture signature binary</strong>
-              <span>Inspection-scoped · auto-finalized</span>
+              <strong>Add signature</strong>
+              <span>
+                {missingRoles.length > 0
+                  ? `Next required: ${formatDetailKey(missingRoles[0]!)}`
+                  : 'Optional additional signature'}
+              </span>
             </div>
-            <InspectionSignaturePad
-              disabled={blocked}
-              inspectionCode={inspection.code}
-              onSignatureFile={(file) => uploadSignatureFile(file)}
-              resetRevision={signaturePadResetRevision}
-            />
-            <div className="inspection-signature-file-fallback">
-              <strong>Or upload an existing signature file</strong>
+
+            <div className="inspection-signature-signer-grid">
               <label>
-                Signature file
+                Signer role
+                <select
+                  disabled={blocked || signatureVersion !== null}
+                  defaultValue={missingRoles[0] ?? 'tenant'}
+                  name="signerRole"
+                >
+                  <option value="landlord">Landlord</option>
+                  <option value="tenant">Tenant</option>
+                  <option value="witness">Witness</option>
+                  <option value="agent">Agent</option>
+                </select>
+              </label>
+              <label>
+                Party
+                <select
+                  disabled={
+                    blocked ||
+                    parties === null ||
+                    signatureVersion !== null
+                  }
+                  defaultValue=""
+                  name="signerPartyId"
+                >
+                  <option value="">No Party (witness/agent only)</option>
+                  {partyOptions.map((party) => (
+                    <option key={party.id} value={party.id}>
+                      {party.displayName} · {party.code}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Signer name
                 <input
-                  accept="image/png,image/jpeg,image/webp,application/pdf"
-                  disabled={blocked}
-                  name="file"
+                  disabled={blocked || signatureVersion !== null}
+                  name="signerName"
                   required
-                  type="file"
                 />
               </label>
-              <p className="setup-hint">
-                Field inspectors can upload only through this Inspection-scoped route.
-              </p>
-              <button className="button-secondary" disabled={blocked} type="submit">
-                {pendingAction === 'signature-upload'
-                  ? 'Uploading…'
-                  : 'Upload signature file'}
-              </button>
             </div>
+            <p className="setup-hint">
+              Landlord and tenant signatures require the exact Party. The signer
+              name is frozen as a snapshot on the signature relation.
+            </p>
+            {partiesError ? <p className="form-error">{partiesError}</p> : null}
+
+            <InspectionSignaturePad
+              disabled={blocked || signatureVersion !== null}
+              inspectionCode={inspection.code}
+              onSignatureFile={(file) =>
+                addSignatureFromFile(file, signatureFormRef.current)
+              }
+              resetRevision={signaturePadResetRevision}
+            />
+
+            <details className="inspection-signature-file-fallback">
+              <summary>Use an existing signature file instead</summary>
+              <div className="inspection-signature-file-fallback-body">
+                <label>
+                  Signature file
+                  <input
+                    accept="image/png,image/jpeg,image/webp,application/pdf"
+                    disabled={blocked || signatureVersion !== null}
+                    name="file"
+                    required
+                    type="file"
+                  />
+                </label>
+                <p className="setup-hint">
+                  The file still uses the same Inspection-scoped binary route and
+                  becomes one exact final DocumentVersion before registration.
+                </p>
+                <button
+                  className="button-primary"
+                  disabled={blocked || signatureVersion !== null}
+                  type="submit"
+                >
+                  {pendingAction === 'signature-upload'
+                    ? 'Storing signature…'
+                    : pendingAction === 'signature'
+                      ? 'Adding signature…'
+                      : 'Add uploaded signature'}
+                </button>
+              </div>
+            </details>
+
             {signatureVersion ? (
-              <div className="document-version-box">
-                <span>Exact final signature version</span>
-                <strong>
-                  v{signatureVersion.versionNumber} · {signatureVersion.fileName}
-                </strong>
-                <DocumentBinaryActions
-                  api={api}
-                  fileName={signatureVersion.fileName}
-                  mimeType={signatureVersion.mimeType}
-                  versionId={signatureVersion.id}
-                />
+              <div
+                className="inspection-signature-recovery"
+                data-inspection-signature-recovery
+              >
+                <strong>Signature file stored · registration pending</strong>
+                <span>{signatureVersion.fileName}</span>
+                <p>
+                  Do not upload another file. Correct signer details if needed,
+                  then retry the relation to this exact stored version.
+                </p>
+                <div className="inspection-signature-recovery-actions">
+                  <button
+                    className="button-primary"
+                    disabled={blocked}
+                    onClick={() => void retryStoredSignatureRegistration()}
+                    type="button"
+                  >
+                    {pendingAction === 'signature'
+                      ? 'Retrying…'
+                      : 'Retry registration'}
+                  </button>
+                  <DocumentBinaryActions
+                    api={api}
+                    fileName={signatureVersion.fileName}
+                    mimeType={signatureVersion.mimeType}
+                    versionId={signatureVersion.id}
+                  />
+                </div>
               </div>
             ) : null}
-          </form>
-
-          <form
-            className="inspection-finalization-card setup-form"
-            data-inspection-finalization-form="signature"
-            onSubmit={captureSignature}
-          >
-            <div className="tenancy-form-heading">
-              <strong>2 · Record signer</strong>
-              <span>Relation to the exact final version</span>
-            </div>
-            <label>
-              Role
-              <select disabled={blocked} defaultValue="tenant" name="signerRole">
-                <option value="landlord">Landlord</option>
-                <option value="tenant">Tenant</option>
-                <option value="witness">Witness</option>
-                <option value="agent">Agent</option>
-              </select>
-            </label>
-            <label>
-              Party
-              <select disabled={blocked || parties === null} defaultValue="" name="signerPartyId">
-                <option value="">No Party (witness/agent only)</option>
-                {partyOptions.map((party) => (
-                  <option key={party.id} value={party.id}>
-                    {party.displayName} · {party.code}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {partiesError ? <p className="form-error">{partiesError}</p> : null}
-            <label>
-              Signer name snapshot
-              <input disabled={blocked} name="signerName" required />
-            </label>
-            <button
-              className="button-primary"
-              disabled={blocked || signatureVersion === null}
-              type="submit"
-            >
-              {pendingAction === 'signature' ? 'Recording…' : 'Record signature'}
-            </button>
           </form>
 
           <form
@@ -1109,7 +1223,11 @@ export function InspectionFinalizationPanel({
               <p className="setup-hint">
                 Missing: {missingRoles.map(formatDetailKey).join(', ')}
               </p>
-            ) : null}
+            ) : (
+              <p className="inspection-signature-ready">
+                All required signatures are present.
+              </p>
+            )}
             <button
               className="button-primary"
               disabled={blocked || missingRoles.length > 0}

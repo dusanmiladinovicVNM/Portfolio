@@ -6351,73 +6351,32 @@ try {
     "//span[contains(@class,'status-chip') and normalize-space()='locked']",
   );
 
-  const signatureUploadForm =
-    "//form[@data-inspection-finalization-form='signature-upload']";
   const signatureForm =
     "//form[@data-inspection-finalization-form='signature']";
   const unlockForm =
     "//form[@data-inspection-finalization-form='unlock']";
 
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//strong[normalize-space()='1 · Capture signature binary']",
+    ),
+    false,
+    'Signature UX no longer exposes a binary-first step',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//strong[normalize-space()='2 · Record signer']",
+    ),
+    false,
+    'Signature UX no longer exposes a separate relation step',
+  );
+
   const uploadsBeforeSignature = await executeScript(
     sessionId,
     'return window.__portfolioDocumentUploadCount || 0;',
   );
-  const signatureCanvas =
-    signatureUploadForm + "//*[@data-inspection-signature-pad]//canvas";
-  await waitForElement(sessionId, 'xpath', signatureCanvas);
-  assertEqual(
-    await elementDisabledXpath(
-      sessionId,
-      signatureUploadForm +
-        "//*[@data-inspection-signature-pad]//button[normalize-space()='Use drawn signature']",
-    ),
-    true,
-    'Blank signature pad cannot be uploaded',
-  );
-  await drawSignaturePadXpath(sessionId, signatureCanvas);
-  await waitForElement(
-    sessionId,
-    'xpath',
-    signatureUploadForm +
-      "//*[@data-inspection-signature-pad]//button[normalize-space()='Use drawn signature' and not(@disabled)]",
-  );
-  await executeScript(
-    sessionId,
-    'window.__portfolioFailNextInspectionBinaryAfterCommit = true; return true;',
-  );
-  await clickXpath(
-    sessionId,
-    signatureUploadForm +
-      "//*[@data-inspection-signature-pad]//button[normalize-space()='Use drawn signature']",
-  );
-  await waitForElement(
-    sessionId,
-    'xpath',
-    "//*[contains(normalize-space(),'Signature binary stored as one final Inspection-scoped DocumentVersion.')]",
-  );
-  await waitForElement(
-    sessionId,
-    'xpath',
-    "//div[contains(@class,'document-version-box')]//strong[contains(normalize-space(),'.png')]",
-  );
-  assertEqual(
-    await executeScript(
-      sessionId,
-      'return window.__portfolioDocumentUploadCount || 0;',
-    ),
-    uploadsBeforeSignature + 1,
-    'Ambiguous drawn-signature upload reuses one Inspection-scoped binary',
-  );
-  assertEqual(
-    await elementDisabledXpath(
-      sessionId,
-      signatureUploadForm +
-        "//*[@data-inspection-signature-pad]//button[normalize-space()='Use drawn signature']",
-    ),
-    true,
-    'Signature pad resets after canonical binary storage',
-  );
-
   await selectOptionXpath(
     sessionId,
     signatureForm + "//select[@name='signerRole']",
@@ -6433,18 +6392,61 @@ try {
     signatureForm + "//input[@name='signerName']",
     'Browser Tenant',
   );
+
+  const signatureCanvas =
+    signatureForm + "//*[@data-inspection-signature-pad]//canvas";
+  await waitForElement(sessionId, 'xpath', signatureCanvas);
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      signatureForm +
+        "//*[@data-inspection-signature-pad]//button[normalize-space()='Add drawn signature']",
+    ),
+    true,
+    'Blank signature pad cannot add a signature',
+  );
+  await drawSignaturePadXpath(sessionId, signatureCanvas);
+  await waitForElement(
+    sessionId,
+    'xpath',
+    signatureForm +
+      "//*[@data-inspection-signature-pad]//button[normalize-space()='Add drawn signature' and not(@disabled)]",
+  );
   await executeScript(
     sessionId,
-    'window.__portfolioFailNextInspectionSignatureAfterCommit = true; return true;',
+    'window.__portfolioFailNextInspectionBinaryAfterCommit = true; window.__portfolioFailNextInspectionSignatureAfterCommit = true; return true;',
   );
   await clickXpath(
     sessionId,
-    signatureForm + "//button[normalize-space()='Record signature']",
+    signatureForm +
+      "//*[@data-inspection-signature-pad]//button[normalize-space()='Add drawn signature']",
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[contains(normalize-space(),'Signature relation recovered from canonical Inspection state.')]",
+    "//*[contains(normalize-space(),'Tenant signature added after canonical recovery.')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    uploadsBeforeSignature + 1,
+    'One drawn-signature action reuses one Inspection-scoped binary through ambiguous upload recovery',
+  );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      signatureForm +
+        "//*[@data-inspection-signature-pad]//button[normalize-space()='Add drawn signature']",
+    ),
+    true,
+    'Signature pad resets only after the signer relation is canonically proven',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//li[.//strong[normalize-space()='Tenant']]//small[contains(normalize-space(),'Signed · Browser Tenant')]",
   );
 
   await setInputValueXpath(
@@ -6491,22 +6493,7 @@ try {
     "//*[contains(normalize-space(),'Correct field content after first signature')]",
   );
 
-  // Re-capture required tenant signature after controlled unlock.
-  await setFileXpath(
-    sessionId,
-    signatureUploadForm + "//input[@name='file']",
-    agreementSignedFilePath,
-  );
-  await clickXpath(
-    sessionId,
-    signatureUploadForm +
-      "//button[normalize-space()='Upload signature file']",
-  );
-  await waitForElement(
-    sessionId,
-    'xpath',
-    "//*[contains(normalize-space(),'Signature binary stored as one final Inspection-scoped DocumentVersion.')]",
-  );
+  // Re-add the required tenant signature in one file-based action.
   await selectOptionXpath(
     sessionId,
     signatureForm + "//select[@name='signerRole']",
@@ -6524,30 +6511,24 @@ try {
   );
   await clickXpath(
     sessionId,
-    signatureForm + "//button[normalize-space()='Record signature']",
+    signatureForm + "//summary[normalize-space()='Use an existing signature file instead']",
   );
-  await waitForElement(
-    sessionId,
-    'xpath',
-    "//*[contains(normalize-space(),'Signature captured against the exact final DocumentVersion.')]",
-  );
-
-  // Capture the second required role against a distinct exact version.
   await setFileXpath(
     sessionId,
-    signatureUploadForm + "//input[@name='file']",
-    amendmentSignedFilePath,
+    signatureForm + "//input[@name='file']",
+    agreementSignedFilePath,
   );
   await clickXpath(
     sessionId,
-    signatureUploadForm +
-      "//button[normalize-space()='Upload signature file']",
+    signatureForm + "//button[normalize-space()='Add uploaded signature']",
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[contains(normalize-space(),'Signature binary stored as one final Inspection-scoped DocumentVersion.')]",
+    "//*[contains(normalize-space(),'Tenant signature added.')]",
   );
+
+  // Capture the second required role through the same unified flow.
   await selectOptionXpath(
     sessionId,
     signatureForm + "//select[@name='signerRole']",
@@ -6563,25 +6544,35 @@ try {
     signatureForm + "//input[@name='signerName']",
     'Browser Landlord Ltd',
   );
+  await setFileXpath(
+    sessionId,
+    signatureForm + "//input[@name='file']",
+    amendmentSignedFilePath,
+  );
   await clickXpath(
     sessionId,
-    signatureForm + "//button[normalize-space()='Record signature']",
+    signatureForm + "//button[normalize-space()='Add uploaded signature']",
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[contains(normalize-space(),'Signature captured against the exact final DocumentVersion.')]",
+    "//*[contains(normalize-space(),'Landlord signature added.')]",
   );
 
   await waitForElement(
     sessionId,
     'xpath',
-    "//li[.//strong[normalize-space()='Tenant']]//small[normalize-space()='active signature present']",
+    "//li[.//strong[normalize-space()='Tenant']]//small[contains(normalize-space(),'Signed · Browser Tenant')]",
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//li[.//strong[normalize-space()='Landlord']]//small[normalize-space()='active signature present']",
+    "//li[.//strong[normalize-space()='Landlord']]//small[contains(normalize-space(),'Signed · Browser Landlord Ltd')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(@class,'inspection-signature-ready') and contains(normalize-space(),'All required signatures are present.')]",
   );
 
   await executeScript(
@@ -6641,7 +6632,7 @@ try {
   await waitForBinaryReads(sessionId, readsBeforeFinalReport + 1);
 
   process.stdout.write(
-    'Browser workflow PASS: Core setup + route-owner guards → Contracts/documents → Inspection progress/completeness → debounced autosave/CAS conflict → field evidence → canonical pre-lock review → lock/drawn-signature/file-fallback/unlock/finalize/report\n',
+    'Browser workflow PASS: Core setup + route-owner guards → Contracts/documents → Inspection progress/completeness → debounced autosave/CAS conflict → field evidence → canonical pre-lock review → lock/unified-signature-flow/unlock/finalize/report\n',
   );
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.stack : error}\n`);

@@ -206,15 +206,15 @@ export function InspectionSignaturePad({
           onClick={() => void exportSignature()}
           type="button"
         >
-          {exporting ? 'Preparing…' : 'Use drawn signature'}
+          {exporting ? 'Adding…' : 'Add drawn signature'}
         </button>
       </div>
       {error ? (
         <p className="setup-form-error" role="alert">{error}</p>
       ) : (
         <p className="setup-hint">
-          Drawing is only local until the PNG is stored through the existing
-          Inspection-scoped signature binary flow.
+          Drawing stays local until Add drawn signature stores it through the
+          Inspection-scoped binary flow and registers the signer relation.
         </p>
       )}
     </div>
