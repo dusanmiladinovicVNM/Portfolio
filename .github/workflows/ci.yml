@@ -63,6 +63,11 @@ jobs:
       - name: Validate public web deployment contract
         run: pnpm web:deployment:check
 
+      - name: Vercel CLI bootstrap smoke
+        run: |
+          npm install --global vercel@59.19.1
+          vercel --version | grep -F '59.19.1'
+
       - name: Current-main deployment fence self-test
         run: bash scripts/deployment/test-current-main-fence.sh
 
