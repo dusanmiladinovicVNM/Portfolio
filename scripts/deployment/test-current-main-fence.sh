@@ -23,7 +23,7 @@ git -C "$WORK" push -u origin main >/dev/null 2>&1
 SHA_A="$(git -C "$WORK" rev-parse HEAD)"
 DEPLOY_REPOSITORY_DIR="$WORK" DEPLOY_EXPECTED_SHA="$SHA_A" bash "$FENCE" >/dev/null
 
-git clone "$ORIGIN" "$PUBLISHER" >/dev/null 2>&1
+git clone --branch main "$ORIGIN" "$PUBLISHER" >/dev/null 2>&1
 git -C "$PUBLISHER" config user.name "Portfolio CI"
 git -C "$PUBLISHER" config user.email "ci@example.invalid"
 printf 'release-b\n' >> "$PUBLISHER/release.txt"
