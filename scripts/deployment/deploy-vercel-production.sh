@@ -21,12 +21,14 @@ if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
   exit 1
 fi
 
-pnpm dlx "vercel@${VERCEL_CLI_VERSION}" pull \
+npm install --global "vercel@${VERCEL_CLI_VERSION}"
+
+vercel pull \
   --yes \
   --environment=production \
   --token "$VERCEL_TOKEN"
 
-pnpm dlx "vercel@${VERCEL_CLI_VERSION}" build \
+vercel build \
   --prod \
   --token "$VERCEL_TOKEN"
 
@@ -36,7 +38,7 @@ if [[ "${DEPLOY_REQUIRE_REMOTE_MAIN:-0}" == "1" ]]; then
 fi
 
 DEPLOYMENT_URL="$(
-  pnpm dlx "vercel@${VERCEL_CLI_VERSION}" deploy \
+  vercel deploy \
     --prebuilt \
     --prod \
     --yes \
