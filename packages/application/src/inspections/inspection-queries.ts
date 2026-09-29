@@ -13,7 +13,11 @@ import {
   type PropertyId,
   type UnitId,
 } from '@portfolio/domain';
-import { requireCapability, type Actor } from '../security/access.js';
+import {
+  requireCapability,
+  type Actor,
+  type StaffRole,
+} from '../security/access.js';
 import type { PortfolioRepository } from '../portfolio/portfolio-repository.js';
 import type {
   InspectionRepository,
@@ -90,6 +94,69 @@ export async function listAssignedInspectionsQuery(
         propertyId: unit.propertyId,
         unitCode: unit.code,
         unitNumber: unit.unitNumber,
+      };
+    }),
+  );
+}
+
+export interface InspectionWorkQueueItem {
+  readonly inspection: Inspection;
+  readonly propertyId: PropertyId;
+  readonly propertyCode: string;
+  readonly propertyName: string;
+  readonly unitCode: string;
+  readonly unitNumber: string;
+  readonly assignedToDisplayName: string | null;
+  readonly assignedToRole: StaffRole | null;
+}
+
+export async function listInspectionWorkQueueQuery(
+  inspectionRepository: InspectionRepository,
+  portfolioRepository: PortfolioRepository,
+  staffDirectoryRepository: StaffDirectoryRepository,
+  actor: Actor,
+): Promise<readonly InspectionWorkQueueItem[]> {
+  requireCapability(actor, 'inspections:read');
+
+  const [inspections, activeStaff] = await Promise.all([
+    actor.role === 'inspector'
+      ? inspectionRepository.listAssignedTo(actor.userId)
+      : inspectionRepository.listActive(),
+    staffDirectoryRepository.listActiveStaff(),
+  ]);
+  const staffById = new Map(
+    activeStaff.map((entry) => [entry.userId, entry] as const),
+  );
+
+  return Promise.all(
+    inspections.map(async (inspection) => {
+      const unit = await portfolioRepository.getUnitById(inspection.unitId);
+      if (!unit) {
+        throw new DomainError(
+          'UNIT_NOT_FOUND',
+          'Inspection work queue references a missing Unit.',
+        );
+      }
+      const property = await portfolioRepository.getPropertyById(
+        unit.propertyId,
+      );
+      if (!property) {
+        throw new DomainError(
+          'PROPERTY_NOT_FOUND',
+          'Inspection work queue references a missing Property.',
+        );
+      }
+      const assigned = staffById.get(inspection.assignedToUserId) ?? null;
+
+      return {
+        inspection,
+        propertyId: property.id,
+        propertyCode: property.code,
+        propertyName: property.name,
+        unitCode: unit.code,
+        unitNumber: unit.unitNumber,
+        assignedToDisplayName: assigned?.displayName ?? null,
+        assignedToRole: assigned?.role ?? null,
       };
     }),
   );

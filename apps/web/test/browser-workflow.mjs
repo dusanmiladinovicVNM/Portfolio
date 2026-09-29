@@ -5224,16 +5224,64 @@ try {
 
   await clickXpath(
     sessionId,
-    "//a[normalize-space()='← All Inspections']",
+    "//aside//a[normalize-space()='Work']",
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//button[contains(@class,'inspection-assigned-work-card')][.//strong[normalize-space()='INS-BRW-001']]",
+    "//*[@data-inspection-work-queue]//h2[normalize-space()='Active work']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    `${baseUrl}/work?asOf=2025-06-30`,
+    'Global Work queue has a shareable top-level route',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-work-queue]//article[.//strong[normalize-space()='INS-BRW-001']][contains(normalize-space(),'Browser Test Property')][contains(normalize-space(),'UNIT-BRW')][contains(normalize-space(),'Browser Inspector')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-work-queue]//article[.//strong[normalize-space()='INS-ORCH-BRW']][contains(normalize-space(),'Inspection Orchestration Property')][contains(normalize-space(),'UNIT-ORCH-BRW')][contains(normalize-space(),'Browser Inspector')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-work-queue]//article[@data-work-attention='today'][.//strong[normalize-space()='INS-BRW-001']]",
+  );
+  await selectOptionXpath(
+    sessionId,
+    "//*[@data-inspection-work-queue]//select[ancestor::label[contains(normalize-space(),'Lifecycle')]]",
+    'in_progress',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-work-queue]//article[.//strong[normalize-space()='INS-ORCH-BRW']]",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-inspection-work-queue]//article[.//strong[normalize-space()='INS-BRW-001']]",
+    ),
+    false,
+    'Lifecycle filter removes draft work while preserving in-progress work',
+  );
+  await selectOptionXpath(
+    sessionId,
+    "//*[@data-inspection-work-queue]//select[ancestor::label[contains(normalize-space(),'Lifecycle')]]",
+    'all',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-work-queue]//article[.//strong[normalize-space()='INS-BRW-001']]",
   );
   await clickXpath(
     sessionId,
-    "//button[contains(@class,'inspection-assigned-work-card')][.//strong[normalize-space()='INS-BRW-001']]",
+    "//*[@data-inspection-work-queue]//article[.//strong[normalize-space()='INS-BRW-001']]//a[normalize-space()='Open Inspection']",
   );
   await waitForElement(
     sessionId,
@@ -5248,7 +5296,7 @@ try {
   assertEqual(
     await currentUrl(sessionId),
     inspectionUrl,
-    'Assigned-work queue navigates with canonical cross-Unit Property owner',
+    'Global Work queue navigates with canonical cross-Unit Property owner',
   );
 
   for (const [label, instanceId] of [

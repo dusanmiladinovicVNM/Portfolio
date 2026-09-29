@@ -1,5 +1,4 @@
 import {
-  assignedInspectionWorkListResponseSchema,
   createInspectionRequestSchema,
   inspectionBundleResponseSchema,
   inspectionListResponseSchema,
@@ -24,7 +23,6 @@ import {
   useState,
 } from 'react';
 import {
-  assignedInspectionsPath,
   inspectionOrchestrationPath,
   inspectionPath,
   inspectionSchemasPath,
@@ -40,15 +38,11 @@ import {
   contractErrorMessage,
   requiredString,
 } from '../admin/form-utils.js';
-import { unitRoute } from '../navigation/workspace-route.js';
-import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
 import {
   formatDetailKey,
-  formatSwissDate,
 } from '../presentation/format.js';
 import type { InspectionWriteGate } from './inspection-write-gate.js';
 import {
-  assertAssignedInspectionWorkList,
   assertCreatedInspection,
   assertInspectionOrchestrationMutation,
   assertInspectionStaffList,
@@ -59,16 +53,12 @@ import {
 
 interface InspectionOrchestrationPanelProps {
   readonly api: PortfolioApi;
-  readonly propertyId: string;
   readonly unitId: string;
-  readonly asOf: string;
   readonly inspections: readonly InspectionResponseDto[];
   readonly selectedInspection: InspectionResponseDto | null;
   readonly createBlockedByDirtySection: boolean;
   readonly showCreate: boolean;
-  readonly showAssignedWork: boolean;
   readonly showDraftOrchestration: boolean;
-  readonly navigate: NavigateWorkspace;
   readonly writeGate: InspectionWriteGate;
   readonly onCreated: (inspection: InspectionResponseDto) => void;
   readonly onUpdated: (inspection: InspectionResponseDto) => void;
@@ -91,16 +81,12 @@ function tenancyLabel(tenancy: TenancyResponse): string {
 
 export function InspectionOrchestrationPanel({
   api,
-  propertyId,
   unitId,
-  asOf,
   inspections,
   selectedInspection,
   createBlockedByDirtySection,
   showCreate,
-  showAssignedWork,
   showDraftOrchestration,
-  navigate,
   writeGate,
   onCreated,
   onUpdated,
@@ -112,22 +98,11 @@ export function InspectionOrchestrationPanel({
     useState<readonly InspectionStaffResponse[] | null>(null);
   const [tenancies, setTenancies] =
     useState<readonly TenancyResponse[] | null>(null);
-  const [assignedWork, setAssignedWork] =
-    useState<
-      Awaited<
-        ReturnType<
-          typeof assignedInspectionWorkListResponseSchema.parse
-        >
-      >['items'] | null
-    >(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [assignedWorkError, setAssignedWorkError] =
-    useState<string | null>(null);
   const [writeError, setWriteError] = useState<string | null>(null);
   const [writeSuccess, setWriteSuccess] = useState<string | null>(null);
   const [inspectionType, setInspectionType] =
     useState<InspectionType>('move_in');
-  const [workRevision, setWorkRevision] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -182,37 +157,6 @@ export function InspectionOrchestrationPanel({
     return () => controller.abort();
   }, [api, unitId]);
 
-  useEffect(() => {
-    setAssignedWork(null);
-    setAssignedWorkError(null);
-    if (!showAssignedWork) return;
-
-    const controller = new AbortController();
-
-    void api
-      .get(
-        assignedInspectionsPath(),
-        assignedInspectionWorkListResponseSchema,
-        { signal: controller.signal },
-      )
-      .then((workResponse) => {
-        if (controller.signal.aborted) return;
-        assertAssignedInspectionWorkList(workResponse.items);
-        setAssignedWork(workResponse.items);
-      })
-      .catch((cause: unknown) => {
-        if (controller.signal.aborted) return;
-        setAssignedWorkError(
-          inspectionError(
-            cause,
-            'Assigned Inspection work could not be loaded.',
-          ),
-        );
-      });
-
-    return () => controller.abort();
-  }, [api, showAssignedWork, unitId, workRevision]);
-
   const publishedSchemas = useMemo(
     () =>
       (schemas ?? []).filter(
@@ -249,7 +193,6 @@ export function InspectionOrchestrationPanel({
       if (!recovered) return false;
       writeGate.finish();
       onCreated(recovered);
-      setWorkRevision((revision) => revision + 1);
       return true;
     } catch {
       return false;
@@ -307,7 +250,6 @@ export function InspectionOrchestrationPanel({
       setInspectionType('move_in');
       writeGate.finish();
       onCreated(created);
-      setWorkRevision((revision) => revision + 1);
       setWriteSuccess('Inspection created from canonical orchestration data.');
     } catch (cause) {
       const recovered = isAmbiguousWriteFailure(cause)
@@ -381,7 +323,6 @@ export function InspectionOrchestrationPanel({
         updated,
       );
       onUpdated(updated);
-      setWorkRevision((revision) => revision + 1);
       setWriteSuccess('Inspection assignment/schedule updated.');
     } catch (cause) {
       let recovered = false;
@@ -402,7 +343,6 @@ export function InspectionOrchestrationPanel({
           ) {
             recovered = true;
             onUpdated(canonical.inspection);
-            setWorkRevision((revision) => revision + 1);
             setWriteSuccess(
               'Inspection orchestration was committed and recovered.',
             );
@@ -631,67 +571,6 @@ export function InspectionOrchestrationPanel({
               {writeGate.pending ? 'Write in progress…' : 'Save orchestration'}
             </button>
           </form>
-        </section>
-      ) : null}
-
-      {showAssignedWork ? (
-        <section className="panel inspection-assigned-work-panel">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Assigned work</p>
-            <h2>My active Inspections</h2>
-          </div>
-          <span className="section-note">
-            Cross-Unit queue uses canonical Property + Unit routing
-          </span>
-        </div>
-
-        {assignedWorkError ? (
-          <p className="form-error" role="alert">
-            {assignedWorkError}
-          </p>
-        ) : null}
-        {assignedWork === null && !assignedWorkError ? (
-          <p className="muted" aria-live="polite">
-            Loading assigned work…
-          </p>
-        ) : null}
-        {assignedWork?.length === 0 ? (
-          <p className="muted">No active Inspections are assigned to you.</p>
-        ) : null}
-        {assignedWork && assignedWork.length > 0 ? (
-          <div className="inspection-assigned-work-list">
-            {assignedWork.map((item) => (
-              <button
-                className="inspection-assigned-work-card"
-                disabled={writeGate.pending}
-                key={item.inspection.id}
-                onClick={() =>
-                  navigate(
-                    unitRoute(
-                      item.propertyId,
-                      item.inspection.unitId,
-                      asOf,
-                      'inspections',
-                      { inspectionId: item.inspection.id },
-                    ),
-                  )
-                }
-                type="button"
-              >
-                <strong>{item.inspection.code}</strong>
-                <span>
-                  {item.unitCode} · Unit {item.unitNumber}
-                </span>
-                <small>
-                  {formatDetailKey(item.inspection.inspectionType)} ·{' '}
-                  {item.inspection.scheduledFor ? formatSwissDate(item.inspection.scheduledFor) : 'Unscheduled'} ·{' '}
-                  {formatDetailKey(item.inspection.status)}
-                </small>
-              </button>
-            ))}
-          </div>
-        ) : null}
         </section>
       ) : null}
     </>

@@ -27,6 +27,7 @@ export interface SaveInspectionSectionResult {
 export interface InspectionRepository {
   getById(id: InspectionId): Promise<Inspection | null>;
   listByUnit(unitId: UnitId): Promise<readonly Inspection[]>;
+  listActive(): Promise<readonly Inspection[]>;
   listAssignedTo(userId: UserId): Promise<readonly Inspection[]>;
   codeExists(code: string): Promise<boolean>;
   insert(

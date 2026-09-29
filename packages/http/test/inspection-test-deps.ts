@@ -50,6 +50,12 @@ export class InMemoryInspectionRepository implements InspectionRepository {
     );
   }
 
+  async listActive() {
+    return [...this.inspections.values()].filter((inspection) =>
+      ['draft', 'in_progress', 'locked'].includes(inspection.status),
+    );
+  }
+
   async listAssignedTo(userId: UserId) {
     return [...this.inspections.values()].filter(
       (inspection) =>

@@ -1134,10 +1134,8 @@ export function UnitInspections({
       {routeInspections ? (
         <InspectionOrchestrationPanel
           api={api}
-          asOf={asOf}
           inspections={routeInspections}
           createBlockedByDirtySection={hasUnsavedChanges}
-          navigate={navigate}
           onCanonicalReload={() => {
             setListRevision((revision) => revision + 1);
             setBundleRevision((revision) => revision + 1);
@@ -1169,11 +1167,9 @@ export function UnitInspections({
                 : current,
             );
           }}
-          propertyId={propertyId}
           selectedInspection={
             routeBundle?.inspection ?? selectedListInspection
           }
-          showAssignedWork={!inspectionId}
           showCreate={!inspectionId}
           showDraftOrchestration={Boolean(inspectionId)}
           unitId={unitId}

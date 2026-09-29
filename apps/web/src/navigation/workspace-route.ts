@@ -25,6 +25,10 @@ export type WorkspaceRoute =
       readonly asOf: string;
     }
   | {
+      readonly kind: 'work';
+      readonly asOf: string;
+    }
+  | {
       readonly kind: 'parties';
       readonly asOf: string;
     }
@@ -60,6 +64,7 @@ export type WorkspaceRoute =
 
 export function workspaceRouteOwnerKey(route: WorkspaceRoute): string {
   if (route.kind === 'dashboard') return 'dashboard';
+  if (route.kind === 'work') return 'work';
   if (route.kind === 'parties') return 'parties';
   if (route.kind === 'staff') return 'staff';
   if (route.kind === 'inspection-schemas') return 'inspection-schemas';
@@ -109,6 +114,10 @@ function readEntityId(value: string | undefined): string | null {
 
 export function dashboardRoute(asOf: string): WorkspaceRoute {
   return { kind: 'dashboard', asOf: requireWorkspaceAsOf(asOf) };
+}
+
+export function workRoute(asOf: string): WorkspaceRoute {
+  return { kind: 'work', asOf: requireWorkspaceAsOf(asOf) };
 }
 
 export function partiesRoute(asOf: string): WorkspaceRoute {
@@ -267,6 +276,10 @@ export function parseWorkspaceLocation(
     }
   }
 
+  if (segments.length === 1 && segments[0] === 'work') {
+    return workRoute(asOf);
+  }
+
   if (segments.length === 1 && segments[0] === 'parties') {
     return partiesRoute(asOf);
   }
@@ -324,6 +337,9 @@ export function workspaceRouteHref(route: WorkspaceRoute): string {
 
   if (route.kind === 'dashboard') {
     return '/dashboard?' + search.toString();
+  }
+  if (route.kind === 'work') {
+    return '/work?' + search.toString();
   }
   if (route.kind === 'parties') {
     return '/parties?' + search.toString();
