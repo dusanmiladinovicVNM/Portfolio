@@ -5235,6 +5235,48 @@ globalThis.fetch = async (
     });
   }
 
+  if (path === '/inspections/work-queue') {
+    const activeStatuses = new Set(['draft', 'in_progress', 'locked']);
+    const items = [];
+
+    const primary = inspectionRecord();
+    if (activeStatuses.has(primary.status)) {
+      items.push({
+        inspection: primary,
+        propertyId,
+        propertyCode: property.code,
+        propertyName: property.name,
+        unitCode: unit.code,
+        unitNumber: unit.unitNumber,
+        assignedToDisplayName: 'Browser Inspector',
+        assignedToRole: 'inspector',
+      });
+    }
+
+    if (
+      setupOrchestrationInspection &&
+      activeStatuses.has(setupOrchestrationInspection.status)
+    ) {
+      const assignedToManager =
+        setupOrchestrationInspection.assignedToUserId ===
+        setupOrchestrationOtherStaffId;
+      items.push({
+        inspection: setupOrchestrationInspection,
+        propertyId: orchestrationPropertyId,
+        propertyCode: orchestrationProperty.code,
+        propertyName: orchestrationProperty.name,
+        unitCode: orchestrationUnit.code,
+        unitNumber: orchestrationUnit.unitNumber,
+        assignedToDisplayName: assignedToManager
+          ? 'Browser Manager'
+          : 'Browser Inspector',
+        assignedToRole: assignedToManager ? 'manager' : 'inspector',
+      });
+    }
+
+    return json({ items });
+  }
+
   if (path === '/inspections/assigned-to-me') {
     return json({
       items: [
