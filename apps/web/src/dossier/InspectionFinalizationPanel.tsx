@@ -58,6 +58,7 @@ import {
 interface InspectionFinalizationPanelProps {
   readonly api: PortfolioApi;
   readonly bundle: InspectionBundleResponse;
+  readonly canGenerateFinalReport: boolean;
   readonly blockedByDirtySection: boolean;
   readonly writeGate: InspectionWriteGate;
   readonly onEditSectionInstance: (sectionInstanceId: string) => void;
@@ -153,6 +154,7 @@ export function InspectionFinalizationPanel({
   api,
   bundle,
   blockedByDirtySection,
+  canGenerateFinalReport,
   writeGate,
   onEditSectionInstance,
   onCanonicalBundle,
@@ -828,8 +830,46 @@ export function InspectionFinalizationPanel({
     }
   }
 
+  async function resolveExistingFinalReport() {
+    if (
+      inspection.status !== 'finalized' ||
+      !finalReportRelation ||
+      !begin('report', { allowDirty: true })
+    ) {
+      return;
+    }
+
+    try {
+      const version = await api.get(
+        inspectionFinalReportPath(inspection.id),
+        documentVersionResponseSchema,
+      );
+      assertFinalReportVersion(version);
+      if (version.id !== finalReportRelation.documentVersionId) {
+        throw new Error(
+          'Final-report read resolved a version different from canonical Evidence.',
+        );
+      }
+      if (mountedRef.current) {
+        setReportVersion(version);
+        setSuccess('Canonical final report loaded.');
+      }
+    } catch (cause) {
+      if (mountedRef.current) {
+        setError(errorMessage(cause, 'Final report could not be loaded.'));
+      }
+    } finally {
+      finish();
+    }
+  }
+
   async function generateFinalReport() {
-    if (inspection.status !== 'finalized' || !begin('report', { allowDirty: true })) {
+    if (
+      inspection.status !== 'finalized' ||
+      finalReportRelation !== null ||
+      !canGenerateFinalReport ||
+      !begin('report', { allowDirty: true })
+    ) {
       return;
     }
 
@@ -1300,7 +1340,18 @@ export function InspectionFinalizationPanel({
                   versionId={reportVersion.id}
                 />
               </div>
-            ) : (
+            ) : finalReportRelation ? (
+              <button
+                className="button-primary"
+                disabled={blocked || bundle.finalSnapshot === null}
+                onClick={() => void resolveExistingFinalReport()}
+                type="button"
+              >
+                {pendingAction === 'report'
+                  ? 'Loading report…'
+                  : 'Load final report'}
+              </button>
+            ) : canGenerateFinalReport ? (
               <button
                 className="button-primary"
                 disabled={blocked || bundle.finalSnapshot === null}
@@ -1308,13 +1359,14 @@ export function InspectionFinalizationPanel({
                 type="button"
               >
                 {pendingAction === 'report'
-                  ? finalReportRelation
-                    ? 'Loading report…'
-                    : 'Generating report…'
-                  : finalReportRelation
-                    ? 'Load final report'
-                    : 'Generate final report'}
+                  ? 'Generating report…'
+                  : 'Generate final report'}
               </button>
+            ) : (
+              <p className="setup-hint">
+                Final report has not been generated yet. A manager or
+                administrator can generate it.
+              </p>
             )}
           </div>
         </div>

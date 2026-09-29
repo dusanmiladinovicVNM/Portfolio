@@ -6708,6 +6708,54 @@ try {
   );
   await waitForBinaryReads(sessionId, readsBeforeFinalReport + 1);
 
+  const finalReportReadsBeforeReload = await executeScript(
+    sessionId,
+    'return window.__portfolioFinalReportReadCount || 0;',
+  );
+  await clickXpath(
+    sessionId,
+    "//a[normalize-space()='← All Inspections']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'inspection-card')][.//strong[normalize-space()='INS-BRW-001']]",
+  );
+  await clickXpath(
+    sessionId,
+    "//a[contains(@class,'inspection-card')][.//strong[normalize-space()='INS-BRW-001']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-final-report]//button[normalize-space()='Load final report']",
+  );
+  await clickXpath(
+    sessionId,
+    "//*[@data-inspection-final-report]//button[normalize-space()='Load final report']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Canonical final report loaded.')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioFinalReportReadCount || 0;',
+    ),
+    finalReportReadsBeforeReload + 1,
+    'Existing final report is resolved through one read-only GET',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioFinalReportRenderCount || 0;',
+    ),
+    1,
+    'Loading an existing final report does not render or create another version',
+  );
+
   process.stdout.write(
     'Browser workflow PASS: Core setup + route-owner guards → Contracts/documents → Inspection progress/completeness → debounced autosave/CAS conflict → field evidence → canonical pre-lock review → lock/unified-signature-flow/unlock/finalize/report\n',
   );

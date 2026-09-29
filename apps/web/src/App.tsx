@@ -340,6 +340,9 @@ function AuthenticatedShell({
           <UnitDossier
             key={workspaceRouteOwnerKey(route)}
             api={api}
+            canGenerateFinalReport={
+              currentStaff?.role === 'admin' || currentStaff?.role === 'manager'
+            }
             asOf={route.asOf}
             navigate={navigate}
             propertyId={route.propertyId}

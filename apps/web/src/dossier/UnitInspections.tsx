@@ -70,6 +70,7 @@ export const INSPECTION_AUTOSAVE_DELAY_MS = 1500;
 
 interface UnitInspectionsProps {
   readonly api: PortfolioApi;
+  readonly canGenerateFinalReport: boolean;
   readonly propertyId: string;
   readonly unitId: string;
   readonly asOf: string;
@@ -497,6 +498,7 @@ function Field({
 
 export function UnitInspections({
   api,
+  canGenerateFinalReport,
   propertyId,
   unitId,
   asOf,
@@ -1629,6 +1631,7 @@ export function UnitInspections({
           <InspectionFinalizationPanel
             api={api}
             blockedByDirtySection={hasUnsavedChanges}
+            canGenerateFinalReport={canGenerateFinalReport}
             bundle={routeBundle}
             key={`${routeBundle.inspection.id}:finalization`}
             onEditSectionInstance={(sectionInstanceId) =>
