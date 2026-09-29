@@ -6639,6 +6639,32 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
+    "//*[@data-inspection-completed-overview][.//h3[normalize-space()='Final Inspection record']]",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-inspection-field-toolbar]",
+    ),
+    false,
+    'Finalized Inspection hides field-work toolbar',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[contains(@class,'inspection-content-workspace')]",
+    ),
+    false,
+    'Finalized Inspection hides Findings/Evidence write workspace',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-completed-overview]//*[contains(normalize-space(),'Kitchen ventilation staining')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
     "//*[contains(normalize-space(),'source lifecycle v')]",
   );
 
@@ -6648,12 +6674,12 @@ try {
   );
   await clickXpath(
     sessionId,
-    "//button[normalize-space()='Generate / reuse final report']",
+    "//*[@data-inspection-final-report]//button[normalize-space()='Generate final report']",
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[contains(normalize-space(),'Final report generated/reused from the immutable snapshot.')]",
+    "//*[contains(normalize-space(),'Final report is ready from the immutable snapshot.')]",
   );
   assertEqual(
     await executeScript(

@@ -40,6 +40,7 @@ import {
   formatDetailKey,
   formatSwissDate,
 } from '../presentation/format.js';
+import { InspectionCompletedOverview } from './InspectionCompletedOverview.js';
 import { InspectionFinalizationPanel } from './InspectionFinalizationPanel.js';
 import { InspectionFindingsEvidence } from './InspectionFindingsEvidence.js';
 import { InspectionOrchestrationPanel } from './InspectionOrchestrationPanel.js';
@@ -1287,6 +1288,10 @@ export function UnitInspections({
             </div>
           ) : null}
 
+          {routeBundle.inspection.status === 'finalized' ? (
+            <InspectionCompletedOverview bundle={routeBundle} />
+          ) : (
+            <>
           {requiredProgress ? (
             <div
               className={`inspection-progress-card ${
@@ -1618,6 +1623,8 @@ export function UnitInspections({
             ) : null}
             </div>
           </div>
+            </>
+          )}
 
           <InspectionFinalizationPanel
             api={api}
