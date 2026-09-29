@@ -71,6 +71,11 @@ const inspectorIdentity: VerifiedIdentity = {
   subject: 'inspector-subject',
 };
 
+const managerIdentity: VerifiedIdentity = {
+  provider: 'supabase',
+  subject: 'manager-subject',
+};
+
 const otherInspectorIdentity: VerifiedIdentity = {
   provider: 'supabase',
   subject: 'other-inspector-subject',
@@ -100,6 +105,12 @@ class AccessRepository implements UserAccessRepository {
       return {
         userId: asUserId('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'),
         role: 'inspector',
+      };
+    }
+    if (identity.subject === 'manager-subject') {
+      return {
+        userId: asUserId('cccccccc-cccc-4ccc-8ccc-cccccccccccc'),
+        role: 'manager',
       };
     }
     if (identity.subject === 'other-inspector-subject') {
@@ -333,6 +344,19 @@ describe('Inspection HTTP backbone', () => {
     const unitId = asUnitId(
       '89000000-0000-4000-8000-000000000002',
     );
+    await portfolioRepository.insertProperty({
+      id: propertyId,
+      code: 'PROP-ORCH',
+      name: 'Orchestration Property',
+      propertyType: 'apartment_building',
+      street: 'Queue Street',
+      houseNumber: '7',
+      postalCode: '8000',
+      city: 'Zurich',
+      countryCode: 'CH',
+      yearBuilt: 2020,
+      status: 'active',
+    });
     await portfolioRepository.insertUnit({
       id: unitId,
       propertyId,
@@ -427,6 +451,120 @@ describe('Inspection HTTP backbone', () => {
           },
         ],
       },
+    });
+
+    const managerInspection = createInspection({
+      id: asInspectionId(
+        '89000000-0000-4000-8000-000000000005',
+      ),
+      code: 'INS-MANAGER',
+      inspectionType: 'move_out',
+      unitId,
+      schemaVersionId: asInspectionSchemaVersionId(
+        '89000000-0000-4000-8000-000000000006',
+      ),
+      assignedToUserId: asUserId(
+        'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      ),
+      createdByUserId: asUserId(
+        'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      ),
+      scheduledFor: '2026-09-23',
+    });
+    inspectionRepository.inspections.set(
+      managerInspection.id,
+      managerInspection,
+    );
+
+    const finalizedInspection = {
+      ...createInspection({
+        id: asInspectionId(
+          '89000000-0000-4000-8000-000000000007',
+        ),
+        code: 'INS-FINALIZED',
+        inspectionType: 'periodic',
+        unitId,
+        schemaVersionId: asInspectionSchemaVersionId(
+          '89000000-0000-4000-8000-000000000008',
+        ),
+        assignedToUserId: asUserId(
+          'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        ),
+        createdByUserId: asUserId(
+          'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        ),
+        scheduledFor: '2026-09-22',
+      }),
+      status: 'finalized' as const,
+      finalizedAt: '2026-09-22T12:00:00.000Z',
+    };
+    inspectionRepository.inspections.set(
+      finalizedInspection.id,
+      finalizedInspection,
+    );
+
+    const managerQueue = await handler(
+      new Request('https://portfolio.test/inspections/work-queue'),
+      managerIdentity,
+    );
+    expect(managerQueue.status).toBe(200);
+    expect(await managerQueue.json()).toMatchObject({
+      data: {
+        items: expect.arrayContaining([
+          expect.objectContaining({
+            inspection: { id: inspection.id },
+            propertyId,
+            propertyCode: 'PROP-ORCH',
+            propertyName: 'Orchestration Property',
+            unitCode: 'UNIT-ORCH',
+            unitNumber: '7A',
+            assignedToDisplayName: 'Inspector User',
+            assignedToRole: 'inspector',
+          }),
+          expect.objectContaining({
+            inspection: { id: managerInspection.id },
+            assignedToDisplayName: 'Manager User',
+            assignedToRole: 'manager',
+          }),
+        ]),
+      },
+    });
+    const managerQueueData = (await (
+      await handler(
+        new Request('https://portfolio.test/inspections/work-queue'),
+        managerIdentity,
+      )
+    ).json()).data as { items: Array<{ inspection: { id: string } }> };
+    expect(managerQueueData.items.map((item) => item.inspection.id)).not.toContain(
+      finalizedInspection.id,
+    );
+
+    const inspectorQueue = await handler(
+      new Request('https://portfolio.test/inspections/work-queue'),
+      inspectorIdentity,
+    );
+    expect(inspectorQueue.status).toBe(200);
+    expect(await inspectorQueue.json()).toMatchObject({
+      data: {
+        items: [
+          expect.objectContaining({
+            inspection: {
+              id: inspection.id,
+              assignedToUserId:
+                'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            },
+          }),
+        ],
+      },
+    });
+
+    const otherInspectorQueue = await handler(
+      new Request('https://portfolio.test/inspections/work-queue'),
+      otherInspectorIdentity,
+    );
+    expect(otherInspectorQueue.status).toBe(200);
+    expect(await otherInspectorQueue.json()).toEqual({
+      data: { items: [] },
     });
 
     const forbiddenReassign = await handler(
