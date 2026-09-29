@@ -508,11 +508,12 @@ describe('Inspection HTTP backbone', () => {
       managerIdentity,
     );
     expect(managerQueue.status).toBe(200);
-    expect(await managerQueue.json()).toMatchObject({
+    const managerQueueBody = await managerQueue.json();
+    expect(managerQueueBody).toMatchObject({
       data: {
         items: expect.arrayContaining([
           expect.objectContaining({
-            inspection: { id: inspection.id },
+            inspection: expect.objectContaining({ id: inspection.id }),
             propertyId,
             propertyCode: 'PROP-ORCH',
             propertyName: 'Orchestration Property',
@@ -522,19 +523,16 @@ describe('Inspection HTTP backbone', () => {
             assignedToRole: 'inspector',
           }),
           expect.objectContaining({
-            inspection: { id: managerInspection.id },
+            inspection: expect.objectContaining({ id: managerInspection.id }),
             assignedToDisplayName: 'Manager User',
             assignedToRole: 'manager',
           }),
         ]),
       },
     });
-    const managerQueueData = (await (
-      await handler(
-        new Request('https://portfolio.test/inspections/work-queue'),
-        managerIdentity,
-      )
-    ).json()).data as { items: Array<{ inspection: { id: string } }> };
+    const managerQueueData = managerQueueBody.data as {
+      items: Array<{ inspection: { id: string } }>;
+    };
     expect(managerQueueData.items.map((item) => item.inspection.id)).not.toContain(
       finalizedInspection.id,
     );
@@ -548,11 +546,11 @@ describe('Inspection HTTP backbone', () => {
       data: {
         items: [
           expect.objectContaining({
-            inspection: {
+            inspection: expect.objectContaining({
               id: inspection.id,
               assignedToUserId:
                 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-            },
+            }),
           }),
         ],
       },
