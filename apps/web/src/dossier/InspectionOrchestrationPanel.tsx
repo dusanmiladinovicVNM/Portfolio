@@ -573,51 +573,6 @@ export function InspectionOrchestrationPanel({
           </form>
         </section>
       ) : null}
-
-
-        {assignedWork === null && !assignedWorkError ? (
-          <p className="muted" aria-live="polite">
-            Loading assigned work…
-          </p>
-        ) : null}
-        {assignedWork?.length === 0 ? (
-          <p className="muted">No active Inspections are assigned to you.</p>
-        ) : null}
-        {assignedWork && assignedWork.length > 0 ? (
-          <div className="inspection-assigned-work-list">
-            {assignedWork.map((item) => (
-              <button
-                className="inspection-assigned-work-card"
-                disabled={writeGate.pending}
-                key={item.inspection.id}
-                onClick={() =>
-                  navigate(
-                    unitRoute(
-                      item.propertyId,
-                      item.inspection.unitId,
-                      asOf,
-                      'inspections',
-                      { inspectionId: item.inspection.id },
-                    ),
-                  )
-                }
-                type="button"
-              >
-                <strong>{item.inspection.code}</strong>
-                <span>
-                  {item.unitCode} · Unit {item.unitNumber}
-                </span>
-                <small>
-                  {formatDetailKey(item.inspection.inspectionType)} ·{' '}
-                  {item.inspection.scheduledFor ? formatSwissDate(item.inspection.scheduledFor) : 'Unscheduled'} ·{' '}
-                  {formatDetailKey(item.inspection.status)}
-                </small>
-              </button>
-            ))}
-          </div>
-        ) : null}
-        </section>
-      ) : null}
     </>
   );
 }
