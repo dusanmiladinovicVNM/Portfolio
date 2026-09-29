@@ -6566,6 +6566,14 @@ try {
     uploadsBeforeTenantRetry + 1,
     'Retry registration does not upload a second signature binary',
   );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      "//button[normalize-space()='Finalize Inspection']",
+    ),
+    true,
+    'One required signature present and one missing keeps Finalize disabled',
+  );
 
   // Capture the second required role through the same unified flow.
   await selectOptionXpath(
