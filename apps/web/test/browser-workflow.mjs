@@ -4885,6 +4885,31 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
+    "//*[@data-unit-dossier-navigation]//*[@data-dossier-nav-group='occupancy'][.//strong[normalize-space()='Occupancy']][.//a[.//span[normalize-space()='Tenancies']]][.//a[.//span[normalize-space()='Contracts']]]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-dossier-navigation]//*[@data-dossier-nav-group='operations'][.//strong[normalize-space()='Operations']][.//a[.//span[normalize-space()='Inspections']]][.//a[.//span[normalize-space()='Maintenance']]]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-dossier-navigation]//*[@data-dossier-nav-group='unit'][.//strong[normalize-space()='Unit & equipment']][.//a[.//span[normalize-space()='Spaces']]][.//a[.//span[normalize-space()='Assets']]][.//a[.//span[normalize-space()='Keys']]][.//a[.//span[normalize-space()='Meters']]]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-dossier-navigation]//*[@data-dossier-nav-group='records'][.//strong[normalize-space()='Records']][.//a[.//span[normalize-space()='Timeline']]][.//a[.//span[normalize-space()='Documents']]]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-dossier-context][contains(normalize-space(),'Unit dossier')][contains(normalize-space(),'Overview')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
     "//article[contains(@class,'metric-card-primary')]//small[normalize-space()='as of 30.06.2025']",
   );
   await clearXpath(
@@ -4903,6 +4928,16 @@ try {
     sessionId,
     'xpath',
     "//h2[normalize-space()='Select the lifecycle record']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-dossier-nav-group='occupancy' and contains(@class,'dossier-nav-group-active')]//a[contains(@class,'dossier-nav-link-active')][.//span[normalize-space()='Contracts']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-dossier-context][contains(normalize-space(),'Unit dossier')][contains(normalize-space(),'Occupancy')][contains(normalize-space(),'Contracts')]",
   );
   await assertActiveHeading(sessionId, 'Unit 1A', 'Contracts tab focus');
 
@@ -4988,6 +5023,19 @@ try {
     await currentUrl(sessionId),
     agreementDeepLink,
     'Agreement contract deep-link URL',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-dossier-context][contains(normalize-space(),'Unit dossier')][contains(normalize-space(),'Occupancy')][contains(normalize-space(),'Contracts')][contains(normalize-space(),'Agreement detail')]",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-unit-dossier-context][contains(normalize-space(),'" + agreementId + "')]",
+    ),
+    false,
+    'Dossier context never exposes internal Agreement UUID',
   );
 
   await clickXpath(sessionId, "//aside//a[normalize-space()='Unit dossier']");
