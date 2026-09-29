@@ -2019,6 +2019,60 @@ input:focus-visible {
   flex-wrap: wrap;
   gap: 9px;
 }
+.inspection-signature-workspace {
+  align-items: start;
+}
+.inspection-signature-progress-card {
+  min-width: 0;
+}
+.inspection-signature-flow-card {
+  grid-column: span 2;
+  min-width: 0;
+}
+.inspection-signature-signer-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.inspection-signature-role-list small {
+  line-height: 1.35;
+}
+.inspection-signature-history {
+  padding-top: 10px;
+  border-top: 1px solid #e4ded4;
+}
+.inspection-signature-history > summary,
+.inspection-signature-file-fallback > summary {
+  cursor: pointer;
+  color: #4f534b;
+  font-size: .8rem;
+  font-weight: 800;
+}
+.inspection-signature-ready {
+  margin: 0;
+  color: #365f3d;
+  font-size: .82rem;
+  font-weight: 700;
+}
+.inspection-signature-recovery {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #d3a565;
+  border-radius: 9px;
+  background: #fff9ef;
+}
+.inspection-signature-recovery p {
+  margin: 0;
+  color: #675943;
+  font-size: .8rem;
+}
+.inspection-signature-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
 .inspection-signature-pad {
   display: grid;
   gap: 10px;
@@ -2051,8 +2105,19 @@ input:focus-visible {
   padding-top: 12px;
   border-top: 1px solid #e4ded4;
 }
+.inspection-signature-file-fallback-body {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+}
 @media (max-width: 760px) {
   .inspection-finalization-grid {
+    grid-template-columns: 1fr;
+  }
+  .inspection-signature-flow-card {
+    grid-column: span 1;
+  }
+  .inspection-signature-signer-grid {
     grid-template-columns: 1fr;
   }
   .inspection-pre-lock-intro,
