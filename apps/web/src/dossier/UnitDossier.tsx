@@ -21,6 +21,7 @@ import { UnitInspections } from './UnitInspections.js';
 import { UnitKeys } from './UnitKeys.js';
 import { UnitMeters } from './UnitMeters.js';
 import { UnitMaintenance } from './UnitMaintenance.js';
+import { UnitDossierNavigation } from './UnitDossierNavigation.js';
 import { UnitOverview } from './UnitOverview.js';
 import { UnitSpaces } from './UnitSpaces.js';
 import { UnitTenancies } from './UnitTenancies.js';
@@ -136,116 +137,24 @@ export function UnitDossier({
 
       {unit ? (
         <>
-          <nav className="dossier-tabs" aria-label="Unit dossier sections">
-            <WorkspaceLink
-              ariaCurrent={tab === 'overview' ? 'page' : undefined}
-              className={`dossier-tab ${tab === 'overview' ? 'dossier-tab-active' : ''}`}
-              navigate={navigate}
-              route={unitRoute(propertyId, unitId, asOf, 'overview')}
-            >
-              Overview
-            </WorkspaceLink>
-            <WorkspaceLink
-              ariaCurrent={tab === 'spaces' ? 'page' : undefined}
-              className={'dossier-tab ' + (tab === 'spaces' ? 'dossier-tab-active' : '')}
-              navigate={navigate}
-              route={unitRoute(propertyId, unitId, asOf, 'spaces')}
-            >
-              Spaces
-            </WorkspaceLink>
-            <WorkspaceLink
-              ariaCurrent={tab === 'tenancies' ? 'page' : undefined}
-              className={`dossier-tab ${tab === 'tenancies' ? 'dossier-tab-active' : ''}`}
-              navigate={navigate}
-              route={unitRoute(propertyId, unitId, asOf, 'tenancies')}
-            >
-              Tenancies
-            </WorkspaceLink>
-            <WorkspaceLink
-              ariaCurrent={tab === 'contracts' ? 'page' : undefined}
-              className={`dossier-tab ${tab === 'contracts' ? 'dossier-tab-active' : ''}`}
-              navigate={navigate}
-              route={unitRoute(propertyId, unitId, asOf, 'contracts', {
-                ...(tenancyId ? { tenancyId } : {}),
-                ...(agreementId ? { agreementId } : {}),
-                ...(amendmentId ? { amendmentId } : {}),
-              })}
-            >
-              Contracts
-            </WorkspaceLink>
-            <WorkspaceLink
-              ariaCurrent={tab === 'inspections' ? 'page' : undefined}
-              className={`dossier-tab ${tab === 'inspections' ? 'dossier-tab-active' : ''}`}
-              navigate={navigate}
-              route={unitRoute(propertyId, unitId, asOf, 'inspections', {
-                ...(inspectionId ? { inspectionId } : {}),
-                ...(inspectionSectionInstanceId
-                  ? { inspectionSectionInstanceId }
-                  : {}),
-              })}
-            >
-              Inspections
-            </WorkspaceLink>
-            <WorkspaceLink
-              ariaCurrent={tab === 'timeline' ? 'page' : undefined}
-              className={`dossier-tab ${tab === 'timeline' ? 'dossier-tab-active' : ''}`}
-              navigate={navigate}
-              route={unitRoute(propertyId, unitId, asOf, 'timeline')}
-            >
-              Timeline
-            </WorkspaceLink>
-            <WorkspaceLink
-              ariaCurrent={tab === 'documents' ? 'page' : undefined}
-              className={`dossier-tab ${tab === 'documents' ? 'dossier-tab-active' : ''}`}
-              navigate={navigate}
-              route={unitRoute(propertyId, unitId, asOf, 'documents')}
-            >
-              Documents
-            </WorkspaceLink>
-            <WorkspaceLink
-              ariaCurrent={tab === 'assets' ? 'page' : undefined}
-              className={`dossier-tab ${tab === 'assets' ? 'dossier-tab-active' : ''}`}
-              navigate={navigate}
-              route={unitRoute(propertyId, unitId, asOf, 'assets', {
-                ...(assetId ? { assetId } : {}),
-              })}
-            >
-              Assets
-            </WorkspaceLink>
-            <WorkspaceLink
-              ariaCurrent={tab === 'keys' ? 'page' : undefined}
-              className={`dossier-tab ${tab === 'keys' ? 'dossier-tab-active' : ''}`}
-              navigate={navigate}
-              route={unitRoute(propertyId, unitId, asOf, 'keys')}
-            >
-              Keys
-            </WorkspaceLink>
-            <WorkspaceLink
-              ariaCurrent={tab === 'meters' ? 'page' : undefined}
-              className={`dossier-tab ${tab === 'meters' ? 'dossier-tab-active' : ''}`}
-              navigate={navigate}
-              route={unitRoute(propertyId, unitId, asOf, 'meters', {
-                ...(meterId ? { meterId } : {}),
-              })}
-            >
-              Meters
-            </WorkspaceLink>
-            <WorkspaceLink
-              ariaCurrent={tab === 'maintenance' ? 'page' : undefined}
-              className={`dossier-tab ${tab === 'maintenance' ? 'dossier-tab-active' : ''}`}
-              navigate={navigate}
-              route={unitRoute(propertyId, unitId, asOf, 'maintenance', {
-                ...(maintenanceIssueId
-                  ? { maintenanceIssueId }
-                  : {}),
-                ...(maintenanceWorkOrderId
-                  ? { maintenanceWorkOrderId }
-                  : {}),
-              })}
-            >
-              Maintenance
-            </WorkspaceLink>
-          </nav>
+          <UnitDossierNavigation
+            asOf={asOf}
+            navigate={navigate}
+            propertyId={propertyId}
+            selection={{
+              ...(tenancyId ? { tenancyId } : {}),
+              ...(agreementId ? { agreementId } : {}),
+              ...(amendmentId ? { amendmentId } : {}),
+              ...(inspectionId ? { inspectionId } : {}),
+              ...(inspectionSectionInstanceId ? { inspectionSectionInstanceId } : {}),
+              ...(assetId ? { assetId } : {}),
+              ...(meterId ? { meterId } : {}),
+              ...(maintenanceIssueId ? { maintenanceIssueId } : {}),
+              ...(maintenanceWorkOrderId ? { maintenanceWorkOrderId } : {}),
+            }}
+            tab={tab}
+            unitId={unitId}
+          />
 
           {tab === 'overview' ? (
             <UnitOverview

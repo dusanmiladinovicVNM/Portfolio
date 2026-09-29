@@ -1252,7 +1252,7 @@ try {
     "//article[contains(@class,'space-card')][.//span[normalize-space()='BATH-SETUP']][.//h3[normalize-space()='Bathroom']][.//span[contains(normalize-space(),'order 5')]]",
   );
 
-  await clickXpath(sessionId, "//a[normalize-space()='Tenancies']");
+  await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Tenancies']]");
   await waitForElement(
     sessionId,
     'xpath',
@@ -1394,7 +1394,7 @@ try {
     "//article[.//span[normalize-space()='TEN-SETUP-BRW']]//span[contains(@class,'status-chip') and normalize-space()='active']",
   );
 
-  await clickXpath(sessionId, "//a[normalize-space()='Keys']");
+  await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Keys']]");
   const accessCreateForm = "//form[@data-access-item-form='create']";
   await waitForElement(sessionId, 'xpath', accessCreateForm);
   assertEqual(
@@ -1875,7 +1875,7 @@ try {
     entryCard + "//span[contains(@class,'status-chip') and normalize-space()='issued']",
   );
 
-  await clickXpath(sessionId, "//a[normalize-space()='Tenancies']");
+  await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Tenancies']]");
 
   await typeXpath(
     sessionId,
@@ -1892,7 +1892,7 @@ try {
     "//article[contains(@class,'tenancy-card')][.//span[normalize-space()='TEN-LU-EMPTY-BRW']][.//span[contains(@class,'status-chip') and normalize-space()='draft']]",
   );
 
-  await clickXpath(sessionId, "//a[normalize-space()='Contracts']");
+  await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Contracts']]");
   await waitForElement(
     sessionId,
     'xpath',
@@ -2440,7 +2440,7 @@ try {
 
   await clickAndDismissConfirm(
     sessionId,
-    "//a[normalize-space()='Timeline']",
+    "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Timeline']]",
     'This Luzerner contract form has unsaved changes. Leave and discard them?',
   );
   assertEqual(
@@ -3039,7 +3039,7 @@ try {
     'Tenancy lifecycle stays on setup Unit owner',
   );
 
-  await clickXpath(sessionId, "//a[normalize-space()='Meters']");
+  await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Meters']]");
   await waitForElement(
     sessionId,
     'xpath',
@@ -3122,7 +3122,7 @@ try {
     'return window.__portfolioPendingMeterMutation === true;',
     'held Meter label mutation',
   );
-  await clickXpath(sessionId, "//a[normalize-space()='Assets']");
+  await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Assets']]");
   await new Promise((resolve) => setTimeout(resolve, 150));
   assertEqual(
     await currentUrl(sessionId),
@@ -3393,7 +3393,7 @@ try {
     "//a[contains(@class,'meter-card')][.//span[normalize-space()='MTR-SETUP-BRW']][.//span[contains(@class,'status-chip') and normalize-space()='retired']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='Unit level']]",
   );
 
-  await clickXpath(sessionId, "//a[normalize-space()='Tenancies']");
+  await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Tenancies']]");
   await waitForElement(
     sessionId,
     'xpath',
@@ -3424,7 +3424,7 @@ try {
     "//article[.//span[normalize-space()='TEN-CANCEL-BRW']]//span[contains(@class,'status-chip') and normalize-space()='cancelled']",
   );
 
-  await clickXpath(sessionId, "//a[normalize-space()='Assets']");
+  await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Assets']]");
   await waitForElement(
     sessionId,
     'xpath',
@@ -3514,7 +3514,7 @@ try {
     'return window.__portfolioPendingAssetMutation === true;',
     'held Asset metadata mutation',
   );
-  await clickXpath(sessionId, "//a[normalize-space()='Spaces']");
+  await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Spaces']]");
   await new Promise((resolve) => setTimeout(resolve, 150));
   assertEqual(
     await currentUrl(sessionId),
@@ -3729,7 +3729,7 @@ try {
     'return window.__portfolioPendingAssetMutation === true;',
     'held ServicePlan pause',
   );
-  await clickXpath(sessionId, "//a[normalize-space()='Meters']");
+  await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Meters']]");
   await new Promise((resolve) => setTimeout(resolve, 150));
   assertEqual(
     await currentUrl(sessionId),
@@ -3848,7 +3848,7 @@ try {
     "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Moved']][.//span[contains(normalize-space(),'current')]][.//dd[normalize-space()='Moved into bedroom']]",
   );
 
-  await clickXpath(sessionId, "//a[normalize-space()='Maintenance']");
+  await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Maintenance']]");
   await waitForElement(
     sessionId,
     'xpath',
@@ -4038,7 +4038,7 @@ try {
     'return window.__portfolioPendingMaintenanceMutation === true;',
     'held Maintenance assignment',
   );
-  await clickXpath(sessionId, "//a[normalize-space()='Assets']");
+  await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Assets']]");
   await new Promise((resolve) => setTimeout(resolve, 150));
   assertEqual(
     await currentUrl(sessionId),
@@ -4476,7 +4476,7 @@ try {
     "//a[contains(@class,'asset-card')][.//span[normalize-space()='AST-OVEN-BRW']][.//dd[normalize-space()='Kitchen']]",
   );
 
-  await clickXpath(sessionId, "//a[normalize-space()='Maintenance']");
+  await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Maintenance']]");
   await waitForElement(
     sessionId,
     'xpath',
@@ -4689,7 +4689,7 @@ try {
     smokeIssueCard + "//span[contains(@class,'status-chip') and normalize-space()='open']",
   );
 
-  await clickXpath(sessionId, "//a[normalize-space()='Spaces']");
+  await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Spaces']]");
   await waitForElement(
     sessionId,
     'xpath',
@@ -4885,6 +4885,31 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
+    "//*[@data-unit-dossier-navigation]//*[@data-dossier-nav-group='occupancy'][.//strong[normalize-space()='Occupancy']][.//a[.//span[normalize-space()='Tenancies']]][.//a[.//span[normalize-space()='Contracts']]]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-dossier-navigation]//*[@data-dossier-nav-group='operations'][.//strong[normalize-space()='Operations']][.//a[.//span[normalize-space()='Inspections']]][.//a[.//span[normalize-space()='Maintenance']]]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-dossier-navigation]//*[@data-dossier-nav-group='unit'][.//strong[normalize-space()='Unit & equipment']][.//a[.//span[normalize-space()='Spaces']]][.//a[.//span[normalize-space()='Assets']]][.//a[.//span[normalize-space()='Keys']]][.//a[.//span[normalize-space()='Meters']]]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-dossier-navigation]//*[@data-dossier-nav-group='records'][.//strong[normalize-space()='Records']][.//a[.//span[normalize-space()='Timeline']]][.//a[.//span[normalize-space()='Documents']]]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-dossier-context][contains(normalize-space(),'Unit dossier')][contains(normalize-space(),'Overview')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
     "//article[contains(@class,'metric-card-primary')]//small[normalize-space()='as of 30.06.2025']",
   );
   await clearXpath(
@@ -4898,11 +4923,21 @@ try {
     'Empty Unit Overview date does not create an invalid route',
   );
 
-  await clickXpath(sessionId, "//a[normalize-space()='Contracts']");
+  await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Contracts']]");
   await waitForElement(
     sessionId,
     'xpath',
     "//h2[normalize-space()='Select the lifecycle record']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-dossier-nav-group='occupancy' and contains(@class,'dossier-nav-group-active')]//a[contains(@class,'dossier-nav-link-active')][.//span[normalize-space()='Contracts']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-dossier-context][contains(normalize-space(),'Unit dossier')][contains(normalize-space(),'Occupancy')][contains(normalize-space(),'Contracts')]",
   );
   await assertActiveHeading(sessionId, 'Unit 1A', 'Contracts tab focus');
 
@@ -4988,6 +5023,19 @@ try {
     await currentUrl(sessionId),
     agreementDeepLink,
     'Agreement contract deep-link URL',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-dossier-context][contains(normalize-space(),'Unit dossier')][contains(normalize-space(),'Occupancy')][contains(normalize-space(),'Contracts')][contains(normalize-space(),'Agreement detail')]",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-unit-dossier-context][contains(normalize-space(),'" + agreementId + "')]",
+    ),
+    false,
+    'Dossier context never exposes internal Agreement UUID',
   );
 
   await clickXpath(sessionId, "//aside//a[normalize-space()='Unit dossier']");
@@ -5155,7 +5203,7 @@ try {
     'return window.__portfolioPendingInspectionOrchestration === true;',
     'held Inspection orchestration mutation',
   );
-  await clickXpath(sessionId, "//a[normalize-space()='Assets']");
+  await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Assets']]");
   await new Promise((resolve) => setTimeout(resolve, 150));
   assertEqual(
     await currentUrl(sessionId),
@@ -5484,7 +5532,7 @@ try {
 
   await clickAndDismissConfirm(
     sessionId,
-    "//a[normalize-space()='Timeline']",
+    "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Timeline']]",
     'This Inspection section has unsaved changes. Leave and discard them?',
   );
   assertEqual(
@@ -5591,7 +5639,7 @@ try {
     "//*[contains(normalize-space(),'Save or discard the current section before recording Findings or Evidence.')]",
   );
 
-  await clickXpath(sessionId, "//a[normalize-space()='Timeline']");
+  await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Timeline']]");
   await new Promise((resolve) => setTimeout(resolve, 150));
   assertEqual(
     await currentUrl(sessionId),
@@ -5938,7 +5986,7 @@ try {
     'return window.__portfolioPendingInspectionEvidence === true;',
     'held Inspection Evidence relation',
   );
-  await clickXpath(sessionId, "//a[normalize-space()='Timeline']");
+  await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Timeline']]");
   await new Promise((resolve) => setTimeout(resolve, 150));
   assertEqual(
     await currentUrl(sessionId),
@@ -6378,7 +6426,7 @@ try {
     'return window.__portfolioPendingInspectionLifecycle === true;',
     'held Inspection lock',
   );
-  await clickXpath(sessionId, "//a[normalize-space()='Timeline']");
+  await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Timeline']]");
   await new Promise((resolve) => setTimeout(resolve, 150));
   assertEqual(
     await currentUrl(sessionId),
