@@ -1450,6 +1450,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioInspectionSchemaCreateCount?: number;
   __portfolioInspectionSchemaPublishCount?: number;
   __portfolioFinalReportRenderCount?: number;
+  __portfolioFinalReportReadCount?: number;
   __portfolioReleaseUnitCreate?: () => boolean;
   __portfolioReleaseSpaceCreate?: () => boolean;
   __portfolioReleaseTenancyMutation?: () => boolean;
@@ -1476,6 +1477,7 @@ browserHarnessWindow.__portfolioInspectionSectionPatchCount = 0;
 browserHarnessWindow.__portfolioInspectionSchemaCreateCount = 0;
 browserHarnessWindow.__portfolioInspectionSchemaPublishCount = 0;
 browserHarnessWindow.__portfolioFinalReportRenderCount = 0;
+browserHarnessWindow.__portfolioFinalReportReadCount = 0;
 browserHarnessWindow.__portfolioAccessItemTransactionCount = () =>
   setupAccessItemTransactions.length;
 browserHarnessWindow.__portfolioAccessItemTransactionCountFor = (accessItemId) =>
@@ -5636,6 +5638,47 @@ globalThis.fetch = async (
       );
     }
     return response;
+  }
+
+  if (
+    path === `/inspections/${inspectionId}/final-report` &&
+    (init?.method ?? 'GET') === 'GET'
+  ) {
+    requireInspectionAuth(init);
+    if (inspectionStatus !== 'finalized' || !inspectionFinalSnapshot) {
+      return apiError(
+        422,
+        'INSPECTION_FINAL_REPORT_STATE_INVALID',
+        'Final report requires a finalized Inspection.',
+      );
+    }
+    const relation = inspectionEvidence.find(
+      (item) =>
+        item.kind === 'final_report' &&
+        item.sectionInstanceId === null &&
+        item.sectionId === null &&
+        item.itemId === null,
+    );
+    if (!relation) {
+      return apiError(
+        404,
+        'INSPECTION_FINAL_REPORT_NOT_FOUND',
+        'Finalized Inspection has no canonical final report yet.',
+      );
+    }
+    const version = setupDocumentVersions.find(
+      (candidate) => candidate.id === relation.documentVersionId,
+    );
+    if (!version) {
+      return apiError(
+        404,
+        'INSPECTION_FINAL_REPORT_DOCUMENT_MISSING',
+        'Canonical final report version is missing.',
+      );
+    }
+    browserHarnessWindow.__portfolioFinalReportReadCount =
+      (browserHarnessWindow.__portfolioFinalReportReadCount ?? 0) + 1;
+    return json(version);
   }
 
   if (

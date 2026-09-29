@@ -30,6 +30,7 @@ import { assertUnitRouteOwner } from './route-owner.js';
 
 interface UnitDossierProps {
   readonly api: PortfolioApi;
+  readonly canGenerateFinalReport: boolean;
   readonly propertyId: string;
   readonly unitId: string;
   readonly tab: DossierTab;
@@ -49,6 +50,7 @@ interface UnitDossierProps {
 
 export function UnitDossier({
   api,
+  canGenerateFinalReport,
   propertyId,
   unitId,
   tab,
@@ -286,6 +288,7 @@ export function UnitDossier({
           {tab === 'inspections' ? (
             <UnitInspections
               api={api}
+              canGenerateFinalReport={canGenerateFinalReport}
               asOf={asOf}
               inspectionId={inspectionId}
               inspectionSectionInstanceId={inspectionSectionInstanceId}

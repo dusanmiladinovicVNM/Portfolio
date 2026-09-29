@@ -10,6 +10,7 @@ import {
   getInspectionBundleQuery,
   finalizeInspectionCommand,
   generateInspectionFinalReportCommand,
+  getInspectionFinalReportQuery,
   getInspectionSchemaVersionQuery,
   listInspectionSchemaVersionsQuery,
   listInspectionsByUnitQuery,
@@ -652,6 +653,23 @@ export async function handleInspectionHttp(
 
   const finalReportMatch =
     /^\/inspections\/([^/]+)\/final-report$/.exec(path);
+  if (method === 'GET' && finalReportMatch) {
+    const parsedId = entityIdSchema.safeParse(finalReportMatch[1]);
+    if (!parsedId.success) return validationFailure();
+
+    const version = await getInspectionFinalReportQuery(
+      {
+        inspectionRepository: deps.inspectionRepository,
+        documentRepository: deps.documentRepository,
+        fileStorage: deps.fileStorage,
+      },
+      actor,
+      asInspectionId(parsedId.data),
+    );
+
+    return json({ data: toDocumentVersionResponse(version) });
+  }
+
   if (method === 'POST' && finalReportMatch) {
     const parsedId = entityIdSchema.safeParse(finalReportMatch[1]);
     if (!parsedId.success) return validationFailure();

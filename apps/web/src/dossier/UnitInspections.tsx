@@ -40,6 +40,7 @@ import {
   formatDetailKey,
   formatSwissDate,
 } from '../presentation/format.js';
+import { InspectionCompletedOverview } from './InspectionCompletedOverview.js';
 import { InspectionFinalizationPanel } from './InspectionFinalizationPanel.js';
 import { InspectionFindingsEvidence } from './InspectionFindingsEvidence.js';
 import { InspectionOrchestrationPanel } from './InspectionOrchestrationPanel.js';
@@ -69,6 +70,7 @@ export const INSPECTION_AUTOSAVE_DELAY_MS = 1500;
 
 interface UnitInspectionsProps {
   readonly api: PortfolioApi;
+  readonly canGenerateFinalReport: boolean;
   readonly propertyId: string;
   readonly unitId: string;
   readonly asOf: string;
@@ -496,6 +498,7 @@ function Field({
 
 export function UnitInspections({
   api,
+  canGenerateFinalReport,
   propertyId,
   unitId,
   asOf,
@@ -1287,6 +1290,10 @@ export function UnitInspections({
             </div>
           ) : null}
 
+          {routeBundle.inspection.status === 'finalized' ? (
+            <InspectionCompletedOverview bundle={routeBundle} />
+          ) : (
+            <>
           {requiredProgress ? (
             <div
               className={`inspection-progress-card ${
@@ -1618,10 +1625,13 @@ export function UnitInspections({
             ) : null}
             </div>
           </div>
+            </>
+          )}
 
           <InspectionFinalizationPanel
             api={api}
             blockedByDirtySection={hasUnsavedChanges}
+            canGenerateFinalReport={canGenerateFinalReport}
             bundle={routeBundle}
             key={`${routeBundle.inspection.id}:finalization`}
             onEditSectionInstance={(sectionInstanceId) =>

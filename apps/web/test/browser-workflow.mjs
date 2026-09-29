@@ -6566,6 +6566,14 @@ try {
     uploadsBeforeTenantRetry + 1,
     'Retry registration does not upload a second signature binary',
   );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      "//button[normalize-space()='Finalize Inspection']",
+    ),
+    true,
+    'One required signature present and one missing keeps Finalize disabled',
+  );
 
   // Capture the second required role through the same unified flow.
   await selectOptionXpath(
@@ -6639,6 +6647,32 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
+    "//*[@data-inspection-completed-overview][.//h3[normalize-space()='Final Inspection record']]",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-inspection-field-toolbar]",
+    ),
+    false,
+    'Finalized Inspection hides field-work toolbar',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[contains(@class,'inspection-content-workspace')]",
+    ),
+    false,
+    'Finalized Inspection hides Findings/Evidence write workspace',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-completed-overview]//*[contains(normalize-space(),'Kitchen ventilation staining')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
     "//*[contains(normalize-space(),'source lifecycle v')]",
   );
 
@@ -6648,12 +6682,12 @@ try {
   );
   await clickXpath(
     sessionId,
-    "//button[normalize-space()='Generate / reuse final report']",
+    "//*[@data-inspection-final-report]//button[normalize-space()='Generate final report']",
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[contains(normalize-space(),'Final report generated/reused from the immutable snapshot.')]",
+    "//*[contains(normalize-space(),'Final report is ready from the immutable snapshot.')]",
   );
   assertEqual(
     await executeScript(
@@ -6673,6 +6707,54 @@ try {
     "//div[contains(@class,'inspection-finalization-card')][.//strong[normalize-space()='Final report']]//button[normalize-space()='Download']",
   );
   await waitForBinaryReads(sessionId, readsBeforeFinalReport + 1);
+
+  const finalReportReadsBeforeReload = await executeScript(
+    sessionId,
+    'return window.__portfolioFinalReportReadCount || 0;',
+  );
+  await clickXpath(
+    sessionId,
+    "//a[normalize-space()='← All Inspections']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'inspection-card')][.//strong[normalize-space()='INS-BRW-001']]",
+  );
+  await clickXpath(
+    sessionId,
+    "//a[contains(@class,'inspection-card')][.//strong[normalize-space()='INS-BRW-001']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-final-report]//button[normalize-space()='Load final report']",
+  );
+  await clickXpath(
+    sessionId,
+    "//*[@data-inspection-final-report]//button[normalize-space()='Load final report']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Canonical final report loaded.')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioFinalReportReadCount || 0;',
+    ),
+    finalReportReadsBeforeReload + 1,
+    'Existing final report is resolved through one read-only GET',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioFinalReportRenderCount || 0;',
+    ),
+    1,
+    'Loading an existing final report does not render or create another version',
+  );
 
   process.stdout.write(
     'Browser workflow PASS: Core setup + route-owner guards → Contracts/documents → Inspection progress/completeness → debounced autosave/CAS conflict → field evidence → canonical pre-lock review → lock/unified-signature-flow/unlock/finalize/report\n',

@@ -58,6 +58,7 @@ import {
 interface InspectionFinalizationPanelProps {
   readonly api: PortfolioApi;
   readonly bundle: InspectionBundleResponse;
+  readonly canGenerateFinalReport: boolean;
   readonly blockedByDirtySection: boolean;
   readonly writeGate: InspectionWriteGate;
   readonly onEditSectionInstance: (sectionInstanceId: string) => void;
@@ -153,6 +154,7 @@ export function InspectionFinalizationPanel({
   api,
   bundle,
   blockedByDirtySection,
+  canGenerateFinalReport,
   writeGate,
   onEditSectionInstance,
   onCanonicalBundle,
@@ -828,8 +830,46 @@ export function InspectionFinalizationPanel({
     }
   }
 
+  async function resolveExistingFinalReport() {
+    if (
+      inspection.status !== 'finalized' ||
+      !finalReportRelation ||
+      !begin('report', { allowDirty: true })
+    ) {
+      return;
+    }
+
+    try {
+      const version = await api.get(
+        inspectionFinalReportPath(inspection.id),
+        documentVersionResponseSchema,
+      );
+      assertFinalReportVersion(version);
+      if (version.id !== finalReportRelation.documentVersionId) {
+        throw new Error(
+          'Final-report read resolved a version different from canonical Evidence.',
+        );
+      }
+      if (mountedRef.current) {
+        setReportVersion(version);
+        setSuccess('Canonical final report loaded.');
+      }
+    } catch (cause) {
+      if (mountedRef.current) {
+        setError(errorMessage(cause, 'Final report could not be loaded.'));
+      }
+    } finally {
+      finish();
+    }
+  }
+
   async function generateFinalReport() {
-    if (inspection.status !== 'finalized' || !begin('report', { allowDirty: true })) {
+    if (
+      inspection.status !== 'finalized' ||
+      finalReportRelation !== null ||
+      !canGenerateFinalReport ||
+      !begin('report', { allowDirty: true })
+    ) {
       return;
     }
 
@@ -869,7 +909,7 @@ export function InspectionFinalizationPanel({
       applyCanonical(canonical);
       if (mountedRef.current) {
         setReportVersion(version);
-        setSuccess('Final report generated/reused from the immutable snapshot.');
+        setSuccess('Final report is ready from the immutable snapshot.');
       }
     } catch (cause) {
       if (mountedRef.current) {
@@ -886,6 +926,16 @@ export function InspectionFinalizationPanel({
 
   const partyOptions = parties ?? [];
   const blocked = writeGate.pending;
+  const finalReportRelation =
+    inspection.status === 'finalized'
+      ? bundle.evidence.find(
+          (item) =>
+            item.kind === 'final_report' &&
+            item.sectionInstanceId === null &&
+            item.sectionId === null &&
+            item.itemId === null,
+        ) ?? null
+      : null;
   const lifecycleHeading =
     inspection.status === 'in_progress'
       ? { eyebrow: 'Review stage', title: 'Review & lock' }
@@ -1237,17 +1287,22 @@ export function InspectionFinalizationPanel({
       ) : null}
 
       {inspection.status === 'finalized' ? (
-        <div className="inspection-finalization-grid">
-          <div className="inspection-finalization-card">
-            <strong>Immutable final snapshot</strong>
+        <div className="inspection-completed-report-workspace">
+          <div className="inspection-finalization-card inspection-completed-proof-card">
+            <strong>Immutable completion proof</strong>
             {bundle.finalSnapshot ? (
               <>
-                <span>Snapshot v{bundle.finalSnapshot.snapshotVersion}</span>
+                <span>
+                  Finalized {formatSwissDateTime(bundle.finalSnapshot.createdAt)}
+                </span>
                 <small>
-                  source lifecycle v{bundle.finalSnapshot.inspectionVersion} ·
-                  content r{bundle.finalSnapshot.contentRevision}
+                  Snapshot v{bundle.finalSnapshot.snapshotVersion} · source lifecycle
+                  v{bundle.finalSnapshot.inspectionVersion} · content
+                  r{bundle.finalSnapshot.contentRevision}
                 </small>
-                <small>{formatSwissDateTime(bundle.finalSnapshot.createdAt)}</small>
+                <p className="inspection-signature-ready">
+                  Finalized content is read-only.
+                </p>
               </>
             ) : (
               <p className="form-error">
@@ -1255,25 +1310,29 @@ export function InspectionFinalizationPanel({
               </p>
             )}
           </div>
-          <div className="inspection-finalization-card">
-            <strong>Final report</strong>
+
+          <div
+            className="inspection-finalization-card inspection-final-report-card"
+            data-inspection-final-report
+          >
+            <div className="tenancy-form-heading">
+              <strong>Final report</strong>
+              <span>
+                {finalReportRelation
+                  ? 'Canonical report registered'
+                  : 'Not generated yet'}
+              </span>
+            </div>
             <p className="muted">
-              Generation is idempotent and always renders from the immutable snapshot.
+              The report is rendered only from the immutable final snapshot.
+              Generation is idempotent.
             </p>
-            <button
-              className="button-primary"
-              disabled={blocked || bundle.finalSnapshot === null}
-              onClick={generateFinalReport}
-              type="button"
-            >
-              {pendingAction === 'report'
-                ? 'Generating…'
-                : 'Generate / reuse final report'}
-            </button>
             {reportVersion ? (
-              <div className="document-version-box">
-                <span>Canonical final report</span>
-                <strong>{reportVersion.fileName}</strong>
+              <div className="inspection-final-report-ready">
+                <div>
+                  <strong>{reportVersion.fileName}</strong>
+                  <small>Canonical final report</small>
+                </div>
                 <DocumentBinaryActions
                   api={api}
                   fileName={reportVersion.fileName}
@@ -1281,7 +1340,34 @@ export function InspectionFinalizationPanel({
                   versionId={reportVersion.id}
                 />
               </div>
-            ) : null}
+            ) : finalReportRelation ? (
+              <button
+                className="button-primary"
+                disabled={blocked || bundle.finalSnapshot === null}
+                onClick={() => void resolveExistingFinalReport()}
+                type="button"
+              >
+                {pendingAction === 'report'
+                  ? 'Loading report…'
+                  : 'Load final report'}
+              </button>
+            ) : canGenerateFinalReport ? (
+              <button
+                className="button-primary"
+                disabled={blocked || bundle.finalSnapshot === null}
+                onClick={generateFinalReport}
+                type="button"
+              >
+                {pendingAction === 'report'
+                  ? 'Generating report…'
+                  : 'Generate final report'}
+              </button>
+            ) : (
+              <p className="setup-hint">
+                Final report has not been generated yet. A manager or
+                administrator can generate it.
+              </p>
+            )}
           </div>
         </div>
       ) : null}

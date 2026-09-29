@@ -1659,6 +1659,26 @@ describe('Inspection HTTP backbone', () => {
       },
     });
 
+    const inspectorMissingReport = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/final-report`,
+      ),
+      inspectorIdentity,
+    );
+    expect(inspectorMissingReport.status).toBe(404);
+    expect(await inspectorMissingReport.json()).toMatchObject({
+      error: { code: 'INSPECTION_FINAL_REPORT_NOT_FOUND' },
+    });
+
+    const inspectorCannotGenerateReport = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/final-report`,
+        { method: 'POST' },
+      ),
+      inspectorIdentity,
+    );
+    expect(inspectorCannotGenerateReport.status).toBe(403);
+
     const firstReport = await handler(
       new Request(
         `https://portfolio.test/inspections/${inspection.id}/final-report`,
@@ -1676,6 +1696,28 @@ describe('Inspection HTTP backbone', () => {
       status: 'final',
       mimeType: 'application/pdf',
     });
+
+    const inspectorReadReport = await handler(
+      new Request(
+        `https://portfolio.test/inspections/${inspection.id}/final-report`,
+      ),
+      inspectorIdentity,
+    );
+    expect(inspectorReadReport.status).toBe(200);
+    expect((await inspectorReadReport.clone().json()).data.id).toBe(
+      firstReportVersion.id,
+    );
+
+    const inspectorReadReportBinary = await handler(
+      new Request(
+        `https://portfolio.test/document-versions/${firstReportVersion.id}/content`,
+      ),
+      inspectorIdentity,
+    );
+    expect(inspectorReadReportBinary.status).toBe(200);
+    expect(new Uint8Array(await inspectorReadReportBinary.arrayBuffer()).byteLength)
+      .toBeGreaterThan(0);
+    expect(getPdfRenderCount()).toBe(1);
 
     const secondReport = await handler(
       new Request(
