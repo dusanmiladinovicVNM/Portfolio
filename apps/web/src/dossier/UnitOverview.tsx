@@ -6,15 +6,19 @@ import { useEffect, useState } from 'react';
 import { unitOverviewPath } from '../api/paths.js';
 import type { PortfolioApi } from '../api/portfolio-api.js';
 import { isWorkspaceAsOf } from '../navigation/workspace-route.js';
+import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
 import {
   formatExactMoney,
   formatSwissDate,
 } from '../presentation/format.js';
+import { UnitOverviewCommandCenter } from './UnitOverviewCommandCenter.js';
 
 interface UnitOverviewProps {
   readonly api: PortfolioApi;
+  readonly propertyId: string;
   readonly unitId: string;
   readonly asOf: string;
+  readonly navigate: NavigateWorkspace;
   readonly onAsOfChange: (asOf: string) => void;
 }
 
@@ -28,8 +32,10 @@ function coverageLabel(
 
 export function UnitOverview({
   api,
+  propertyId,
   unitId,
   asOf,
+  navigate,
   onAsOfChange,
 }: UnitOverviewProps) {
   const [overview, setOverview] =
@@ -108,6 +114,15 @@ export function UnitOverview({
 
       {overview ? (
         <div className="dashboard-stack">
+          <UnitOverviewCommandCenter
+            api={api}
+            asOf={asOf}
+            navigate={navigate}
+            overview={overview}
+            propertyId={propertyId}
+            unitId={unitId}
+          />
+
           <section className="metric-grid">
             <article className="metric-card metric-card-primary">
               <span>Occupancy</span>
@@ -182,7 +197,7 @@ export function UnitOverview({
 
           <section className="panel">
             <div className="section-heading">
-              <div><p className="eyebrow">Current operations</p><h2>Unit attention</h2></div>
+              <div><p className="eyebrow">Current operations</p><h2>Operational inventory</h2></div>
               <span className="section-note">
                 Current state · independent of overview as-of
               </span>
