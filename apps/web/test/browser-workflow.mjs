@@ -4940,6 +4940,7 @@ try {
     baseUrl + '/properties/' + propertyId +
     '/units/' + unitId +
     '?tab=inspections&inspectionId=' + inspectionId +
+    '&sectionInstanceId=' + inspectionSectionInstanceId +
     '&asOf=2025-06-30';
   assertEqual(
     await currentUrl(sessionId),
