@@ -344,6 +344,7 @@ export function UnitOverviewCommandCenter({
 
       <div className="unit-command-center-shortcuts">
         <WorkspaceLink
+          className="unit-command-center-shortcut"
           navigate={navigate}
           route={unitRoute(propertyId, unitId, asOf, 'maintenance')}
         >
@@ -354,6 +355,7 @@ export function UnitOverviewCommandCenter({
           </strong>
         </WorkspaceLink>
         <WorkspaceLink
+          className="unit-command-center-shortcut"
           navigate={navigate}
           route={unitRoute(propertyId, unitId, asOf, 'assets')}
         >
@@ -364,6 +366,7 @@ export function UnitOverviewCommandCenter({
           </strong>
         </WorkspaceLink>
         <WorkspaceLink
+          className="unit-command-center-shortcut"
           navigate={navigate}
           route={unitRoute(propertyId, unitId, asOf, 'meters')}
         >
@@ -371,6 +374,7 @@ export function UnitOverviewCommandCenter({
           <strong>{overview.currentOperations.activeMeterCount} active</strong>
         </WorkspaceLink>
         <WorkspaceLink
+          className="unit-command-center-shortcut"
           navigate={navigate}
           route={unitRoute(propertyId, unitId, asOf, 'documents')}
         >
