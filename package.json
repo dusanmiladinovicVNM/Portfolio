@@ -21,7 +21,8 @@
     "binary-backup:self-test": "node scripts/recovery/backup-google-drive-binaries.mjs --self-test",
     "binary-backup:restore": "bash scripts/recovery/restore-production-binaries.sh",
     "binary-backup:restore:typecheck": "pnpm --filter @portfolio/recovery typecheck",
-    "binary-backup:restore:build": "bash scripts/recovery/build-binary-restore-operator.sh .artifacts/binary-restore/restore-production-binaries.mjs"
+    "binary-backup:restore:build": "bash scripts/recovery/build-binary-restore-operator.sh .artifacts/binary-restore/restore-production-binaries.mjs",
+    "vercel:production:deploy": "bash scripts/deployment/deploy-vercel-production.sh"
   },
   "devDependencies": {
     "@types/node": "24.13.5",

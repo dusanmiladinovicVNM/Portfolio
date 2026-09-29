@@ -44,6 +44,11 @@ if [[ "$MANIFEST_BUNDLE_SHA" != "$CURRENT_BUNDLE_SHA" ]]; then
   exit 1
 fi
 
+if [[ "${DEPLOY_REQUIRE_REMOTE_MAIN:-0}" == "1" ]]; then
+  DEPLOY_EXPECTED_SHA="$ACTUAL_SHA" \
+    bash "$ROOT_DIR/scripts/deployment/assert-current-main.sh"
+fi
+
 pnpm dlx "supabase@${SUPABASE_CLI_VERSION}" functions deploy api \
   --project-ref "$PROJECT_REF" \
   --use-api

@@ -63,6 +63,9 @@ jobs:
       - name: Validate public web deployment contract
         run: pnpm web:deployment:check
 
+      - name: Current-main deployment fence self-test
+        run: bash scripts/deployment/test-current-main-fence.sh
+
       - name: Unit tests
         env:
           LUZERNER_VISUAL_PROOF_PATH: .artifacts/luzerner/mietvertrag-fixture.pdf
@@ -221,3 +224,92 @@ jobs:
 
       - name: Check deployable Supabase Edge bundle
         run: deno check supabase/functions/api/dist/index.js
+
+  deploy-production-api:
+    name: Deploy production API
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: portfolio-production-api-deploy
+      cancel-in-progress: false
+    env:
+      SUPABASE_PROJECT_REF: fiowxgamyjjcondlheqg
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_DEPLOY_ACCESS_TOKEN || secrets.SUPABASE_OBSERVABILITY_ACCESS_TOKEN }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+    steps:
+      - name: Checkout exact merged main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Use Node.js 24 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install pnpm
+        run: npm install --global pnpm@12.4.2
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Require production release credentials
+        run: |
+          test -n "$SUPABASE_ACCESS_TOKEN" || {
+            echo "SUPABASE_DEPLOY_ACCESS_TOKEN or SUPABASE_OBSERVABILITY_ACCESS_TOKEN is required." >&2
+            exit 1
+          }
+          test -n "$VERCEL_TOKEN" || {
+            echo "VERCEL_TOKEN is required for the gated production web release." >&2
+            exit 1
+          }
+          test -n "$VERCEL_ORG_ID" || {
+            echo "VERCEL_ORG_ID is required for the gated production web release." >&2
+            exit 1
+          }
+          test -n "$VERCEL_PROJECT_ID" || {
+            echo "VERCEL_PROJECT_ID is required for the gated production web release." >&2
+            exit 1
+          }
+
+      - name: Refuse stale main deployment
+        id: freshness
+        run: |
+          git fetch --no-tags origin main
+          HEAD_SHA="$(git rev-parse HEAD)"
+          REMOTE_MAIN_SHA="$(git rev-parse origin/main)"
+
+          test "$HEAD_SHA" = "$GITHUB_SHA" || {
+            echo "Checked-out SHA $HEAD_SHA does not match workflow SHA $GITHUB_SHA." >&2
+            exit 1
+          }
+
+          if [ "$REMOTE_MAIN_SHA" != "$GITHUB_SHA" ]; then
+            echo "A newer main exists at $REMOTE_MAIN_SHA; skipping stale deployment of $GITHUB_SHA."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy and verify hosted API SHA
+        if: steps.freshness.outputs.deploy == 'true'
+        env:
+          DEPLOY_REQUIRE_REMOTE_MAIN: "1"
+        run: pnpm supabase:function:deploy
+
+      - name: Deploy production web after API
+        if: steps.freshness.outputs.deploy == 'true'
+        env:
+          DEPLOY_REQUIRE_REMOTE_MAIN: "1"
+        run: pnpm vercel:production:deploy
+
+      - name: Record skipped stale deployment
+        if: steps.freshness.outputs.deploy != 'true'
+        run: |
+          echo "Production release skipped because a newer main commit is already canonical." >> "$GITHUB_STEP_SUMMARY"

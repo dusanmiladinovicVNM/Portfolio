@@ -45,10 +45,21 @@ function numericField(row, name) {
   return parsed;
 }
 
-function evaluateSignals({ readyOk, counts, thresholds }) {
+function evaluateSignals({
+  readyOk,
+  releaseSha = null,
+  expectedReleaseSha = null,
+  counts,
+  thresholds,
+}) {
   const alerts = [];
 
   if (!readyOk) alerts.push('readiness probe failed');
+  if (expectedReleaseSha && releaseSha !== expectedReleaseSha) {
+    alerts.push(
+      `deployed API release ${releaseSha ?? 'unknown'} does not match expected main ${expectedReleaseSha}`,
+    );
+  }
   if (counts.unexpectedErrors >= thresholds.unexpectedErrors) {
     alerts.push(`unexpected errors ${counts.unexpectedErrors} >= ${thresholds.unexpectedErrors}`);
   }
@@ -174,7 +185,15 @@ async function queryLogAggregates({ projectRef, accessToken, windowMinutes }) {
   };
 }
 
-function markdownSummary({ checkedAt, windowMinutes, readiness, counts, thresholds, alerts }) {
+function markdownSummary({
+  checkedAt,
+  windowMinutes,
+  readiness,
+  expectedReleaseSha,
+  counts,
+  thresholds,
+  alerts,
+}) {
   const state = alerts.length === 0 ? 'HEALTHY' : 'ALERT';
   return [
     `# Portfolio production observability — ${state}`,
@@ -186,6 +205,7 @@ function markdownSummary({ checkedAt, windowMinutes, readiness, counts, threshol
     '',
     `- /health/ready: ${readiness.ok ? 'PASS' : 'FAIL'}${readiness.status === null ? '' : ` (HTTP ${readiness.status})`}`,
     `- deployed API release: ${readiness.releaseSha ?? 'unknown'}`,
+    `- expected main release: ${expectedReleaseSha ?? 'not configured'}`,
     '',
     '## Aggregated production signals',
     '',
@@ -215,6 +235,8 @@ function selfTest() {
   assert.deepEqual(
     evaluateSignals({
       readyOk: true,
+      releaseSha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      expectedReleaseSha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       counts: { generic5xx: 2, unexpectedErrors: 0, storageFailures: 0, rateLimitExceeded: 9, authFailures: 19 },
       thresholds: DEFAULT_THRESHOLDS,
     }),
@@ -222,7 +244,21 @@ function selfTest() {
   );
   assert.deepEqual(
     evaluateSignals({
+      readyOk: true,
+      releaseSha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      expectedReleaseSha: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      counts: { generic5xx: 0, unexpectedErrors: 0, storageFailures: 0, rateLimitExceeded: 0, authFailures: 0 },
+      thresholds: DEFAULT_THRESHOLDS,
+    }),
+    [
+      'deployed API release aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa does not match expected main bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    ],
+  );
+  assert.deepEqual(
+    evaluateSignals({
       readyOk: false,
+      releaseSha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      expectedReleaseSha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       counts: { generic5xx: 3, unexpectedErrors: 1, storageFailures: 1, rateLimitExceeded: 10, authFailures: 20 },
       thresholds: DEFAULT_THRESHOLDS,
     }),
@@ -255,6 +291,8 @@ async function main() {
   const projectRef = process.env.SUPABASE_PROJECT_REF;
   const accessToken = process.env.SUPABASE_OBSERVABILITY_ACCESS_TOKEN;
   const apiBaseUrl = process.env.PORTFOLIO_PRODUCTION_API_BASE_URL;
+  const expectedReleaseSha =
+    process.env.PORTFOLIO_EXPECTED_RELEASE_SHA?.trim() || null;
   if (!projectRef) throw new Error('SUPABASE_PROJECT_REF is required.');
   if (!accessToken) throw new Error('SUPABASE_OBSERVABILITY_ACCESS_TOKEN is required.');
   if (!apiBaseUrl) throw new Error('PORTFOLIO_PRODUCTION_API_BASE_URL is required.');
@@ -278,13 +316,27 @@ async function main() {
     counts = { generic5xx: 0, unexpectedErrors: 0, storageFailures: 0, rateLimitExceeded: 0, authFailures: 0 };
   }
 
-  const alerts = monitorError
-    ? [`monitoring logs query unavailable: ${monitorError}`]
-    : evaluateSignals({ readyOk: readiness.ok, counts, thresholds });
-  if (monitorError && !readiness.ok) alerts.unshift('readiness probe failed');
+  const alerts = evaluateSignals({
+    readyOk: readiness.ok,
+    releaseSha: readiness.releaseSha,
+    expectedReleaseSha,
+    counts,
+    thresholds,
+  });
+  if (monitorError) {
+    alerts.push(`monitoring logs query unavailable: ${monitorError}`);
+  }
 
   const checkedAt = new Date().toISOString();
-  const report = { checkedAt, windowMinutes, readiness, counts, thresholds, alerts };
+  const report = {
+    checkedAt,
+    windowMinutes,
+    readiness,
+    expectedReleaseSha,
+    counts,
+    thresholds,
+    alerts,
+  };
   const summary = markdownSummary(report);
   const jsonPath = process.env.OBSERVABILITY_JSON_PATH ?? '.artifacts/observability/result.json';
   const summaryPath = process.env.OBSERVABILITY_SUMMARY_PATH ?? '.artifacts/observability/summary.md';
