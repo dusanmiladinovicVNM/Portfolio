@@ -18,6 +18,7 @@ import type { DocumentRepository } from '../documents/document-repository.js';
 import type { FileStorageWritePort } from '../documents/file-storage-port.js';
 import type { PdfPort } from '../documents/pdf-port.js';
 import type { InspectionRepository } from './inspection-repository.js';
+import { resolveInspectionFinalReport } from './inspection-report-service.js';
 
 export interface GenerateInspectionFinalReportDependencies {
   readonly inspectionRepository: InspectionRepository;
@@ -47,31 +48,7 @@ export async function generateInspectionFinalReportCommand(
     );
   }
 
-  const resolveExistingEvidence = async (): Promise<DocumentVersion | null> => {
-    const existing = (await deps.inspectionRepository.listEvidence(inspectionId))
-      .find((item) => item.kind === 'final_report');
-    if (!existing) return null;
-
-    const version = await deps.documentRepository.getVersionById(
-      existing.documentVersionId,
-    );
-    if (!version) {
-      throw new DomainError(
-        'INSPECTION_FINAL_REPORT_DOCUMENT_MISSING',
-        'Final report evidence references a missing document version.',
-      );
-    }
-    if (version.status !== 'final' || version.mimeType !== 'application/pdf') {
-      throw new DomainError(
-        'INSPECTION_FINAL_REPORT_DOCUMENT_INVALID',
-        'Final report evidence must reference one final PDF DocumentVersion.',
-      );
-    }
-    await assertDocumentVersionStorageIntegrity(deps, version);
-    return version;
-  };
-
-  const existing = await resolveExistingEvidence();
+  const existing = await resolveInspectionFinalReport(deps, inspectionId);
   if (existing) return existing;
 
   const snapshot = await deps.inspectionRepository.getFinalSnapshot(inspectionId);
@@ -226,7 +203,7 @@ export async function generateInspectionFinalReportCommand(
     ) {
       throw error;
     }
-    const winner = await resolveExistingEvidence();
+    const winner = await resolveInspectionFinalReport(deps, inspectionId);
     if (!winner) {
       throw new DomainError(
         'INSPECTION_FINAL_REPORT_RECONCILIATION_REQUIRED',

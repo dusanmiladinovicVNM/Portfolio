@@ -38,6 +38,7 @@ export * from './inspections/inspection-commands.js';
 export * from './inspections/inspection-binary-commands.js';
 export * from './inspections/inspection-queries.js';
 export * from './inspections/inspection-report-commands.js';
+export * from './inspections/inspection-report-queries.js';
 
 export * from './assets/asset-repository.js';
 export * from './assets/asset-commands.js';
