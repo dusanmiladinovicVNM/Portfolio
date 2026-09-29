@@ -112,6 +112,24 @@ const vercelDeployScript = await readFile(
   'utf8',
 );
 
+if (!vercelDeployScript.includes('VERCEL_CLI_VERSION=59.19.1')) {
+  failures.push('Production Vercel deploy must pin the Vercel CLI version.');
+}
+if (
+  !vercelDeployScript.includes(
+    'npm install --global "vercel@${VERCEL_CLI_VERSION}"',
+  )
+) {
+  failures.push(
+    'Production Vercel deploy must install the pinned CLI outside pnpm dlx to avoid pnpm lifecycle-script blocking.',
+  );
+}
+if (vercelDeployScript.includes('pnpm dlx "vercel@')) {
+  failures.push(
+    'Production Vercel deploy must not bootstrap the CLI through pnpm dlx.',
+  );
+}
+
 for (const [label, deployScript] of [
   ['Supabase API', supabaseDeployScript],
   ['Vercel web', vercelDeployScript],
