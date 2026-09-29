@@ -103,6 +103,29 @@ if (
   );
 }
 
+const supabaseDeployScript = await readFile(
+  path.join(root, 'scripts/deployment/deploy-supabase-function.sh'),
+  'utf8',
+);
+const vercelDeployScript = await readFile(
+  path.join(root, 'scripts/deployment/deploy-vercel-production.sh'),
+  'utf8',
+);
+
+for (const [label, deployScript] of [
+  ['Supabase API', supabaseDeployScript],
+  ['Vercel web', vercelDeployScript],
+]) {
+  if (
+    !deployScript.includes('DEPLOY_REQUIRE_REMOTE_MAIN') ||
+    !deployScript.includes('assert-current-main.sh')
+  ) {
+    failures.push(
+      `${label} canonical deploy script must consume DEPLOY_REQUIRE_REMOTE_MAIN through assert-current-main.sh.`,
+    );
+  }
+}
+
 const ciWorkflow = await readFile(
   path.join(root, '.github/workflows/ci.yml'),
   'utf8',
