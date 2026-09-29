@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { unitOverviewPath } from '../src/api/paths.js';
 import {
   dashboardRoute,
+  workRoute,
   partiesRoute,
   staffRoute,
   inspectionSchemasRoute,
@@ -201,6 +202,22 @@ describe('workspace URL navigation', () => {
     );
   });
 
+
+  it('round-trips the global Work queue route with the reporting context', () => {
+    const route = workRoute('2025-06-30');
+    expect(workspaceRouteHref(route)).toBe('/work?asOf=2025-06-30');
+    expect(
+      parseWorkspaceLocation(
+        '/work',
+        '?asOf=2025-06-30',
+        '2026-09-21',
+      ),
+    ).toEqual({
+      kind: 'work',
+      asOf: '2025-06-30',
+    });
+    expect(workspaceRouteOwnerKey(route)).toBe('work');
+  });
 
   it('round-trips the global Parties route with the reporting context', () => {
     const route = partiesRoute('2025-06-30');

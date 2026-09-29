@@ -8,11 +8,13 @@ import { StaffAdministration } from './admin/StaffAdministration.js';
 import { InspectionSchemaAdministration } from './admin/InspectionSchemaAdministration.js';
 import { currentStaffPath } from './api/paths.js';
 import { PortfolioDashboard } from './dashboard/PortfolioDashboard.js';
+import { InspectionWorkQueue } from './work/InspectionWorkQueue.js';
 import { PropertyUnits } from './dossier/PropertyUnits.js';
 import { UnitDossier } from './dossier/UnitDossier.js';
 import { WorkspaceLink } from './navigation/WorkspaceLink.js';
 import {
   dashboardRoute,
+  workRoute,
   partiesRoute,
   staffRoute,
   inspectionSchemasRoute,
@@ -105,7 +107,9 @@ function AuthenticatedShell({
   const focusKey =
     route.kind === 'dashboard'
       ? 'dashboard'
-      : route.kind === 'parties'
+      : route.kind === 'work'
+        ? 'work'
+        : route.kind === 'parties'
         ? 'parties'
         : route.kind === 'staff'
           ? 'staff'
@@ -182,6 +186,14 @@ function AuthenticatedShell({
             route={dashboardRoute(route.asOf)}
           >
             Overview
+          </WorkspaceLink>
+          <WorkspaceLink
+            ariaCurrent={route.kind === 'work' ? 'page' : undefined}
+            className={`nav-item ${route.kind === 'work' ? 'nav-item-active' : ''}`}
+            navigate={navigate}
+            route={workRoute(route.asOf)}
+          >
+            Work
           </WorkspaceLink>
           <WorkspaceLink
             ariaCurrent={route.kind === 'parties' ? 'page' : undefined}
@@ -288,6 +300,15 @@ function AuthenticatedShell({
       >
         {route.kind === 'dashboard' ? (
           <PortfolioDashboard api={api} asOf={route.asOf} navigate={navigate} />
+        ) : null}
+
+        {route.kind === 'work' ? (
+          <InspectionWorkQueue
+            api={api}
+            asOf={route.asOf}
+            navigate={navigate}
+            staffRole={currentStaff?.role ?? null}
+          />
         ) : null}
 
         {route.kind === 'parties' ? (
