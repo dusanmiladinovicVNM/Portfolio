@@ -37,11 +37,10 @@ const deploymentEnabled = config.git?.deploymentEnabled;
 if (
   typeof deploymentEnabled !== 'object' ||
   deploymentEnabled === null ||
-  deploymentEnabled['**'] !== false ||
-  deploymentEnabled.main !== true
+  deploymentEnabled['**'] !== false
 ) {
   failures.push(
-    'vercel.json must use the globstar catch-all to suppress every non-main Git branch while keeping main enabled.',
+    'vercel.json must suppress automatic Git deployment for every branch, including main; production web deploys only through the gated main CI release.',
   );
 }
 
@@ -56,7 +55,7 @@ if (
   }
 
   const unexpectedEnabledPatterns = Object.entries(deploymentEnabled)
-    .filter(([pattern, enabled]) => pattern !== 'main' && enabled === true)
+    .filter(([, enabled]) => enabled === true)
     .map(([pattern]) => pattern);
 
   if (unexpectedEnabledPatterns.length > 0) {
@@ -71,19 +70,15 @@ if (
     if (deploymentEnabled['**'] === false) {
       matchingDecisions.push(false);
     }
-    if (branch === 'main' && deploymentEnabled.main === true) {
-      matchingDecisions.push(true);
-    }
-
-    // Vercel defaults an unspecified branch to enabled. If more than one
-    // pattern matches, any true rule permits deployment.
+    // Vercel defaults an unspecified branch to enabled. The globstar false
+    // rule must therefore cover main and every feature branch.
     return matchingDecisions.length === 0
       ? true
       : matchingDecisions.some(Boolean);
   };
 
   for (const [branch, expectedEnabled] of [
-    ['main', true],
+    ['main', false],
     ['plain-branch', false],
     ['feature/foo', false],
     ['ux/inspection-workspace-shell', false],
@@ -99,6 +94,55 @@ if (
 }
 
 const rootPackage = await readJson('package.json');
+if (
+  rootPackage.scripts?.['vercel:production:deploy'] !==
+  'bash scripts/deployment/deploy-vercel-production.sh'
+) {
+  failures.push(
+    'Production web deployment must use the canonical scripts/deployment/deploy-vercel-production.sh entry point.',
+  );
+}
+
+const ciWorkflow = await readFile(
+  path.join(root, '.github/workflows/ci.yml'),
+  'utf8',
+);
+const releaseJobStart = ciWorkflow.indexOf('  deploy-production-api:');
+const releaseJob =
+  releaseJobStart === -1 ? '' : ciWorkflow.slice(releaseJobStart);
+const apiDeployIndex = releaseJob.indexOf(
+  'run: pnpm supabase:function:deploy',
+);
+const webDeployIndex = releaseJob.indexOf(
+  'run: pnpm vercel:production:deploy',
+);
+
+if (releaseJobStart === -1) {
+  failures.push('Main CI must contain the gated deploy-production-api release job.');
+} else {
+  if (
+    !releaseJob.includes(
+      "if: github.event_name == 'push' && github.ref == 'refs/heads/main'",
+    )
+  ) {
+    failures.push('Production release job must run only for pushes to main.');
+  }
+  if (
+    apiDeployIndex === -1 ||
+    webDeployIndex === -1 ||
+    webDeployIndex <= apiDeployIndex
+  ) {
+    failures.push(
+      'Production release must deploy and verify the API before deploying the Vercel web frontend.',
+    );
+  }
+  if (!releaseJob.includes('DEPLOY_REQUIRE_REMOTE_MAIN: "1"')) {
+    failures.push(
+      'Production release must require the current-main fence at deployment time.',
+    );
+  }
+}
+
 if (rootPackage.engines?.node !== '>=24 <25') {
   failures.push('Root Node engine must remain pinned to Node 24.');
 }
