@@ -188,9 +188,12 @@ export function UnitOverviewCommandCenter({
     activeInspections.length +
     openIssues.length +
     (occupancyAction === null ? 0 : 1);
+  const currentWorkComplete =
+    inspections !== null && maintenanceIssues !== null;
+  const currentWorkFailed =
+    inspectionError !== null || maintenanceError !== null;
   const loadingCurrentWork =
-    (inspections === null && inspectionError === null) ||
-    (maintenanceIssues === null && maintenanceError === null);
+    !currentWorkComplete && !currentWorkFailed;
 
   return (
     <section
@@ -208,8 +211,14 @@ export function UnitOverviewCommandCenter({
           </p>
         </div>
         <div className="unit-command-center-count">
-          <strong>{currentActionCount}</strong>
-          <span>action{currentActionCount === 1 ? '' : 's'}</span>
+          <strong>{currentWorkComplete ? currentActionCount : '—'}</strong>
+          <span>
+            {currentWorkComplete
+              ? `action${currentActionCount === 1 ? '' : 's'}`
+              : currentWorkFailed
+                ? 'current work unavailable'
+                : 'loading current work'}
+          </span>
         </div>
       </div>
 
