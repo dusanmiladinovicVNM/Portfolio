@@ -4912,6 +4912,55 @@ try {
     'xpath',
     "//article[contains(@class,'metric-card-primary')]//small[normalize-space()='as of 30.06.2025']",
   );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-command-center][.//h2[normalize-space()='What needs attention']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-action-inspection][.//h3[normalize-space()='INS-BRW-001']][contains(normalize-space(),'Draft')][contains(normalize-space(),'scheduled 30.06.2025')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-command-center]//a[normalize-space()='Prepare Inspection']",
+  );
+  await clickXpath(
+    sessionId,
+    "//*[@data-unit-action-inspection][.//h3[normalize-space()='INS-BRW-001']]//a[normalize-space()='Prepare Inspection']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'inspection-editor')]//h2[normalize-space()='INS-BRW-001']",
+  );
+  const overviewInspectionUrl =
+    baseUrl + '/properties/' + propertyId +
+    '/units/' + unitId +
+    '?tab=inspections&inspectionId=' + inspectionId +
+    '&sectionInstanceId=' + inspectionSectionInstanceId +
+    '&asOf=2025-06-30';
+  assertEqual(
+    await currentUrl(sessionId),
+    overviewInspectionUrl,
+    'Unit command center opens exact canonical Inspection',
+  );
+  await clickXpath(
+    sessionId,
+    "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Overview']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-command-center]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    unitOverviewUrl,
+    'Command-center return restores Unit Overview route',
+  );
   await clearXpath(
     sessionId,
     "//input[@aria-label='Unit overview business date']",

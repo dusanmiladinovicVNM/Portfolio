@@ -160,6 +160,8 @@ export function UnitDossier({
             <UnitOverview
               api={api}
               asOf={asOf}
+              navigate={navigate}
+              propertyId={propertyId}
               onAsOfChange={(nextAsOf) =>
                 navigate(
                   unitRoute(propertyId, unitId, nextAsOf, 'overview'),
