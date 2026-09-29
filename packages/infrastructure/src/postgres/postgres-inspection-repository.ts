@@ -584,6 +584,15 @@ export class PostgresInspectionRepository implements InspectionRepository {
     return rows.map(mapInspection);
   }
 
+  async listActive(): Promise<readonly Inspection[]> {
+    const rows = await this.sql<InspectionRow[]>`
+      ${this.sql.unsafe(inspectionSelect)}
+      where status in ('draft', 'in_progress', 'locked')
+      order by scheduled_for asc nulls last, id
+    `;
+    return rows.map(mapInspection);
+  }
+
   async listAssignedTo(userId: UserId): Promise<readonly Inspection[]> {
     const rows = await this.sql<InspectionRow[]>`
       ${this.sql.unsafe(inspectionSelect)}
