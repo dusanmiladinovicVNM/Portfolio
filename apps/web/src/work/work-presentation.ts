@@ -1,7 +1,7 @@
 import {
+  WORK_ATTENTION_VALUES,
   type OperationalWorkItemResponse,
   type WorkOccupancyItemResponse,
-  type WORK_ATTENTION_VALUES,
 } from '@portfolio/contracts';
 import {
   propertyRoute,
