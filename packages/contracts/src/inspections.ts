@@ -352,32 +352,6 @@ export const inspectionStaffListResponseSchema = z.object({
   items: z.array(inspectionStaffResponseSchema),
 });
 
-export const assignedInspectionWorkItemResponseSchema = z.object({
-  inspection: inspectionResponseSchema,
-  propertyId: entityIdSchema,
-  unitCode: z.string(),
-  unitNumber: z.string(),
-});
-
-export const assignedInspectionWorkListResponseSchema = z.object({
-  items: z.array(assignedInspectionWorkItemResponseSchema),
-});
-
-export const inspectionWorkQueueItemResponseSchema = z.object({
-  inspection: inspectionResponseSchema,
-  propertyId: entityIdSchema,
-  propertyCode: z.string().trim().min(1),
-  propertyName: z.string().trim().min(1),
-  unitCode: z.string().trim().min(1),
-  unitNumber: z.string().trim().min(1),
-  assignedToDisplayName: z.string().trim().min(1).nullable(),
-  assignedToRole: z.enum(['admin', 'manager', 'inspector']).nullable(),
-});
-
-export const inspectionWorkQueueListResponseSchema = z.object({
-  items: z.array(inspectionWorkQueueItemResponseSchema),
-});
-
 export const inspectionBundleResponseSchema = z.object({
   inspection: inspectionResponseSchema,
   schema: inspectionSchemaVersionResponseSchema,
@@ -408,18 +382,6 @@ export type InspectionStaffResponse = z.infer<
 >;
 export type InspectionStaffListResponse = z.infer<
   typeof inspectionStaffListResponseSchema
->;
-export type AssignedInspectionWorkItemResponse = z.infer<
-  typeof assignedInspectionWorkItemResponseSchema
->;
-export type AssignedInspectionWorkListResponse = z.infer<
-  typeof assignedInspectionWorkListResponseSchema
->;
-export type InspectionWorkQueueItemResponse = z.infer<
-  typeof inspectionWorkQueueItemResponseSchema
->;
-export type InspectionWorkQueueListResponse = z.infer<
-  typeof inspectionWorkQueueListResponseSchema
 >;
 export type InspectionBundleResponse = z.infer<
   typeof inspectionBundleResponseSchema
