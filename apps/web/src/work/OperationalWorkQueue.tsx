@@ -7,16 +7,21 @@ import { useEffect, useMemo, useState } from 'react';
 import { operationalWorkPath } from '../api/paths.js';
 import type { PortfolioApi } from '../api/portfolio-api.js';
 import { WorkspaceLink } from '../navigation/WorkspaceLink.js';
-import {
-  propertyRoute,
-  unitRoute,
-} from '../navigation/workspace-route.js';
 import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
 import {
   formatDetailKey,
   formatSwissDate,
   formatSwissDateTime,
 } from '../presentation/format.js';
+import {
+  workAttentionLabel,
+  workDomainLabel,
+  workItemActionLabel,
+  workItemCode,
+  workItemKey,
+  workItemRoute,
+  workOccupancyReasonLabel,
+} from './work-presentation.js';
 
 type WorkDomain = 'all' | OperationalWorkItemResponse['kind'];
 type WorkAttentionFilter = 'all' | (typeof WORK_ATTENTION_VALUES)[number];
@@ -26,62 +31,6 @@ interface OperationalWorkQueueProps {
   readonly asOf: string;
   readonly navigate: NavigateWorkspace;
   readonly staffRole: 'admin' | 'manager' | 'inspector' | null;
-}
-
-function attentionLabel(
-  value: (typeof WORK_ATTENTION_VALUES)[number],
-): string {
-  switch (value) {
-    case 'urgent':
-      return 'Urgent';
-    case 'overdue':
-      return 'Overdue';
-    case 'today':
-      return 'Today';
-    case 'high':
-      return 'High';
-    case 'upcoming':
-      return 'Upcoming';
-    case 'normal':
-      return 'Normal';
-    case 'unscheduled':
-      return 'Unscheduled';
-  }
-}
-
-function domainLabel(value: OperationalWorkItemResponse['kind']): string {
-  switch (value) {
-    case 'inspection':
-      return 'Inspection';
-    case 'maintenance':
-      return 'Maintenance';
-    case 'occupancy':
-      return 'Occupancy & contract';
-  }
-}
-
-function occupancyReasonLabel(
-  reason: Extract<OperationalWorkItemResponse, { kind: 'occupancy' }>['reason'],
-): string {
-  switch (reason) {
-    case 'contract_missing':
-      return 'Contract coverage missing';
-    case 'contract_draft':
-      return 'Draft agreement';
-    case 'move_out':
-      return 'Move-out';
-  }
-}
-
-function itemKey(item: OperationalWorkItemResponse): string {
-  switch (item.kind) {
-    case 'inspection':
-      return `inspection:${item.inspectionId}`;
-    case 'maintenance':
-      return `maintenance:${item.issueId}`;
-    case 'occupancy':
-      return `occupancy:${item.reason}:${item.tenancyId}:${item.agreementId ?? 'none'}`;
-  }
 }
 
 function assignedLabel(
@@ -265,7 +214,7 @@ export function OperationalWorkQueue({
                 <option value="all">All attention</option>
                 {WORK_ATTENTION_VALUES.map((attention) => (
                   <option key={attention} value={attention}>
-                    {attentionLabel(attention)}
+                    {workAttentionLabel(attention)}
                   </option>
                 ))}
               </select>
@@ -292,23 +241,17 @@ export function OperationalWorkQueue({
                   className="work-queue-card"
                   data-work-attention={item.attention}
                   data-work-domain={item.kind}
-                  key={itemKey(item)}
+                  key={workItemKey(item)}
                 >
                   <div className="work-queue-card-primary">
                     <span
                       className={`work-attention work-attention-${item.attention}`}
                     >
-                      {attentionLabel(item.attention)}
+                      {workAttentionLabel(item.attention)}
                     </span>
                     <div>
-                      <strong>
-                        {item.kind === 'inspection'
-                          ? item.inspectionCode
-                          : item.kind === 'maintenance'
-                            ? item.issueCode
-                            : item.tenancyCode}
-                      </strong>
-                      <small>{domainLabel(item.kind)}</small>
+                      <strong>{workItemCode(item)}</strong>
+                      <small>{workDomainLabel(item.kind)}</small>
                     </div>
                   </div>
 
@@ -318,160 +261,13 @@ export function OperationalWorkQueue({
                       <dd>{locationLabel(item)}</dd>
                     </div>
 
-                    {item.kind === 'inspection' ? (
-                      <>
-                        <div>
-                          <dt>Lifecycle</dt>
-                          <dd>{formatDetailKey(item.inspectionStatus)}</dd>
-                        </div>
-                        <div>
-                          <dt>Assignee</dt>
-                          <dd>{assignedLabel(item)}</dd>
-                        </div>
-                        <div>
-                          <dt>Scheduled</dt>
-                          <dd>
-                            {item.scheduledFor
-                              ? formatSwissDate(item.scheduledFor)
-                              : 'Unscheduled'}
-                          </dd>
-                        </div>
-                      </>
-                    ) : null}
-
-                    {item.kind === 'maintenance' ? (
-                      <>
-                        <div>
-                          <dt>Issue</dt>
-                          <dd>{item.title}</dd>
-                        </div>
-                        <div>
-                          <dt>Priority</dt>
-                          <dd>{formatDetailKey(item.priority)}</dd>
-                        </div>
-                        <div>
-                          <dt>Reported</dt>
-                          <dd>{formatSwissDateTime(item.reportedAt)}</dd>
-                        </div>
-                        <div>
-                          <dt>Active work orders</dt>
-                          <dd>{item.activeWorkOrderCount}</dd>
-                        </div>
-                      </>
-                    ) : null}
-
-                    {item.kind === 'occupancy' ? (
-                      <>
-                        <div>
-                          <dt>Attention</dt>
-                          <dd>{occupancyReasonLabel(item.reason)}</dd>
-                        </div>
-                        <div>
-                          <dt>Tenancy</dt>
-                          <dd>
-                            {item.tenancyCode} · {formatDetailKey(item.tenancyStatus)}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>Agreement</dt>
-                          <dd>{item.agreementCode ?? 'No covering agreement'}</dd>
-                        </div>
-                        <div>
-                          <dt>Due</dt>
-                          <dd>
-                            {item.dueDate
-                              ? formatSwissDate(item.dueDate)
-                              : 'No due date'}
-                          </dd>
-                        </div>
-                      </>
-                    ) : null}
-                  </dl>
-
-                  <div className="work-queue-card-action">
-                    <span className="status-chip">
-                      {item.kind === 'inspection'
-                        ? formatDetailKey(item.inspectionStatus)
-                        : item.kind === 'maintenance'
-                          ? formatDetailKey(item.priority)
-                          : occupancyReasonLabel(item.reason)}
-                    </span>
-
-                    {item.kind === 'inspection' ? (
-                      <WorkspaceLink
-                        className="button-secondary work-queue-open"
-                        navigate={navigate}
-                        route={unitRoute(
-                          item.propertyId,
-                          item.unitId,
-                          asOf,
-                          'inspections',
-                          { inspectionId: item.inspectionId },
-                        )}
-                      >
-                        Open Inspection
-                      </WorkspaceLink>
-                    ) : null}
-
-                    {item.kind === 'maintenance' ? (
-                      item.unitId === null ? (
-                        <WorkspaceLink
-                          className="button-secondary work-queue-open"
-                          navigate={navigate}
-                          route={propertyRoute(item.propertyId, asOf, {
-                            maintenanceIssueId: item.issueId,
-                          })}
-                        >
-                          Open Maintenance
-                        </WorkspaceLink>
-                      ) : (
-                        <WorkspaceLink
-                          className="button-secondary work-queue-open"
-                          navigate={navigate}
-                          route={unitRoute(
-                            item.propertyId,
-                            item.unitId,
-                            asOf,
-                            'maintenance',
-                            { maintenanceIssueId: item.issueId },
-                          )}
-                        >
-                          Open Maintenance
-                        </WorkspaceLink>
-                      )
-                    ) : null}
-
-                    {item.kind === 'occupancy' ? (
-                      <WorkspaceLink
-                        className="button-secondary work-queue-open"
-                        navigate={navigate}
-                        route={
-                          item.reason === 'move_out'
-                            ? unitRoute(
-                                item.propertyId,
-                                item.unitId,
-                                asOf,
-                                'tenancies',
-                              )
-                            : unitRoute(
-                                item.propertyId,
-                                item.unitId,
-                                asOf,
-                                'contracts',
-                                {
-                                  tenancyId: item.tenancyId,
-                                  ...(item.agreementId
-                                    ? { agreementId: item.agreementId }
-                                    : {}),
-                                },
-                              )
-                        }
-                      >
-                        {item.reason === 'move_out'
-                          ? 'Open Tenancy'
-                          : 'Open Contracts'}
-                      </WorkspaceLink>
-                    ) : null}
+                    <WorkspaceLink
+                      className="button-secondary work-queue-open"
+                      navigate={navigate}
+                      route={workItemRoute(item, asOf)}
+                    >
+                      {workItemActionLabel(item)}
+                    </WorkspaceLink>
                   </div>
                 </article>
               ))}
