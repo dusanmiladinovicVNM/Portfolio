@@ -3754,17 +3754,24 @@ globalThis.fetch = async (
         'Maintenance WorkOrder version conflict.',
       );
     }
-    const activeAssignee =
-      body.assignee.kind === 'party'
-        ? [...parties, ...(setupParty ? [setupParty] : [])].some(
-            (party) =>
-              party.id === body.assignee.partyId &&
-              party.status === 'active',
-          )
-        : [
-            inspectionUserId,
-            setupOrchestrationOtherStaffId,
-          ].includes(body.assignee.userId);
+    let activeAssignee: boolean;
+    if (body.assignee.kind === 'party') {
+      const partyId = body.assignee.partyId;
+      activeAssignee = [
+        ...parties,
+        ...(setupParty ? [setupParty] : []),
+      ].some(
+        (party) =>
+          party.id === partyId &&
+          party.status === 'active',
+      );
+    } else {
+      const userId = body.assignee.userId;
+      activeAssignee = [
+        inspectionUserId,
+        setupOrchestrationOtherStaffId,
+      ].includes(userId);
+    }
     if (!activeAssignee) {
       return apiError(
         422,
