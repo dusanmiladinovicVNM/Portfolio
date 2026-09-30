@@ -5418,12 +5418,12 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-operational-work-queue]//article[@data-work-domain='maintenance'][@data-work-attention='urgent'][.//strong[normalize-space()='MI-WORK-BRW']][contains(normalize-space(),'Heating requires immediate attention')]",
+    "//*[@data-operational-work-queue]//article[@data-work-domain='maintenance'][@data-work-attention='urgent'][.//strong[normalize-space()='ISS-OVEN-BRW']][contains(normalize-space(),'Oven not heating')]",
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-operational-work-queue]//article[@data-work-domain='occupancy'][.//strong[normalize-space()='TEN-WORK-BRW']][contains(normalize-space(),'Draft agreement')][contains(normalize-space(),'AGR-WORK-BRW')]",
+    "//*[@data-operational-work-queue]//article[@data-work-domain='occupancy'][.//strong[normalize-space()='TEN-WORK-BRW']][contains(normalize-space(),'Contract coverage missing')][contains(normalize-space(),'No covering agreement')]",
   );
   await waitForElement(
     sessionId,
@@ -5443,7 +5443,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='MI-WORK-BRW']]",
+    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='ISS-OVEN-BRW']]",
   );
   assertEqual(
     await elementExistsXpath(
@@ -5466,6 +5466,61 @@ try {
     "//*[@data-operational-work-queue]//select[ancestor::label[contains(normalize-space(),'Domain')]]",
     'all',
   );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='INS-BRW-001']]",
+  );
+
+  await clickXpath(
+    sessionId,
+    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='ISS-OVEN-BRW']]//a[normalize-space()='Open Maintenance']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//section[contains(@class,'maintenance-admin-panel')]//h2[normalize-space()='ISS-OVEN-BRW · Oven not heating']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + setupPropertyId +
+      '/units/' + setupUnitId +
+      '?tab=maintenance&issueId=' + setupOvenMaintenanceIssueId +
+      '&asOf=2025-06-30',
+    'Global Work Maintenance opens the exact canonical Issue owner',
+  );
+
+  await clickXpath(sessionId, "//aside//a[normalize-space()='Work']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='TEN-WORK-BRW']]",
+  );
+  await clickXpath(
+    sessionId,
+    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='TEN-WORK-BRW']]//a[normalize-space()='Open Contracts']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'selection-card')][.//strong[normalize-space()='TEN-WORK-BRW']][.//span[normalize-space()='planned']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[normalize-space()='No Lease Agreements exist for this Tenancy.']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + orchestrationPropertyId +
+      '/units/' + orchestrationUnitId +
+      '?tab=contracts&tenancyId=aa200000-0000-4000-8000-000000000001&asOf=2025-06-30',
+    'Global Work contract gap opens the exact canonical Tenancy owner',
+  );
+
+  await clickXpath(sessionId, "//aside//a[normalize-space()='Work']");
   await waitForElement(
     sessionId,
     'xpath',

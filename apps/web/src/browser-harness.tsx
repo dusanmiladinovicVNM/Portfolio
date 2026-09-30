@@ -284,6 +284,8 @@ const orchestrationPropertyId =
   'd2000000-0000-4000-8000-000000000001';
 const orchestrationUnitId =
   'd2000000-0000-4000-8000-000000000002';
+const workTenancyId =
+  'aa200000-0000-4000-8000-000000000001';
 
 const setupDestinationUnit: UnitResponse = {
   id: setupDestinationUnitId,
@@ -369,6 +371,21 @@ const orchestrationUnit: UnitResponse = {
   rooms: 3,
   status: 'active',
   notes: '',
+};
+
+const workTenancy: TenancyResponse = {
+  id: workTenancyId,
+  code: 'TEN-WORK-BRW',
+  unitId: orchestrationUnitId,
+  status: 'planned',
+  plannedStart: '2027-10-05',
+  plannedEnd: null,
+  actualStart: null,
+  actualEnd: null,
+  noticeGivenAt: null,
+  terminationEffectiveAt: null,
+  version: 1,
+  parties: [],
 };
 
 let setupProperty: PropertyResponse | null = null;
@@ -2761,7 +2778,19 @@ globalThis.fetch = async (
   }
 
   if (path === '/units/' + orchestrationUnitId + '/tenancies') {
+    return json({ items: [workTenancy] });
+  }
+
+  if (path === '/tenancies/' + workTenancyId + '/agreements') {
     return json({ items: [] });
+  }
+
+  if (path === '/tenancies/' + workTenancyId + '/terms') {
+    return apiError(
+      404,
+      'TENANCY_TERMS_NOT_FOUND',
+      'No effective terms exist for this Work tenancy.',
+    );
   }
 
   if (
@@ -5309,39 +5338,62 @@ globalThis.fetch = async (
       });
     }
 
-    items.push({
-      kind: 'maintenance',
-      attention: 'urgent',
-      issueId: 'aa100000-0000-4000-8000-000000000001',
-      issueCode: 'MI-WORK-BRW',
-      title: 'Heating requires immediate attention',
-      priority: 'urgent',
-      reportedAt: '2025-06-29T08:00:00.000Z',
-      propertyId,
-      propertyCode: property.code,
-      propertyName: property.name,
-      unitId,
-      unitCode: unit.code,
-      unitNumber: unit.unitNumber,
-      activeWorkOrderCount: 1,
-    });
+    const workMaintenanceIssue = setupMaintenanceIssues.find(
+      (issue) => issue.id === setupMaintenanceIssueIds[1],
+    );
+    if (
+      workMaintenanceIssue?.status === 'open' &&
+      setupProperty &&
+      setupUnit
+    ) {
+      items.push({
+        kind: 'maintenance',
+        attention:
+          workMaintenanceIssue.priority === 'urgent'
+            ? 'urgent'
+            : workMaintenanceIssue.priority === 'high'
+              ? 'high'
+              : 'normal',
+        issueId: workMaintenanceIssue.id,
+        issueCode: workMaintenanceIssue.code,
+        title: workMaintenanceIssue.title,
+        priority: workMaintenanceIssue.priority,
+        reportedAt: workMaintenanceIssue.reportedAt,
+        propertyId: setupProperty.id,
+        propertyCode: setupProperty.code,
+        propertyName: setupProperty.name,
+        unitId: setupUnit.id,
+        unitCode: setupUnit.code,
+        unitNumber: setupUnit.unitNumber,
+        activeWorkOrderCount: setupMaintenanceWorkOrders.filter(
+          (entry) =>
+            entry.workOrder.issueId === workMaintenanceIssue.id &&
+            !['completed', 'cancelled'].includes(entry.workOrder.status),
+        ).length,
+      });
+    }
 
     items.push({
       kind: 'occupancy',
-      attention: 'upcoming',
-      reason: 'contract_draft',
-      tenancyId: 'aa200000-0000-4000-8000-000000000001',
-      tenancyCode: 'TEN-WORK-BRW',
-      tenancyStatus: 'planned',
-      agreementId: 'aa300000-0000-4000-8000-000000000001',
-      agreementCode: 'AGR-WORK-BRW',
-      dueDate: '2025-07-01',
-      propertyId,
-      propertyCode: property.code,
-      propertyName: property.name,
-      unitId,
-      unitCode: unit.code,
-      unitNumber: unit.unitNumber,
+      attention:
+        workTenancy.plannedStart! < referenceDate
+          ? 'overdue'
+          : workTenancy.plannedStart === referenceDate
+            ? 'today'
+            : 'upcoming',
+      reason: 'contract_missing',
+      tenancyId: workTenancy.id,
+      tenancyCode: workTenancy.code,
+      tenancyStatus: workTenancy.status,
+      agreementId: null,
+      agreementCode: null,
+      dueDate: workTenancy.plannedStart,
+      propertyId: orchestrationProperty.id,
+      propertyCode: orchestrationProperty.code,
+      propertyName: orchestrationProperty.name,
+      unitId: orchestrationUnit.id,
+      unitCode: orchestrationUnit.code,
+      unitNumber: orchestrationUnit.unitNumber,
     });
 
     return json({ referenceDate, items });
