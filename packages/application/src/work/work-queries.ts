@@ -26,7 +26,8 @@ export interface WorkInspectionItem extends WorkInspectionProjection {
   readonly attention: WorkAttention;
 }
 
-export interface WorkMaintenanceItem extends WorkMaintenanceProjection {
+export interface WorkMaintenanceItem
+  extends Omit<WorkMaintenanceProjection, 'assignedUserIds'> {
   readonly attention: WorkAttention;
 }
 
@@ -77,8 +78,9 @@ function inspectionItem(
 function maintenanceItem(
   item: WorkMaintenanceProjection,
 ): WorkMaintenanceItem {
+  const { assignedUserIds: _assignedUserIds, ...publicItem } = item;
   return {
-    ...item,
+    ...publicItem,
     attention:
       item.priority === 'urgent'
         ? 'urgent'
