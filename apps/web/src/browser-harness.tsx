@@ -5235,6 +5235,118 @@ globalThis.fetch = async (
     });
   }
 
+  if (path === '/work') {
+    const referenceDate = url.searchParams.get('asOf');
+    if (!referenceDate) {
+      return apiError(400, 'VALIDATION_ERROR', 'Queue date is required.');
+    }
+
+    const items = [];
+    const activeStatuses = new Set(['draft', 'in_progress', 'locked']);
+    const primary = inspectionRecord();
+    if (activeStatuses.has(primary.status)) {
+      items.push({
+        kind: 'inspection',
+        attention:
+          primary.scheduledFor === null
+            ? 'unscheduled'
+            : primary.scheduledFor < referenceDate
+              ? 'overdue'
+              : primary.scheduledFor === referenceDate
+                ? 'today'
+                : 'upcoming',
+        inspectionId: primary.id,
+        inspectionCode: primary.code,
+        inspectionType: primary.inspectionType,
+        inspectionStatus: primary.status,
+        scheduledFor: primary.scheduledFor,
+        assignedToUserId: primary.assignedToUserId,
+        assignedToDisplayName: 'Browser Inspector',
+        assignedToRole: 'inspector',
+        propertyId,
+        propertyCode: property.code,
+        propertyName: property.name,
+        unitId,
+        unitCode: unit.code,
+        unitNumber: unit.unitNumber,
+      });
+    }
+
+    if (
+      setupOrchestrationInspection &&
+      activeStatuses.has(setupOrchestrationInspection.status)
+    ) {
+      const assignedToManager =
+        setupOrchestrationInspection.assignedToUserId ===
+        setupOrchestrationOtherStaffId;
+      const scheduledFor = setupOrchestrationInspection.scheduledFor;
+      items.push({
+        kind: 'inspection',
+        attention:
+          scheduledFor === null
+            ? 'unscheduled'
+            : scheduledFor < referenceDate
+              ? 'overdue'
+              : scheduledFor === referenceDate
+                ? 'today'
+                : 'upcoming',
+        inspectionId: setupOrchestrationInspection.id,
+        inspectionCode: setupOrchestrationInspection.code,
+        inspectionType: setupOrchestrationInspection.inspectionType,
+        inspectionStatus: setupOrchestrationInspection.status,
+        scheduledFor,
+        assignedToUserId: setupOrchestrationInspection.assignedToUserId,
+        assignedToDisplayName: assignedToManager
+          ? 'Browser Manager'
+          : 'Browser Inspector',
+        assignedToRole: assignedToManager ? 'manager' : 'inspector',
+        propertyId: orchestrationPropertyId,
+        propertyCode: orchestrationProperty.code,
+        propertyName: orchestrationProperty.name,
+        unitId: orchestrationUnitId,
+        unitCode: orchestrationUnit.code,
+        unitNumber: orchestrationUnit.unitNumber,
+      });
+    }
+
+    items.push({
+      kind: 'maintenance',
+      attention: 'urgent',
+      issueId: 'aa100000-0000-4000-8000-000000000001',
+      issueCode: 'MI-WORK-BRW',
+      title: 'Heating requires immediate attention',
+      priority: 'urgent',
+      reportedAt: '2025-06-29T08:00:00.000Z',
+      propertyId,
+      propertyCode: property.code,
+      propertyName: property.name,
+      unitId,
+      unitCode: unit.code,
+      unitNumber: unit.unitNumber,
+      activeWorkOrderCount: 1,
+    });
+
+    items.push({
+      kind: 'occupancy',
+      attention: 'upcoming',
+      reason: 'contract_draft',
+      tenancyId: 'aa200000-0000-4000-8000-000000000001',
+      tenancyCode: 'TEN-WORK-BRW',
+      tenancyStatus: 'planned',
+      agreementId: 'aa300000-0000-4000-8000-000000000001',
+      agreementCode: 'AGR-WORK-BRW',
+      dueDate: '2025-07-01',
+      propertyId,
+      propertyCode: property.code,
+      propertyName: property.name,
+      unitId,
+      unitCode: unit.code,
+      unitNumber: unit.unitNumber,
+    });
+
+    return json({ referenceDate, items });
+  }
+
   if (path === '/inspections/work-queue') {
     const activeStatuses = new Set(['draft', 'in_progress', 'locked']);
     const items = [];
