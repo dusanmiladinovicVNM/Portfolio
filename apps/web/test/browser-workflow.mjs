@@ -74,6 +74,8 @@ const setupInspectionFindingId = 'b1000000-0000-4000-8000-000000000044';
 const setupMaintenanceIssueId = 'b1000000-0000-4000-8000-000000000045';
 const setupOvenMaintenanceIssueId = 'b1000000-0000-4000-8000-000000000100';
 const setupSmokeMaintenanceIssueId = 'b1000000-0000-4000-8000-000000000101';
+const workPropertyMaintenanceIssueId =
+  'aa100000-0000-4000-8000-000000000001';
 const setupMaintenanceWorkOrderId = 'b1000000-0000-4000-8000-000000000046';
 const setupOvenMaintenanceWorkOrderId = 'b1000000-0000-4000-8000-000000000102';
 const setupSmokeMaintenanceWorkOrderId = 'b1000000-0000-4000-8000-000000000103';
@@ -5418,7 +5420,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-operational-work-queue]//article[@data-work-domain='maintenance'][@data-work-attention='urgent'][.//strong[normalize-space()='ISS-OVEN-BRW']][contains(normalize-space(),'Oven not heating')]",
+    "//*[@data-operational-work-queue]//article[@data-work-domain='maintenance'][@data-work-attention='urgent'][.//strong[normalize-space()='ISS-PROPERTY-WORK-BRW']][contains(normalize-space(),'Roof inspection follow-up')][contains(normalize-space(),'Property-level')]",
   );
   await waitForElement(
     sessionId,
@@ -5443,7 +5445,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='ISS-OVEN-BRW']]",
+    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='ISS-PROPERTY-WORK-BRW']]",
   );
   assertEqual(
     await elementExistsXpath(
@@ -5474,21 +5476,20 @@ try {
 
   await clickXpath(
     sessionId,
-    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='ISS-OVEN-BRW']]//a[normalize-space()='Open Maintenance']",
+    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='ISS-PROPERTY-WORK-BRW']]//a[normalize-space()='Open Maintenance']",
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[contains(@class,'maintenance-admin-panel')]//h2[normalize-space()='ISS-OVEN-BRW · Oven not heating']",
+    "//*[@data-property-maintenance-issue]//section[contains(@class,'maintenance-admin-panel')]//h2[normalize-space()='ISS-PROPERTY-WORK-BRW · Roof inspection follow-up']",
   );
   assertEqual(
     await currentUrl(sessionId),
     baseUrl +
-      '/properties/' + setupPropertyId +
-      '/units/' + setupUnitId +
-      '?tab=maintenance&issueId=' + setupOvenMaintenanceIssueId +
+      '/properties/' + propertyId +
+      '?issueId=' + workPropertyMaintenanceIssueId +
       '&asOf=2025-06-30',
-    'Global Work Maintenance opens the exact canonical Issue owner',
+    'Global Work opens the exact canonical property-level Maintenance Issue owner',
   );
 
   await clickXpath(sessionId, "//aside//a[normalize-space()='Work']");

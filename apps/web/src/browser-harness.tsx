@@ -249,6 +249,8 @@ const setupMaintenanceIssueIds = [
   'b1000000-0000-4000-8000-000000000100',
   'b1000000-0000-4000-8000-000000000101',
 ] as const;
+const workPropertyMaintenanceIssueId =
+  'aa100000-0000-4000-8000-000000000001';
 const setupMaintenanceWorkOrderIds = [
   'b1000000-0000-4000-8000-000000000046',
   'b1000000-0000-4000-8000-000000000102',
@@ -431,7 +433,27 @@ let setupMeterBoundaries: MeterReadingBoundaryResponse[] = [];
 let setupMeterReadingSequence = 0;
 let setupMeterBoundarySequence = 0;
 let setupMeterClockSequence = 0;
-let setupMaintenanceIssues: MaintenanceIssueResponse[] = [];
+let setupMaintenanceIssues: MaintenanceIssueResponse[] = [
+  {
+    id: workPropertyMaintenanceIssueId,
+    code: 'ISS-PROPERTY-WORK-BRW',
+    propertyId,
+    unitId: null,
+    spaceId: null,
+    assetId: null,
+    inspectionFindingId: null,
+    title: 'Roof inspection follow-up',
+    description: 'Property-level operational issue for Work routing acceptance.',
+    priority: 'urgent',
+    status: 'open',
+    reportedAt: '2025-06-29T08:00:00.000Z',
+    resolvedAt: null,
+    cancelledAt: null,
+    version: 1,
+    recordedAt: '2025-06-29T08:05:00.000Z',
+    recordedByUserId: inspectionUserId,
+  },
+];
 let setupMaintenanceIssueSequence = 0;
 let setupMaintenanceWorkOrders: MaintenanceWorkOrderEntryResponse[] = [];
 let setupMaintenanceWorkOrderSequence = 0;
@@ -5339,13 +5361,9 @@ globalThis.fetch = async (
     }
 
     const workMaintenanceIssue = setupMaintenanceIssues.find(
-      (issue) => issue.id === setupMaintenanceIssueIds[1],
+      (issue) => issue.id === workPropertyMaintenanceIssueId,
     );
-    if (
-      workMaintenanceIssue?.status === 'open' &&
-      setupProperty &&
-      setupUnit
-    ) {
+    if (workMaintenanceIssue?.status === 'open') {
       items.push({
         kind: 'maintenance',
         attention:
@@ -5359,12 +5377,12 @@ globalThis.fetch = async (
         title: workMaintenanceIssue.title,
         priority: workMaintenanceIssue.priority,
         reportedAt: workMaintenanceIssue.reportedAt,
-        propertyId: setupProperty.id,
-        propertyCode: setupProperty.code,
-        propertyName: setupProperty.name,
-        unitId: setupUnit.id,
-        unitCode: setupUnit.code,
-        unitNumber: setupUnit.unitNumber,
+        propertyId: property.id,
+        propertyCode: property.code,
+        propertyName: property.name,
+        unitId: null,
+        unitCode: null,
+        unitNumber: null,
         activeWorkOrderCount: setupMaintenanceWorkOrders.filter(
           (entry) =>
             entry.workOrder.issueId === workMaintenanceIssue.id &&
