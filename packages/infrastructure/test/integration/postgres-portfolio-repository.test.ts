@@ -13185,9 +13185,7 @@ describe('PostgreSQL infrastructure', () => {
       )
     `;
 
-    const projected = await workRepository.getOperationalWork(
-      asDateOnly('2026-09-30'),
-    );
+    const projected = await workRepository.getOperationalWork();
 
     expect(projected.inspections).toEqual(
       expect.arrayContaining([
