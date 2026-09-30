@@ -60,6 +60,7 @@ import { InMemoryAccessItemRepository } from './access-item-test-deps.js';
 import { InMemoryMeterRepository } from './meter-test-deps.js';
 import { InMemoryUnitTimelineRepository } from './unit-timeline-test-deps.js';
 import { InMemoryReportingRepository } from './reporting-test-deps.js';
+import { InMemoryWorkRepository } from './work-test-deps.js';
 
 const adminIdentity: VerifiedIdentity = {
   provider: 'supabase',
@@ -268,6 +269,7 @@ function buildHandler() {
     meterRepository: new InMemoryMeterRepository(),
     unitTimelineRepository: new InMemoryUnitTimelineRepository(),
     reportingRepository: new InMemoryReportingRepository(),
+    workRepository: new InMemoryWorkRepository(),
     assetRepository: new InMemoryAssetRepository(),
     assetInventoryRepository: new InMemoryAssetInventoryRepository(),
     assetServiceRepository: new InMemoryAssetServiceRepository(),
