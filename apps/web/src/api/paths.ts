@@ -389,14 +389,6 @@ export function inspectionStaffPath(): string {
   return '/inspection-staff';
 }
 
-export function assignedInspectionsPath(): string {
-  return '/inspections/assigned-to-me';
-}
-
-export function inspectionWorkQueuePath(): string {
-  return '/inspections/work-queue';
-}
-
 export function inspectionOrchestrationPath(
   inspectionId: string,
 ): string {
