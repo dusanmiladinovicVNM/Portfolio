@@ -1,5 +1,4 @@
 import type {
-  DateOnly,
   InspectionId,
   InspectionStatus,
   InspectionType,
@@ -78,7 +77,5 @@ export interface OperationalWorkProjection {
 }
 
 export interface WorkRepository {
-  getOperationalWork(
-    referenceDate: DateOnly,
-  ): Promise<OperationalWorkProjection>;
+  getOperationalWork(): Promise<OperationalWorkProjection>;
 }
