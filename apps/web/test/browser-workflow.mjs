@@ -5505,7 +5505,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//a[contains(@class,'selection-card')][.//strong[normalize-space()='TEN-WORK-BRW']][.//span[normalize-space()='planned']]",
+    "//a[contains(@class,'selection-card')][.//strong[normalize-space()='TEN-WORK-BRW']][.//span[normalize-space()='Planned']]",
   );
   await waitForElement(
     sessionId,
