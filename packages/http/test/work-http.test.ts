@@ -26,7 +26,7 @@ describe('Work HTTP route', () => {
     );
 
     expect(response?.status).toBe(400);
-    expect(repository.lastReferenceDate).toBeNull();
+    expect(repository.readCount).toBe(0);
   });
 
   it('returns the canonical multi-domain queue with the exact reference date', async () => {
@@ -69,7 +69,7 @@ describe('Work HTTP route', () => {
     );
 
     expect(response?.status).toBe(200);
-    expect(repository.lastReferenceDate).toBe('2026-09-30');
+    expect(repository.readCount).toBe(1);
     expect(await response?.json()).toEqual({
       data: {
         referenceDate: '2026-09-30',
