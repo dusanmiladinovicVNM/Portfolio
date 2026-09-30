@@ -4095,7 +4095,7 @@ try {
     "//section[contains(@class,'maintenance-admin-panel')]//h3[normalize-space()='WO-SETUP-BRW · Repair leaking washer']",
   );
 
-  const assignForm = "//form[@data-maintenance-form='assign']";
+  const assignForm = "//form[@data-maintenance-form='assign-party']";
   await selectOptionXpath(
     sessionId,
     assignForm + "//select[@name='partyId']",
@@ -4107,7 +4107,7 @@ try {
   );
   await clickXpath(
     sessionId,
-    assignForm + "//button[normalize-space()='Assign WorkOrder']",
+    assignForm + "//button[normalize-space()='Assign contractor']",
   );
   await waitForScriptTruthy(
     sessionId,
