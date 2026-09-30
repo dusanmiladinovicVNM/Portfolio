@@ -32,12 +32,12 @@ const inspector: Actor = {
 };
 
 class FakeWorkRepository implements WorkRepository {
-  lastReferenceDate: DateOnly | null = null;
+  readCount = 0;
 
   constructor(readonly projection: OperationalWorkProjection) {}
 
-  async getOperationalWork(referenceDate: DateOnly) {
-    this.lastReferenceDate = referenceDate;
+  async getOperationalWork() {
+    this.readCount += 1;
     return this.projection;
   }
 }
@@ -157,7 +157,7 @@ describe('Operational Work query', () => {
       '2026-09-30',
     );
 
-    expect(repository.lastReferenceDate).toBe('2026-09-30');
+    expect(repository.readCount).toBe(1);
     expect(
       result.items.map((item) => [item.kind, item.attention]),
     ).toEqual([
