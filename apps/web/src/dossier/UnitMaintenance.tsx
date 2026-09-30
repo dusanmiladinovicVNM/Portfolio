@@ -8,6 +8,7 @@ import {
   createMaintenanceWorkOrderRequestSchema,
   inspectionBundleResponseSchema,
   inspectionListResponseSchema,
+  inspectionStaffListResponseSchema,
   linkMaintenanceServiceEventRequestSchema,
   maintenanceIssueListResponseSchema,
   maintenanceIssueResponseSchema,
@@ -24,6 +25,7 @@ import {
   type AssetResponse,
   type InspectionBundleResponse,
   type InspectionFindingResponse,
+  type InspectionStaffResponse,
   type MaintenanceIssueResponse,
   type MaintenanceWorkOrderEntryResponse,
   type PartyResponse,
@@ -46,6 +48,7 @@ import {
   assetPath,
   assetServiceEventsPath,
   inspectionPath,
+  inspectionStaffPath,
   maintenanceIssuePath,
   maintenanceIssuesPath,
   maintenanceIssueStatusPath,
@@ -71,7 +74,10 @@ import {
 } from '../admin/form-utils.js';
 import { useCreateSubmissionGuard } from '../admin/use-create-submission-guard.js';
 import { WorkspaceLink } from '../navigation/WorkspaceLink.js';
-import { unitRoute } from '../navigation/workspace-route.js';
+import {
+  propertyRoute,
+  unitRoute,
+} from '../navigation/workspace-route.js';
 import type {
   NavigateWorkspace,
   SetNavigationBlocker,
@@ -87,6 +93,7 @@ import {
   assertCreatedServiceEvent,
   assertInspectionBundleUnitOwner,
   assertMaintenanceIssueOwner,
+  assertPropertyMaintenanceIssueOwner,
   assertMaintenanceIssueTerminal,
   assertMaintenanceIssueUpdate,
   assertMaintenanceServiceEventLink,
@@ -119,6 +126,33 @@ interface MaintenanceWriteGate {
 interface FindingOption {
   readonly inspectionCode: string;
   readonly finding: InspectionFindingResponse;
+}
+
+function useMaintenanceWriteGate(
+  setNavigationBlocker: SetNavigationBlocker,
+): MaintenanceWriteGate {
+  const [pending, setPending] = useState(false);
+  const submission = useCreateSubmissionGuard();
+
+  useEffect(
+    () => () => setNavigationBlocker(null),
+    [setNavigationBlocker],
+  );
+
+  return {
+    pending,
+    tryStart: () => {
+      if (!submission.tryStart()) return false;
+      setNavigationBlocker(() => false);
+      setPending(true);
+      return true;
+    },
+    finish: () => {
+      submission.finish();
+      setNavigationBlocker(null);
+      if (submission.isMounted()) setPending(false);
+    },
+  };
 }
 
 function swissInstant(date: string, time: string): string | undefined {
@@ -156,10 +190,16 @@ function maintenanceError(cause: unknown, fallback: string): string {
 function assigneeLabel(
   entry: MaintenanceWorkOrderEntryResponse,
   parties: readonly PartyResponse[],
+  staff: readonly InspectionStaffResponse[],
 ): string {
   const assignee = entry.workOrder.assignee;
   if (assignee === null) return 'Unassigned';
-  if (assignee.kind === 'user') return 'Internal user';
+  if (assignee.kind === 'user') {
+    return (
+      staff.find((candidate) => candidate.userId === assignee.userId)
+        ?.displayName ?? 'Internal staff'
+    );
+  }
   return (
     parties.find((party) => party.id === assignee.partyId)?.displayName ??
     'External party'
@@ -446,6 +486,7 @@ function IssueAdministration({
   workOrders,
   selectedWorkOrderId,
   parties,
+  staff,
   spaces,
   issueAssetsById,
   findings,
@@ -460,6 +501,7 @@ function IssueAdministration({
   readonly workOrders: readonly MaintenanceWorkOrderEntryResponse[];
   readonly selectedWorkOrderId?: string | undefined;
   readonly parties: readonly PartyResponse[];
+  readonly staff: readonly InspectionStaffResponse[];
   readonly spaces: readonly SpaceResponse[];
   readonly issueAssetsById: ReadonlyMap<string, AssetResponse>;
   readonly findings: readonly FindingOption[];
@@ -667,20 +709,22 @@ function IssueAdministration({
     }
   }
 
-  async function assignWorkOrder(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function assignWorkOrder(
+    assignee:
+      | { readonly kind: 'party'; readonly partyId: string }
+      | { readonly kind: 'user'; readonly userId: string },
+    actionKey: 'assign-party' | 'assign-user',
+  ) {
     if (!selectedOrder) return;
-    const form = new FormData(event.currentTarget);
-    const partyId = requiredString(form, 'partyId');
     const parsed = assignMaintenanceWorkOrderRequestSchema.safeParse({
       expectedVersion: selectedOrder.version,
-      assignee: { kind: 'party', partyId },
+      assignee,
     });
     if (!parsed.success) {
       setError(contractErrorMessage());
       return;
     }
-    if (!begin('assign')) return;
+    if (!begin(actionKey)) return;
 
     try {
       const response = await api.post(
@@ -690,7 +734,7 @@ function IssueAdministration({
       );
       assertMaintenanceWorkOrderAssignment(
         selectedOrder,
-        partyId,
+        parsed.data.assignee,
         response,
       );
       if (local.isMounted()) {
@@ -705,6 +749,28 @@ function IssueAdministration({
     } finally {
       finish();
     }
+  }
+
+  async function assignPartyWorkOrder(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const partyId = requiredString(form, 'partyId');
+    if (!partyId) {
+      setError('Select an active external Party.');
+      return;
+    }
+    await assignWorkOrder({ kind: 'party', partyId }, 'assign-party');
+  }
+
+  async function assignInternalWorkOrder(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const userId = requiredString(form, 'userId');
+    if (!userId) {
+      setError('Select active internal staff.');
+      return;
+    }
+    await assignWorkOrder({ kind: 'user', userId }, 'assign-user');
   }
 
   async function transitionWorkOrder(
@@ -969,14 +1035,19 @@ function IssueAdministration({
 
       <dl className="detail-list maintenance-scope-grid">
         <div><dt>Property</dt><dd>Current property</dd></div>
-        <div><dt>Unit</dt><dd>Current unit</dd></div>
+        <div>
+          <dt>Unit</dt>
+          <dd>{issue.unitId === null ? 'Property level' : 'Current unit'}</dd>
+        </div>
         <div>
           <dt>Space</dt>
           <dd>
             {issue.spaceId
               ? spaces.find((space) => space.id === issue.spaceId)?.code ??
                 'Assigned space'
-              : 'Unit level'}
+              : issue.unitId === null
+                ? '—'
+                : 'Unit level'}
           </dd>
         </div>
         <div>
@@ -1140,7 +1211,7 @@ function IssueAdministration({
                 <span className="eyebrow">{entry.workOrder.code}</span>
                 <strong>{entry.workOrder.title}</strong>
                 <span>{entry.workOrder.status}</span>
-                <small>{assigneeLabel(entry, parties)}</small>
+                <small>{assigneeLabel(entry, parties, staff)}</small>
               </button>
             ))}
           </div>
@@ -1162,7 +1233,7 @@ function IssueAdministration({
           </div>
 
           <dl className="detail-list compact-detail-list">
-            <div><dt>Assignee</dt><dd>{assigneeLabel(selectedEntry, parties)}</dd></div>
+            <div><dt>Assignee</dt><dd>{assigneeLabel(selectedEntry, parties, staff)}</dd></div>
             <div><dt>Created</dt><dd>{formatSwissDateTime(selectedOrder.createdAt)}</dd></div>
             <div><dt>Assigned</dt><dd>{formatSwissDateTime(selectedOrder.assignedAt)}</dd></div>
             <div><dt>Started</dt><dd>{formatSwissDateTime(selectedOrder.startedAt)}</dd></div>
@@ -1213,12 +1284,52 @@ function IssueAdministration({
 
               <form
                 className="setup-form maintenance-form"
-                data-maintenance-form="assign"
-                onSubmit={assignWorkOrder}
+                data-maintenance-form="assign-internal"
+                onSubmit={assignInternalWorkOrder}
+              >
+                <div className="tenancy-form-heading">
+                  <strong>Assign internal staff</strong>
+                  <span>Active Portfolio staff</span>
+                </div>
+                <label>
+                  Staff member
+                  <select
+                    defaultValue={
+                      selectedOrder.assignee?.kind === 'user'
+                        ? selectedOrder.assignee.userId
+                        : ''
+                    }
+                    disabled={writeGate.pending}
+                    name="userId"
+                    required
+                  >
+                    <option value="">Select staff…</option>
+                    {staff.map((entry) => (
+                      <option key={entry.userId} value={entry.userId}>
+                        {entry.displayName} · {formatDetailKey(entry.role)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  className="button-primary"
+                  disabled={writeGate.pending}
+                  type="submit"
+                >
+                  {action === 'assign-user'
+                    ? 'Assigning…'
+                    : 'Assign internal'}
+                </button>
+              </form>
+
+              <form
+                className="setup-form maintenance-form"
+                data-maintenance-form="assign-party"
+                onSubmit={assignPartyWorkOrder}
               >
                 <div className="tenancy-form-heading">
                   <strong>Assign contractor</strong>
-                  <span>Active Party only</span>
+                  <span>Active external Party</span>
                 </div>
                 <label>
                   Party
@@ -1245,7 +1356,9 @@ function IssueAdministration({
                   disabled={writeGate.pending}
                   type="submit"
                 >
-                  {action === 'assign' ? 'Assigning…' : 'Assign WorkOrder'}
+                  {action === 'assign-party'
+                    ? 'Assigning…'
+                    : 'Assign contractor'}
                 </button>
               </form>
             </div>
@@ -1518,6 +1631,8 @@ export function UnitMaintenance({
     useState<ReadonlyMap<string, AssetResponse>>(() => new Map());
   const [parties, setParties] =
     useState<readonly PartyResponse[] | null>(null);
+  const [staff, setStaff] =
+    useState<readonly InspectionStaffResponse[] | null>(null);
   const [findings, setFindings] =
     useState<readonly FindingOption[] | null>(null);
   const [workOrders, setWorkOrders] =
@@ -1528,28 +1643,7 @@ export function UnitMaintenance({
   const [detailError, setDetailError] = useState<string | null>(null);
   const [baseRevision, setBaseRevision] = useState(0);
   const [detailRevision, setDetailRevision] = useState(0);
-  const [writePending, setWritePending] = useState(false);
-  const writeSubmission = useCreateSubmissionGuard();
-
-  const writeGate: MaintenanceWriteGate = {
-    pending: writePending,
-    tryStart: () => {
-      if (!writeSubmission.tryStart()) return false;
-      setNavigationBlocker(() => false);
-      setWritePending(true);
-      return true;
-    },
-    finish: () => {
-      writeSubmission.finish();
-      setNavigationBlocker(null);
-      if (writeSubmission.isMounted()) setWritePending(false);
-    },
-  };
-
-  useEffect(
-    () => () => setNavigationBlocker(null),
-    [setNavigationBlocker],
-  );
+  const writeGate = useMaintenanceWriteGate(setNavigationBlocker);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1558,6 +1652,7 @@ export function UnitMaintenance({
     setAssets(null);
     setIssueAssetsById(new Map());
     setParties(null);
+    setStaff(null);
     setFindings(null);
     setLoadError(null);
 
@@ -1576,6 +1671,9 @@ export function UnitMaintenance({
       api.get(partiesPath(), partyListResponseSchema, {
         signal: controller.signal,
       }),
+      api.get(inspectionStaffPath(), inspectionStaffListResponseSchema, {
+        signal: controller.signal,
+      }),
       api.get(unitInspectionsPath(unitId), inspectionListResponseSchema, {
         signal: controller.signal,
       }),
@@ -1586,6 +1684,7 @@ export function UnitMaintenance({
           spaceResponse,
           assetResponse,
           partyResponse,
+          staffResponse,
           inspectionResponse,
         ]) => {
           if (controller.signal.aborted) return;
@@ -1661,6 +1760,7 @@ export function UnitMaintenance({
           setAssets(assetResponse.items);
           setIssueAssetsById(issueAssetMap);
           setParties(partyResponse.items);
+          setStaff(staffResponse.items);
           setFindings(findingOptions);
         },
       )
@@ -1918,7 +2018,7 @@ export function UnitMaintenance({
         </section>
       ) : null}
 
-      {selectedIssue && workOrders && parties ? (
+      {selectedIssue && workOrders && parties && staff ? (
         <IssueAdministration
           api={api}
           issue={selectedIssue}
@@ -1944,6 +2044,7 @@ export function UnitMaintenance({
             )
           }
           parties={parties}
+          staff={staff}
           spaces={spaces ?? []}
           issueAssetsById={issueAssetsById}
           findings={findings ?? []}
@@ -1956,3 +2057,211 @@ export function UnitMaintenance({
     </div>
   );
 }
+
+interface PropertyMaintenanceIssueProps {
+  readonly api: PortfolioApi;
+  readonly propertyId: string;
+  readonly asOf: string;
+  readonly issueId: string;
+  readonly workOrderId?: string | undefined;
+  readonly navigate: NavigateWorkspace;
+  readonly setNavigationBlocker: SetNavigationBlocker;
+}
+
+export function PropertyMaintenanceIssue({
+  api,
+  propertyId,
+  asOf,
+  issueId,
+  workOrderId,
+  navigate,
+  setNavigationBlocker,
+}: PropertyMaintenanceIssueProps) {
+  const [issue, setIssue] = useState<MaintenanceIssueResponse | null>(null);
+  const [parties, setParties] = useState<readonly PartyResponse[] | null>(null);
+  const [staff, setStaff] =
+    useState<readonly InspectionStaffResponse[] | null>(null);
+  const [workOrders, setWorkOrders] =
+    useState<readonly MaintenanceWorkOrderEntryResponse[] | null>(null);
+  const [serviceEvents, setServiceEvents] =
+    useState<readonly ServiceEventResponse[]>([]);
+  const [issueAssetsById, setIssueAssetsById] =
+    useState<ReadonlyMap<string, AssetResponse>>(() => new Map());
+  const [error, setError] = useState<string | null>(null);
+  const [revision, setRevision] = useState(0);
+  const writeGate = useMaintenanceWriteGate(setNavigationBlocker);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setIssue(null);
+    setParties(null);
+    setStaff(null);
+    setWorkOrders(null);
+    setServiceEvents([]);
+    setIssueAssetsById(new Map());
+    setError(null);
+
+    void (async () => {
+      const [canonicalIssue, partyResponse, staffResponse] = await Promise.all([
+        api.get(
+          maintenanceIssuePath(issueId),
+          maintenanceIssueResponseSchema,
+          { signal: controller.signal },
+        ),
+        api.get(partiesPath(), partyListResponseSchema, {
+          signal: controller.signal,
+        }),
+        api.get(inspectionStaffPath(), inspectionStaffListResponseSchema, {
+          signal: controller.signal,
+        }),
+      ]);
+      if (controller.signal.aborted) return;
+      assertPropertyMaintenanceIssueOwner(
+        propertyId,
+        issueId,
+        canonicalIssue,
+      );
+
+      const [workOrderResponse, asset] = await Promise.all([
+        api.get(
+          maintenanceIssueWorkOrdersPath(issueId),
+          maintenanceWorkOrderEntryListResponseSchema,
+          { signal: controller.signal },
+        ),
+        canonicalIssue.assetId === null
+          ? Promise.resolve(null)
+          : api.get(
+              assetPath(canonicalIssue.assetId),
+              assetResponseSchema,
+              { signal: controller.signal },
+            ),
+      ]);
+      if (controller.signal.aborted) return;
+      assertMaintenanceWorkOrdersOwner(
+        canonicalIssue.id,
+        workOrderResponse.items,
+      );
+      if (
+        asset &&
+        (asset.id !== canonicalIssue.assetId ||
+          asset.propertyId !== propertyId ||
+          asset.unitId !== null)
+      ) {
+        throw new Error(
+          'Property-level Maintenance Asset crossed its canonical owner.',
+        );
+      }
+
+      const eventResponse =
+        canonicalIssue.assetId === null
+          ? { items: [] as ServiceEventResponse[] }
+          : await api.get(
+              assetServiceEventsPath(canonicalIssue.assetId),
+              serviceEventListResponseSchema,
+              { signal: controller.signal },
+            );
+      if (controller.signal.aborted) return;
+      if (canonicalIssue.assetId !== null) {
+        assertServiceEventsOwner(
+          canonicalIssue.assetId,
+          eventResponse.items,
+        );
+      }
+
+      setIssue(canonicalIssue);
+      setParties(partyResponse.items);
+      setStaff(staffResponse.items);
+      setWorkOrders(workOrderResponse.items);
+      setServiceEvents(eventResponse.items);
+      setIssueAssetsById(
+        asset ? new Map([[asset.id, asset]]) : new Map(),
+      );
+    })().catch((cause: unknown) => {
+      if (controller.signal.aborted) return;
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Property-level Maintenance Issue could not be loaded.',
+      );
+    });
+
+    return () => controller.abort();
+  }, [api, issueId, propertyId, revision]);
+
+  const selectedWorkOrderInvalid =
+    workOrders !== null &&
+    workOrderId !== undefined &&
+    !workOrders.some((entry) => entry.workOrder.id === workOrderId);
+
+  const refresh = () => setRevision((value) => value + 1);
+
+  if (error) {
+    return (
+      <section className="panel state-panel" role="alert">
+        <p className="eyebrow">Property Maintenance owner failed</p>
+        <h2>Issue unavailable</h2>
+        <p>{error}</p>
+      </section>
+    );
+  }
+
+  if (!issue || !parties || !staff || !workOrders) {
+    return (
+      <section className="panel state-panel" aria-live="polite">
+        <p className="eyebrow">Property Maintenance</p>
+        <h2>Loading exact Issue…</h2>
+      </section>
+    );
+  }
+
+  return (
+    <div className="dashboard-stack" data-property-maintenance-issue>
+      {selectedWorkOrderInvalid ? (
+        <section className="panel state-panel" role="alert">
+          <p className="eyebrow">WorkOrder owner failed</p>
+          <h2>WorkOrder unavailable</h2>
+          <p>The selected WorkOrder does not belong to this Issue.</p>
+        </section>
+      ) : null}
+
+      <IssueAdministration
+        api={api}
+        issue={issue}
+        key={`${issue.id}:${issue.version}:${workOrders
+          .map(
+            (entry) =>
+              `${entry.workOrder.id}:${entry.workOrder.version}:${entry.serviceEventIds.length}`,
+          )
+          .join('|')}`}
+        onCanonicalWrite={refresh}
+        onWorkOrderCreated={(workOrder) => {
+          refresh();
+          navigate(
+            propertyRoute(propertyId, asOf, {
+              maintenanceIssueId: issue.id,
+              maintenanceWorkOrderId: workOrder.id,
+            }),
+          );
+        }}
+        onWorkOrderSelected={(nextWorkOrderId) =>
+          navigate(
+            propertyRoute(propertyId, asOf, {
+              maintenanceIssueId: issue.id,
+              maintenanceWorkOrderId: nextWorkOrderId,
+            }),
+          )
+        }
+        parties={parties}
+        staff={staff}
+        spaces={[]}
+        issueAssetsById={issueAssetsById}
+        findings={[]}
+        selectedWorkOrderId={workOrderId}
+        serviceEvents={serviceEvents}
+        workOrders={workOrders}
+        writeGate={writeGate}
+      />
+    </div>
+  );
+}
+

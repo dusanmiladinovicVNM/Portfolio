@@ -2995,9 +2995,17 @@ input:focus-visible {
   font-weight: 800;
   text-transform: uppercase;
 }
+.work-attention-urgent {
+  background: #f1d6d2;
+  color: #842c27;
+}
 .work-attention-overdue {
   background: #f4dfdb;
   color: #8a332d;
+}
+.work-attention-high {
+  background: #f3e1cf;
+  color: #7a4b21;
 }
 .work-attention-today {
   background: #eee4c9;
@@ -3006,6 +3014,10 @@ input:focus-visible {
 .work-attention-upcoming {
   background: #e2eadf;
   color: #476047;
+}
+.work-attention-normal {
+  background: #e8e8e4;
+  color: #5f625d;
 }
 .work-attention-unscheduled {
   background: #ece9e3;

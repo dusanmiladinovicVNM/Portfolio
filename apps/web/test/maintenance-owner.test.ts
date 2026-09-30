@@ -32,6 +32,7 @@ const workOrderId = '55555555-5555-4555-8555-555555555555';
 const assetId = '66666666-6666-4666-8666-666666666666';
 const serviceEventId = '77777777-7777-4777-8777-777777777777';
 const partyId = '88888888-8888-4888-8888-888888888888';
+const staffUserId = '99999999-9999-4999-8999-999999999999';
 
 function issue(
   overrides: Partial<MaintenanceIssueResponse> = {},
@@ -247,9 +248,22 @@ describe('Maintenance browser owner guards', () => {
     expect(() =>
       assertMaintenanceWorkOrderAssignment(
         order(),
-        partyId,
+        { kind: 'party', partyId },
         order({
           assignee: { kind: 'party', partyId },
+          status: 'assigned',
+          assignedAt: '2026-09-22T08:20:00.000Z',
+          version: 2,
+        }),
+      ),
+    ).not.toThrow();
+
+    expect(() =>
+      assertMaintenanceWorkOrderAssignment(
+        order(),
+        { kind: 'user', userId: staffUserId },
+        order({
+          assignee: { kind: 'user', userId: staffUserId },
           status: 'assigned',
           assignedAt: '2026-09-22T08:20:00.000Z',
           version: 2,

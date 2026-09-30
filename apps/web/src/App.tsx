@@ -8,7 +8,7 @@ import { StaffAdministration } from './admin/StaffAdministration.js';
 import { InspectionSchemaAdministration } from './admin/InspectionSchemaAdministration.js';
 import { currentStaffPath } from './api/paths.js';
 import { PortfolioDashboard } from './dashboard/PortfolioDashboard.js';
-import { InspectionWorkQueue } from './work/InspectionWorkQueue.js';
+import { OperationalWorkQueue } from './work/OperationalWorkQueue.js';
 import { PropertyUnits } from './dossier/PropertyUnits.js';
 import { UnitDossier } from './dossier/UnitDossier.js';
 import { WorkspaceLink } from './navigation/WorkspaceLink.js';
@@ -303,7 +303,7 @@ function AuthenticatedShell({
         ) : null}
 
         {route.kind === 'work' ? (
-          <InspectionWorkQueue
+          <OperationalWorkQueue
             api={api}
             asOf={route.asOf}
             navigate={navigate}
@@ -352,8 +352,11 @@ function AuthenticatedShell({
             key={workspaceRouteOwnerKey(route)}
             api={api}
             asOf={route.asOf}
+            maintenanceIssueId={route.maintenanceIssueId}
+            maintenanceWorkOrderId={route.maintenanceWorkOrderId}
             navigate={navigate}
             propertyId={route.propertyId}
+            setNavigationBlocker={setNavigationBlocker}
           />
         ) : null}
 

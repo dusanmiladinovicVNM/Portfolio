@@ -44,6 +44,8 @@ export type WorkspaceRoute =
       readonly kind: 'property';
       readonly propertyId: string;
       readonly asOf: string;
+      readonly maintenanceIssueId?: string;
+      readonly maintenanceWorkOrderId?: string;
     }
   | {
       readonly kind: 'unit';
@@ -132,14 +134,26 @@ export function inspectionSchemasRoute(asOf: string): WorkspaceRoute {
   return { kind: 'inspection-schemas', asOf: requireWorkspaceAsOf(asOf) };
 }
 
+export interface PropertyRouteSelection {
+  readonly maintenanceIssueId?: string;
+  readonly maintenanceWorkOrderId?: string;
+}
+
 export function propertyRoute(
   propertyId: string,
   asOf: string,
+  selection: PropertyRouteSelection = {},
 ): WorkspaceRoute {
+  const maintenanceIssueId = selection.maintenanceIssueId;
+  const maintenanceWorkOrderId = maintenanceIssueId
+    ? selection.maintenanceWorkOrderId
+    : undefined;
   return {
     kind: 'property',
     propertyId,
     asOf: requireWorkspaceAsOf(asOf),
+    ...(maintenanceIssueId ? { maintenanceIssueId } : {}),
+    ...(maintenanceWorkOrderId ? { maintenanceWorkOrderId } : {}),
   };
 }
 
@@ -294,7 +308,18 @@ export function parseWorkspaceLocation(
 
   if (segments.length === 2 && segments[0] === 'properties') {
     const propertyId = readEntityId(segments[1]);
-    if (propertyId) return propertyRoute(propertyId, asOf);
+    if (propertyId) {
+      const maintenanceIssueId = readEntityId(
+        search.get('issueId') ?? undefined,
+      );
+      const maintenanceWorkOrderId = maintenanceIssueId
+        ? readEntityId(search.get('workOrderId') ?? undefined)
+        : null;
+      return propertyRoute(propertyId, asOf, {
+        ...(maintenanceIssueId ? { maintenanceIssueId } : {}),
+        ...(maintenanceWorkOrderId ? { maintenanceWorkOrderId } : {}),
+      });
+    }
   }
 
   return dashboardRoute(asOf);
@@ -302,6 +327,13 @@ export function parseWorkspaceLocation(
 
 export function workspaceRouteHref(route: WorkspaceRoute): string {
   const search = new URLSearchParams();
+
+  if (route.kind === 'property' && route.maintenanceIssueId) {
+    search.set('issueId', route.maintenanceIssueId);
+    if (route.maintenanceWorkOrderId) {
+      search.set('workOrderId', route.maintenanceWorkOrderId);
+    }
+  }
 
   if (route.kind === 'unit') {
     search.set('tab', route.tab);

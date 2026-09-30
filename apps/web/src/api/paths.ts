@@ -38,6 +38,10 @@ export function reportingDashboardPath(asOf: string): string {
   return `/reporting/dashboard?asOf=${encodeURIComponent(asOf)}`;
 }
 
+export function operationalWorkPath(asOf: string): string {
+  return `/work?asOf=${encodeURIComponent(asOf)}`;
+}
+
 export function propertyPath(propertyId: string): string {
   return `/properties/${encodeURIComponent(propertyId)}`;
 }
@@ -383,14 +387,6 @@ export function inspectionSchemaPublishPath(schemaVersionId: string): string {
 
 export function inspectionStaffPath(): string {
   return '/inspection-staff';
-}
-
-export function assignedInspectionsPath(): string {
-  return '/inspections/assigned-to-me';
-}
-
-export function inspectionWorkQueuePath(): string {
-  return '/inspections/work-queue';
 }
 
 export function inspectionOrchestrationPath(

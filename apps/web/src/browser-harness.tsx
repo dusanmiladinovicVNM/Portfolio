@@ -249,11 +249,16 @@ const setupMaintenanceIssueIds = [
   'b1000000-0000-4000-8000-000000000100',
   'b1000000-0000-4000-8000-000000000101',
 ] as const;
+const workPropertyMaintenanceIssueId =
+  'aa100000-0000-4000-8000-000000000001';
 const setupMaintenanceWorkOrderIds = [
   'b1000000-0000-4000-8000-000000000046',
   'b1000000-0000-4000-8000-000000000102',
   'b1000000-0000-4000-8000-000000000103',
+  'aa100000-0000-4000-8000-000000000002',
 ] as const;
+const workPropertyMaintenanceWorkOrderId =
+  'aa100000-0000-4000-8000-000000000002';
 const setupServiceEventId =
   'b1000000-0000-4000-8000-000000000047';
 const setupWarrantyId =
@@ -284,6 +289,8 @@ const orchestrationPropertyId =
   'd2000000-0000-4000-8000-000000000001';
 const orchestrationUnitId =
   'd2000000-0000-4000-8000-000000000002';
+const workTenancyId =
+  'aa200000-0000-4000-8000-000000000001';
 
 const setupDestinationUnit: UnitResponse = {
   id: setupDestinationUnitId,
@@ -371,6 +378,21 @@ const orchestrationUnit: UnitResponse = {
   notes: '',
 };
 
+const workTenancy: TenancyResponse = {
+  id: workTenancyId,
+  code: 'TEN-WORK-BRW',
+  unitId: orchestrationUnitId,
+  status: 'planned',
+  plannedStart: '2027-10-05',
+  plannedEnd: null,
+  actualStart: null,
+  actualEnd: null,
+  noticeGivenAt: null,
+  terminationEffectiveAt: null,
+  version: 1,
+  parties: [],
+};
+
 let setupProperty: PropertyResponse | null = null;
 let setupUnit: UnitResponse | null = null;
 let setupSpaces: SpaceResponse[] = [];
@@ -414,7 +436,27 @@ let setupMeterBoundaries: MeterReadingBoundaryResponse[] = [];
 let setupMeterReadingSequence = 0;
 let setupMeterBoundarySequence = 0;
 let setupMeterClockSequence = 0;
-let setupMaintenanceIssues: MaintenanceIssueResponse[] = [];
+let setupMaintenanceIssues: MaintenanceIssueResponse[] = [
+  {
+    id: workPropertyMaintenanceIssueId,
+    code: 'ISS-PROPERTY-WORK-BRW',
+    propertyId,
+    unitId: null,
+    spaceId: null,
+    assetId: null,
+    inspectionFindingId: null,
+    title: 'Roof inspection follow-up',
+    description: 'Property-level operational issue for Work routing acceptance.',
+    priority: 'urgent',
+    status: 'open',
+    reportedAt: '2025-06-29T08:00:00.000Z',
+    resolvedAt: null,
+    cancelledAt: null,
+    version: 1,
+    recordedAt: '2025-06-29T08:05:00.000Z',
+    recordedByUserId: inspectionUserId,
+  },
+];
 let setupMaintenanceIssueSequence = 0;
 let setupMaintenanceWorkOrders: MaintenanceWorkOrderEntryResponse[] = [];
 let setupMaintenanceWorkOrderSequence = 0;
@@ -1423,6 +1465,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioSimulateAccessItemHandoff?: () => boolean;
   __portfolioAccessItemTransactionCount?: () => number;
   __portfolioAccessItemTransactionCountFor?: (accessItemId: string) => number;
+  __portfolioWorkActorUserId?: string | null;
   __portfolioFailNextMeterBoundaryAfterCommit?: boolean;
   __portfolioFailNextAssetMoveAfterCommit?: boolean;
   __portfolioConcurrentAssetMoveAcrossProperty?: boolean;
@@ -1478,6 +1521,7 @@ browserHarnessWindow.__portfolioInspectionSchemaCreateCount = 0;
 browserHarnessWindow.__portfolioInspectionSchemaPublishCount = 0;
 browserHarnessWindow.__portfolioFinalReportRenderCount = 0;
 browserHarnessWindow.__portfolioFinalReportReadCount = 0;
+browserHarnessWindow.__portfolioWorkActorUserId = null;
 browserHarnessWindow.__portfolioAccessItemTransactionCount = () =>
   setupAccessItemTransactions.length;
 browserHarnessWindow.__portfolioAccessItemTransactionCountFor = (accessItemId) =>
@@ -2761,7 +2805,19 @@ globalThis.fetch = async (
   }
 
   if (path === '/units/' + orchestrationUnitId + '/tenancies') {
+    return json({ items: [workTenancy] });
+  }
+
+  if (path === '/tenancies/' + workTenancyId + '/agreements') {
     return json({ items: [] });
+  }
+
+  if (path === '/tenancies/' + workTenancyId + '/terms') {
+    return apiError(
+      404,
+      'TENANCY_TERMS_NOT_FOUND',
+      'No effective terms exist for this Work tenancy.',
+    );
   }
 
   if (
@@ -3526,8 +3582,23 @@ globalThis.fetch = async (
         );
       }
       const id =
-        setupMaintenanceWorkOrderIds[setupMaintenanceWorkOrderSequence++];
+        setupMaintenanceIssue.id === workPropertyMaintenanceIssueId
+          ? workPropertyMaintenanceWorkOrderId
+          : setupMaintenanceWorkOrderIds[
+              setupMaintenanceWorkOrderSequence++
+            ];
       if (!id) throw new Error('Setup Maintenance WorkOrder id pool exhausted.');
+      if (
+        setupMaintenanceWorkOrders.some(
+          (entry) => entry.workOrder.id === id,
+        )
+      ) {
+        return apiError(
+          409,
+          'MAINTENANCE_WORK_ORDER_CODE_CONFLICT',
+          'Canonical Maintenance WorkOrder already exists.',
+        );
+      }
       const order: MaintenanceWorkOrderResponse = {
         id,
         issueId: setupMaintenanceIssue.id,
@@ -3698,21 +3769,29 @@ globalThis.fetch = async (
         'Maintenance WorkOrder version conflict.',
       );
     }
-    if (
-      body.assignee.kind !== 'party' ||
-      ![...parties, ...(setupParty ? [setupParty] : [])].some(
+    let activeAssignee: boolean;
+    if (body.assignee.kind === 'party') {
+      const partyId = body.assignee.partyId;
+      activeAssignee = [
+        ...parties,
+        ...(setupParty ? [setupParty] : []),
+      ].some(
         (party) =>
-          party.id ===
-            (body.assignee.kind === 'party'
-              ? body.assignee.partyId
-              : '') &&
+          party.id === partyId &&
           party.status === 'active',
-      )
-    ) {
+      );
+    } else {
+      const userId = body.assignee.userId;
+      activeAssignee = [
+        inspectionUserId,
+        setupOrchestrationOtherStaffId,
+      ].includes(userId);
+    }
+    if (!activeAssignee) {
       return apiError(
         422,
         'MAINTENANCE_ASSIGNEE_INACTIVE',
-        'Maintenance assignee must be an active Party.',
+        'Maintenance assignee must be active internal staff or an active Party.',
       );
     }
     const updated: MaintenanceWorkOrderResponse = {
@@ -5235,70 +5314,155 @@ globalThis.fetch = async (
     });
   }
 
-  if (path === '/inspections/work-queue') {
-    const activeStatuses = new Set(['draft', 'in_progress', 'locked']);
-    const items = [];
+  if (path === '/work') {
+    const referenceDate = url.searchParams.get('asOf');
+    if (!referenceDate) {
+      return apiError(400, 'VALIDATION_ERROR', 'Queue date is required.');
+    }
 
+    const items = [];
+    const workActorUserId =
+      browserHarnessWindow.__portfolioWorkActorUserId ?? null;
+    const inspectorScoped = workActorUserId !== null;
+    const activeStatuses = new Set(['draft', 'in_progress', 'locked']);
     const primary = inspectionRecord();
-    if (activeStatuses.has(primary.status)) {
+    if (
+      activeStatuses.has(primary.status) &&
+      (!inspectorScoped || primary.assignedToUserId === workActorUserId)
+    ) {
       items.push({
-        inspection: primary,
+        kind: 'inspection',
+        attention:
+          primary.scheduledFor === null
+            ? 'unscheduled'
+            : primary.scheduledFor < referenceDate
+              ? 'overdue'
+              : primary.scheduledFor === referenceDate
+                ? 'today'
+                : 'upcoming',
+        inspectionId: primary.id,
+        inspectionCode: primary.code,
+        inspectionType: primary.inspectionType,
+        inspectionStatus: primary.status,
+        scheduledFor: primary.scheduledFor,
+        assignedToUserId: primary.assignedToUserId,
+        assignedToDisplayName: 'Browser Inspector',
+        assignedToRole: 'inspector',
         propertyId,
         propertyCode: property.code,
         propertyName: property.name,
+        unitId,
         unitCode: unit.code,
         unitNumber: unit.unitNumber,
-        assignedToDisplayName: 'Browser Inspector',
-        assignedToRole: 'inspector',
       });
     }
 
     if (
       setupOrchestrationInspection &&
-      activeStatuses.has(setupOrchestrationInspection.status)
+      activeStatuses.has(setupOrchestrationInspection.status) &&
+      (!inspectorScoped ||
+        setupOrchestrationInspection.assignedToUserId === workActorUserId)
     ) {
       const assignedToManager =
         setupOrchestrationInspection.assignedToUserId ===
         setupOrchestrationOtherStaffId;
+      const scheduledFor = setupOrchestrationInspection.scheduledFor;
       items.push({
-        inspection: setupOrchestrationInspection,
-        propertyId: orchestrationPropertyId,
-        propertyCode: orchestrationProperty.code,
-        propertyName: orchestrationProperty.name,
-        unitCode: orchestrationUnit.code,
-        unitNumber: orchestrationUnit.unitNumber,
+        kind: 'inspection',
+        attention:
+          scheduledFor === null
+            ? 'unscheduled'
+            : scheduledFor < referenceDate
+              ? 'overdue'
+              : scheduledFor === referenceDate
+                ? 'today'
+                : 'upcoming',
+        inspectionId: setupOrchestrationInspection.id,
+        inspectionCode: setupOrchestrationInspection.code,
+        inspectionType: setupOrchestrationInspection.inspectionType,
+        inspectionStatus: setupOrchestrationInspection.status,
+        scheduledFor,
+        assignedToUserId: setupOrchestrationInspection.assignedToUserId,
         assignedToDisplayName: assignedToManager
           ? 'Browser Manager'
           : 'Browser Inspector',
         assignedToRole: assignedToManager ? 'manager' : 'inspector',
+        propertyId: orchestrationPropertyId,
+        propertyCode: orchestrationProperty.code,
+        propertyName: orchestrationProperty.name,
+        unitId: orchestrationUnitId,
+        unitCode: orchestrationUnit.code,
+        unitNumber: orchestrationUnit.unitNumber,
       });
     }
 
-    return json({ items });
-  }
+    const workMaintenanceIssue = setupMaintenanceIssues.find(
+      (issue) => issue.id === workPropertyMaintenanceIssueId,
+    );
+    const workMaintenanceAssignedToActor =
+      workActorUserId !== null &&
+      setupMaintenanceWorkOrders.some(
+        (entry) =>
+          entry.workOrder.issueId === workPropertyMaintenanceIssueId &&
+          ['assigned', 'in_progress'].includes(entry.workOrder.status) &&
+          entry.workOrder.assignee?.kind === 'user' &&
+          entry.workOrder.assignee.userId === workActorUserId,
+      );
+    if (
+      workMaintenanceIssue?.status === 'open' &&
+      (!inspectorScoped || workMaintenanceAssignedToActor)
+    ) {
+      items.push({
+        kind: 'maintenance',
+        attention:
+          workMaintenanceIssue.priority === 'urgent'
+            ? 'urgent'
+            : workMaintenanceIssue.priority === 'high'
+              ? 'high'
+              : 'normal',
+        issueId: workMaintenanceIssue.id,
+        issueCode: workMaintenanceIssue.code,
+        title: workMaintenanceIssue.title,
+        priority: workMaintenanceIssue.priority,
+        reportedAt: workMaintenanceIssue.reportedAt,
+        propertyId: property.id,
+        propertyCode: property.code,
+        propertyName: property.name,
+        unitId: null,
+        unitCode: null,
+        unitNumber: null,
+        activeWorkOrderCount: setupMaintenanceWorkOrders.filter(
+          (entry) =>
+            entry.workOrder.issueId === workMaintenanceIssue.id &&
+            !['completed', 'cancelled'].includes(entry.workOrder.status),
+        ).length,
+      });
+    }
 
-  if (path === '/inspections/assigned-to-me') {
-    return json({
-      items: [
-        {
-          inspection: inspectionRecord(),
-          propertyId,
-          unitCode: unit.code,
-          unitNumber: unit.unitNumber,
-        },
-        ...(setupOrchestrationInspection?.assignedToUserId ===
-        inspectionUserId
-          ? [
-              {
-                inspection: setupOrchestrationInspection,
-                propertyId: orchestrationPropertyId,
-                unitCode: orchestrationUnit.code,
-                unitNumber: orchestrationUnit.unitNumber,
-              },
-            ]
-          : []),
-      ],
+    if (!inspectorScoped) items.push({
+      kind: 'occupancy',
+      attention:
+        workTenancy.plannedStart! < referenceDate
+          ? 'overdue'
+          : workTenancy.plannedStart === referenceDate
+            ? 'today'
+            : 'upcoming',
+      reason: 'contract_missing',
+      tenancyId: workTenancy.id,
+      tenancyCode: workTenancy.code,
+      tenancyStatus: workTenancy.status,
+      agreementId: null,
+      agreementCode: null,
+      dueDate: workTenancy.plannedStart,
+      propertyId: orchestrationProperty.id,
+      propertyCode: orchestrationProperty.code,
+      propertyName: orchestrationProperty.name,
+      unitId: orchestrationUnit.id,
+      unitCode: orchestrationUnit.code,
+      unitNumber: orchestrationUnit.unitNumber,
     });
+
+    return json({ referenceDate, items });
   }
 
   if (path === `/units/${unitId}/inspections`) {

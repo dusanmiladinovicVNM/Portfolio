@@ -1,5 +1,4 @@
 import type {
-  AssignedInspectionWorkItemResponse,
   InspectionResponseDto,
   InspectionStaffResponse,
 } from '@portfolio/contracts';
@@ -56,20 +55,6 @@ export function assertInspectionStaffList(
       throw new Error('Inspection staff list contains a duplicate user.');
     }
     ids.add(entry.userId);
-  }
-}
-
-export function assertAssignedInspectionWorkList(
-  work: readonly AssignedInspectionWorkItemResponse[],
-): void {
-  const ids = new Set<string>();
-  for (const item of work) {
-    if (ids.has(item.inspection.id)) {
-      throw new Error(
-        'Assigned Inspection work list contains duplicate Inspection identity.',
-      );
-    }
-    ids.add(item.inspection.id);
   }
 }
 

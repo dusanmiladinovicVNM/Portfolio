@@ -74,6 +74,10 @@ const setupInspectionFindingId = 'b1000000-0000-4000-8000-000000000044';
 const setupMaintenanceIssueId = 'b1000000-0000-4000-8000-000000000045';
 const setupOvenMaintenanceIssueId = 'b1000000-0000-4000-8000-000000000100';
 const setupSmokeMaintenanceIssueId = 'b1000000-0000-4000-8000-000000000101';
+const workPropertyMaintenanceIssueId =
+  'aa100000-0000-4000-8000-000000000001';
+const workPropertyMaintenanceWorkOrderId =
+  'aa100000-0000-4000-8000-000000000002';
 const setupMaintenanceWorkOrderId = 'b1000000-0000-4000-8000-000000000046';
 const setupOvenMaintenanceWorkOrderId = 'b1000000-0000-4000-8000-000000000102';
 const setupSmokeMaintenanceWorkOrderId = 'b1000000-0000-4000-8000-000000000103';
@@ -4091,7 +4095,7 @@ try {
     "//section[contains(@class,'maintenance-admin-panel')]//h3[normalize-space()='WO-SETUP-BRW · Repair leaking washer']",
   );
 
-  const assignForm = "//form[@data-maintenance-form='assign']";
+  const assignForm = "//form[@data-maintenance-form='assign-party']";
   await selectOptionXpath(
     sessionId,
     assignForm + "//select[@name='partyId']",
@@ -4103,7 +4107,7 @@ try {
   );
   await clickXpath(
     sessionId,
-    assignForm + "//button[normalize-space()='Assign WorkOrder']",
+    assignForm + "//button[normalize-space()='Assign contractor']",
   );
   await waitForScriptTruthy(
     sessionId,
@@ -5398,7 +5402,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-inspection-work-queue]//h2[normalize-space()='Active work']",
+    "//*[@data-operational-work-queue]//h2[normalize-space()='Active work']",
   );
   assertEqual(
     await currentUrl(sessionId),
@@ -5408,49 +5412,215 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-inspection-work-queue]//article[.//strong[normalize-space()='INS-BRW-001']][contains(normalize-space(),'Browser Test Property')][contains(normalize-space(),'UNIT-BRW')][contains(normalize-space(),'Browser Inspector')]",
+    "//*[@data-operational-work-queue]//article[@data-work-domain='inspection'][.//strong[normalize-space()='INS-BRW-001']][contains(normalize-space(),'Browser Test Property')][contains(normalize-space(),'UNIT-BRW')][contains(normalize-space(),'Browser Inspector')]",
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-inspection-work-queue]//article[.//strong[normalize-space()='INS-ORCH-BRW']][contains(normalize-space(),'Inspection Orchestration Property')][contains(normalize-space(),'UNIT-ORCH-BRW')][contains(normalize-space(),'Browser Inspector')]",
+    "//*[@data-operational-work-queue]//article[@data-work-domain='inspection'][.//strong[normalize-space()='INS-ORCH-BRW']][contains(normalize-space(),'Inspection Orchestration Property')][contains(normalize-space(),'UNIT-ORCH-BRW')][contains(normalize-space(),'Browser Inspector')]",
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-inspection-work-queue]//article[@data-work-attention='today'][.//strong[normalize-space()='INS-BRW-001']]",
+    "//*[@data-operational-work-queue]//article[@data-work-domain='maintenance'][@data-work-attention='urgent'][.//strong[normalize-space()='ISS-PROPERTY-WORK-BRW']][contains(normalize-space(),'Roof inspection follow-up')][contains(normalize-space(),'Property-level')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-operational-work-queue]//article[@data-work-domain='occupancy'][.//strong[normalize-space()='TEN-WORK-BRW']][contains(normalize-space(),'Contract coverage missing')][contains(normalize-space(),'No covering agreement')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-operational-work-queue]//article[@data-work-attention='today'][.//strong[normalize-space()='INS-BRW-001']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'The item set is current canonical state')][contains(normalize-space(),'does not rewind the Work set')]",
   );
   await selectOptionXpath(
     sessionId,
-    "//*[@data-inspection-work-queue]//select[ancestor::label[contains(normalize-space(),'Lifecycle')]]",
-    'in_progress',
+    "//*[@data-operational-work-queue]//select[ancestor::label[contains(normalize-space(),'Domain')]]",
+    'maintenance',
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-inspection-work-queue]//article[.//strong[normalize-space()='INS-ORCH-BRW']]",
+    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='ISS-PROPERTY-WORK-BRW']]",
   );
   assertEqual(
     await elementExistsXpath(
       sessionId,
-      "//*[@data-inspection-work-queue]//article[.//strong[normalize-space()='INS-BRW-001']]",
+      "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='INS-BRW-001']]",
     ),
     false,
-    'Lifecycle filter removes draft work while preserving in-progress work',
+    'Domain filter isolates Maintenance from Inspection work',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='TEN-WORK-BRW']]",
+    ),
+    false,
+    'Domain filter isolates Maintenance from occupancy work',
   );
   await selectOptionXpath(
     sessionId,
-    "//*[@data-inspection-work-queue]//select[ancestor::label[contains(normalize-space(),'Lifecycle')]]",
+    "//*[@data-operational-work-queue]//select[ancestor::label[contains(normalize-space(),'Domain')]]",
     'all',
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-inspection-work-queue]//article[.//strong[normalize-space()='INS-BRW-001']]",
+    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='INS-BRW-001']]",
+  );
+
+  await clickXpath(
+    sessionId,
+    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='ISS-PROPERTY-WORK-BRW']]//a[normalize-space()='Open Maintenance']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-property-maintenance-issue]//section[contains(@class,'maintenance-admin-panel')]//h2[normalize-space()='ISS-PROPERTY-WORK-BRW · Roof inspection follow-up']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + propertyId +
+      '?issueId=' + workPropertyMaintenanceIssueId +
+      '&asOf=2025-06-30',
+    'Global Work opens the exact canonical property-level Maintenance Issue owner',
+  );
+
+  const inspectorWorkOrderCreateForm =
+    "//form[@data-maintenance-form='create-work-order']";
+  await typeXpath(
+    sessionId,
+    inspectorWorkOrderCreateForm + "//input[@name='code']",
+    'WO-WORK-INSPECTOR-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    inspectorWorkOrderCreateForm + "//input[@name='title']",
+    'Inspect roof follow-up',
   );
   await clickXpath(
     sessionId,
-    "//*[@data-inspection-work-queue]//article[.//strong[normalize-space()='INS-BRW-001']]//a[normalize-space()='Open Inspection']",
+    inspectorWorkOrderCreateForm +
+      "//button[normalize-space()='Create WorkOrder']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//button[contains(@class,'maintenance-order-card')][.//span[normalize-space()='WO-WORK-INSPECTOR-BRW']]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + propertyId +
+      '?issueId=' + workPropertyMaintenanceIssueId +
+      '&workOrderId=' + workPropertyMaintenanceWorkOrderId +
+      '&asOf=2025-06-30',
+    'Property Maintenance creates the canonical WorkOrder deep-link',
+  );
+
+  const internalAssignmentForm =
+    "//form[@data-maintenance-form='assign-internal']";
+  await selectOptionXpath(
+    sessionId,
+    internalAssignmentForm + "//select[@name='userId']",
+    inspectionUserId,
+  );
+  await clickXpath(
+    sessionId,
+    internalAssignmentForm + "//button[normalize-space()='Assign internal']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//button[contains(@class,'maintenance-order-card')][.//span[normalize-space()='WO-WORK-INSPECTOR-BRW']][contains(normalize-space(),'Browser Inspector')][contains(normalize-space(),'assigned')]",
+  );
+
+  await executeScript(
+    sessionId,
+    "window.__portfolioWorkActorUserId = '" + inspectionUserId + "'; return true;",
+  );
+  await clickXpath(sessionId, "//aside//a[normalize-space()='Work']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-operational-work-queue]//article[@data-work-domain='maintenance'][.//strong[normalize-space()='ISS-PROPERTY-WORK-BRW']]",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-operational-work-queue]//article[@data-work-domain='occupancy']",
+    ),
+    false,
+    'Inspector Work excludes occupancy/contracts server-side',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='TEN-WORK-BRW']]",
+    ),
+    false,
+    'Inspector Work cannot see contract-gap items',
+  );
+
+  await executeScript(
+    sessionId,
+    'window.__portfolioWorkActorUserId = null; return true;',
+  );
+  await navigateWithPopState(
+    sessionId,
+    '/dashboard?asOf=2025-06-30',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//aside//a[normalize-space()='Work']",
+  );
+  await clickXpath(sessionId, "//aside//a[normalize-space()='Work']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='TEN-WORK-BRW']]",
+  );
+  await clickXpath(
+    sessionId,
+    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='TEN-WORK-BRW']]//a[normalize-space()='Open Contracts']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//a[contains(@class,'selection-card')][.//strong[normalize-space()='TEN-WORK-BRW']][.//span[normalize-space()='Planned']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[normalize-space()='No Lease Agreements exist for this Tenancy.']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + orchestrationPropertyId +
+      '/units/' + orchestrationUnitId +
+      '?tab=contracts&tenancyId=aa200000-0000-4000-8000-000000000001&asOf=2025-06-30',
+    'Global Work contract gap opens the exact canonical Tenancy owner',
+  );
+
+  await clickXpath(sessionId, "//aside//a[normalize-space()='Work']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='INS-BRW-001']]",
+  );
+  await clickXpath(
+    sessionId,
+    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='INS-BRW-001']]//a[normalize-space()='Open Inspection']",
   );
   await waitForElement(
     sessionId,

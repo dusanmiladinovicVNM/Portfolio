@@ -17,14 +17,21 @@ import {
   dashboardRoute,
   unitRoute,
 } from '../navigation/workspace-route.js';
-import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
+import type {
+  NavigateWorkspace,
+  SetNavigationBlocker,
+} from '../navigation/use-workspace-navigation.js';
 import { formatSwissDate } from '../presentation/format.js';
+import { PropertyMaintenanceIssue } from './UnitMaintenance.js';
 
 interface PropertyUnitsProps {
   readonly api: PortfolioApi;
   readonly propertyId: string;
   readonly asOf: string;
+  readonly maintenanceIssueId?: string | undefined;
+  readonly maintenanceWorkOrderId?: string | undefined;
   readonly navigate: NavigateWorkspace;
+  readonly setNavigationBlocker: SetNavigationBlocker;
 }
 
 interface PropertyUnitsData {
@@ -36,7 +43,10 @@ export function PropertyUnits({
   api,
   propertyId,
   asOf,
+  maintenanceIssueId,
+  maintenanceWorkOrderId,
   navigate,
+  setNavigationBlocker,
 }: PropertyUnitsProps) {
   const [data, setData] = useState<PropertyUnitsData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +101,18 @@ export function PropertyUnits({
           </p>
         </div>
       </header>
+
+      {maintenanceIssueId ? (
+        <PropertyMaintenanceIssue
+          api={api}
+          asOf={asOf}
+          issueId={maintenanceIssueId}
+          navigate={navigate}
+          propertyId={propertyId}
+          setNavigationBlocker={setNavigationBlocker}
+          workOrderId={maintenanceWorkOrderId}
+        />
+      ) : null}
 
       {data ? (
         <section className="panel page-panel">

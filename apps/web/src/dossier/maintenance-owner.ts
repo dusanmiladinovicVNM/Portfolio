@@ -18,6 +18,22 @@ export function assertUnitMaintenanceIssuesOwner(
   }
 }
 
+export function assertPropertyMaintenanceIssueOwner(
+  propertyId: string,
+  issueId: string,
+  issue: MaintenanceIssueResponse,
+): void {
+  if (
+    issue.id !== issueId ||
+    issue.propertyId !== propertyId ||
+    issue.unitId !== null
+  ) {
+    throw new Error(
+      'Maintenance Issue response does not match the selected Property-level owner.',
+    );
+  }
+}
+
 export function assertMaintenanceIssueOwner(
   unitId: string,
   issueId: string,
@@ -273,7 +289,7 @@ export function assertMaintenanceWorkOrderUpdate(
 
 export function assertMaintenanceWorkOrderAssignment(
   current: MaintenanceWorkOrderResponse,
-  partyId: string,
+  assignee: NonNullable<MaintenanceWorkOrderResponse['assignee']>,
   response: MaintenanceWorkOrderResponse,
 ): void {
   if (!sameWorkOrderImmutableIdentity(current, response)) {
@@ -281,11 +297,17 @@ export function assertMaintenanceWorkOrderAssignment(
       'Maintenance WorkOrder assignment changed immutable task identity.',
     );
   }
+  const sameAssignee =
+    response.assignee?.kind === assignee.kind &&
+    (assignee.kind === 'party' && response.assignee?.kind === 'party'
+      ? response.assignee.partyId === assignee.partyId
+      : assignee.kind === 'user' && response.assignee?.kind === 'user'
+        ? response.assignee.userId === assignee.userId
+        : false);
   if (
     response.title !== current.title ||
     response.description !== current.description ||
-    response.assignee?.kind !== 'party' ||
-    response.assignee.partyId !== partyId ||
+    !sameAssignee ||
     response.status !== 'assigned' ||
     response.assignedAt === null ||
     response.startedAt !== current.startedAt ||

@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type {
-  AssignedInspectionWorkItemResponse,
   InspectionResponseDto,
   InspectionStaffResponse,
 } from '@portfolio/contracts';
 import {
-  assertAssignedInspectionWorkList,
   assertCreatedInspection,
   assertInspectionOrchestrationMutation,
   assertInspectionStaffList,
@@ -145,7 +143,7 @@ describe('Inspection orchestration browser guards', () => {
     ).toThrow('historical Inspection identity');
   });
 
-  it('rejects duplicate staff/work identities in browser read models', () => {
+  it('rejects duplicate staff identities in browser read models', () => {
     const staff: InspectionStaffResponse = {
       userId: assigneeId,
       displayName: 'Inspector',
@@ -156,18 +154,5 @@ describe('Inspection orchestration browser guards', () => {
     expect(() => assertInspectionStaffList([staff, staff])).toThrow(
       'duplicate user',
     );
-
-    const work: AssignedInspectionWorkItemResponse = {
-      inspection: inspection(),
-      propertyId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-      unitCode: 'UNIT-1',
-      unitNumber: '1A',
-    };
-    expect(() =>
-      assertAssignedInspectionWorkList([work]),
-    ).not.toThrow();
-    expect(() =>
-      assertAssignedInspectionWorkList([work, work]),
-    ).toThrow('duplicate Inspection');
   });
 });

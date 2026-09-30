@@ -42,6 +42,19 @@ export const INSPECTION_FINDING_SEVERITIES = [
 ] as const;
 
 export type InspectionStatus = (typeof INSPECTION_STATUSES)[number];
+
+export const ACTIVE_INSPECTION_STATUSES: readonly InspectionStatus[] = [
+  'draft',
+  'in_progress',
+  'locked',
+];
+
+export function isActiveInspectionStatus(
+  status: InspectionStatus,
+): boolean {
+  return ACTIVE_INSPECTION_STATUSES.includes(status);
+}
+
 export type InspectionFindingSeverity =
   (typeof INSPECTION_FINDING_SEVERITIES)[number];
 

@@ -395,6 +395,32 @@ describe('workspace URL navigation', () => {
     );
   });
 
+  it('deep-links property-level Maintenance without inventing a Unit owner', () => {
+    const selected = propertyRoute(
+      propertyId,
+      '2025-06-30',
+      { maintenanceIssueId, maintenanceWorkOrderId },
+    );
+
+    expect(workspaceRouteHref(selected)).toBe(
+      `/properties/${propertyId}?issueId=${maintenanceIssueId}&workOrderId=${maintenanceWorkOrderId}&asOf=2025-06-30`,
+    );
+
+    expect(
+      parseWorkspaceLocation(
+        `/properties/${propertyId}`,
+        `?issueId=${maintenanceIssueId}&workOrderId=${maintenanceWorkOrderId}&asOf=2025-06-30`,
+        '2026-09-21',
+      ),
+    ).toEqual({
+      kind: 'property',
+      propertyId,
+      maintenanceIssueId,
+      maintenanceWorkOrderId,
+      asOf: '2025-06-30',
+    });
+  });
+
   it('round-trips the Unit Spaces setup tab', () => {
     const route = unitRoute(
       propertyId,

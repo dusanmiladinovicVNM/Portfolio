@@ -77,3 +77,5 @@ export * from './timeline/unit-timeline-queries.js';
 
 export * from './reporting/reporting-repository.js';
 export * from './reporting/reporting-queries.js';
+export * from './work/work-repository.js';
+export * from './work/work-queries.js';

@@ -29,6 +29,7 @@ import {
   type UnitTimelineRepository,
   type UserAccessRepository,
   type VerifiedIdentity,
+  type WorkRepository,
 } from '@portfolio/application';
 import { DomainError } from '@portfolio/domain';
 import { handleAccessItemHttp } from './access-item-http-routes.js';
@@ -50,10 +51,12 @@ import { handleReportingHttp } from './reporting-http-routes.js';
 import { handleStaffHttp } from './staff-http-routes.js';
 import { handleTenancyHttp } from './tenancy-http-routes.js';
 import { handleUnitTimelineHttp } from './unit-timeline-http-routes.js';
+import { handleWorkHttp } from './work-http-routes.js';
 
 export interface PortfolioHttpDependencies {
   readonly portfolioRepository: PortfolioRepository;
   readonly reportingRepository: ReportingRepository;
+  readonly workRepository: WorkRepository;
   readonly accessItemRepository: AccessItemRepository;
   readonly assetRepository: AssetRepository;
   readonly assetInventoryRepository: AssetInventoryRepository;
@@ -241,6 +244,16 @@ export function createPortfolioHttpHandler(
       }
 
       const handlers = [
+        () =>
+          handleWorkHttp(
+            {
+              workRepository: deps.workRepository,
+              clock: deps.clock,
+            },
+            actor,
+            request,
+            path,
+          ),
         () =>
           deps.staffAdministrationRepository && deps.staffAuthAdmin
             ? handleStaffHttp(

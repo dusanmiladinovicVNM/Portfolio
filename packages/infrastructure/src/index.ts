@@ -26,3 +26,4 @@ export * from './postgres/postgres-unit-timeline-repository.js';
 export * from './postgres/postgres-reporting-repository.js';
 
 export * from './recovery/document-binary-snapshot-restore.js';
+export * from './postgres/postgres-work-repository.js';
