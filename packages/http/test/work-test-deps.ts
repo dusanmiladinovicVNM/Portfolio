@@ -2,7 +2,6 @@ import type {
   OperationalWorkProjection,
   WorkRepository,
 } from '@portfolio/application';
-import type { DateOnly } from '@portfolio/domain';
 
 export class InMemoryWorkRepository implements WorkRepository {
   projection: OperationalWorkProjection = {
@@ -11,12 +10,10 @@ export class InMemoryWorkRepository implements WorkRepository {
     occupancy: [],
   };
 
-  lastReferenceDate: DateOnly | null = null;
+  readCount = 0;
 
-  async getOperationalWork(
-    referenceDate: DateOnly,
-  ): Promise<OperationalWorkProjection> {
-    this.lastReferenceDate = referenceDate;
+  async getOperationalWork(): Promise<OperationalWorkProjection> {
+    this.readCount += 1;
     return this.projection;
   }
 }
