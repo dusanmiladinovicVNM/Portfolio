@@ -13018,4 +13018,213 @@ describe('PostgreSQL infrastructure', () => {
   });
 
 
+  it('projects current Inspection, Maintenance and occupancy work from canonical PostgreSQL state', async () => {
+    const actor = await resolveActor(accessRepository, {
+      provider: 'supabase',
+      subject: 'external-admin-subject',
+    });
+    const ids = new SequenceIds(
+      Array.from({ length: 30 }, (_, index) =>
+        `da000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      ),
+    );
+
+    const property = await createPropertyCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        code: 'PROP-WORK-INT',
+        name: 'Operational Work Property',
+        propertyType: 'apartment_building',
+        street: 'Work Street',
+        houseNumber: '100',
+        postalCode: '8000',
+        city: 'Zürich',
+        countryCode: 'CH',
+      },
+    );
+    const unit = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-WORK-INT',
+        unitNumber: 'W-1',
+        unitType: 'apartment',
+      },
+    );
+
+    const schemaDraft = await createInspectionSchemaVersionCommand(
+      { inspectionRepository, idGenerator: ids },
+      actor,
+      {
+        schemaCode: 'WORK-INT',
+        inspectionType: 'periodic',
+        title: 'Operational Work integration',
+        requiredSignatureRoles: [],
+        sections: [
+          {
+            key: 'general',
+            title: 'General',
+            sortOrder: 0,
+            items: [
+              {
+                key: 'condition',
+                type: 'text',
+                label: 'Condition',
+                sortOrder: 0,
+              },
+            ],
+          },
+        ],
+      },
+    );
+    const schema = await publishInspectionSchemaVersionCommand(
+      inspectionRepository,
+      actor,
+      schemaDraft.id,
+    );
+    const inspection = await createInspectionCommand(
+      {
+        inspectionRepository,
+        portfolioRepository,
+        tenancyRepository,
+        staffDirectoryRepository: accessRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-30T08:00:00.000Z' },
+      },
+      actor,
+      {
+        code: 'INS-WORK-INT',
+        inspectionType: 'periodic',
+        unitId: unit.id,
+        schemaVersionId: schema.id,
+        assignedToUserId:
+          'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' as import('@portfolio/domain').UserId,
+        scheduledFor: '2026-10-01',
+      },
+    );
+
+    const maintenanceDeps = {
+      maintenanceRepository,
+      portfolioRepository,
+      assetRepository,
+      assetServiceRepository,
+      inspectionRepository,
+      partyRepository,
+      staffDirectoryRepository: accessRepository,
+      idGenerator: ids,
+      clock: { now: () => '2026-09-30T09:00:00.000Z' },
+    };
+    const issue = await createMaintenanceIssueCommand(
+      maintenanceDeps,
+      actor,
+      {
+        code: 'MI-WORK-INT',
+        propertyId: property.id,
+        unitId: unit.id,
+        title: 'Operational Work urgent issue',
+        priority: 'urgent',
+        reportedAt: '2026-09-30T08:30:00.000Z',
+      },
+    );
+    const workOrder = await createMaintenanceWorkOrderCommand(
+      {
+        maintenanceRepository,
+        idGenerator: ids,
+        clock: { now: () => '2026-09-30T09:05:00.000Z' },
+      },
+      actor,
+      issue.id,
+      {
+        code: 'MWO-WORK-INT',
+        title: 'Operational Work order',
+      },
+    );
+    await assignMaintenanceWorkOrderCommand(
+      {
+        maintenanceRepository,
+        staffDirectoryRepository: accessRepository,
+        partyRepository,
+        clock: { now: () => '2026-09-30T09:10:00.000Z' },
+      },
+      actor,
+      workOrder.id,
+      workOrder.version,
+      {
+        kind: 'user',
+        userId:
+          'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' as import('@portfolio/domain').UserId,
+      },
+    );
+
+    const tenancyId = ids.next();
+    const agreementId = ids.next();
+    await sql`
+      insert into public.tenancies (
+        id, code, unit_id, status, planned_start, version
+      ) values (
+        ${tenancyId},
+        'TEN-WORK-INT',
+        ${unit.id},
+        'planned',
+        '2026-10-01',
+        1
+      )
+    `;
+    await sql`
+      insert into public.lease_agreements (
+        id, tenancy_id, code, agreement_type, effective_from, status
+      ) values (
+        ${agreementId},
+        ${tenancyId},
+        'AGR-WORK-INT',
+        'initial',
+        '2026-10-01',
+        'draft'
+      )
+    `;
+
+    const projected = await workRepository.getOperationalWork(
+      asDateOnly('2026-09-30'),
+    );
+
+    expect(projected.inspections).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          inspectionId: inspection.id,
+          inspectionCode: 'INS-WORK-INT',
+          propertyId: property.id,
+          unitId: unit.id,
+        }),
+      ]),
+    );
+    expect(projected.maintenance).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          issueId: issue.id,
+          issueCode: 'MI-WORK-INT',
+          priority: 'urgent',
+          activeWorkOrderCount: 1,
+          assignedUserIds: [
+            'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+          ],
+        }),
+      ]),
+    );
+    expect(projected.occupancy).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reason: 'contract_draft',
+          tenancyCode: 'TEN-WORK-INT',
+          agreementCode: 'AGR-WORK-INT',
+          propertyId: property.id,
+          unitId: unit.id,
+          dueDate: '2026-10-01',
+        }),
+      ]),
+    );
+  });
+
+
 });
