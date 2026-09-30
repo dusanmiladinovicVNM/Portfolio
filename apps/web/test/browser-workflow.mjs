@@ -627,7 +627,7 @@ try {
   );
   assertEqual(
     await currentUrl(sessionId),
-    baseUrl + '/browser-harness.html?asOf=2025-06-30',
+    baseUrl + '/dashboard?asOf=2025-06-30',
     'Historical reporting route remains unchanged while Daily Operations uses Swiss today',
   );
   await waitForElement(
