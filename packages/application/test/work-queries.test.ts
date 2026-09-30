@@ -147,6 +147,14 @@ function projection(): OperationalWorkProjection {
   };
 }
 
+function itemCodeForTest(
+  item: Awaited<ReturnType<typeof listOperationalWorkQuery>>['items'][number],
+): string {
+  if (item.kind === 'inspection') return item.inspectionCode;
+  if (item.kind === 'maintenance') return item.issueCode;
+  return `${item.tenancyCode}:${item.reason}`;
+}
+
 describe('Operational Work query', () => {
   it('derives attention and a stable cross-domain order without persisting tasks', async () => {
     const repository = new FakeWorkRepository(projection());
@@ -167,6 +175,42 @@ describe('Operational Work query', () => {
       ['occupancy', 'upcoming'],
       ['maintenance', 'normal'],
     ]);
+  });
+
+  it('uses queue date only for attention without rewinding the canonical Work set', async () => {
+    const repository = new FakeWorkRepository(projection());
+
+    const earlier = await listOperationalWorkQuery(
+      repository,
+      manager,
+      '2026-09-29',
+    );
+    const later = await listOperationalWorkQuery(
+      repository,
+      manager,
+      '2026-10-02',
+    );
+
+    expect(repository.readCount).toBe(2);
+    expect(
+      earlier.items.map((item) => [item.kind, itemCodeForTest(item)]).sort(),
+    ).toEqual(
+      later.items.map((item) => [item.kind, itemCodeForTest(item)]).sort(),
+    );
+    expect(
+      earlier.items.find(
+        (item) =>
+          item.kind === 'inspection' &&
+          item.inspectionCode === 'INS-MINE',
+      )?.attention,
+    ).toBe('upcoming');
+    expect(
+      later.items.find(
+        (item) =>
+          item.kind === 'inspection' &&
+          item.inspectionCode === 'INS-MINE',
+      )?.attention,
+    ).toBe('overdue');
   });
 
   it('scopes inspectors to their own canonical Inspection and assigned Maintenance work', async () => {
