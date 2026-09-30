@@ -13224,6 +13224,43 @@ describe('PostgreSQL infrastructure', () => {
       )
     `;
 
+    const futureDraftUnit = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-WORK-FUTURE-DRAFT',
+        unitNumber: 'W-3',
+        unitType: 'apartment',
+      },
+    );
+    const futureDraftTenancyId = ids.next();
+    const futureDraftAgreementId = ids.next();
+    await sql`
+      insert into public.tenancies (
+        id, code, unit_id, status, planned_start, version
+      ) values (
+        ${futureDraftTenancyId},
+        'TEN-WORK-FUTURE-DRAFT',
+        ${futureDraftUnit.id},
+        'planned',
+        '2026-10-01',
+        1
+      )
+    `;
+    await sql`
+      insert into public.lease_agreements (
+        id, tenancy_id, code, agreement_type, effective_from, status
+      ) values (
+        ${futureDraftAgreementId},
+        ${futureDraftTenancyId},
+        'AGR-WORK-FUTURE-DRAFT',
+        'initial',
+        '2026-11-01',
+        'draft'
+      )
+    `;
+
     const projected = await workRepository.getOperationalWork(
       asDateOnly('2026-10-01'),
     );
@@ -13268,6 +13305,23 @@ describe('PostgreSQL infrastructure', () => {
           agreementCode: null,
           propertyId: property.id,
           unitId: gapUnit.id,
+          dueDate: '2026-10-01',
+        }),
+        expect.objectContaining({
+          reason: 'contract_draft',
+          tenancyCode: 'TEN-WORK-FUTURE-DRAFT',
+          agreementCode: 'AGR-WORK-FUTURE-DRAFT',
+          propertyId: property.id,
+          unitId: futureDraftUnit.id,
+          dueDate: '2026-11-01',
+        }),
+        expect.objectContaining({
+          reason: 'contract_missing',
+          tenancyCode: 'TEN-WORK-FUTURE-DRAFT',
+          agreementId: null,
+          agreementCode: null,
+          propertyId: property.id,
+          unitId: futureDraftUnit.id,
           dueDate: '2026-10-01',
         }),
       ]),

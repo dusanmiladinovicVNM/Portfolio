@@ -239,6 +239,11 @@ export class PostgresWorkRepository implements WorkRepository {
                 from public.lease_agreements draft
                 where draft.tenancy_id = t.id
                   and draft.status = 'draft'
+                  and draft.effective_from <= t.coverage_date
+                  and (
+                    draft.effective_to is null
+                    or draft.effective_to >= t.coverage_date
+                  )
               )
               and not exists (
                 select 1
