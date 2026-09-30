@@ -11,6 +11,7 @@ import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.j
 import {
   formatDetailKey,
   formatSwissDate,
+  localDateOnly,
 } from '../presentation/format.js';
 import {
   workAttentionLabel,
@@ -64,6 +65,7 @@ export function PortfolioCommandCenter({
     useState<readonly OperationalWorkItemResponse[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [requestVersion, setRequestVersion] = useState(0);
+  const workQueueDate = localDateOnly();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -72,14 +74,14 @@ export function PortfolioCommandCenter({
 
     void api
       .get(
-        operationalWorkPath(asOf),
+        operationalWorkPath(workQueueDate),
         operationalWorkQueueResponseSchema,
         { signal: controller.signal },
       )
       .then((response) => {
         if (controller.signal.aborted) return;
-        if (response.referenceDate !== asOf) {
-          setError('Work command center returned a different queue date.');
+        if (response.referenceDate !== workQueueDate) {
+          setError('Work command center returned a different operational date.');
           return;
         }
         setItems(response.items);
@@ -94,7 +96,7 @@ export function PortfolioCommandCenter({
       });
 
     return () => controller.abort();
-  }, [api, asOf, requestVersion]);
+  }, [api, requestVersion, workQueueDate]);
 
   const summary = useMemo(() => {
     const counts = {
@@ -141,15 +143,15 @@ export function PortfolioCommandCenter({
           <p className="eyebrow">Daily operations</p>
           <h2 id="portfolio-command-center-title">What needs attention</h2>
           <p className="muted">
-            {scopeLabel} is current canonical state. Queue date
-            {' '}{formatSwissDate(asOf)} only derives dated attention; it does not
-            rewind the Work set.
+            {scopeLabel} is current canonical state. Operational attention is
+            relative to today in Europe/Zurich ({formatSwissDate(workQueueDate)}),
+            independently of the reporting date selected below.
           </p>
         </div>
         <WorkspaceLink
           className="button-secondary"
           navigate={navigate}
-          route={workRoute(asOf)}
+          route={workRoute(workQueueDate)}
         >
           View all Work
         </WorkspaceLink>
@@ -238,7 +240,7 @@ export function PortfolioCommandCenter({
               <WorkspaceLink
                 className="button-secondary"
                 navigate={navigate}
-                route={workItemRoute(item, asOf)}
+                route={workItemRoute(item, workQueueDate)}
               >
                 {workItemActionLabel(item)}
               </WorkspaceLink>
@@ -253,7 +255,7 @@ export function PortfolioCommandCenter({
           <WorkspaceLink
             className="portfolio-command-center-more-link"
             navigate={navigate}
-            route={workRoute(asOf)}
+            route={workRoute(workQueueDate)}
           >
             Open full Work queue
           </WorkspaceLink>

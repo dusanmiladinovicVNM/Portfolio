@@ -7,6 +7,20 @@ const vitePort = 4174;
 const driverPort = 9515;
 const baseUrl = `http://127.0.0.1:${vitePort}`;
 const driverUrl = `http://127.0.0.1:${driverPort}`;
+
+function swissDateOnly(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Zurich',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const part = (type) =>
+    parts.find((entry) => entry.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+const operationalToday = swissDateOnly();
 const propertyId = '11111111-1111-4111-8111-111111111111';
 const unitId = '22222222-2222-4222-8222-222222222222';
 const tenancyId = '33333333-3333-4333-8333-333333333333';
@@ -573,6 +587,16 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
+    "//*[@data-portfolio-command-center]//article[@data-work-domain='inspection'][@data-work-attention='overdue'][.//strong[normalize-space()='INS-BRW-001']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-portfolio-command-center]//*[contains(normalize-space(),'Operational attention is relative to today in Europe/Zurich')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
     "//*[@data-portfolio-command-center]//article[@data-work-domain='maintenance'][.//strong[normalize-space()='ISS-PROPERTY-WORK-BRW']]",
   );
   await waitForElement(
@@ -585,8 +609,8 @@ try {
       sessionId,
       "return document.querySelector('[data-portfolio-command-center] a[href^=\"/work?\"]')?.getAttribute('href') || null;",
     ),
-    '/work?asOf=2025-06-30',
-    'Portfolio command center links to the canonical full Work queue',
+    '/work?asOf=' + operationalToday,
+    'Portfolio command center opens the canonical full Work queue using Swiss today, not reporting asOf',
   );
   assertEqual(
     await executeScript(
@@ -597,8 +621,14 @@ try {
       propertyId +
       '?issueId=' +
       workPropertyMaintenanceIssueId +
-      '&asOf=2025-06-30',
-    'Portfolio command center reuses the exact canonical Maintenance owner route',
+      '&asOf=' +
+      operationalToday,
+    'Portfolio command center reuses the exact Maintenance owner with the operational Work date',
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl + '/browser-harness.html?asOf=2025-06-30',
+    'Historical reporting route remains unchanged while Daily Operations uses Swiss today',
   );
   await waitForElement(
     sessionId,
