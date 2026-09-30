@@ -8,6 +8,7 @@ import {
   createMaintenanceWorkOrderRequestSchema,
   inspectionBundleResponseSchema,
   inspectionListResponseSchema,
+  inspectionStaffListResponseSchema,
   linkMaintenanceServiceEventRequestSchema,
   maintenanceIssueListResponseSchema,
   maintenanceIssueResponseSchema,
@@ -24,6 +25,7 @@ import {
   type AssetResponse,
   type InspectionBundleResponse,
   type InspectionFindingResponse,
+  type InspectionStaffResponse,
   type MaintenanceIssueResponse,
   type MaintenanceWorkOrderEntryResponse,
   type PartyResponse,
@@ -46,6 +48,7 @@ import {
   assetPath,
   assetServiceEventsPath,
   inspectionPath,
+  inspectionStaffPath,
   maintenanceIssuePath,
   maintenanceIssuesPath,
   maintenanceIssueStatusPath,
@@ -187,10 +190,16 @@ function maintenanceError(cause: unknown, fallback: string): string {
 function assigneeLabel(
   entry: MaintenanceWorkOrderEntryResponse,
   parties: readonly PartyResponse[],
+  staff: readonly InspectionStaffResponse[],
 ): string {
   const assignee = entry.workOrder.assignee;
   if (assignee === null) return 'Unassigned';
-  if (assignee.kind === 'user') return 'Internal user';
+  if (assignee.kind === 'user') {
+    return (
+      staff.find((candidate) => candidate.userId === assignee.userId)
+        ?.displayName ?? 'Internal staff'
+    );
+  }
   return (
     parties.find((party) => party.id === assignee.partyId)?.displayName ??
     'External party'
@@ -477,6 +486,7 @@ function IssueAdministration({
   workOrders,
   selectedWorkOrderId,
   parties,
+  staff,
   spaces,
   issueAssetsById,
   findings,
@@ -491,6 +501,7 @@ function IssueAdministration({
   readonly workOrders: readonly MaintenanceWorkOrderEntryResponse[];
   readonly selectedWorkOrderId?: string | undefined;
   readonly parties: readonly PartyResponse[];
+  readonly staff: readonly InspectionStaffResponse[];
   readonly spaces: readonly SpaceResponse[];
   readonly issueAssetsById: ReadonlyMap<string, AssetResponse>;
   readonly findings: readonly FindingOption[];
@@ -698,20 +709,22 @@ function IssueAdministration({
     }
   }
 
-  async function assignWorkOrder(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function assignWorkOrder(
+    assignee:
+      | { readonly kind: 'party'; readonly partyId: string }
+      | { readonly kind: 'user'; readonly userId: string },
+    actionKey: 'assign-party' | 'assign-user',
+  ) {
     if (!selectedOrder) return;
-    const form = new FormData(event.currentTarget);
-    const partyId = requiredString(form, 'partyId');
     const parsed = assignMaintenanceWorkOrderRequestSchema.safeParse({
       expectedVersion: selectedOrder.version,
-      assignee: { kind: 'party', partyId },
+      assignee,
     });
     if (!parsed.success) {
       setError(contractErrorMessage());
       return;
     }
-    if (!begin('assign')) return;
+    if (!begin(actionKey)) return;
 
     try {
       const response = await api.post(
@@ -721,7 +734,7 @@ function IssueAdministration({
       );
       assertMaintenanceWorkOrderAssignment(
         selectedOrder,
-        partyId,
+        parsed.data.assignee,
         response,
       );
       if (local.isMounted()) {
@@ -736,6 +749,28 @@ function IssueAdministration({
     } finally {
       finish();
     }
+  }
+
+  async function assignPartyWorkOrder(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const partyId = requiredString(form, 'partyId');
+    if (!partyId) {
+      setError('Select an active external Party.');
+      return;
+    }
+    await assignWorkOrder({ kind: 'party', partyId }, 'assign-party');
+  }
+
+  async function assignInternalWorkOrder(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const userId = requiredString(form, 'userId');
+    if (!userId) {
+      setError('Select active internal staff.');
+      return;
+    }
+    await assignWorkOrder({ kind: 'user', userId }, 'assign-user');
   }
 
   async function transitionWorkOrder(
@@ -1176,7 +1211,7 @@ function IssueAdministration({
                 <span className="eyebrow">{entry.workOrder.code}</span>
                 <strong>{entry.workOrder.title}</strong>
                 <span>{entry.workOrder.status}</span>
-                <small>{assigneeLabel(entry, parties)}</small>
+                <small>{assigneeLabel(entry, parties, staff)}</small>
               </button>
             ))}
           </div>
@@ -1198,7 +1233,7 @@ function IssueAdministration({
           </div>
 
           <dl className="detail-list compact-detail-list">
-            <div><dt>Assignee</dt><dd>{assigneeLabel(selectedEntry, parties)}</dd></div>
+            <div><dt>Assignee</dt><dd>{assigneeLabel(selectedEntry, parties, staff)}</dd></div>
             <div><dt>Created</dt><dd>{formatSwissDateTime(selectedOrder.createdAt)}</dd></div>
             <div><dt>Assigned</dt><dd>{formatSwissDateTime(selectedOrder.assignedAt)}</dd></div>
             <div><dt>Started</dt><dd>{formatSwissDateTime(selectedOrder.startedAt)}</dd></div>
@@ -1249,12 +1284,52 @@ function IssueAdministration({
 
               <form
                 className="setup-form maintenance-form"
-                data-maintenance-form="assign"
-                onSubmit={assignWorkOrder}
+                data-maintenance-form="assign-internal"
+                onSubmit={assignInternalWorkOrder}
+              >
+                <div className="tenancy-form-heading">
+                  <strong>Assign internal staff</strong>
+                  <span>Active Portfolio staff</span>
+                </div>
+                <label>
+                  Staff member
+                  <select
+                    defaultValue={
+                      selectedOrder.assignee?.kind === 'user'
+                        ? selectedOrder.assignee.userId
+                        : ''
+                    }
+                    disabled={writeGate.pending}
+                    name="userId"
+                    required
+                  >
+                    <option value="">Select staff…</option>
+                    {staff.map((entry) => (
+                      <option key={entry.userId} value={entry.userId}>
+                        {entry.displayName} · {formatDetailKey(entry.role)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  className="button-primary"
+                  disabled={writeGate.pending}
+                  type="submit"
+                >
+                  {action === 'assign-user'
+                    ? 'Assigning…'
+                    : 'Assign internal'}
+                </button>
+              </form>
+
+              <form
+                className="setup-form maintenance-form"
+                data-maintenance-form="assign-party"
+                onSubmit={assignPartyWorkOrder}
               >
                 <div className="tenancy-form-heading">
                   <strong>Assign contractor</strong>
-                  <span>Active Party only</span>
+                  <span>Active external Party</span>
                 </div>
                 <label>
                   Party
@@ -1281,7 +1356,9 @@ function IssueAdministration({
                   disabled={writeGate.pending}
                   type="submit"
                 >
-                  {action === 'assign' ? 'Assigning…' : 'Assign WorkOrder'}
+                  {action === 'assign-party'
+                    ? 'Assigning…'
+                    : 'Assign contractor'}
                 </button>
               </form>
             </div>
@@ -1554,6 +1631,8 @@ export function UnitMaintenance({
     useState<ReadonlyMap<string, AssetResponse>>(() => new Map());
   const [parties, setParties] =
     useState<readonly PartyResponse[] | null>(null);
+  const [staff, setStaff] =
+    useState<readonly InspectionStaffResponse[] | null>(null);
   const [findings, setFindings] =
     useState<readonly FindingOption[] | null>(null);
   const [workOrders, setWorkOrders] =
@@ -1573,6 +1652,7 @@ export function UnitMaintenance({
     setAssets(null);
     setIssueAssetsById(new Map());
     setParties(null);
+    setStaff(null);
     setFindings(null);
     setLoadError(null);
 
@@ -1591,6 +1671,9 @@ export function UnitMaintenance({
       api.get(partiesPath(), partyListResponseSchema, {
         signal: controller.signal,
       }),
+      api.get(inspectionStaffPath(), inspectionStaffListResponseSchema, {
+        signal: controller.signal,
+      }),
       api.get(unitInspectionsPath(unitId), inspectionListResponseSchema, {
         signal: controller.signal,
       }),
@@ -1601,6 +1684,7 @@ export function UnitMaintenance({
           spaceResponse,
           assetResponse,
           partyResponse,
+          staffResponse,
           inspectionResponse,
         ]) => {
           if (controller.signal.aborted) return;
@@ -1676,6 +1760,7 @@ export function UnitMaintenance({
           setAssets(assetResponse.items);
           setIssueAssetsById(issueAssetMap);
           setParties(partyResponse.items);
+          setStaff(staffResponse.items);
           setFindings(findingOptions);
         },
       )
@@ -1933,7 +2018,7 @@ export function UnitMaintenance({
         </section>
       ) : null}
 
-      {selectedIssue && workOrders && parties ? (
+      {selectedIssue && workOrders && parties && staff ? (
         <IssueAdministration
           api={api}
           issue={selectedIssue}
@@ -1959,6 +2044,7 @@ export function UnitMaintenance({
             )
           }
           parties={parties}
+          staff={staff}
           spaces={spaces ?? []}
           issueAssetsById={issueAssetsById}
           findings={findings ?? []}
@@ -1993,6 +2079,8 @@ export function PropertyMaintenanceIssue({
 }: PropertyMaintenanceIssueProps) {
   const [issue, setIssue] = useState<MaintenanceIssueResponse | null>(null);
   const [parties, setParties] = useState<readonly PartyResponse[] | null>(null);
+  const [staff, setStaff] =
+    useState<readonly InspectionStaffResponse[] | null>(null);
   const [workOrders, setWorkOrders] =
     useState<readonly MaintenanceWorkOrderEntryResponse[] | null>(null);
   const [serviceEvents, setServiceEvents] =
@@ -2007,19 +2095,23 @@ export function PropertyMaintenanceIssue({
     const controller = new AbortController();
     setIssue(null);
     setParties(null);
+    setStaff(null);
     setWorkOrders(null);
     setServiceEvents([]);
     setIssueAssetsById(new Map());
     setError(null);
 
     void (async () => {
-      const [canonicalIssue, partyResponse] = await Promise.all([
+      const [canonicalIssue, partyResponse, staffResponse] = await Promise.all([
         api.get(
           maintenanceIssuePath(issueId),
           maintenanceIssueResponseSchema,
           { signal: controller.signal },
         ),
         api.get(partiesPath(), partyListResponseSchema, {
+          signal: controller.signal,
+        }),
+        api.get(inspectionStaffPath(), inspectionStaffListResponseSchema, {
           signal: controller.signal,
         }),
       ]);
@@ -2078,6 +2170,7 @@ export function PropertyMaintenanceIssue({
 
       setIssue(canonicalIssue);
       setParties(partyResponse.items);
+      setStaff(staffResponse.items);
       setWorkOrders(workOrderResponse.items);
       setServiceEvents(eventResponse.items);
       setIssueAssetsById(
@@ -2112,7 +2205,7 @@ export function PropertyMaintenanceIssue({
     );
   }
 
-  if (!issue || !parties || !workOrders) {
+  if (!issue || !parties || !staff || !workOrders) {
     return (
       <section className="panel state-panel" aria-live="polite">
         <p className="eyebrow">Property Maintenance</p>
@@ -2159,6 +2252,7 @@ export function PropertyMaintenanceIssue({
           )
         }
         parties={parties}
+        staff={staff}
         spaces={[]}
         issueAssetsById={issueAssetsById}
         findings={[]}

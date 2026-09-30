@@ -76,6 +76,8 @@ const setupOvenMaintenanceIssueId = 'b1000000-0000-4000-8000-000000000100';
 const setupSmokeMaintenanceIssueId = 'b1000000-0000-4000-8000-000000000101';
 const workPropertyMaintenanceIssueId =
   'aa100000-0000-4000-8000-000000000001';
+const workPropertyMaintenanceWorkOrderId =
+  'aa100000-0000-4000-8000-000000000002';
 const setupMaintenanceWorkOrderId = 'b1000000-0000-4000-8000-000000000046';
 const setupOvenMaintenanceWorkOrderId = 'b1000000-0000-4000-8000-000000000102';
 const setupSmokeMaintenanceWorkOrderId = 'b1000000-0000-4000-8000-000000000103';
@@ -5492,6 +5494,95 @@ try {
     'Global Work opens the exact canonical property-level Maintenance Issue owner',
   );
 
+  const inspectorWorkOrderCreateForm =
+    "//form[@data-maintenance-form='create-work-order']";
+  await typeXpath(
+    sessionId,
+    inspectorWorkOrderCreateForm + "//input[@name='code']",
+    'WO-WORK-INSPECTOR-BRW',
+  );
+  await typeXpath(
+    sessionId,
+    inspectorWorkOrderCreateForm + "//input[@name='title']",
+    'Inspect roof follow-up',
+  );
+  await clickXpath(
+    sessionId,
+    inspectorWorkOrderCreateForm +
+      "//button[normalize-space()='Create WorkOrder']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//button[contains(@class,'maintenance-order-card')][.//span[normalize-space()='WO-WORK-INSPECTOR-BRW']]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + propertyId +
+      '?issueId=' + workPropertyMaintenanceIssueId +
+      '&workOrderId=' + workPropertyMaintenanceWorkOrderId +
+      '&asOf=2025-06-30',
+    'Property Maintenance creates the canonical WorkOrder deep-link',
+  );
+
+  const internalAssignmentForm =
+    "//form[@data-maintenance-form='assign-internal']";
+  await selectOptionXpath(
+    sessionId,
+    internalAssignmentForm + "//select[@name='userId']",
+    inspectionUserId,
+  );
+  await clickXpath(
+    sessionId,
+    internalAssignmentForm + "//button[normalize-space()='Assign internal']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//button[contains(@class,'maintenance-order-card')][.//span[normalize-space()='WO-WORK-INSPECTOR-BRW']][contains(normalize-space(),'Browser Inspector')][contains(normalize-space(),'assigned')]",
+  );
+
+  await executeScript(
+    sessionId,
+    "window.__portfolioWorkActorUserId = '" + inspectionUserId + "'; return true;",
+  );
+  await clickXpath(sessionId, "//aside//a[normalize-space()='Work']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-operational-work-queue]//article[@data-work-domain='maintenance'][.//strong[normalize-space()='ISS-PROPERTY-WORK-BRW']]",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-operational-work-queue]//article[@data-work-domain='occupancy']",
+    ),
+    false,
+    'Inspector Work excludes occupancy/contracts server-side',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='TEN-WORK-BRW']]",
+    ),
+    false,
+    'Inspector Work cannot see contract-gap items',
+  );
+
+  await executeScript(
+    sessionId,
+    'window.__portfolioWorkActorUserId = null; return true;',
+  );
+  await navigateWithPopState(
+    sessionId,
+    '/dashboard?asOf=2025-06-30',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//aside//a[normalize-space()='Work']",
+  );
   await clickXpath(sessionId, "//aside//a[normalize-space()='Work']");
   await waitForElement(
     sessionId,

@@ -255,7 +255,10 @@ const setupMaintenanceWorkOrderIds = [
   'b1000000-0000-4000-8000-000000000046',
   'b1000000-0000-4000-8000-000000000102',
   'b1000000-0000-4000-8000-000000000103',
+  'aa100000-0000-4000-8000-000000000002',
 ] as const;
+const workPropertyMaintenanceWorkOrderId =
+  'aa100000-0000-4000-8000-000000000002';
 const setupServiceEventId =
   'b1000000-0000-4000-8000-000000000047';
 const setupWarrantyId =
@@ -1462,6 +1465,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioSimulateAccessItemHandoff?: () => boolean;
   __portfolioAccessItemTransactionCount?: () => number;
   __portfolioAccessItemTransactionCountFor?: (accessItemId: string) => number;
+  __portfolioWorkActorUserId?: string | null;
   __portfolioFailNextMeterBoundaryAfterCommit?: boolean;
   __portfolioFailNextAssetMoveAfterCommit?: boolean;
   __portfolioConcurrentAssetMoveAcrossProperty?: boolean;
@@ -1517,6 +1521,7 @@ browserHarnessWindow.__portfolioInspectionSchemaCreateCount = 0;
 browserHarnessWindow.__portfolioInspectionSchemaPublishCount = 0;
 browserHarnessWindow.__portfolioFinalReportRenderCount = 0;
 browserHarnessWindow.__portfolioFinalReportReadCount = 0;
+browserHarnessWindow.__portfolioWorkActorUserId = null;
 browserHarnessWindow.__portfolioAccessItemTransactionCount = () =>
   setupAccessItemTransactions.length;
 browserHarnessWindow.__portfolioAccessItemTransactionCountFor = (accessItemId) =>
@@ -3749,21 +3754,22 @@ globalThis.fetch = async (
         'Maintenance WorkOrder version conflict.',
       );
     }
-    if (
-      body.assignee.kind !== 'party' ||
-      ![...parties, ...(setupParty ? [setupParty] : [])].some(
-        (party) =>
-          party.id ===
-            (body.assignee.kind === 'party'
-              ? body.assignee.partyId
-              : '') &&
-          party.status === 'active',
-      )
-    ) {
+    const activeAssignee =
+      body.assignee.kind === 'party'
+        ? [...parties, ...(setupParty ? [setupParty] : [])].some(
+            (party) =>
+              party.id === body.assignee.partyId &&
+              party.status === 'active',
+          )
+        : [
+            inspectionUserId,
+            setupOrchestrationOtherStaffId,
+          ].includes(body.assignee.userId);
+    if (!activeAssignee) {
       return apiError(
         422,
         'MAINTENANCE_ASSIGNEE_INACTIVE',
-        'Maintenance assignee must be an active Party.',
+        'Maintenance assignee must be active internal staff or an active Party.',
       );
     }
     const updated: MaintenanceWorkOrderResponse = {
@@ -5293,9 +5299,15 @@ globalThis.fetch = async (
     }
 
     const items = [];
+    const workActorUserId =
+      browserHarnessWindow.__portfolioWorkActorUserId ?? null;
+    const inspectorScoped = workActorUserId !== null;
     const activeStatuses = new Set(['draft', 'in_progress', 'locked']);
     const primary = inspectionRecord();
-    if (activeStatuses.has(primary.status)) {
+    if (
+      activeStatuses.has(primary.status) &&
+      (!inspectorScoped || primary.assignedToUserId === workActorUserId)
+    ) {
       items.push({
         kind: 'inspection',
         attention:
@@ -5325,7 +5337,9 @@ globalThis.fetch = async (
 
     if (
       setupOrchestrationInspection &&
-      activeStatuses.has(setupOrchestrationInspection.status)
+      activeStatuses.has(setupOrchestrationInspection.status) &&
+      (!inspectorScoped ||
+        setupOrchestrationInspection.assignedToUserId === workActorUserId)
     ) {
       const assignedToManager =
         setupOrchestrationInspection.assignedToUserId ===
@@ -5363,7 +5377,19 @@ globalThis.fetch = async (
     const workMaintenanceIssue = setupMaintenanceIssues.find(
       (issue) => issue.id === workPropertyMaintenanceIssueId,
     );
-    if (workMaintenanceIssue?.status === 'open') {
+    const workMaintenanceAssignedToActor =
+      workActorUserId !== null &&
+      setupMaintenanceWorkOrders.some(
+        (entry) =>
+          entry.workOrder.issueId === workPropertyMaintenanceIssueId &&
+          ['assigned', 'in_progress'].includes(entry.workOrder.status) &&
+          entry.workOrder.assignee?.kind === 'user' &&
+          entry.workOrder.assignee.userId === workActorUserId,
+      );
+    if (
+      workMaintenanceIssue?.status === 'open' &&
+      (!inspectorScoped || workMaintenanceAssignedToActor)
+    ) {
       items.push({
         kind: 'maintenance',
         attention:
@@ -5391,7 +5417,7 @@ globalThis.fetch = async (
       });
     }
 
-    items.push({
+    if (!inspectorScoped) items.push({
       kind: 'occupancy',
       attention:
         workTenancy.plannedStart! < referenceDate
