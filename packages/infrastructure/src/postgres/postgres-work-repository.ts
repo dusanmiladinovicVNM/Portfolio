@@ -260,11 +260,14 @@ export class PostgresWorkRepository implements WorkRepository {
             from operational_tenancies t
             where t.status in ('notice_given', 'move_out_pending')
           )
-          select * from contract_drafts
-          union all
-          select * from missing_contracts
-          union all
-          select * from move_out
+          select *
+          from (
+            select * from contract_drafts
+            union all
+            select * from missing_contracts
+            union all
+            select * from move_out
+          ) operational_work
           order by
             due_date asc nulls last,
             lower(property_code),
