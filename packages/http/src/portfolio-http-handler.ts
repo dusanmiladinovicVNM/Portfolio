@@ -246,7 +246,10 @@ export function createPortfolioHttpHandler(
       const handlers = [
         () =>
           handleWorkHttp(
-            { workRepository: deps.workRepository },
+            {
+              workRepository: deps.workRepository,
+              clock: deps.clock,
+            },
             actor,
             request,
             path,

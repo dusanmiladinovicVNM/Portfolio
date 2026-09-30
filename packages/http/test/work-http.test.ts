@@ -14,12 +14,16 @@ const manager = {
   role: 'manager' as const,
 };
 
+const clock = {
+  now: () => '2026-09-30T22:30:00.000Z',
+};
+
 describe('Work HTTP route', () => {
   it('requires an explicit valid queue reference date', async () => {
     const repository = new InMemoryWorkRepository();
 
     const response = await handleWorkHttp(
-      { workRepository: repository },
+      { workRepository: repository, clock },
       manager,
       new Request('https://portfolio.test/work'),
       '/work',
@@ -62,7 +66,7 @@ describe('Work HTTP route', () => {
     };
 
     const response = await handleWorkHttp(
-      { workRepository: repository },
+      { workRepository: repository, clock },
       manager,
       new Request('https://portfolio.test/work?asOf=2026-09-30'),
       '/work',
@@ -70,6 +74,7 @@ describe('Work HTTP route', () => {
 
     expect(response?.status).toBe(200);
     expect(repository.readCount).toBe(1);
+    expect(repository.lastOperationalDate).toBe('2026-10-01');
     expect(await response?.json()).toEqual({
       data: {
         referenceDate: '2026-09-30',
@@ -88,7 +93,7 @@ describe('Work HTTP route', () => {
     const repository = new InMemoryWorkRepository();
 
     const response = await handleWorkHttp(
-      { workRepository: repository },
+      { workRepository: repository, clock },
       manager,
       new Request('https://portfolio.test/properties'),
       '/properties',

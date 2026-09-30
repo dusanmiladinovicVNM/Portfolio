@@ -78,5 +78,7 @@ export interface OperationalWorkProjection {
 }
 
 export interface WorkRepository {
-  getOperationalWork(): Promise<OperationalWorkProjection>;
+  getOperationalWork(
+    operationalDate: DateOnly,
+  ): Promise<OperationalWorkProjection>;
 }

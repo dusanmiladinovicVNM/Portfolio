@@ -141,6 +141,7 @@ export async function listOperationalWorkQuery(
   repository: WorkRepository,
   actor: Actor,
   referenceDateValue: string,
+  operationalDateValue: string,
 ): Promise<OperationalWorkQueue> {
   requireCapability(actor, 'portfolio:read');
   requireCapability(actor, 'inspections:read');
@@ -152,7 +153,8 @@ export async function listOperationalWorkQuery(
   }
 
   const referenceDate = asDateOnly(referenceDateValue);
-  const projection = await repository.getOperationalWork();
+  const operationalDate = asDateOnly(operationalDateValue);
+  const projection = await repository.getOperationalWork(operationalDate);
 
   const inspections = projection.inspections
     .filter(

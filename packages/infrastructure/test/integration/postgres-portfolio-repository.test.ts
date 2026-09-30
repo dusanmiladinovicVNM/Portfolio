@@ -13185,7 +13185,48 @@ describe('PostgreSQL infrastructure', () => {
       )
     `;
 
-    const projected = await workRepository.getOperationalWork();
+    const gapUnit = await createUnitCommand(
+      { portfolioRepository, idGenerator: ids },
+      actor,
+      {
+        propertyId: property.id,
+        code: 'UNIT-WORK-GAP',
+        unitNumber: 'W-2',
+        unitType: 'apartment',
+      },
+    );
+    const gapTenancyId = ids.next();
+    const gapAgreementId = ids.next();
+    await sql`
+      insert into public.tenancies (
+        id, code, unit_id, status, planned_start, version
+      ) values (
+        ${gapTenancyId},
+        'TEN-WORK-GAP',
+        ${gapUnit.id},
+        'planned',
+        '2026-10-01',
+        1
+      )
+    `;
+    await sql`
+      insert into public.lease_agreements (
+        id, tenancy_id, code, agreement_type, effective_from,
+        status, signed_at
+      ) values (
+        ${gapAgreementId},
+        ${gapTenancyId},
+        'AGR-WORK-FUTURE',
+        'initial',
+        '2026-10-10',
+        'signed',
+        '2026-09-30'
+      )
+    `;
+
+    const projected = await workRepository.getOperationalWork(
+      asDateOnly('2026-10-01'),
+    );
 
     expect(projected.inspections).toEqual(
       expect.arrayContaining([
@@ -13218,6 +13259,15 @@ describe('PostgreSQL infrastructure', () => {
           agreementCode: 'AGR-WORK-INT',
           propertyId: property.id,
           unitId: unit.id,
+          dueDate: '2026-10-01',
+        }),
+        expect.objectContaining({
+          reason: 'contract_missing',
+          tenancyCode: 'TEN-WORK-GAP',
+          agreementId: null,
+          agreementCode: null,
+          propertyId: property.id,
+          unitId: gapUnit.id,
           dueDate: '2026-10-01',
         }),
       ]),

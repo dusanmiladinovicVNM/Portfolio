@@ -33,11 +33,13 @@ const inspector: Actor = {
 
 class FakeWorkRepository implements WorkRepository {
   readCount = 0;
+  lastOperationalDate: DateOnly | null = null;
 
   constructor(readonly projection: OperationalWorkProjection) {}
 
-  async getOperationalWork() {
+  async getOperationalWork(operationalDate: DateOnly) {
     this.readCount += 1;
+    this.lastOperationalDate = operationalDate;
     return this.projection;
   }
 }
@@ -163,9 +165,11 @@ describe('Operational Work query', () => {
       repository,
       manager,
       '2026-09-30',
+      '2026-10-01',
     );
 
     expect(repository.readCount).toBe(1);
+    expect(repository.lastOperationalDate).toBe('2026-10-01');
     expect(
       result.items.map((item) => [item.kind, item.attention]),
     ).toEqual([
@@ -184,14 +188,17 @@ describe('Operational Work query', () => {
       repository,
       manager,
       '2026-09-29',
+      '2026-10-01',
     );
     const later = await listOperationalWorkQuery(
       repository,
       manager,
       '2026-10-02',
+      '2026-10-01',
     );
 
     expect(repository.readCount).toBe(2);
+    expect(repository.lastOperationalDate).toBe('2026-10-01');
     expect(
       earlier.items.map((item) => [item.kind, itemCodeForTest(item)]).sort(),
     ).toEqual(
@@ -220,6 +227,7 @@ describe('Operational Work query', () => {
       repository,
       inspector,
       '2026-09-30',
+      '2026-10-01',
     );
 
     expect(result.items).toHaveLength(2);

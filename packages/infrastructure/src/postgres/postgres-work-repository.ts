@@ -85,7 +85,9 @@ function instant(value: string | Date): string {
 export class PostgresWorkRepository implements WorkRepository {
   constructor(private readonly sql: Sql) {}
 
-  async getOperationalWork(): Promise<OperationalWorkProjection> {
+  async getOperationalWork(
+    operationalDate: DateOnly,
+  ): Promise<OperationalWorkProjection> {
     return this.sql.begin(
       'isolation level repeatable read read only',
       async (tx) => {
@@ -180,7 +182,11 @@ export class PostgresWorkRepository implements WorkRepository {
               p.code as property_code,
               p.name as property_name,
               u.code as unit_code,
-              u.unit_number
+              u.unit_number,
+              case
+                when t.status = 'planned' then t.planned_start
+                else ${operationalDate}::date
+              end as coverage_date
             from public.tenancies t
             join public.units u on u.id = t.unit_id
             join public.properties p on p.id = u.property_id
@@ -238,8 +244,25 @@ export class PostgresWorkRepository implements WorkRepository {
                 select 1
                 from public.lease_agreements signed
                 where signed.tenancy_id = t.id
-                  and signed.status = 'signed'
                   and signed.signed_at is not null
+                  and signed.status in ('signed', 'superseded', 'terminated')
+                  and signed.effective_from <= t.coverage_date
+                  and (
+                    signed.effective_to is null
+                    or signed.effective_to >= t.coverage_date
+                  )
+                  and not exists (
+                    select 1
+                    from public.lease_agreements successor
+                    where successor.predecessor_agreement_id = signed.id
+                      and successor.signed_at is not null
+                      and successor.status in (
+                        'signed',
+                        'superseded',
+                        'terminated'
+                      )
+                      and successor.effective_from <= t.coverage_date
+                  )
               )
           ),
           move_out as (
