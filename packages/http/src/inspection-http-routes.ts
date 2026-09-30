@@ -14,8 +14,6 @@ import {
   getInspectionSchemaVersionQuery,
   listInspectionSchemaVersionsQuery,
   listInspectionsByUnitQuery,
-  listAssignedInspectionsQuery,
-  listInspectionWorkQueueQuery,
   listAssignableInspectionStaffQuery,
   lockInspectionCommand,
   publishInspectionSchemaVersionCommand,
@@ -206,47 +204,6 @@ export async function handleInspectionHttp(
           displayName: entry.displayName,
           email: entry.email,
           role: entry.role,
-        })),
-      },
-    });
-  }
-
-  if (method === 'GET' && path === '/inspections/assigned-to-me') {
-    const work = await listAssignedInspectionsQuery(
-      deps.inspectionRepository,
-      deps.portfolioRepository,
-      actor,
-    );
-    return json({
-      data: {
-        items: work.map((item) => ({
-          inspection: toInspectionResponse(item.inspection),
-          propertyId: item.propertyId,
-          unitCode: item.unitCode,
-          unitNumber: item.unitNumber,
-        })),
-      },
-    });
-  }
-
-  if (method === 'GET' && path === '/inspections/work-queue') {
-    const work = await listInspectionWorkQueueQuery(
-      deps.inspectionRepository,
-      deps.portfolioRepository,
-      deps.staffDirectoryRepository,
-      actor,
-    );
-    return json({
-      data: {
-        items: work.map((item) => ({
-          inspection: toInspectionResponse(item.inspection),
-          propertyId: item.propertyId,
-          propertyCode: item.propertyCode,
-          propertyName: item.propertyName,
-          unitCode: item.unitCode,
-          unitNumber: item.unitNumber,
-          assignedToDisplayName: item.assignedToDisplayName,
-          assignedToRole: item.assignedToRole,
         })),
       },
     });
