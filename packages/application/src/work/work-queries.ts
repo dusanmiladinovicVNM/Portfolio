@@ -152,7 +152,7 @@ export async function listOperationalWorkQuery(
   }
 
   const referenceDate = asDateOnly(referenceDateValue);
-  const projection = await repository.getOperationalWork(referenceDate);
+  const projection = await repository.getOperationalWork();
 
   const inspections = projection.inspections
     .filter(
