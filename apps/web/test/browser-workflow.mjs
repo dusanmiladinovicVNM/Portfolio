@@ -5398,7 +5398,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-inspection-work-queue]//h2[normalize-space()='Active work']",
+    "//*[@data-operational-work-queue]//h2[normalize-space()='Active work']",
   );
   assertEqual(
     await currentUrl(sessionId),
@@ -5408,49 +5408,72 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-inspection-work-queue]//article[.//strong[normalize-space()='INS-BRW-001']][contains(normalize-space(),'Browser Test Property')][contains(normalize-space(),'UNIT-BRW')][contains(normalize-space(),'Browser Inspector')]",
+    "//*[@data-operational-work-queue]//article[@data-work-domain='inspection'][.//strong[normalize-space()='INS-BRW-001']][contains(normalize-space(),'Browser Test Property')][contains(normalize-space(),'UNIT-BRW')][contains(normalize-space(),'Browser Inspector')]",
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-inspection-work-queue]//article[.//strong[normalize-space()='INS-ORCH-BRW']][contains(normalize-space(),'Inspection Orchestration Property')][contains(normalize-space(),'UNIT-ORCH-BRW')][contains(normalize-space(),'Browser Inspector')]",
+    "//*[@data-operational-work-queue]//article[@data-work-domain='inspection'][.//strong[normalize-space()='INS-ORCH-BRW']][contains(normalize-space(),'Inspection Orchestration Property')][contains(normalize-space(),'UNIT-ORCH-BRW')][contains(normalize-space(),'Browser Inspector')]",
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-inspection-work-queue]//article[@data-work-attention='today'][.//strong[normalize-space()='INS-BRW-001']]",
+    "//*[@data-operational-work-queue]//article[@data-work-domain='maintenance'][@data-work-attention='urgent'][.//strong[normalize-space()='MI-WORK-BRW']][contains(normalize-space(),'Heating requires immediate attention')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-operational-work-queue]//article[@data-work-domain='occupancy'][.//strong[normalize-space()='TEN-WORK-BRW']][contains(normalize-space(),'Draft agreement')][contains(normalize-space(),'AGR-WORK-BRW')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-operational-work-queue]//article[@data-work-attention='today'][.//strong[normalize-space()='INS-BRW-001']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'The item set is current canonical state')][contains(normalize-space(),'does not rewind the Work set')]",
   );
   await selectOptionXpath(
     sessionId,
-    "//*[@data-inspection-work-queue]//select[ancestor::label[contains(normalize-space(),'Lifecycle')]]",
-    'in_progress',
+    "//*[@data-operational-work-queue]//select[ancestor::label[contains(normalize-space(),'Domain')]]",
+    'maintenance',
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-inspection-work-queue]//article[.//strong[normalize-space()='INS-ORCH-BRW']]",
+    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='MI-WORK-BRW']]",
   );
   assertEqual(
     await elementExistsXpath(
       sessionId,
-      "//*[@data-inspection-work-queue]//article[.//strong[normalize-space()='INS-BRW-001']]",
+      "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='INS-BRW-001']]",
     ),
     false,
-    'Lifecycle filter removes draft work while preserving in-progress work',
+    'Domain filter isolates Maintenance from Inspection work',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='TEN-WORK-BRW']]",
+    ),
+    false,
+    'Domain filter isolates Maintenance from occupancy work',
   );
   await selectOptionXpath(
     sessionId,
-    "//*[@data-inspection-work-queue]//select[ancestor::label[contains(normalize-space(),'Lifecycle')]]",
+    "//*[@data-operational-work-queue]//select[ancestor::label[contains(normalize-space(),'Domain')]]",
     'all',
   );
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-inspection-work-queue]//article[.//strong[normalize-space()='INS-BRW-001']]",
+    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='INS-BRW-001']]",
   );
   await clickXpath(
     sessionId,
-    "//*[@data-inspection-work-queue]//article[.//strong[normalize-space()='INS-BRW-001']]//a[normalize-space()='Open Inspection']",
+    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='INS-BRW-001']]//a[normalize-space()='Open Inspection']",
   );
   await waitForElement(
     sessionId,
