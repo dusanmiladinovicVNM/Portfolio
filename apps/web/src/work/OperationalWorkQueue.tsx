@@ -261,6 +261,85 @@ export function OperationalWorkQueue({
                       <dd>{locationLabel(item)}</dd>
                     </div>
 
+                    {item.kind === 'inspection' ? (
+                      <>
+                        <div>
+                          <dt>Lifecycle</dt>
+                          <dd>{formatDetailKey(item.inspectionStatus)}</dd>
+                        </div>
+                        <div>
+                          <dt>Assignee</dt>
+                          <dd>{assignedLabel(item)}</dd>
+                        </div>
+                        <div>
+                          <dt>Scheduled</dt>
+                          <dd>
+                            {item.scheduledFor
+                              ? formatSwissDate(item.scheduledFor)
+                              : 'Unscheduled'}
+                          </dd>
+                        </div>
+                      </>
+                    ) : null}
+
+                    {item.kind === 'maintenance' ? (
+                      <>
+                        <div>
+                          <dt>Issue</dt>
+                          <dd>{item.title}</dd>
+                        </div>
+                        <div>
+                          <dt>Priority</dt>
+                          <dd>{formatDetailKey(item.priority)}</dd>
+                        </div>
+                        <div>
+                          <dt>Reported</dt>
+                          <dd>{formatSwissDateTime(item.reportedAt)}</dd>
+                        </div>
+                        <div>
+                          <dt>Active work orders</dt>
+                          <dd>{item.activeWorkOrderCount}</dd>
+                        </div>
+                      </>
+                    ) : null}
+
+                    {item.kind === 'occupancy' ? (
+                      <>
+                        <div>
+                          <dt>Attention</dt>
+                          <dd>{workOccupancyReasonLabel(item.reason)}</dd>
+                        </div>
+                        <div>
+                          <dt>Tenancy</dt>
+                          <dd>
+                            {item.tenancyCode} · {formatDetailKey(item.tenancyStatus)}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Agreement</dt>
+                          <dd>{item.agreementCode ?? 'No covering agreement'}</dd>
+                        </div>
+                        <div>
+                          <dt>Due</dt>
+                          <dd>
+                            {item.dueDate
+                              ? formatSwissDate(item.dueDate)
+                              : 'No due date'}
+                          </dd>
+                        </div>
+                      </>
+                    ) : null}
+                  </dl>
+
+                  <div className="work-queue-card-action">
+                    <span className="status-chip">
+                      {item.kind === 'inspection'
+                        ? formatDetailKey(item.inspectionStatus)
+                        : item.kind === 'maintenance'
+                          ? formatDetailKey(item.priority)
+                          : workOccupancyReasonLabel(item.reason)}
+                    </span>
+
                     <WorkspaceLink
                       className="button-secondary work-queue-open"
                       navigate={navigate}
