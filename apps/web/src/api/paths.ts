@@ -38,6 +38,10 @@ export function reportingDashboardPath(asOf: string): string {
   return `/reporting/dashboard?asOf=${encodeURIComponent(asOf)}`;
 }
 
+export function operationalWorkPath(asOf: string): string {
+  return `/work?asOf=${encodeURIComponent(asOf)}`;
+}
+
 export function propertyPath(propertyId: string): string {
   return `/properties/${encodeURIComponent(propertyId)}`;
 }
