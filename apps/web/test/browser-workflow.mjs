@@ -553,14 +553,14 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//h1[normalize-space()='Portfolio picture']",
+    "//h1[normalize-space()='Portfolio']",
   );
   await waitForElement(
     sessionId,
     'xpath',
     "//a[normalize-space()='Skip to main content']",
   );
-  await assertActiveHeading(sessionId, 'Portfolio picture', 'Dashboard focus');
+  await assertActiveHeading(sessionId, 'Portfolio', 'Dashboard focus');
   await waitForElement(
     sessionId,
     'xpath',
@@ -570,6 +570,30 @@ try {
     sessionId,
     'xpath',
     "//*[normalize-space()='No attributed costs through 30.06.2025.']",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-portfolio-setup]').open;",
+    ),
+    false,
+    'Portfolio setup is collapsed by default',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-portfolio-setup] form').getClientRects().length;",
+    ),
+    0,
+    'Collapsed Portfolio setup form is not visible',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return Array.from(document.querySelectorAll('[data-portfolio-section]')).map((element) => element.dataset.portfolioSection).join(',');",
+    ),
+    'attention,snapshot,properties,costs',
+    'Portfolio Overview prioritizes operations before reporting and costs',
   );
   const dashboardUrl = `${baseUrl}/dashboard?asOf=2025-06-30`;
   assertEqual(
@@ -1020,7 +1044,27 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//h1[normalize-space()='Portfolio picture']",
+    "//h1[normalize-space()='Portfolio']",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-portfolio-setup]').open;",
+    ),
+    false,
+    'Returning to Portfolio keeps setup collapsed',
+  );
+  await clickXpath(
+    sessionId,
+    "//details[@data-portfolio-setup]/summary",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-portfolio-setup]').open;",
+    ),
+    true,
+    'Portfolio setup opens only on operator request',
   );
 
   await typeXpath(
@@ -4837,7 +4881,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//h1[normalize-space()='Portfolio picture']",
+    "//h1[normalize-space()='Portfolio']",
   );
 
   await clickXpath(
