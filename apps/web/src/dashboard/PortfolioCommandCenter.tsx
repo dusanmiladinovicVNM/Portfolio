@@ -250,7 +250,11 @@ export function PortfolioCommandCenter({
       {items !== null && items.length > PREVIEW_LIMIT ? (
         <p className="portfolio-command-center-more">
           Showing {PREVIEW_LIMIT} of {items.length} active Work items.
-          <WorkspaceLink navigate={navigate} route={workRoute(asOf)}>
+          <WorkspaceLink
+            className="portfolio-command-center-more-link"
+            navigate={navigate}
+            route={workRoute(asOf)}
+          >
             Open full Work queue
           </WorkspaceLink>
         </p>
