@@ -33,6 +33,7 @@ import {
   PostgresTenancyRepository,
   PostgresUnitTimelineRepository,
   PostgresUserAccessRepository,
+  PostgresWorkRepository,
   SystemClock,
   WebCryptoIdGenerator,
   WebCryptoSha256,
@@ -65,6 +66,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
 
   const portfolioRepository = new PostgresPortfolioRepository(sql);
   const reportingRepository = new PostgresReportingRepository(sql);
+  const workRepository = new PostgresWorkRepository(sql);
   const accessItemRepository = new PostgresAccessItemRepository(sql);
   const assetRepository = new PostgresAssetRepository(sql);
   const assetInventoryRepository = new PostgresAssetInventoryRepository(sql);
@@ -112,6 +114,7 @@ export function createSupabaseApi(config: SupabaseApiConfig): SupabaseApi {
       assetServiceRepository,
       portfolioRepository,
       reportingRepository,
+      workRepository,
       partyRepository,
       ownershipRepository,
       tenancyRepository,
