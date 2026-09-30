@@ -5,6 +5,7 @@ import {
   type MaintenanceIssueResponse,
   type UnitReportingOverviewResponse,
 } from '@portfolio/contracts';
+import { isActiveInspectionStatus } from '@portfolio/domain';
 import { useEffect, useMemo, useState } from 'react';
 import {
   unitInspectionsPath,
@@ -39,14 +40,6 @@ const maintenancePriorityRank: Readonly<
   normal: 2,
   low: 3,
 };
-
-function activeInspection(inspection: InspectionResponseDto): boolean {
-  return (
-    inspection.status === 'draft' ||
-    inspection.status === 'in_progress' ||
-    inspection.status === 'locked'
-  );
-}
 
 function inspectionActionLabel(inspection: InspectionResponseDto): string {
   if (inspection.status === 'draft') return 'Prepare Inspection';
@@ -124,7 +117,7 @@ export function UnitOverviewCommandCenter({
   const activeInspections = useMemo(
     () =>
       [...(inspections ?? [])]
-        .filter(activeInspection)
+        .filter((inspection) => isActiveInspectionStatus(inspection.status))
         .sort((left, right) => {
           const leftDate = left.scheduledFor ?? '9999-12-31';
           const rightDate = right.scheduledFor ?? '9999-12-31';
