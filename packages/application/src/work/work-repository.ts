@@ -1,4 +1,5 @@
 import type {
+  DateOnly,
   InspectionId,
   InspectionStatus,
   InspectionType,
