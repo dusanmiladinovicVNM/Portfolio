@@ -71,7 +71,10 @@ import {
 } from '../admin/form-utils.js';
 import { useCreateSubmissionGuard } from '../admin/use-create-submission-guard.js';
 import { WorkspaceLink } from '../navigation/WorkspaceLink.js';
-import { unitRoute } from '../navigation/workspace-route.js';
+import {
+  propertyRoute,
+  unitRoute,
+} from '../navigation/workspace-route.js';
 import type {
   NavigateWorkspace,
   SetNavigationBlocker,
@@ -87,6 +90,7 @@ import {
   assertCreatedServiceEvent,
   assertInspectionBundleUnitOwner,
   assertMaintenanceIssueOwner,
+  assertPropertyMaintenanceIssueOwner,
   assertMaintenanceIssueTerminal,
   assertMaintenanceIssueUpdate,
   assertMaintenanceServiceEventLink,
@@ -119,6 +123,33 @@ interface MaintenanceWriteGate {
 interface FindingOption {
   readonly inspectionCode: string;
   readonly finding: InspectionFindingResponse;
+}
+
+function useMaintenanceWriteGate(
+  setNavigationBlocker: SetNavigationBlocker,
+): MaintenanceWriteGate {
+  const [pending, setPending] = useState(false);
+  const submission = useCreateSubmissionGuard();
+
+  useEffect(
+    () => () => setNavigationBlocker(null),
+    [setNavigationBlocker],
+  );
+
+  return {
+    pending,
+    tryStart: () => {
+      if (!submission.tryStart()) return false;
+      setNavigationBlocker(() => false);
+      setPending(true);
+      return true;
+    },
+    finish: () => {
+      submission.finish();
+      setNavigationBlocker(null);
+      if (submission.isMounted()) setPending(false);
+    },
+  };
 }
 
 function swissInstant(date: string, time: string): string | undefined {
@@ -969,14 +1000,19 @@ function IssueAdministration({
 
       <dl className="detail-list maintenance-scope-grid">
         <div><dt>Property</dt><dd>Current property</dd></div>
-        <div><dt>Unit</dt><dd>Current unit</dd></div>
+        <div>
+          <dt>Unit</dt>
+          <dd>{issue.unitId === null ? 'Property level' : 'Current unit'}</dd>
+        </div>
         <div>
           <dt>Space</dt>
           <dd>
             {issue.spaceId
               ? spaces.find((space) => space.id === issue.spaceId)?.code ??
                 'Assigned space'
-              : 'Unit level'}
+              : issue.unitId === null
+                ? '—'
+                : 'Unit level'}
           </dd>
         </div>
         <div>
@@ -1528,28 +1564,7 @@ export function UnitMaintenance({
   const [detailError, setDetailError] = useState<string | null>(null);
   const [baseRevision, setBaseRevision] = useState(0);
   const [detailRevision, setDetailRevision] = useState(0);
-  const [writePending, setWritePending] = useState(false);
-  const writeSubmission = useCreateSubmissionGuard();
-
-  const writeGate: MaintenanceWriteGate = {
-    pending: writePending,
-    tryStart: () => {
-      if (!writeSubmission.tryStart()) return false;
-      setNavigationBlocker(() => false);
-      setWritePending(true);
-      return true;
-    },
-    finish: () => {
-      writeSubmission.finish();
-      setNavigationBlocker(null);
-      if (writeSubmission.isMounted()) setWritePending(false);
-    },
-  };
-
-  useEffect(
-    () => () => setNavigationBlocker(null),
-    [setNavigationBlocker],
-  );
+  const writeGate = useMaintenanceWriteGate(setNavigationBlocker);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1956,3 +1971,203 @@ export function UnitMaintenance({
     </div>
   );
 }
+
+interface PropertyMaintenanceIssueProps {
+  readonly api: PortfolioApi;
+  readonly propertyId: string;
+  readonly asOf: string;
+  readonly issueId: string;
+  readonly workOrderId?: string | undefined;
+  readonly navigate: NavigateWorkspace;
+  readonly setNavigationBlocker: SetNavigationBlocker;
+}
+
+export function PropertyMaintenanceIssue({
+  api,
+  propertyId,
+  asOf,
+  issueId,
+  workOrderId,
+  navigate,
+  setNavigationBlocker,
+}: PropertyMaintenanceIssueProps) {
+  const [issue, setIssue] = useState<MaintenanceIssueResponse | null>(null);
+  const [parties, setParties] = useState<readonly PartyResponse[] | null>(null);
+  const [workOrders, setWorkOrders] =
+    useState<readonly MaintenanceWorkOrderEntryResponse[] | null>(null);
+  const [serviceEvents, setServiceEvents] =
+    useState<readonly ServiceEventResponse[]>([]);
+  const [issueAssetsById, setIssueAssetsById] =
+    useState<ReadonlyMap<string, AssetResponse>>(() => new Map());
+  const [error, setError] = useState<string | null>(null);
+  const [revision, setRevision] = useState(0);
+  const writeGate = useMaintenanceWriteGate(setNavigationBlocker);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setIssue(null);
+    setParties(null);
+    setWorkOrders(null);
+    setServiceEvents([]);
+    setIssueAssetsById(new Map());
+    setError(null);
+
+    void (async () => {
+      const [canonicalIssue, partyResponse] = await Promise.all([
+        api.get(
+          maintenanceIssuePath(issueId),
+          maintenanceIssueResponseSchema,
+          { signal: controller.signal },
+        ),
+        api.get(partiesPath(), partyListResponseSchema, {
+          signal: controller.signal,
+        }),
+      ]);
+      if (controller.signal.aborted) return;
+      assertPropertyMaintenanceIssueOwner(
+        propertyId,
+        issueId,
+        canonicalIssue,
+      );
+
+      const [workOrderResponse, asset] = await Promise.all([
+        api.get(
+          maintenanceIssueWorkOrdersPath(issueId),
+          maintenanceWorkOrderEntryListResponseSchema,
+          { signal: controller.signal },
+        ),
+        canonicalIssue.assetId === null
+          ? Promise.resolve(null)
+          : api.get(
+              assetPath(canonicalIssue.assetId),
+              assetResponseSchema,
+              { signal: controller.signal },
+            ),
+      ]);
+      if (controller.signal.aborted) return;
+      assertMaintenanceWorkOrdersOwner(
+        canonicalIssue.id,
+        workOrderResponse.items,
+      );
+      if (
+        asset &&
+        (asset.id !== canonicalIssue.assetId ||
+          asset.propertyId !== propertyId ||
+          asset.unitId !== null)
+      ) {
+        throw new Error(
+          'Property-level Maintenance Asset crossed its canonical owner.',
+        );
+      }
+
+      const eventResponse =
+        canonicalIssue.assetId === null
+          ? { items: [] as ServiceEventResponse[] }
+          : await api.get(
+              assetServiceEventsPath(canonicalIssue.assetId),
+              serviceEventListResponseSchema,
+              { signal: controller.signal },
+            );
+      if (controller.signal.aborted) return;
+      if (canonicalIssue.assetId !== null) {
+        assertServiceEventsOwner(
+          canonicalIssue.assetId,
+          eventResponse.items,
+        );
+      }
+
+      setIssue(canonicalIssue);
+      setParties(partyResponse.items);
+      setWorkOrders(workOrderResponse.items);
+      setServiceEvents(eventResponse.items);
+      setIssueAssetsById(
+        asset ? new Map([[asset.id, asset]]) : new Map(),
+      );
+    })().catch((cause: unknown) => {
+      if (controller.signal.aborted) return;
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Property-level Maintenance Issue could not be loaded.',
+      );
+    });
+
+    return () => controller.abort();
+  }, [api, issueId, propertyId, revision]);
+
+  const selectedWorkOrderInvalid =
+    workOrders !== null &&
+    workOrderId !== undefined &&
+    !workOrders.some((entry) => entry.workOrder.id === workOrderId);
+
+  const refresh = () => setRevision((value) => value + 1);
+
+  if (error) {
+    return (
+      <section className="panel state-panel" role="alert">
+        <p className="eyebrow">Property Maintenance owner failed</p>
+        <h2>Issue unavailable</h2>
+        <p>{error}</p>
+      </section>
+    );
+  }
+
+  if (!issue || !parties || !workOrders) {
+    return (
+      <section className="panel state-panel" aria-live="polite">
+        <p className="eyebrow">Property Maintenance</p>
+        <h2>Loading exact Issue…</h2>
+      </section>
+    );
+  }
+
+  return (
+    <div className="dashboard-stack" data-property-maintenance-issue>
+      {selectedWorkOrderInvalid ? (
+        <section className="panel state-panel" role="alert">
+          <p className="eyebrow">WorkOrder owner failed</p>
+          <h2>WorkOrder unavailable</h2>
+          <p>The selected WorkOrder does not belong to this Issue.</p>
+        </section>
+      ) : null}
+
+      <IssueAdministration
+        api={api}
+        issue={issue}
+        key={`${issue.id}:${issue.version}:${workOrders
+          .map(
+            (entry) =>
+              `${entry.workOrder.id}:${entry.workOrder.version}:${entry.serviceEventIds.length}`,
+          )
+          .join('|')}`}
+        onCanonicalWrite={refresh}
+        onWorkOrderCreated={(workOrder) => {
+          refresh();
+          navigate(
+            propertyRoute(propertyId, asOf, {
+              maintenanceIssueId: issue.id,
+              maintenanceWorkOrderId: workOrder.id,
+            }),
+          );
+        }}
+        onWorkOrderSelected={(nextWorkOrderId) =>
+          navigate(
+            propertyRoute(propertyId, asOf, {
+              maintenanceIssueId: issue.id,
+              maintenanceWorkOrderId: nextWorkOrderId,
+            }),
+          )
+        }
+        parties={parties}
+        spaces={[]}
+        issueAssetsById={issueAssetsById}
+        findings={[]}
+        selectedWorkOrderId={workOrderId}
+        serviceEvents={serviceEvents}
+        workOrders={workOrders}
+        writeGate={writeGate}
+      />
+    </div>
+  );
+}
+

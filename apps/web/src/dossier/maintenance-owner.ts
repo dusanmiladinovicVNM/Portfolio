@@ -18,6 +18,22 @@ export function assertUnitMaintenanceIssuesOwner(
   }
 }
 
+export function assertPropertyMaintenanceIssueOwner(
+  propertyId: string,
+  issueId: string,
+  issue: MaintenanceIssueResponse,
+): void {
+  if (
+    issue.id !== issueId ||
+    issue.propertyId !== propertyId ||
+    issue.unitId !== null
+  ) {
+    throw new Error(
+      'Maintenance Issue response does not match the selected Property-level owner.',
+    );
+  }
+}
+
 export function assertMaintenanceIssueOwner(
   unitId: string,
   issueId: string,

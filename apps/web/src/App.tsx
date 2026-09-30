@@ -352,8 +352,11 @@ function AuthenticatedShell({
             key={workspaceRouteOwnerKey(route)}
             api={api}
             asOf={route.asOf}
+            maintenanceIssueId={route.maintenanceIssueId}
+            maintenanceWorkOrderId={route.maintenanceWorkOrderId}
             navigate={navigate}
             propertyId={route.propertyId}
+            setNavigationBlocker={setNavigationBlocker}
           />
         ) : null}
 

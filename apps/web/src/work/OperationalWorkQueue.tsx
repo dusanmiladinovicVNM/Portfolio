@@ -418,9 +418,11 @@ export function OperationalWorkQueue({
                         <WorkspaceLink
                           className="button-secondary work-queue-open"
                           navigate={navigate}
-                          route={propertyRoute(item.propertyId, asOf)}
+                          route={propertyRoute(item.propertyId, asOf, {
+                            maintenanceIssueId: item.issueId,
+                          })}
                         >
-                          Open Property
+                          Open Maintenance
                         </WorkspaceLink>
                       ) : (
                         <WorkspaceLink
