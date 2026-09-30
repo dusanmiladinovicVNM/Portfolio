@@ -568,6 +568,41 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
+    "//*[@data-portfolio-command-center]//h2[normalize-space()='What needs attention']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-portfolio-command-center]//article[@data-work-domain='maintenance'][.//strong[normalize-space()='ISS-PROPERTY-WORK-BRW']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-portfolio-command-center]//article[@data-work-domain='occupancy'][.//strong[normalize-space()='TEN-WORK-BRW']]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-portfolio-command-center] a[href^=\"/work?\"]')?.getAttribute('href') || null;",
+    ),
+    '/work?asOf=2025-06-30',
+    'Portfolio command center links to the canonical full Work queue',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-portfolio-command-center] article[data-work-domain=\"maintenance\"] a')?.getAttribute('href') || null;",
+    ),
+    '/properties/' +
+      propertyId +
+      '?issueId=' +
+      workPropertyMaintenanceIssueId +
+      '&asOf=2025-06-30',
+    'Portfolio command center reuses the exact canonical Maintenance owner route',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
     "//h2[normalize-space()='Occupancy as of 30.06.2025']",
   );
   await waitForElement(
@@ -616,8 +651,8 @@ try {
       sessionId,
       "return Array.from(document.querySelectorAll('[data-portfolio-section]')).map((element) => element.dataset.portfolioSection).join(',');",
     ),
-    'attention,occupancy,properties,costs',
-    'Portfolio Overview prioritizes operations before reporting and costs',
+    'command-center,operations,occupancy,properties,costs',
+    'Portfolio Overview prioritizes actionable Work before operating and reporting context',
   );
   const dashboardUrl = `${baseUrl}/dashboard?asOf=2025-06-30`;
   assertEqual(
