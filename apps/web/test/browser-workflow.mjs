@@ -582,9 +582,9 @@ try {
   assertEqual(
     await executeScript(
       sessionId,
-      "return document.querySelector('[data-portfolio-setup] form').getClientRects().length;",
+      "return document.querySelector('[data-portfolio-setup] form').checkVisibility();",
     ),
-    0,
+    false,
     'Collapsed Portfolio setup form is not visible',
   );
   assertEqual(
@@ -1065,6 +1065,14 @@ try {
     ),
     true,
     'Portfolio setup opens only on operator request',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-portfolio-setup] form').checkVisibility();",
+    ),
+    true,
+    'Expanded Portfolio setup form is visible',
   );
 
   await typeXpath(
