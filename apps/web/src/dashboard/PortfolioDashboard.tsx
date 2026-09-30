@@ -79,7 +79,7 @@ export function PortfolioDashboard({
       <header className="workspace-header">
         <div>
           <p className="eyebrow">Portfolio dashboard</p>
-          <h1>Portfolio picture</h1>
+          <h1>Portfolio</h1>
           <p className="header-note">
             Occupancy and costs are historical as of the selected business date.
             Operational counters represent current operations.
@@ -101,21 +101,29 @@ export function PortfolioDashboard({
         </label>
       </header>
 
-      <section className="panel page-panel">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Core setup</p>
-            <h2>Add Property</h2>
-          </div>
-          <span className="section-note">Canonical Portfolio master data</span>
+      <details
+        className="portfolio-setup-disclosure"
+        data-portfolio-setup
+      >
+        <summary>
+          <span>
+            <span className="eyebrow">Setup</span>
+            <strong>Add property</strong>
+            <small>Create canonical Portfolio master data only when needed.</small>
+          </span>
+          <span className="portfolio-setup-disclosure-action" aria-hidden="true">
+            Open setup
+          </span>
+        </summary>
+        <div className="portfolio-setup-body">
+          <CreatePropertyForm
+            api={api}
+            onCreated={(created) =>
+              navigate(propertyRoute(created.id, asOf))
+            }
+          />
         </div>
-        <CreatePropertyForm
-          api={api}
-          onCreated={(created) =>
-            navigate(propertyRoute(created.id, asOf))
-          }
-        />
-      </section>
+      </details>
 
       {error ? (
         <section className="panel state-panel" role="alert">
@@ -136,34 +144,18 @@ export function PortfolioDashboard({
 
       {data ? (
         <div className="dashboard-stack">
-          <section className="metric-grid" aria-label="Portfolio occupancy summary">
-            <article className="metric-card metric-card-primary">
-              <span>Occupancy</span>
-              <strong>{occupancyRate(data)}</strong>
-              <small>{data.occupiedUnitCount} occupied units</small>
-            </article>
-            <article className="metric-card">
-              <span>Properties</span>
-              <strong>{data.propertyCount}</strong>
-              <small>{data.unitCount} total units</small>
-            </article>
-            <article className="metric-card">
-              <span>Planned</span>
-              <strong>{data.plannedUnitCount}</strong>
-              <small>units with planned occupancy</small>
-            </article>
-            <article className="metric-card">
-              <span>Vacant</span>
-              <strong>{data.vacantUnitCount}</strong>
-              <small>units without occupancy</small>
-            </article>
-          </section>
-
-          <section className="panel">
+          <section
+            className="panel portfolio-attention-panel"
+            data-portfolio-section="attention"
+          >
             <div className="section-heading">
               <div>
                 <p className="eyebrow">Current operations</p>
-                <h2>Operational attention</h2>
+                <h2>What needs attention</h2>
+                <p className="muted">
+                  Live operational counters. Detailed actionable work remains in
+                  the canonical domain workflows.
+                </p>
               </div>
               <span className="section-note">
                 Current state · not rewound by as-of date
@@ -179,36 +171,43 @@ export function PortfolioDashboard({
             </div>
           </section>
 
-          <section className="panel">
-            <div className="section-heading">
+          <section
+            className="portfolio-snapshot"
+            data-portfolio-section="snapshot"
+            aria-labelledby="portfolio-snapshot-title"
+          >
+            <div className="section-heading portfolio-section-heading">
               <div>
-                <p className="eyebrow">Cost ledger</p>
-                <h2>Portfolio costs by currency</h2>
+                <p className="eyebrow">Portfolio snapshot</p>
+                <h2 id="portfolio-snapshot-title">Occupancy and inventory</h2>
               </div>
-              <span className="section-note">
-                No cross-currency total or FX conversion
-              </span>
+              <span className="section-note">Snapshot {formatSwissDate(data.asOf)}</span>
             </div>
-            {data.portfolioCostsByCurrency.length === 0 ? (
-              <p className="muted">No attributed costs through {formatSwissDate(data.asOf)}.</p>
-            ) : (
-              <div className="cost-grid">
-                {data.portfolioCostsByCurrency.map((cost) => (
-                  <article className="cost-card" key={cost.currency}>
-                    <span>{cost.currency}</span>
-                    <strong>{formatExactMoney(cost.currency, cost.total)}</strong>
-                    <dl>
-                      <div><dt>CAPEX</dt><dd>{formatExactMoney(cost.currency, cost.capex)}</dd></div>
-                      <div><dt>OPEX</dt><dd>{formatExactMoney(cost.currency, cost.opex)}</dd></div>
-                      <div><dt>Unclassified</dt><dd>{formatExactMoney(cost.currency, cost.unclassified)}</dd></div>
-                    </dl>
-                  </article>
-                ))}
-              </div>
-            )}
+            <div className="metric-grid" aria-label="Portfolio occupancy summary">
+              <article className="metric-card metric-card-primary">
+                <span>Occupancy</span>
+                <strong>{occupancyRate(data)}</strong>
+                <small>{data.occupiedUnitCount} occupied units</small>
+              </article>
+              <article className="metric-card">
+                <span>Properties</span>
+                <strong>{data.propertyCount}</strong>
+                <small>{data.unitCount} total units</small>
+              </article>
+              <article className="metric-card">
+                <span>Planned</span>
+                <strong>{data.plannedUnitCount}</strong>
+                <small>units with planned occupancy</small>
+              </article>
+              <article className="metric-card">
+                <span>Vacant</span>
+                <strong>{data.vacantUnitCount}</strong>
+                <small>units without occupancy</small>
+              </article>
+            </div>
           </section>
 
-          <section className="panel">
+          <section className="panel" data-portfolio-section="properties">
             <div className="section-heading">
               <div>
                 <p className="eyebrow">Inventory</p>
@@ -255,6 +254,35 @@ export function PortfolioDashboard({
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </section>
+
+          <section className="panel" data-portfolio-section="costs">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Cost ledger</p>
+                <h2>Portfolio costs by currency</h2>
+              </div>
+              <span className="section-note">
+                No cross-currency total or FX conversion
+              </span>
+            </div>
+            {data.portfolioCostsByCurrency.length === 0 ? (
+              <p className="muted">No attributed costs through {formatSwissDate(data.asOf)}.</p>
+            ) : (
+              <div className="cost-grid">
+                {data.portfolioCostsByCurrency.map((cost) => (
+                  <article className="cost-card" key={cost.currency}>
+                    <span>{cost.currency}</span>
+                    <strong>{formatExactMoney(cost.currency, cost.total)}</strong>
+                    <dl>
+                      <div><dt>CAPEX</dt><dd>{formatExactMoney(cost.currency, cost.capex)}</dd></div>
+                      <div><dt>OPEX</dt><dd>{formatExactMoney(cost.currency, cost.opex)}</dd></div>
+                      <div><dt>Unclassified</dt><dd>{formatExactMoney(cost.currency, cost.unclassified)}</dd></div>
+                    </dl>
+                  </article>
+                ))}
               </div>
             )}
           </section>
