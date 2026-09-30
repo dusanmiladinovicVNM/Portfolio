@@ -112,7 +112,7 @@ export function PortfolioDashboard({
             <small>Create canonical Portfolio master data only when needed.</small>
           </span>
           <span className="portfolio-setup-disclosure-action" aria-hidden="true">
-            Open setup
+            +
           </span>
         </summary>
         <div className="portfolio-setup-body">
@@ -151,10 +151,10 @@ export function PortfolioDashboard({
             <div className="section-heading">
               <div>
                 <p className="eyebrow">Current operations</p>
-                <h2>What needs attention</h2>
+                <h2>Operational overview</h2>
                 <p className="muted">
-                  Live operational counters. Detailed actionable work remains in
-                  the canonical domain workflows.
+                  Live operational counters. Actionable work remains in the
+                  canonical Inspection and Maintenance workflows.
                 </p>
               </div>
               <span className="section-note">
