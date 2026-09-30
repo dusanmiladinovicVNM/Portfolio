@@ -32,7 +32,7 @@ function occupancyRate(data: PortfolioDashboardResponse): string {
 function LoadingState() {
   return (
     <section className="panel state-panel" aria-live="polite">
-      <p className="eyebrow">Portfolio snapshot</p>
+      <p className="eyebrow">Portfolio reporting</p>
       <h2>Loading reporting projection…</h2>
     </section>
   );
@@ -79,10 +79,10 @@ export function PortfolioDashboard({
       <header className="workspace-header">
         <div>
           <p className="eyebrow">Portfolio dashboard</p>
-          <h1>Portfolio picture</h1>
+          <h1>Portfolio</h1>
           <p className="header-note">
-            Occupancy and costs are historical as of the selected business date.
-            Operational counters represent current operations.
+            Occupancy and costs use the selected business date. Property and Unit
+            master inventory, plus operational counters, represent current state.
           </p>
         </div>
         <label className="date-control">
@@ -101,21 +101,29 @@ export function PortfolioDashboard({
         </label>
       </header>
 
-      <section className="panel page-panel">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Core setup</p>
-            <h2>Add Property</h2>
-          </div>
-          <span className="section-note">Canonical Portfolio master data</span>
+      <details
+        className="portfolio-setup-disclosure"
+        data-portfolio-setup
+      >
+        <summary>
+          <span>
+            <span className="eyebrow">Setup</span>
+            <strong>Add property</strong>
+            <small>Create canonical Portfolio master data only when needed.</small>
+          </span>
+          <span className="portfolio-setup-disclosure-action" aria-hidden="true">
+            +
+          </span>
+        </summary>
+        <div className="portfolio-setup-body">
+          <CreatePropertyForm
+            api={api}
+            onCreated={(created) =>
+              navigate(propertyRoute(created.id, asOf))
+            }
+          />
         </div>
-        <CreatePropertyForm
-          api={api}
-          onCreated={(created) =>
-            navigate(propertyRoute(created.id, asOf))
-          }
-        />
-      </section>
+      </details>
 
       {error ? (
         <section className="panel state-panel" role="alert">
@@ -136,34 +144,18 @@ export function PortfolioDashboard({
 
       {data ? (
         <div className="dashboard-stack">
-          <section className="metric-grid" aria-label="Portfolio occupancy summary">
-            <article className="metric-card metric-card-primary">
-              <span>Occupancy</span>
-              <strong>{occupancyRate(data)}</strong>
-              <small>{data.occupiedUnitCount} occupied units</small>
-            </article>
-            <article className="metric-card">
-              <span>Properties</span>
-              <strong>{data.propertyCount}</strong>
-              <small>{data.unitCount} total units</small>
-            </article>
-            <article className="metric-card">
-              <span>Planned</span>
-              <strong>{data.plannedUnitCount}</strong>
-              <small>units with planned occupancy</small>
-            </article>
-            <article className="metric-card">
-              <span>Vacant</span>
-              <strong>{data.vacantUnitCount}</strong>
-              <small>units without occupancy</small>
-            </article>
-          </section>
-
-          <section className="panel">
+          <section
+            className="panel portfolio-attention-panel"
+            data-portfolio-section="attention"
+          >
             <div className="section-heading">
               <div>
                 <p className="eyebrow">Current operations</p>
-                <h2>Operational attention</h2>
+                <h2>Operational overview</h2>
+                <p className="muted">
+                  Live operational counters. Actionable work remains in the
+                  canonical Inspection and Maintenance workflows.
+                </p>
               </div>
               <span className="section-note">
                 Current state · not rewound by as-of date
@@ -179,42 +171,63 @@ export function PortfolioDashboard({
             </div>
           </section>
 
-          <section className="panel">
-            <div className="section-heading">
+          <section
+            className="portfolio-projection"
+            data-portfolio-section="occupancy"
+            aria-labelledby="portfolio-occupancy-title"
+          >
+            <div className="section-heading portfolio-section-heading">
               <div>
-                <p className="eyebrow">Cost ledger</p>
-                <h2>Portfolio costs by currency</h2>
+                <p className="eyebrow">Reporting projection</p>
+                <h2 id="portfolio-occupancy-title">
+                  Occupancy as of {formatSwissDate(data.asOf)}
+                </h2>
+                <p className="muted">
+                  Occupancy status is projected at the selected date over the
+                  current Property and Unit master inventory.
+                </p>
               </div>
-              <span className="section-note">
-                No cross-currency total or FX conversion
-              </span>
+              <span className="section-note">Inventory population · current</span>
             </div>
-            {data.portfolioCostsByCurrency.length === 0 ? (
-              <p className="muted">No attributed costs through {formatSwissDate(data.asOf)}.</p>
-            ) : (
-              <div className="cost-grid">
-                {data.portfolioCostsByCurrency.map((cost) => (
-                  <article className="cost-card" key={cost.currency}>
-                    <span>{cost.currency}</span>
-                    <strong>{formatExactMoney(cost.currency, cost.total)}</strong>
-                    <dl>
-                      <div><dt>CAPEX</dt><dd>{formatExactMoney(cost.currency, cost.capex)}</dd></div>
-                      <div><dt>OPEX</dt><dd>{formatExactMoney(cost.currency, cost.opex)}</dd></div>
-                      <div><dt>Unclassified</dt><dd>{formatExactMoney(cost.currency, cost.unclassified)}</dd></div>
-                    </dl>
-                  </article>
-                ))}
-              </div>
-            )}
+            <div className="metric-grid" aria-label="Portfolio occupancy projection">
+              <article className="metric-card metric-card-primary">
+                <span>Occupancy as of</span>
+                <strong>{occupancyRate(data)}</strong>
+                <small>
+                  {data.occupiedUnitCount} occupied on {formatSwissDate(data.asOf)}
+                </small>
+              </article>
+              <article className="metric-card">
+                <span>Current inventory</span>
+                <strong>{data.propertyCount}</strong>
+                <small>{data.unitCount} current Units</small>
+              </article>
+              <article className="metric-card">
+                <span>Planned as of</span>
+                <strong>{data.plannedUnitCount}</strong>
+                <small>current Units projected as planned</small>
+              </article>
+              <article className="metric-card">
+                <span>Vacant as of</span>
+                <strong>{data.vacantUnitCount}</strong>
+                <small>current Units projected as vacant</small>
+              </article>
+            </div>
           </section>
 
-          <section className="panel">
+          <section className="panel" data-portfolio-section="properties">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Inventory</p>
+                <p className="eyebrow">Current inventory</p>
                 <h2>Properties</h2>
+                <p className="muted">
+                  Property and Unit inventory is current. Occupancy columns use
+                  {formatSwissDate(data.asOf)}; Maintenance columns are current.
+                </p>
               </div>
-              <span className="section-note">Snapshot {formatSwissDate(data.asOf)}</span>
+              <span className="section-note">
+                Occupancy · as of {formatSwissDate(data.asOf)} · Maintenance · current
+              </span>
             </div>
             {data.properties.length === 0 ? (
               <p className="muted">No properties in the Portfolio projection.</p>
@@ -224,12 +237,12 @@ export function PortfolioDashboard({
                   <thead>
                     <tr>
                       <th>Property</th>
-                      <th>Units</th>
-                      <th>Occupied</th>
-                      <th>Planned</th>
-                      <th>Vacant</th>
-                      <th>Open issues</th>
-                      <th>Urgent</th>
+                      <th>Units now</th>
+                      <th>Occupied as of</th>
+                      <th>Planned as of</th>
+                      <th>Vacant as of</th>
+                      <th>Open issues now</th>
+                      <th>Urgent now</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -255,6 +268,35 @@ export function PortfolioDashboard({
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </section>
+
+          <section className="panel" data-portfolio-section="costs">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Cost ledger</p>
+                <h2>Portfolio costs by currency</h2>
+              </div>
+              <span className="section-note">
+                No cross-currency total or FX conversion
+              </span>
+            </div>
+            {data.portfolioCostsByCurrency.length === 0 ? (
+              <p className="muted">No attributed costs through {formatSwissDate(data.asOf)}.</p>
+            ) : (
+              <div className="cost-grid">
+                {data.portfolioCostsByCurrency.map((cost) => (
+                  <article className="cost-card" key={cost.currency}>
+                    <span>{cost.currency}</span>
+                    <strong>{formatExactMoney(cost.currency, cost.total)}</strong>
+                    <dl>
+                      <div><dt>CAPEX</dt><dd>{formatExactMoney(cost.currency, cost.capex)}</dd></div>
+                      <div><dt>OPEX</dt><dd>{formatExactMoney(cost.currency, cost.opex)}</dd></div>
+                      <div><dt>Unclassified</dt><dd>{formatExactMoney(cost.currency, cost.unclassified)}</dd></div>
+                    </dl>
+                  </article>
+                ))}
               </div>
             )}
           </section>
