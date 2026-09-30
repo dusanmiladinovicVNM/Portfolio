@@ -32,7 +32,7 @@ function occupancyRate(data: PortfolioDashboardResponse): string {
 function LoadingState() {
   return (
     <section className="panel state-panel" aria-live="polite">
-      <p className="eyebrow">Portfolio snapshot</p>
+      <p className="eyebrow">Portfolio reporting</p>
       <h2>Loading reporting projection…</h2>
     </section>
   );
@@ -81,8 +81,8 @@ export function PortfolioDashboard({
           <p className="eyebrow">Portfolio dashboard</p>
           <h1>Portfolio</h1>
           <p className="header-note">
-            Occupancy and costs are historical as of the selected business date.
-            Operational counters represent current operations.
+            Occupancy and costs use the selected business date. Property and Unit
+            master inventory, plus operational counters, represent current state.
           </p>
         </div>
         <label className="date-control">
@@ -172,37 +172,45 @@ export function PortfolioDashboard({
           </section>
 
           <section
-            className="portfolio-snapshot"
-            data-portfolio-section="snapshot"
-            aria-labelledby="portfolio-snapshot-title"
+            className="portfolio-projection"
+            data-portfolio-section="occupancy"
+            aria-labelledby="portfolio-occupancy-title"
           >
             <div className="section-heading portfolio-section-heading">
               <div>
-                <p className="eyebrow">Portfolio snapshot</p>
-                <h2 id="portfolio-snapshot-title">Occupancy and inventory</h2>
+                <p className="eyebrow">Reporting projection</p>
+                <h2 id="portfolio-occupancy-title">
+                  Occupancy as of {formatSwissDate(data.asOf)}
+                </h2>
+                <p className="muted">
+                  Occupancy status is projected at the selected date over the
+                  current Property and Unit master inventory.
+                </p>
               </div>
-              <span className="section-note">Snapshot {formatSwissDate(data.asOf)}</span>
+              <span className="section-note">Inventory population · current</span>
             </div>
-            <div className="metric-grid" aria-label="Portfolio occupancy summary">
+            <div className="metric-grid" aria-label="Portfolio occupancy projection">
               <article className="metric-card metric-card-primary">
-                <span>Occupancy</span>
+                <span>Occupancy as of</span>
                 <strong>{occupancyRate(data)}</strong>
-                <small>{data.occupiedUnitCount} occupied units</small>
+                <small>
+                  {data.occupiedUnitCount} occupied on {formatSwissDate(data.asOf)}
+                </small>
               </article>
               <article className="metric-card">
-                <span>Properties</span>
+                <span>Current inventory</span>
                 <strong>{data.propertyCount}</strong>
-                <small>{data.unitCount} total units</small>
+                <small>{data.unitCount} current Units</small>
               </article>
               <article className="metric-card">
-                <span>Planned</span>
+                <span>Planned as of</span>
                 <strong>{data.plannedUnitCount}</strong>
-                <small>units with planned occupancy</small>
+                <small>current Units projected as planned</small>
               </article>
               <article className="metric-card">
-                <span>Vacant</span>
+                <span>Vacant as of</span>
                 <strong>{data.vacantUnitCount}</strong>
-                <small>units without occupancy</small>
+                <small>current Units projected as vacant</small>
               </article>
             </div>
           </section>
@@ -210,10 +218,16 @@ export function PortfolioDashboard({
           <section className="panel" data-portfolio-section="properties">
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Inventory</p>
+                <p className="eyebrow">Current inventory</p>
                 <h2>Properties</h2>
+                <p className="muted">
+                  Property and Unit inventory is current. Occupancy columns use
+                  {formatSwissDate(data.asOf)}; Maintenance columns are current.
+                </p>
               </div>
-              <span className="section-note">Snapshot {formatSwissDate(data.asOf)}</span>
+              <span className="section-note">
+                Occupancy · as of {formatSwissDate(data.asOf)} · Maintenance · current
+              </span>
             </div>
             {data.properties.length === 0 ? (
               <p className="muted">No properties in the Portfolio projection.</p>
@@ -223,12 +237,12 @@ export function PortfolioDashboard({
                   <thead>
                     <tr>
                       <th>Property</th>
-                      <th>Units</th>
-                      <th>Occupied</th>
-                      <th>Planned</th>
-                      <th>Vacant</th>
-                      <th>Open issues</th>
-                      <th>Urgent</th>
+                      <th>Units now</th>
+                      <th>Occupied as of</th>
+                      <th>Planned as of</th>
+                      <th>Vacant as of</th>
+                      <th>Open issues now</th>
+                      <th>Urgent now</th>
                     </tr>
                   </thead>
                   <tbody>
