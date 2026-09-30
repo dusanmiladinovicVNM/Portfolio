@@ -23,3 +23,4 @@ export * from './timeline.js';
 export * from './reporting.js';
 
 export * from './staff.js';
+export * from './work.js';
