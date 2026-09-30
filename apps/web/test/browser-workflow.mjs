@@ -564,7 +564,27 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//span[contains(@class,'section-note') and normalize-space()='Snapshot 30.06.2025']",
+    "//h2[normalize-space()='Occupancy as of 30.06.2025']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-portfolio-section='occupancy']//*[contains(normalize-space(),'current Property and Unit master inventory')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-portfolio-section='properties']//span[contains(@class,'section-note') and contains(normalize-space(),'Occupancy · as of 30.06.2025 · Maintenance · current')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-portfolio-section='properties']//th[normalize-space()='Units now']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-portfolio-section='properties']//th[normalize-space()='Open issues now']",
   );
   await waitForElement(
     sessionId,
@@ -592,7 +612,7 @@ try {
       sessionId,
       "return Array.from(document.querySelectorAll('[data-portfolio-section]')).map((element) => element.dataset.portfolioSection).join(',');",
     ),
-    'attention,snapshot,properties,costs',
+    'attention,occupancy,properties,costs',
     'Portfolio Overview prioritizes operations before reporting and costs',
   );
   const dashboardUrl = `${baseUrl}/dashboard?asOf=2025-06-30`;
