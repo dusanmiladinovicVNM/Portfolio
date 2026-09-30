@@ -3582,8 +3582,23 @@ globalThis.fetch = async (
         );
       }
       const id =
-        setupMaintenanceWorkOrderIds[setupMaintenanceWorkOrderSequence++];
+        setupMaintenanceIssue.id === workPropertyMaintenanceIssueId
+          ? workPropertyMaintenanceWorkOrderId
+          : setupMaintenanceWorkOrderIds[
+              setupMaintenanceWorkOrderSequence++
+            ];
       if (!id) throw new Error('Setup Maintenance WorkOrder id pool exhausted.');
+      if (
+        setupMaintenanceWorkOrders.some(
+          (entry) => entry.workOrder.id === id,
+        )
+      ) {
+        return apiError(
+          409,
+          'MAINTENANCE_WORK_ORDER_CODE_CONFLICT',
+          'Canonical Maintenance WorkOrder already exists.',
+        );
+      }
       const order: MaintenanceWorkOrderResponse = {
         id,
         issueId: setupMaintenanceIssue.id,
