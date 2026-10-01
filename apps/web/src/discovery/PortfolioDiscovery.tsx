@@ -1,11 +1,17 @@
 import {
+  operationalWorkQueueResponseSchema,
   propertyListResponseSchema,
   unitListResponseSchema,
+  type OperationalWorkItemResponse,
   type PropertyResponse,
   type UnitResponse,
 } from '@portfolio/contracts';
 import { useEffect, useMemo, useState } from 'react';
-import { propertiesPath, unitsPath } from '../api/paths.js';
+import {
+  operationalWorkPath,
+  propertiesPath,
+  unitsPath,
+} from '../api/paths.js';
 import type { PortfolioApi } from '../api/portfolio-api.js';
 import { WorkspaceLink } from '../navigation/WorkspaceLink.js';
 import {
@@ -14,7 +20,20 @@ import {
   unitRoute,
 } from '../navigation/workspace-route.js';
 import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
-import { formatDetailKey, formatSwissDate } from '../presentation/format.js';
+import {
+  formatDetailKey,
+  formatSwissDate,
+  localDateOnly,
+} from '../presentation/format.js';
+import {
+  workAttentionLabel,
+  workDomainLabel,
+  workItemCode,
+  workItemKey,
+  workItemRoute,
+  workItemSummary,
+  workOccupancyReasonLabel,
+} from '../work/work-presentation.js';
 
 interface PortfolioDiscoveryProps {
   readonly api: PortfolioApi;
@@ -27,10 +46,13 @@ interface DiscoveryData {
   readonly properties: readonly PropertyResponse[];
   readonly units: readonly UnitResponse[];
   readonly propertyById: ReadonlyMap<string, PropertyResponse>;
+  readonly workItems: readonly OperationalWorkItemResponse[];
+  readonly workQueueDate: string;
 }
 
 const PROPERTY_RESULT_LIMIT = 8;
 const UNIT_RESULT_LIMIT = 12;
+const WORK_RESULT_LIMIT = 12;
 
 function normalized(value: string): string {
   return value
@@ -49,6 +71,54 @@ function matchesTokens(
   return tokens.every((token) => haystack.includes(token));
 }
 
+function workSearchValues(
+  item: OperationalWorkItemResponse,
+): readonly (string | null | undefined)[] {
+  const owner = [
+    item.propertyCode,
+    item.propertyName,
+    item.unitCode,
+    item.unitNumber,
+  ];
+
+  if (item.kind === 'inspection') {
+    return [
+      ...owner,
+      item.inspectionCode,
+      item.inspectionType,
+      item.inspectionStatus,
+      item.assignedToDisplayName,
+      item.assignedToRole,
+    ];
+  }
+
+  if (item.kind === 'maintenance') {
+    return [
+      ...owner,
+      item.issueCode,
+      item.title,
+      item.priority,
+      item.attention,
+    ];
+  }
+
+  return [
+    ...owner,
+    item.tenancyCode,
+    item.tenancyStatus,
+    item.agreementCode,
+    item.reason,
+    workOccupancyReasonLabel(item.reason),
+  ];
+}
+
+function workContext(item: OperationalWorkItemResponse): string {
+  const property = item.propertyCode + ' · ' + item.propertyName;
+  return item.unitId === null
+    ? property + ' · Property-level'
+    : property + ' · ' + item.unitCode + ' · Unit ' + item.unitNumber;
+}
+
 function propertyAddress(property: PropertyResponse): string {
   return [
     property.street + ' ' + property.houseNumber,
@@ -65,6 +135,7 @@ export function PortfolioDiscovery({
   const [data, setData] = useState<DiscoveryData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [requestVersion, setRequestVersion] = useState(0);
+  const workQueueDate = localDateOnly();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -78,9 +149,20 @@ export function PortfolioDiscovery({
       api.get(unitsPath(), unitListResponseSchema, {
         signal: controller.signal,
       }),
+      api.get(
+        operationalWorkPath(workQueueDate),
+        operationalWorkQueueResponseSchema,
+        { signal: controller.signal },
+      ),
     ])
-      .then(([propertyResponse, unitResponse]) => {
+      .then(([propertyResponse, unitResponse, workResponse]) => {
         if (controller.signal.aborted) return;
+
+        if (workResponse.referenceDate !== workQueueDate) {
+          throw new Error(
+            'Discovery Work returned a different operational date.',
+          );
+        }
 
         const propertyById = new Map(
           propertyResponse.items.map((property) => [property.id, property]),
@@ -98,6 +180,8 @@ export function PortfolioDiscovery({
           properties: propertyResponse.items,
           units: unitResponse.items,
           propertyById,
+          workItems: workResponse.items,
+          workQueueDate,
         });
       })
       .catch((cause: unknown) => {
@@ -110,7 +194,7 @@ export function PortfolioDiscovery({
       });
 
     return () => controller.abort();
-  }, [api, requestVersion]);
+  }, [api, requestVersion, workQueueDate]);
 
   const search = useMemo(() => {
     const normalizedQuery = normalized(query.trim());
@@ -123,6 +207,8 @@ export function PortfolioDiscovery({
         units: [] as UnitResponse[],
         propertyMatchCount: 0,
         unitMatchCount: 0,
+        work: [] as OperationalWorkItemResponse[],
+        workMatchCount: 0,
       };
     }
 
@@ -166,16 +252,27 @@ export function PortfolioDiscovery({
       );
     });
 
+    const workMatches = data.workItems.filter((item) =>
+      matchesTokens(workSearchValues(item), tokens),
+    );
+
     return {
       ready: true,
       properties: propertyMatches.slice(0, PROPERTY_RESULT_LIMIT),
       units: unitMatches.slice(0, UNIT_RESULT_LIMIT),
+      work: workMatches.slice(0, WORK_RESULT_LIMIT),
       propertyMatchCount: propertyMatches.length,
       unitMatchCount: unitMatches.length,
+      workMatchCount: workMatches.length,
     };
   }, [data, query]);
 
-  const totalMatches = search.propertyMatchCount + search.unitMatchCount;
+  const totalMatches =
+    search.propertyMatchCount +
+    search.unitMatchCount +
+    search.workMatchCount;
+  const shownMatches =
+    search.properties.length + search.units.length + search.work.length;
 
   return (
     <>
@@ -184,9 +281,10 @@ export function PortfolioDiscovery({
           <p className="eyebrow">Portfolio discovery</p>
           <h1>Find</h1>
           <p className="header-note">
-            Search current Property and Unit master data by code, name, address
-            or Unit number. Opening a result preserves the workspace reporting
-            context of {formatSwissDate(asOf)}.
+            Search current Property and Unit master data plus actor-scoped
+            operational Work. Master-data results preserve the reporting context
+            of {formatSwissDate(asOf)}; Work actions use the current Swiss
+            operational date.
           </p>
         </div>
       </header>
@@ -199,7 +297,7 @@ export function PortfolioDiscovery({
         <div className="section-heading">
           <div>
             <p className="eyebrow">Current master data</p>
-            <h2 id="portfolio-discovery-title">Property & Unit search</h2>
+            <h2 id="portfolio-discovery-title">Property, Unit & Work search</h2>
           </div>
           {data ? (
             <span className="section-note">
@@ -218,7 +316,7 @@ export function PortfolioDiscovery({
                 replace: true,
               })
             }
-            placeholder="Code, name, street, city, Unit number…"
+            placeholder="Property, Unit, Inspection, Maintenance…"
             type="search"
             value={query}
           />
@@ -247,7 +345,7 @@ export function PortfolioDiscovery({
         {!error && data && !search.ready ? (
           <p className="discovery-prompt">
             Enter at least two characters. Internal IDs are not searchable or
-            shown.
+            shown. Operational Work is limited by the actor's canonical server-side scope.
           </p>
         ) : null}
 
@@ -256,16 +354,46 @@ export function PortfolioDiscovery({
             <div className="discovery-result-summary">
               <strong>
                 {totalMatches === 0
-                  ? 'No matching Property or Unit'
+                  ? 'No matching Property, Unit or Work'
                   : totalMatches + (totalMatches === 1 ? ' match' : ' matches')}
               </strong>
-              {totalMatches > search.properties.length + search.units.length ? (
+              {totalMatches > shownMatches ? (
                 <span>
-                  Showing the first {search.properties.length + search.units.length}.
-                  Refine the search for a narrower result.
+                  Showing the first {shownMatches}. Refine the search for a narrower result.
                 </span>
               ) : null}
             </div>
+
+            {search.work.length > 0 ? (
+              <section
+                className="discovery-result-group"
+                aria-labelledby="discovery-work"
+              >
+                <h3 id="discovery-work">Operational Work</h3>
+                <div className="discovery-result-list">
+                  {search.work.map((item) => (
+                    <article
+                      data-discovery-kind="work"
+                      data-work-domain={item.kind}
+                      key={workItemKey(item)}
+                    >
+                      <WorkspaceLink
+                        className="discovery-result"
+                        navigate={navigate}
+                        route={workItemRoute(item, data.workQueueDate)}
+                      >
+                        <span className="eyebrow">
+                          {workDomainLabel(item.kind)} · {workAttentionLabel(item.attention)}
+                        </span>
+                        <strong>{workItemCode(item)}</strong>
+                        <span>{workItemSummary(item)}</span>
+                        <small>{workContext(item)}</small>
+                      </WorkspaceLink>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
             {search.properties.length > 0 ? (
               <section
