@@ -5020,10 +5020,13 @@ try {
     'xpath',
     "//*[@data-property-command-center]//article[@data-work-domain='maintenance'][.//strong[normalize-space()='ISS-PROPERTY-WORK-BRW']]",
   );
-  await waitForElement(
-    sessionId,
-    'xpath',
-    "//*[@data-property-command-center]//article[@data-work-domain='occupancy'][.//strong[normalize-space()='TEN-WORK-BRW']]",
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-property-command-center]//article[.//strong[normalize-space()='TEN-WORK-BRW']]",
+    ),
+    false,
+    'Property command center excludes canonical Work owned by another Property',
   );
   assertEqual(
     await executeScript(
