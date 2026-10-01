@@ -14,16 +14,40 @@ Portfolio keeps business authorization in PostgreSQL. Supabase Auth proves exter
 
 ## 2. Link the Supabase project
 
+For local operator work:
+
 ~~~bash
 supabase login
 supabase link --project-ref <project-ref>
 ~~~
 
-Do not edit production schema manually in the Dashboard. Apply the canonical migrations:
+Do not edit production schema manually in the Dashboard.
 
-~~~bash
-supabase db push
+The canonical GitHub production release now owns migration ordering. Configure these
+repository secrets before a production release:
+
+~~~text
+SUPABASE_DEPLOY_ACCESS_TOKEN
+SUPABASE_DB_PASSWORD
 ~~~
+
+The release job refuses to deploy without both. It links the exact current-main
+checkout to the configured project, applies canonical migrations with pinned
+Supabase CLI `2.117.0`, verifies local/remote migration history has no remaining
+version drift, and only then deploys the Edge API and web client:
+
+~~~text
+current-main fence
+→ supabase db push
+→ migration history parity
+→ deploy exact API SHA
+→ hosted API SHA verify
+→ fresh current-main fence
+→ Vercel production deploy
+~~~
+
+Manual `supabase db push` remains an operator recovery tool, not the normal
+production release path.
 
 ## 3. Google Drive OAuth
 
@@ -105,11 +129,21 @@ esbuild_version=0.28.2
 
 The generated bundle and manifest are ignored by Git, so their creation does not change the exact source revision.
 
-For production, do not run the raw build/deploy commands separately. Use the verified wrapper:
+For production, do not run the raw build/deploy commands separately. The
+GitHub production workflow is authoritative and runs the migration gate before
+the API wrapper. For an operator recovery deployment, preserve the same order:
 
 ~~~bash
-SUPABASE_PROJECT_REF=<project-ref> pnpm supabase:function:deploy
+export SUPABASE_PROJECT_REF=<project-ref>
+export SUPABASE_ACCESS_TOKEN=<token>
+export SUPABASE_DB_PASSWORD=<database-password>
+
+pnpm supabase:migrations:deploy
+pnpm supabase:function:deploy
 ~~~
+
+Never deploy current application code against a database whose migration history
+has not passed the migration gate.
 
 The wrapper:
 1. requires a clean checkout;
