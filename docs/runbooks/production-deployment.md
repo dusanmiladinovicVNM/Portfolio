@@ -31,21 +31,28 @@ SUPABASE_DEPLOY_ACCESS_TOKEN
 SUPABASE_DB_PASSWORD   # optional; direct DB auth when configured
 ~~~
 
-The release job requires the deploy access token. When no database password is
-configured, the authenticated Supabase CLI may use its linked-project login
-role; an explicit database password remains preferable where production
-credential policy provides one. The job links the exact current-main checkout
-to the configured project, applies canonical migrations with pinned
-Supabase CLI `2.117.0`, verifies local/remote migration history has no remaining
-version drift, and only then deploys the Edge API and web client:
+The release job requires `SUPABASE_DEPLOY_ACCESS_TOKEN`; the read-oriented
+observability token is never accepted as a fallback credential for production
+DDL or code deployment. When no database password is configured, the
+authenticated Supabase CLI may use its linked-project login role; an explicit
+database password remains preferable where production credential policy
+provides one.
+
+The job starts only from an exact current-main checkout, links that checkout to
+the configured project, then performs one final freshness fence immediately
+before the first production mutation. From the moment `supabase db push`
+begins, that exact release is committed and must finish through API and web
+deployment even if a newer `main` appears; the queued newer release follows
+afterward. The canonical order is:
 
 ~~~text
-current-main fence
+initial current-main fence
+→ supabase link
+→ final current-main fence
 → supabase db push
 → migration history parity
 → deploy exact API SHA
 → hosted API SHA verify
-→ fresh current-main fence
 → Vercel production deploy
 ~~~
 
@@ -147,7 +154,9 @@ pnpm supabase:function:deploy
 ~~~
 
 Never deploy current application code against a database whose migration history
-has not passed the migration gate.
+has not passed the migration gate. Do not re-run a stale-main abort after
+`db push`: once production schema mutation has started, complete the same exact
+release SHA through API and web deployment before the next queued release.
 
 The wrapper:
 1. requires a clean checkout;
