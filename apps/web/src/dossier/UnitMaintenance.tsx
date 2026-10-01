@@ -1,7 +1,6 @@
 import {
   assignMaintenanceWorkOrderRequestSchema,
   assetListResponseSchema,
-  assetResponseSchema,
   changeMaintenanceIssueStatusRequestSchema,
   changeMaintenanceWorkOrderStatusRequestSchema,
   createMaintenanceIssueRequestSchema,
@@ -45,7 +44,6 @@ import {
   useState,
 } from 'react';
 import {
-  assetPath,
   assetServiceEventsPath,
   inspectionPath,
   inspectionStaffPath,
