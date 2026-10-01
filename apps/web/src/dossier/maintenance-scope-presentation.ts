@@ -31,12 +31,17 @@ export function maintenanceAssetCurrentPlacementLabel(
   if (asset === null) return 'Current placement unavailable';
 
   if (asset.propertyId === null) return 'No current placement';
-  if (asset.unitId === null) return 'Property level';
 
-  if (issue.unitId !== null && asset.unitId !== issue.unitId) {
-    return 'Outside this Unit';
+  if (issue.unitId === null) {
+    if (asset.propertyId !== issue.propertyId) {
+      return 'Outside historical Property';
+    }
+    if (asset.unitId === null) return 'Property level';
+    return asset.spaceId === null ? 'Unit placement' : 'Unit Space';
   }
 
+  if (asset.unitId === null) return 'Property level';
+  if (asset.unitId !== issue.unitId) return 'Outside this Unit';
   if (asset.spaceId === null) return 'Unit level';
 
   const space = spaces.find((candidate) => candidate.id === asset.spaceId);
