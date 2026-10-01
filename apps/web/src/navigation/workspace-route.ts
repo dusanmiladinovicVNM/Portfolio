@@ -29,6 +29,10 @@ export type WorkspaceRoute =
       readonly asOf: string;
     }
   | {
+      readonly kind: 'properties';
+      readonly asOf: string;
+    }
+  | {
       readonly kind: 'discovery';
       readonly asOf: string;
       readonly query: string;
@@ -72,6 +76,7 @@ export type WorkspaceRoute =
 export function workspaceRouteOwnerKey(route: WorkspaceRoute): string {
   if (route.kind === 'dashboard') return 'dashboard';
   if (route.kind === 'work') return 'work';
+  if (route.kind === 'properties') return 'properties';
   if (route.kind === 'discovery') return 'discovery';
   if (route.kind === 'parties') return 'parties';
   if (route.kind === 'staff') return 'staff';
@@ -126,6 +131,10 @@ export function dashboardRoute(asOf: string): WorkspaceRoute {
 
 export function workRoute(asOf: string): WorkspaceRoute {
   return { kind: 'work', asOf: requireWorkspaceAsOf(asOf) };
+}
+
+export function propertiesRoute(asOf: string): WorkspaceRoute {
+  return { kind: 'properties', asOf: requireWorkspaceAsOf(asOf) };
 }
 
 export function discoveryRoute(asOf: string, query = ''): WorkspaceRoute {
@@ -308,6 +317,10 @@ export function parseWorkspaceLocation(
     return workRoute(asOf);
   }
 
+  if (segments.length === 1 && segments[0] === 'properties') {
+    return propertiesRoute(asOf);
+  }
+
   if (segments.length === 1 && segments[0] === 'find') {
     return discoveryRoute(asOf, search.get('q') ?? '');
   }
@@ -393,6 +406,9 @@ export function workspaceRouteHref(route: WorkspaceRoute): string {
   }
   if (route.kind === 'work') {
     return '/work?' + search.toString();
+  }
+  if (route.kind === 'properties') {
+    return '/properties?' + search.toString();
   }
   if (route.kind === 'discovery') {
     return '/find?' + search.toString();
