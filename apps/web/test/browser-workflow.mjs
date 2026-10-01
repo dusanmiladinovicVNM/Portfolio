@@ -1515,6 +1515,60 @@ try {
     "//*[normalize-space()='No Spaces defined for this Unit.']",
   );
 
+  await clickXpath(
+    sessionId,
+    "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Overview']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-setup-readiness][.//h2[normalize-space()='Physical Unit setup']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-setup-readiness]//*[normalize-space()='Start with Spaces']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-setup-readiness]//a[@data-setup-tab='spaces'][.//strong[normalize-space()='0 defined']]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return Array.from(document.querySelectorAll('[data-unit-setup-readiness] [data-setup-tab]')).map((element) => element.dataset.setupTab).join(',');",
+    ),
+    'spaces,assets,meters,keys,inspections',
+    'New Unit Overview exposes the recommended physical setup surfaces',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-unit-setup-readiness] [data-setup-tab="keys"]')?.getAttribute('href') || null;",
+    ),
+    '/properties/' +
+      setupPropertyId +
+      '/units/' +
+      setupUnitId +
+      '?tab=keys&asOf=2025-06-30',
+    'Setup readiness preserves Unit owner and reporting context',
+  );
+  await clickXpath(
+    sessionId,
+    "//*[@data-unit-setup-readiness]//a[normalize-space()='Define Spaces']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[normalize-space()='No Spaces defined for this Unit.']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    setupUnitUrl,
+    'Setup readiness returns the operator to canonical Spaces setup',
+  );
+
   await typeXpath(
     sessionId,
     "//form[contains(@class,'setup-form')]//input[@name='code']",
@@ -1650,6 +1704,39 @@ try {
     sessionId,
     'xpath',
     "//article[contains(@class,'space-card')][.//span[normalize-space()='BATH-SETUP']][.//h3[normalize-space()='Bathroom']][.//span[contains(normalize-space(),'order 5')]]",
+  );
+
+  await clickXpath(
+    sessionId,
+    "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Overview']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-setup-readiness]//a[@data-setup-tab='spaces'][.//strong[normalize-space()='5 defined']]",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-unit-setup-readiness]//*[normalize-space()='Start with Spaces']",
+    ),
+    false,
+    'Setup readiness removes the start-with-Spaces callout after structure exists',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-setup-readiness]//a[@data-setup-tab='assets'][.//strong[normalize-space()='0 located']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-setup-readiness]//a[@data-setup-tab='meters'][.//strong[normalize-space()='0 active']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-setup-readiness]//a[@data-setup-tab='keys'][.//strong[normalize-space()='0 active']]",
   );
 
   await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Tenancies']]");
