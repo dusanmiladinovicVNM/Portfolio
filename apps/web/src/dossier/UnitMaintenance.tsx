@@ -88,6 +88,10 @@ import {
   swissLocalDateTimeToInstant,
 } from '../presentation/format.js';
 import {
+  maintenanceAssetCurrentPlacementLabel,
+  maintenanceIssueSpaceScopeLabel,
+} from './maintenance-scope-presentation.js';
+import {
   assertCreatedMaintenanceIssue,
   assertCreatedMaintenanceWorkOrder,
   assertCreatedServiceEvent,
@@ -1014,6 +1018,16 @@ function IssueAdministration({
     (selectedOrder.status === 'in_progress' ||
       selectedOrder.status === 'completed');
 
+  const issueAsset =
+    issue.assetId === null
+      ? null
+      : issueAssetsById.get(issue.assetId) ?? null;
+  const currentAssetPlacement = maintenanceAssetCurrentPlacementLabel(
+    issue,
+    issueAsset,
+    spaces,
+  );
+
   return (
     <section className="panel maintenance-admin-panel">
       <div className="section-heading">
@@ -1041,24 +1055,22 @@ function IssueAdministration({
         </div>
         <div>
           <dt>Space</dt>
-          <dd>
-            {issue.spaceId
-              ? spaces.find((space) => space.id === issue.spaceId)?.code ??
-                'Assigned space'
-              : issue.unitId === null
-                ? '—'
-                : 'Unit level'}
-          </dd>
+          <dd>{maintenanceIssueSpaceScopeLabel(issue, spaces)}</dd>
         </div>
         <div>
           <dt>Asset</dt>
           <dd>
             {issue.assetId
-              ? issueAssetsById.get(issue.assetId)?.code ??
-                'Assigned asset'
+              ? issueAsset?.code ?? 'Assigned asset'
               : '—'}
           </dd>
         </div>
+        {currentAssetPlacement !== null ? (
+          <div>
+            <dt>Current Asset placement</dt>
+            <dd>{currentAssetPlacement}</dd>
+          </div>
+        ) : null}
         <div>
           <dt>Inspection Finding</dt>
           <dd>
