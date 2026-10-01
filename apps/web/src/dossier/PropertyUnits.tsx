@@ -12,6 +12,7 @@ import {
 import type { PortfolioApi } from '../api/portfolio-api.js';
 import { WorkspaceLink } from '../navigation/WorkspaceLink.js';
 import { CreateUnitForm } from './CreateUnitForm.js';
+import { PropertyCommandCenter } from './PropertyCommandCenter.js';
 import { assertPropertyUnitsOwner } from './route-owner.js';
 import {
   dashboardRoute,
@@ -92,12 +93,12 @@ export function PropertyUnits({
             ← Portfolio
           </WorkspaceLink>
           <p className="eyebrow">
-            Property{data ? ` · ${data.property.code}` : ''}
+            Property{data ? ' · ' + data.property.code : ''}
           </p>
           <h1>{data?.property.name ?? 'Property'}</h1>
           <p className="header-note">
-            Current Unit inventory. Reporting context remains {formatSwissDate(asOf)}, so opening
-            a Unit dossier starts from the same historical business date.
+            Daily operations use current Swiss business date. Reporting and Unit
+            navigation context remains {formatSwissDate(asOf)}.
           </p>
         </div>
       </header>
@@ -112,35 +113,22 @@ export function PropertyUnits({
           setNavigationBlocker={setNavigationBlocker}
           workOrderId={maintenanceWorkOrderId}
         />
-      ) : null}
+      ) : (
+        <PropertyCommandCenter
+          api={api}
+          navigate={navigate}
+          propertyId={propertyId}
+        />
+      )}
 
-      {data ? (
-        <section className="panel page-panel">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Core setup</p>
-              <h2>Add Unit</h2>
-            </div>
-            <span className="section-note">{data.property.code}</span>
-          </div>
-          <CreateUnitForm
-            api={api}
-            propertyId={propertyId}
-            onCreated={(created) =>
-              navigate(unitRoute(propertyId, created.id, asOf, 'spaces'))
-            }
-          />
-        </section>
-      ) : null}
-
-      <section className="panel page-panel">
+      <section className="panel page-panel" data-property-section="units">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Inventory</p>
+            <p className="eyebrow">Current inventory</p>
             <h2>Units</h2>
           </div>
           <span className="section-note">
-            {data ? `${data.units.length} current Unit records` : 'Loading…'}
+            {data ? data.units.length + ' current Unit records' : 'Loading…'}
           </span>
         </div>
 
@@ -172,7 +160,7 @@ export function PropertyUnits({
                 <dl>
                   <div><dt>Type</dt><dd>{unit.unitType}</dd></div>
                   <div><dt>Floor</dt><dd>{unit.floor ?? '—'}</dd></div>
-                  <div><dt>Area</dt><dd>{unit.areaM2 === null ? '—' : `${unit.areaM2} m²`}</dd></div>
+                  <div><dt>Area</dt><dd>{unit.areaM2 === null ? '—' : unit.areaM2 + ' m²'}</dd></div>
                   <div><dt>Status</dt><dd>{unit.status}</dd></div>
                 </dl>
                 <span className="open-label">Open dossier →</span>
@@ -181,6 +169,28 @@ export function PropertyUnits({
           </div>
         ) : null}
       </section>
+
+      {data ? (
+        <section className="panel page-panel" data-property-section="setup">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Setup</p>
+              <h2>Add Unit</h2>
+              <p className="muted">
+                Create canonical Property master data only when needed.
+              </p>
+            </div>
+            <span className="section-note">{data.property.code}</span>
+          </div>
+          <CreateUnitForm
+            api={api}
+            propertyId={propertyId}
+            onCreated={(created) =>
+              navigate(unitRoute(propertyId, created.id, asOf, 'spaces'))
+            }
+          />
+        </section>
+      ) : null}
     </>
   );
 }

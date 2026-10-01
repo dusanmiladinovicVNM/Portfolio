@@ -5003,7 +5003,76 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//p[contains(@class,'header-note') and contains(normalize-space(),'Reporting context remains 30.06.2025')]",
+    "//p[contains(@class,'header-note') and contains(normalize-space(),'Reporting and Unit navigation context remains 30.06.2025')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-property-command-center]//h2[normalize-space()='What needs attention']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-property-command-center]//article[@data-work-domain='inspection'][@data-work-attention='overdue'][.//strong[normalize-space()='INS-BRW-001']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-property-command-center]//article[@data-work-domain='maintenance'][.//strong[normalize-space()='ISS-PROPERTY-WORK-BRW']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-property-command-center]//article[@data-work-domain='occupancy'][.//strong[normalize-space()='TEN-WORK-BRW']]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-property-command-center] article[data-work-domain=\"inspection\"] a')?.getAttribute('href') || null;",
+    ),
+    '/properties/' +
+      propertyId +
+      '/units/' +
+      unitId +
+      '?tab=inspections&inspectionId=' +
+      inspectionId +
+      '&asOf=' +
+      operationalToday,
+    'Property command center keeps exact Inspection owner and current Work date',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-property-command-center] article[data-work-domain=\"maintenance\"] a')?.getAttribute('href') || null;",
+    ),
+    '/properties/' +
+      propertyId +
+      '?issueId=' +
+      workPropertyMaintenanceIssueId +
+      '&asOf=' +
+      operationalToday,
+    'Property command center keeps exact property-level Maintenance owner and current Work date',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-property-command-center] a[href^=\"/work?\"]')?.getAttribute('href') || null;",
+    ),
+    '/work?asOf=' + operationalToday,
+    'Property command center opens canonical Work using Swiss today',
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl + '/properties/' + propertyId + '?asOf=2025-06-30',
+    'Historical Property route remains unchanged while Daily Operations uses Swiss today',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return Array.from(document.querySelectorAll('[data-property-section]')).map((element) => element.dataset.propertySection).join(',');",
+    ),
+    'units,setup',
+    'Property hierarchy keeps current operations ahead of inventory and setup',
   );
 
   await clickXpath(
