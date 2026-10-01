@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
+  deriveServicePlanNextDue,
   listOperationalWorkQuery,
   type Actor,
   type OperationalWorkProjection,
   type WorkRepository,
 } from '../src/index.js';
 import {
+  asAssetId,
   asInspectionId,
   asLeaseAgreementId,
   asMaintenanceIssueId,
   asPropertyId,
+  asServicePlanId,
   asTenancyId,
   asUnitId,
   asUserId,
@@ -124,6 +127,30 @@ function projection(): OperationalWorkProjection {
         assignedUserIds: [],
       },
     ],
+    service: [
+      {
+        kind: 'service',
+        servicePlanId: asServicePlanId(
+          '58000000-0000-4000-8000-000000000001',
+        ),
+        assetId: asAssetId(
+          '59000000-0000-4000-8000-000000000001',
+        ),
+        assetCode: 'AST-LIFT',
+        assetName: 'Passenger lift',
+        planName: 'Quarterly lift inspection',
+        scheduleKind: 'recurring',
+        firstDueOn: '2026-10-01' as DateOnly,
+        intervalMonths: 3,
+        latestLinkedServicePerformedAt: '2026-07-10T06:30:00.000Z',
+        propertyId,
+        propertyCode: 'PROP-1',
+        propertyName: 'Property One',
+        unitId: null,
+        unitCode: null,
+        unitNumber: null,
+      },
+    ],
     occupancy: [
       {
         kind: 'occupancy',
@@ -154,8 +181,49 @@ function itemCodeForTest(
 ): string {
   if (item.kind === 'inspection') return item.inspectionCode;
   if (item.kind === 'maintenance') return item.issueCode;
+  if (item.kind === 'service') return item.assetCode + ':' + item.planName;
   return `${item.tenancyCode}:${item.reason}`;
 }
+
+describe('Service Work due derivation', () => {
+  const baseService = projection().service[0]!;
+
+  it('keeps first due when linked history predates the first scheduled occurrence', () => {
+    expect(deriveServicePlanNextDue(baseService)).toBe('2026-10-01');
+  });
+
+  it('uses Europe/Zurich occurrence date and advances only after a due occurrence exists', () => {
+    expect(
+      deriveServicePlanNextDue({
+        ...baseService,
+        latestLinkedServicePerformedAt: '2026-09-30T22:30:00.000Z',
+      }),
+    ).toBe('2027-01-01');
+  });
+
+  it('removes completed one-time policy from operational Work', () => {
+    expect(
+      deriveServicePlanNextDue({
+        ...baseService,
+        scheduleKind: 'one_time',
+        intervalMonths: null,
+        firstDueOn: '2026-10-01' as DateOnly,
+        latestLinkedServicePerformedAt: '2026-10-01T08:00:00.000Z',
+      }),
+    ).toBeNull();
+  });
+
+  it('keeps recurring cadence anchored across month-end clamping', () => {
+    expect(
+      deriveServicePlanNextDue({
+        ...baseService,
+        firstDueOn: '2026-01-31' as DateOnly,
+        intervalMonths: 1,
+        latestLinkedServicePerformedAt: '2026-02-28T10:00:00.000Z',
+      }),
+    ).toBe('2026-03-31');
+  });
+});
 
 describe('Operational Work query', () => {
   it('derives attention and a stable cross-domain order without persisting tasks', async () => {
@@ -176,6 +244,7 @@ describe('Operational Work query', () => {
       ['maintenance', 'urgent'],
       ['inspection', 'overdue'],
       ['inspection', 'today'],
+      ['service', 'upcoming'],
       ['occupancy', 'upcoming'],
       ['maintenance', 'normal'],
     ]);
@@ -237,6 +306,9 @@ describe('Operational Work query', () => {
     ]);
     expect(
       result.items.some((item) => item.kind === 'occupancy'),
+    ).toBe(false);
+    expect(
+      result.items.some((item) => item.kind === 'service'),
     ).toBe(false);
     expect(
       result.items.find((item) => item.kind === 'inspection'),
