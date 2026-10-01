@@ -180,6 +180,17 @@ export class PostgresPortfolioRepository implements PortfolioRepository {
     return rows.map(mapProperty);
   }
 
+  async listUnits(): Promise<readonly Unit[]> {
+    const rows = await this.sql<UnitRow[]>\`
+      select
+        id, property_id, code, unit_number, unit_type, floor,
+        area_m2, rooms, status, notes
+      from public.units
+      order by lower(code), id
+    \`;
+    return rows.map(mapUnit);
+  }
+
   async listUnitsByProperty(propertyId: PropertyId): Promise<readonly Unit[]> {
     const rows = await this.sql<UnitRow[]>`
       select
