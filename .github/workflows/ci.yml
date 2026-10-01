@@ -244,7 +244,7 @@ jobs:
       cancel-in-progress: false
     env:
       SUPABASE_PROJECT_REF: fiowxgamyjjcondlheqg
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_DEPLOY_ACCESS_TOKEN || secrets.SUPABASE_OBSERVABILITY_ACCESS_TOKEN }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_DEPLOY_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -271,7 +271,7 @@ jobs:
       - name: Require production release credentials
         run: |
           test -n "$SUPABASE_ACCESS_TOKEN" || {
-            echo "SUPABASE_DEPLOY_ACCESS_TOKEN or SUPABASE_OBSERVABILITY_ACCESS_TOKEN is required." >&2
+            echo "SUPABASE_DEPLOY_ACCESS_TOKEN is required." >&2
             exit 1
           }
           test -n "$VERCEL_TOKEN" || {
@@ -314,14 +314,10 @@ jobs:
 
       - name: Deploy and verify hosted API SHA
         if: steps.freshness.outputs.deploy == 'true'
-        env:
-          DEPLOY_REQUIRE_REMOTE_MAIN: "1"
         run: pnpm supabase:function:deploy
 
       - name: Deploy production web after API
         if: steps.freshness.outputs.deploy == 'true'
-        env:
-          DEPLOY_REQUIRE_REMOTE_MAIN: "1"
         run: pnpm vercel:production:deploy
 
       - name: Record skipped stale deployment
