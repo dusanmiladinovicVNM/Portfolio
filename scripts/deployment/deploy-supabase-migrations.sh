@@ -17,11 +17,6 @@ if [[ -z "${SUPABASE_ACCESS_TOKEN:-}" ]]; then
   exit 1
 fi
 
-if [[ -z "${SUPABASE_DB_PASSWORD:-}" ]]; then
-  echo "SUPABASE_DB_PASSWORD is required for non-interactive linked database migrations." >&2
-  exit 1
-fi
-
 ACTUAL_SHA="$(git rev-parse HEAD)"
 
 if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
