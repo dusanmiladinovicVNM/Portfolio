@@ -130,7 +130,7 @@ export function OperationalWorkQueue({
     staffRole === 'inspector'
       ? 'Your assigned Inspection and Maintenance work.'
       : staffRole === 'admin' || staffRole === 'manager'
-        ? 'Current operational work across Inspections, Maintenance and occupancy/contracts.'
+        ? 'Current operational work across Inspections, Maintenance, Service and occupancy/contracts.'
         : 'Current operational work across the Portfolio.';
 
   return (
@@ -198,6 +198,7 @@ export function OperationalWorkQueue({
                 <option value="all">All work</option>
                 <option value="inspection">Inspections</option>
                 <option value="maintenance">Maintenance</option>
+                <option value="service">Service</option>
                 <option value="occupancy">Occupancy & contracts</option>
               </select>
             </label>
@@ -303,6 +304,31 @@ export function OperationalWorkQueue({
                       </>
                     ) : null}
 
+                    {item.kind === 'service' ? (
+                      <>
+                        <div>
+                          <dt>Plan</dt>
+                          <dd>{item.planName}</dd>
+                        </div>
+                        <div>
+                          <dt>Asset</dt>
+                          <dd>{item.assetName}</dd>
+                        </div>
+                        <div>
+                          <dt>Schedule</dt>
+                          <dd>
+                            {item.scheduleKind === 'recurring'
+                              ? `Every ${item.intervalMonths} month${item.intervalMonths === 1 ? '' : 's'}`
+                              : 'One time'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Due</dt>
+                          <dd>{formatSwissDate(item.dueOn)}</dd>
+                        </div>
+                      </>
+                    ) : null}
+
                     {item.kind === 'occupancy' ? (
                       <>
                         <div>
@@ -337,7 +363,9 @@ export function OperationalWorkQueue({
                         ? formatDetailKey(item.inspectionStatus)
                         : item.kind === 'maintenance'
                           ? formatDetailKey(item.priority)
-                          : workOccupancyReasonLabel(item.reason)}
+                          : item.kind === 'service'
+                            ? formatSwissDate(item.dueOn)
+                            : workOccupancyReasonLabel(item.reason)}
                     </span>
 
                     <WorkspaceLink
