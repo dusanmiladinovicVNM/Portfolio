@@ -279,6 +279,43 @@ describe('Operational Work query', () => {
     expect(futureOccupancyIndex).toBeGreaterThan(normalMaintenanceIndex);
   });
 
+  it('keeps active unscheduled Inspection ahead of future-dated Work', async () => {
+    const base = projection();
+    const repository = new FakeWorkRepository({
+      ...base,
+      inspections: [
+        ...base.inspections,
+        {
+          ...base.inspections[0]!,
+          inspectionId: asInspectionId(
+            '40000000-0000-4000-8000-000000000099',
+          ),
+          inspectionCode: 'INS-UNSCHEDULED',
+          scheduledFor: null,
+        },
+      ],
+    });
+
+    const result = await listOperationalWorkQuery(
+      repository,
+      manager,
+      '2026-09-30',
+      '2026-10-01',
+    );
+
+    const unscheduledIndex = result.items.findIndex(
+      (item) =>
+        item.kind === 'inspection' &&
+        item.inspectionCode === 'INS-UNSCHEDULED',
+    );
+    const upcomingIndex = result.items.findIndex(
+      (item) => item.attention === 'upcoming',
+    );
+
+    expect(unscheduledIndex).toBeGreaterThanOrEqual(0);
+    expect(upcomingIndex).toBeGreaterThan(unscheduledIndex);
+  });
+
   it('uses queue date only for attention without rewinding the canonical Work set', async () => {
     const repository = new FakeWorkRepository(projection());
 
