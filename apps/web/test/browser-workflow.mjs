@@ -730,6 +730,35 @@ try {
   await typeXpath(
     sessionId,
     "//input[@aria-label='Find Property or Unit']",
+    'INS-BRW-001',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-portfolio-discovery]//*[@data-discovery-kind='work'][@data-work-domain='inspection']//a[.//strong[normalize-space()='INS-BRW-001']]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-discovery-kind=\"work\"][data-work-domain=\"inspection\"] a')?.getAttribute('href') || null;",
+    ),
+    '/properties/' +
+      propertyId +
+      '/units/' +
+      unitId +
+      '?tab=inspections&inspectionId=' +
+      inspectionId +
+      '&asOf=' +
+      operationalToday,
+    'Find opens active Inspection through canonical Work routing and Swiss operational date',
+  );
+  await clearXpath(
+    sessionId,
+    "//input[@aria-label='Find Property or Unit']",
+  );
+  await typeXpath(
+    sessionId,
+    "//input[@aria-label='Find Property or Unit']",
     'UNIT-BRW',
   );
   await waitForElement(
