@@ -24,11 +24,6 @@ interface UnitSetupReadinessProps {
   readonly navigate: NavigateWorkspace;
 }
 
-interface SetupInventory {
-  readonly spaceCount: number;
-  readonly activeAccessItemCount: number;
-}
-
 interface SetupStep {
   readonly tab: DossierTab;
   readonly label: string;
@@ -45,43 +40,55 @@ export function UnitSetupReadiness({
   overview,
   navigate,
 }: UnitSetupReadinessProps) {
-  const [inventory, setInventory] = useState<SetupInventory | null>(null);
-  const [readError, setReadError] = useState<string | null>(null);
+  const [spaceCount, setSpaceCount] = useState<number | null>(null);
+  const [activeAccessItemCount, setActiveAccessItemCount] =
+    useState<number | null>(null);
+  const [spaceError, setSpaceError] = useState<string | null>(null);
+  const [accessItemError, setAccessItemError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
-    setInventory(null);
-    setReadError(null);
+    setSpaceCount(null);
+    setActiveAccessItemCount(null);
+    setSpaceError(null);
+    setAccessItemError(null);
 
-    void Promise.all([
-      api.get(unitSpacesPath(unitId), spaceListResponseSchema, {
+    void api
+      .get(unitSpacesPath(unitId), spaceListResponseSchema, {
         signal: controller.signal,
-      }),
-      api.get(unitAccessItemsPath(unitId), accessItemListResponseSchema, {
-        signal: controller.signal,
-      }),
-    ])
-      .then(([spaceResponse, accessResponse]) => {
+      })
+      .then((response) => {
         if (controller.signal.aborted) return;
-        assertUnitSpacesOwner(unitId, spaceResponse.items);
-        assertUnitAccessItemsOwner(
-          propertyId,
-          unitId,
-          accessResponse.items,
-        );
-        setInventory({
-          spaceCount: spaceResponse.items.length,
-          activeAccessItemCount: accessResponse.items.filter(
-            (entry) => entry.item.status === 'active',
-          ).length,
-        });
+        assertUnitSpacesOwner(unitId, response.items);
+        setSpaceCount(response.items.length);
       })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
-        setReadError(
+        setSpaceError(
           cause instanceof Error
             ? cause.message
-            : 'Physical setup inventory could not be loaded.',
+            : 'Spaces inventory could not be loaded.',
+        );
+      });
+
+    void api
+      .get(unitAccessItemsPath(unitId), accessItemListResponseSchema, {
+        signal: controller.signal,
+      })
+      .then((response) => {
+        if (controller.signal.aborted) return;
+        assertUnitAccessItemsOwner(propertyId, unitId, response.items);
+        setActiveAccessItemCount(
+          response.items.filter((entry) => entry.item.status === 'active')
+            .length,
+        );
+      })
+      .catch((cause: unknown) => {
+        if (controller.signal.aborted) return;
+        setAccessItemError(
+          cause instanceof Error
+            ? cause.message
+            : 'Keys inventory could not be loaded.',
         );
       });
 
@@ -92,10 +99,7 @@ export function UnitSetupReadiness({
     {
       tab: 'spaces',
       label: 'Spaces',
-      value:
-        inventory === null
-          ? '—'
-          : `${inventory.spaceCount} defined`,
+      value: spaceCount === null ? '—' : `${spaceCount} defined`,
       detail: 'Define rooms and physical spaces first.',
       sequence: '1',
     },
@@ -117,9 +121,9 @@ export function UnitSetupReadiness({
       tab: 'keys',
       label: 'Keys',
       value:
-        inventory === null
+        activeAccessItemCount === null
           ? '—'
-          : `${inventory.activeAccessItemCount} active`,
+          : `${activeAccessItemCount} active`,
       detail: 'Record access inventory before custody handover.',
       sequence: '3',
     },
@@ -132,7 +136,7 @@ export function UnitSetupReadiness({
     },
   ];
 
-  const spacesMissing = inventory?.spaceCount === 0;
+  const spacesMissing = spaceCount === 0;
 
   return (
     <section
@@ -154,9 +158,14 @@ export function UnitSetupReadiness({
         </span>
       </div>
 
-      {readError ? (
+      {spaceError ? (
         <p className="form-error" role="alert">
-          Setup inventory: {readError}
+          Spaces inventory: {spaceError}
+        </p>
+      ) : null}
+      {accessItemError ? (
+        <p className="form-error" role="alert">
+          Keys inventory: {accessItemError}
         </p>
       ) : null}
 
