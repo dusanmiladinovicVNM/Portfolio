@@ -90,6 +90,8 @@ const setupOvenMaintenanceIssueId = 'b1000000-0000-4000-8000-000000000100';
 const setupSmokeMaintenanceIssueId = 'b1000000-0000-4000-8000-000000000101';
 const workPropertyMaintenanceIssueId =
   'aa100000-0000-4000-8000-000000000001';
+const propertyServiceAssetId =
+  'aa300000-0000-4000-8000-000000000001';
 const workPropertyMaintenanceWorkOrderId =
   'aa100000-0000-4000-8000-000000000002';
 const setupMaintenanceWorkOrderId = 'b1000000-0000-4000-8000-000000000046';
@@ -5357,8 +5359,60 @@ try {
       sessionId,
       "return Array.from(document.querySelectorAll('[data-property-section]')).map((element) => element.dataset.propertySection).join(',');",
     ),
-    'units,setup',
-    'Property hierarchy keeps current operations ahead of inventory and setup',
+    'units,assets,setup',
+    'Property hierarchy keeps Units ahead of direct Property Assets and setup',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-property-assets]//a[.//span[normalize-space()='AST-PROPERTY-LIFT-BRW']][.//h3[normalize-space()='Passenger lift']]",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-property-assets]//*[normalize-space()='AST-UNIT-SHADOW-BRW']",
+    ),
+    false,
+    'Property Asset register excludes Unit-owned Asset inventory',
+  );
+  await clickXpath(
+    sessionId,
+    "//*[@data-property-assets]//a[.//span[normalize-space()='AST-PROPERTY-LIFT-BRW']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-property-asset-service]//h2[normalize-space()='AST-PROPERTY-LIFT-BRW · Passenger lift']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-property-asset-service]//article[contains(@class,'asset-service-card')][.//strong[normalize-space()='Quarterly lift inspection']][contains(normalize-space(),'due 01.10.2026')][contains(normalize-space(),'every 3 months')]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + propertyId +
+      '?assetId=' + propertyServiceAssetId +
+      '&asOf=2025-06-30',
+    'Property Asset service surface has an exact canonical deep-link',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-property-command-center]",
+    ),
+    false,
+    'Selected Property Asset replaces command-center presentation without changing owner',
+  );
+  await navigateWithPopState(
+    sessionId,
+    '/properties/' + propertyId + '?asOf=2025-06-30',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-property-command-center]",
   );
 
   await clickXpath(
