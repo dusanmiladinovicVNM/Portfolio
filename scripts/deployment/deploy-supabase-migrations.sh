@@ -25,10 +25,14 @@ if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
   exit 1
 fi
 
-if [[ "${DEPLOY_REQUIRE_REMOTE_MAIN:-0}" == "1" ]]; then
-  DEPLOY_EXPECTED_SHA="$ACTUAL_SHA" \
-    bash "$ROOT_DIR/scripts/deployment/assert-current-main.sh"
-fi
+run_current_main_fence() {
+  if [[ -n "${DEPLOY_CURRENT_MAIN_FENCE_BIN:-}" ]]; then
+    DEPLOY_EXPECTED_SHA="$ACTUAL_SHA" "$DEPLOY_CURRENT_MAIN_FENCE_BIN"
+  else
+    DEPLOY_EXPECTED_SHA="$ACTUAL_SHA" \
+      bash "$ROOT_DIR/scripts/deployment/assert-current-main.sh"
+  fi
+}
 
 run_supabase() {
   if [[ -n "${SUPABASE_CLI_BIN:-}" ]]; then
@@ -39,6 +43,11 @@ run_supabase() {
 }
 
 run_supabase link --project-ref "$PROJECT_REF"
+
+if [[ "${DEPLOY_REQUIRE_REMOTE_MAIN:-0}" == "1" ]]; then
+  run_current_main_fence
+fi
+
 run_supabase db push --linked --yes
 
 MIGRATION_LIST="$(run_supabase migration list --linked)"
