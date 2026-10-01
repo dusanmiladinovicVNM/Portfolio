@@ -716,7 +716,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-portfolio-discovery]//a[@data-discovery-kind='property'][.//strong[normalize-space()='Browser Test Property']][contains(normalize-space(),'PROP-BRW')][contains(normalize-space(),'Browser Street 1')]",
+    "//*[@data-portfolio-discovery]//*[@data-discovery-kind='property']//a[.//strong[normalize-space()='Browser Test Property']][contains(normalize-space(),'PROP-BRW')][contains(normalize-space(),'Browser Street 1')]",
   );
   assertEqual(
     await currentUrl(sessionId),
@@ -735,7 +735,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-portfolio-discovery]//a[@data-discovery-kind='unit'][.//strong[normalize-space()='Unit 1A']][contains(normalize-space(),'PROP-BRW')][contains(normalize-space(),'Browser Test Property')]",
+    "//*[@data-portfolio-discovery]//*[@data-discovery-kind='unit']//a[.//strong[normalize-space()='Unit 1A']][contains(normalize-space(),'PROP-BRW')][contains(normalize-space(),'Browser Test Property')]",
   );
   assertEqual(
     await executeScript(
@@ -749,7 +749,7 @@ try {
   );
   await clickXpath(
     sessionId,
-    "//*[@data-portfolio-discovery]//a[@data-discovery-kind='unit'][.//strong[normalize-space()='Unit 1A']]",
+    "//*[@data-portfolio-discovery]//*[@data-discovery-kind='unit']//a[.//strong[normalize-space()='Unit 1A']]",
   );
   await waitForElement(sessionId, 'xpath', "//h1[normalize-space()='Unit 1A']");
   assertEqual(
