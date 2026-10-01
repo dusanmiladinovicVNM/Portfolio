@@ -12,6 +12,7 @@ import {
 const propertyId = '11111111-1111-4111-8111-111111111111';
 const unitId = '22222222-2222-4222-8222-222222222222';
 const otherUnitId = '33333333-3333-4333-8333-333333333333';
+const otherPropertyId = '99999999-9999-4999-8999-999999999999';
 const assetId = '44444444-4444-4444-8444-444444444444';
 const officeSpaceId = '55555555-5555-4555-8555-555555555555';
 const technicalSpaceId = '66666666-6666-4666-8666-666666666666';
@@ -142,6 +143,45 @@ describe('Maintenance scope presentation', () => {
         spaces,
       ),
     ).toBe('Outside this Unit');
+  });
+
+  it('keeps a property-level historical Issue readable after legitimate Asset moves', () => {
+    const propertyIssue = issue({
+      unitId: null,
+      spaceId: null,
+    });
+
+    expect(maintenanceIssueSpaceScopeLabel(propertyIssue, [])).toBe(
+      'Asset-only scope',
+    );
+    expect(
+      maintenanceAssetCurrentPlacementLabel(
+        propertyIssue,
+        asset({ unitId, spaceId: null, version: 2 }),
+        [],
+      ),
+    ).toBe('Unit placement');
+
+    expect(
+      maintenanceAssetCurrentPlacementLabel(
+        propertyIssue,
+        asset({
+          propertyId: otherPropertyId,
+          unitId: otherUnitId,
+          spaceId: null,
+          version: 3,
+        }),
+        [],
+      ),
+    ).toBe('Outside historical Property');
+  });
+
+  it('surfaces unavailable current placement without hiding the historical Issue', () => {
+    const currentIssue = issue();
+
+    expect(
+      maintenanceAssetCurrentPlacementLabel(currentIssue, null, spaces),
+    ).toBe('Current placement unavailable');
   });
 
   it('keeps non-Asset Unit scope unchanged', () => {
