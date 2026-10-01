@@ -4,10 +4,12 @@ import type {
   WorkRepository,
 } from '@portfolio/application';
 import {
+  asAssetId,
   asInspectionId,
   asLeaseAgreementId,
   asMaintenanceIssueId,
   asPropertyId,
+  asServicePlanId,
   asTenancyId,
   asUnitId,
   asUserId,
@@ -15,6 +17,7 @@ import {
   type InspectionStatus,
   type InspectionType,
   type MaintenanceIssuePriority,
+  type ServicePlanKind,
   type TenancyStatus,
 } from '@portfolio/domain';
 
@@ -52,6 +55,24 @@ interface MaintenanceWorkRow {
   unit_number: string | null;
   active_work_order_count: string | number | bigint;
   assigned_user_ids: string[];
+}
+
+interface ServiceWorkRow {
+  service_plan_id: string;
+  asset_id: string;
+  asset_code: string;
+  asset_name: string;
+  plan_name: string;
+  schedule_kind: ServicePlanKind;
+  first_due_on: DateValue;
+  interval_months: number | null;
+  latest_linked_service_performed_at: string | Date | null;
+  property_id: string;
+  property_code: string;
+  property_name: string;
+  unit_id: string | null;
+  unit_code: string | null;
+  unit_number: string | null;
 }
 
 interface OccupancyWorkRow {
@@ -172,6 +193,55 @@ export class PostgresWorkRepository implements WorkRepository {
             mi.reported_at,
             lower(mi.code),
             mi.id
+        `;
+
+        const serviceRows = await tx<ServiceWorkRow[]>`
+          select
+            sp.id as service_plan_id,
+            a.id as asset_id,
+            a.code as asset_code,
+            a.name as asset_name,
+            sp.name as plan_name,
+            sp.schedule_kind,
+            sp.first_due_on,
+            sp.interval_months,
+            max(se.performed_at) as latest_linked_service_performed_at,
+            p.id as property_id,
+            p.code as property_code,
+            p.name as property_name,
+            u.id as unit_id,
+            u.code as unit_code,
+            u.unit_number
+          from public.asset_service_plans sp
+          join public.assets a on a.id = sp.asset_id
+          join public.properties p on p.id = a.property_id
+          left join public.units u on u.id = a.unit_id
+          left join public.asset_service_events se
+            on se.service_plan_id = sp.id
+          where sp.status = 'active'
+            and a.status in ('active', 'inactive')
+          group by
+            sp.id,
+            sp.name,
+            sp.schedule_kind,
+            sp.first_due_on,
+            sp.interval_months,
+            a.id,
+            a.code,
+            a.name,
+            p.id,
+            p.code,
+            p.name,
+            u.id,
+            u.code,
+            u.unit_number
+          order by
+            sp.first_due_on,
+            lower(p.code),
+            lower(coalesce(u.code, '')),
+            lower(a.code),
+            lower(sp.name),
+            sp.id
         `;
 
         const occupancyRows = await tx<OccupancyWorkRow[]>`
@@ -338,6 +408,27 @@ export class PostgresWorkRepository implements WorkRepository {
             unitNumber: row.unit_number,
             activeWorkOrderCount: Number(row.active_work_order_count),
             assignedUserIds: row.assigned_user_ids.map(asUserId),
+          })),
+          service: serviceRows.map((row) => ({
+            kind: 'service' as const,
+            servicePlanId: asServicePlanId(row.service_plan_id),
+            assetId: asAssetId(row.asset_id),
+            assetCode: row.asset_code,
+            assetName: row.asset_name,
+            planName: row.plan_name,
+            scheduleKind: row.schedule_kind,
+            firstDueOn: dateOnly(row.first_due_on)!,
+            intervalMonths: row.interval_months,
+            latestLinkedServicePerformedAt:
+              row.latest_linked_service_performed_at === null
+                ? null
+                : instant(row.latest_linked_service_performed_at),
+            propertyId: asPropertyId(row.property_id),
+            propertyCode: row.property_code,
+            propertyName: row.property_name,
+            unitId: row.unit_id === null ? null : asUnitId(row.unit_id),
+            unitCode: row.unit_code,
+            unitNumber: row.unit_number,
           })),
           occupancy: occupancyRows.map((row) => ({
             kind: 'occupancy' as const,
