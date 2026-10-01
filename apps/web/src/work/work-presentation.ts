@@ -59,6 +59,14 @@ export function workItemSummary(
     return item.title + ' · ' + formatDetailKey(item.priority) + ' priority';
   }
 
+  if (item.kind === 'service') {
+    return (
+      item.planName +
+      ' · due ' +
+      formatSwissDate(item.dueOn)
+    );
+  }
+
   const due = item.dueDate
     ? ' · due ' + formatSwissDate(item.dueDate)
     : '';
@@ -73,6 +81,8 @@ export function workDomainLabel(
       return 'Inspection';
     case 'maintenance':
       return 'Maintenance';
+    case 'service':
+      return 'Service';
     case 'occupancy':
       return 'Occupancy & contract';
   }
@@ -97,6 +107,8 @@ export function workItemKey(item: OperationalWorkItemResponse): string {
       return `inspection:${item.inspectionId}`;
     case 'maintenance':
       return `maintenance:${item.issueId}`;
+    case 'service':
+      return `service:${item.servicePlanId}`;
     case 'occupancy':
       return `occupancy:${item.reason}:${item.tenancyId}:${item.agreementId ?? 'none'}`;
   }
@@ -108,6 +120,8 @@ export function workItemCode(item: OperationalWorkItemResponse): string {
       return item.inspectionCode;
     case 'maintenance':
       return item.issueCode;
+    case 'service':
+      return item.assetCode;
     case 'occupancy':
       return item.tenancyCode;
   }
@@ -121,6 +135,8 @@ export function workItemActionLabel(
       return 'Open Inspection';
     case 'maintenance':
       return 'Open Maintenance';
+    case 'service':
+      return 'Open Service';
     case 'occupancy':
       return item.reason === 'move_out'
         ? 'Open Tenancy'
@@ -153,6 +169,20 @@ export function workItemRoute(
           asOf,
           'maintenance',
           { maintenanceIssueId: item.issueId },
+        );
+  }
+
+  if (item.kind === 'service') {
+    return item.unitId === null
+      ? propertyRoute(item.propertyId, asOf, {
+          assetId: item.assetId,
+        })
+      : unitRoute(
+          item.propertyId,
+          item.unitId,
+          asOf,
+          'assets',
+          { assetId: item.assetId },
         );
   }
 
