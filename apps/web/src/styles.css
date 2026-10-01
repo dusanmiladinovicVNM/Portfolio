@@ -3739,3 +3739,13 @@ summary:focus-visible {
     animation-iteration-count: 1 !important;
   }
 }
+
+
+@media (max-width: 520px) {
+  .discovery-result-list,
+  .asset-admin-grid,
+  .meter-grid,
+  .meter-admin-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
