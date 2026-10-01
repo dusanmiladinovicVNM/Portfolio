@@ -275,23 +275,23 @@ export function PortfolioDiscovery({
                 <h3 id="discovery-properties">Properties</h3>
                 <div className="discovery-result-list">
                   {search.properties.map((property) => (
-                    <WorkspaceLink
-                      className="discovery-result"
-                      data-discovery-kind="property"
-                      key={property.id}
-                      navigate={navigate}
-                      route={propertyRoute(property.id, asOf)}
-                    >
-                      <span className="eyebrow">
-                        Property · {property.code}
-                      </span>
-                      <strong>{property.name}</strong>
-                      <span>{propertyAddress(property)}</span>
-                      <small>
-                        {formatDetailKey(property.propertyType)} ·{' '}
-                        {formatDetailKey(property.status)}
-                      </small>
-                    </WorkspaceLink>
+                    <article data-discovery-kind="property" key={property.id}>
+                      <WorkspaceLink
+                        className="discovery-result"
+                        navigate={navigate}
+                        route={propertyRoute(property.id, asOf)}
+                      >
+                        <span className="eyebrow">
+                          Property · {property.code}
+                        </span>
+                        <strong>{property.name}</strong>
+                        <span>{propertyAddress(property)}</span>
+                        <small>
+                          {formatDetailKey(property.propertyType)} ·{' '}
+                          {formatDetailKey(property.status)}
+                        </small>
+                      </WorkspaceLink>
+                    </article>
                   ))}
                 </div>
               </section>
@@ -308,29 +308,29 @@ export function PortfolioDiscovery({
                     const property = data.propertyById.get(unit.propertyId)!;
 
                     return (
-                      <WorkspaceLink
-                        className="discovery-result"
-                        data-discovery-kind="unit"
-                        key={unit.id}
-                        navigate={navigate}
-                        route={unitRoute(
-                          unit.propertyId,
-                          unit.id,
-                          asOf,
-                          'overview',
-                        )}
-                      >
-                        <span className="eyebrow">Unit · {unit.code}</span>
-                        <strong>Unit {unit.unitNumber}</strong>
-                        <span>
-                          {property.code} · {property.name}
-                        </span>
-                        <small>
-                          {formatDetailKey(unit.unitType)}
-                          {unit.floor ? ' · floor ' + unit.floor : ''}
-                          {' · ' + formatDetailKey(unit.status)}
-                        </small>
-                      </WorkspaceLink>
+                      <article data-discovery-kind="unit" key={unit.id}>
+                        <WorkspaceLink
+                          className="discovery-result"
+                          navigate={navigate}
+                          route={unitRoute(
+                            unit.propertyId,
+                            unit.id,
+                            asOf,
+                            'overview',
+                          )}
+                        >
+                          <span className="eyebrow">Unit · {unit.code}</span>
+                          <strong>Unit {unit.unitNumber}</strong>
+                          <span>
+                            {property.code} · {property.name}
+                          </span>
+                          <small>
+                            {formatDetailKey(unit.unitType)}
+                            {unit.floor ? ' · floor ' + unit.floor : ''}
+                            {' · ' + formatDetailKey(unit.status)}
+                          </small>
+                        </WorkspaceLink>
+                      </article>
                     );
                   })}
                 </div>
