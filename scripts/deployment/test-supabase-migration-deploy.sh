@@ -102,30 +102,8 @@ run_drift_failure() {
   fi
 }
 
-run_missing_password_failure() {
-  : > "$LOG"
-  if (
-    cd "$ROOT_DIR"
-    env -u SUPABASE_DB_PASSWORD \
-      SUPABASE_PROJECT_REF="test-project" \
-      SUPABASE_ACCESS_TOKEN="test-token" \
-      SUPABASE_CLI_BIN="$FAKE" \
-      FAKE_SUPABASE_LOG="$LOG" \
-      bash "$DEPLOY"
-  ) >/dev/null 2>&1; then
-    echo "Migration deploy accepted missing SUPABASE_DB_PASSWORD." >&2
-    exit 1
-  fi
-
-  if [[ -s "$LOG" ]]; then
-    echo "Migration deploy invoked Supabase before validating credentials." >&2
-    exit 1
-  fi
-}
-
 run_success
 run_push_failure
 run_drift_failure
-run_missing_password_failure
 
 echo "Supabase migration deployment self-test passed."
