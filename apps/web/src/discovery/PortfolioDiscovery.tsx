@@ -102,6 +102,18 @@ function workSearchValues(
     ];
   }
 
+  if (item.kind === 'service') {
+    return [
+      ...owner,
+      item.assetCode,
+      item.assetName,
+      item.planName,
+      item.scheduleKind,
+      item.dueOn,
+      item.attention,
+    ];
+  }
+
   return [
     ...owner,
     item.tenancyCode,
