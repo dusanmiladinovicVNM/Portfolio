@@ -1,4 +1,5 @@
 import type { StaffResponse } from '@portfolio/contracts';
+import type { ReactNode } from 'react';
 import { WorkspaceLink } from './WorkspaceLink.js';
 import {
   dashboardRoute,
@@ -30,7 +31,7 @@ function NavGroup({
 }: {
   readonly id: string;
   readonly label: string;
-  readonly children: React.ReactNode;
+  readonly children: ReactNode;
 }) {
   return (
     <section
