@@ -1,4 +1,5 @@
 import type {
+  AssetId,
   DateOnly,
   InspectionId,
   InspectionStatus,
@@ -7,6 +8,8 @@ import type {
   MaintenanceIssueId,
   MaintenanceIssuePriority,
   PropertyId,
+  ServicePlanId,
+  ServicePlanKind,
   TenancyId,
   TenancyStatus,
   UnitId,
@@ -49,6 +52,25 @@ export interface WorkMaintenanceProjection {
   readonly assignedUserIds: readonly UserId[];
 }
 
+export interface WorkServiceProjection {
+  readonly kind: 'service';
+  readonly servicePlanId: ServicePlanId;
+  readonly assetId: AssetId;
+  readonly assetCode: string;
+  readonly assetName: string;
+  readonly planName: string;
+  readonly scheduleKind: ServicePlanKind;
+  readonly firstDueOn: DateOnly;
+  readonly intervalMonths: number | null;
+  readonly latestLinkedServicePerformedAt: string | null;
+  readonly propertyId: PropertyId;
+  readonly propertyCode: string;
+  readonly propertyName: string;
+  readonly unitId: UnitId | null;
+  readonly unitCode: string | null;
+  readonly unitNumber: string | null;
+}
+
 export type WorkOccupancyReason =
   | 'contract_missing'
   | 'contract_draft'
@@ -74,6 +96,7 @@ export interface WorkOccupancyProjection {
 export interface OperationalWorkProjection {
   readonly inspections: readonly WorkInspectionProjection[];
   readonly maintenance: readonly WorkMaintenanceProjection[];
+  readonly service: readonly WorkServiceProjection[];
   readonly occupancy: readonly WorkOccupancyProjection[];
 }
 
