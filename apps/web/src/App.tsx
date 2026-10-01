@@ -277,6 +277,7 @@ function AuthenticatedShell({
             key={workspaceRouteOwnerKey(route)}
             api={api}
             asOf={route.asOf}
+            assetId={route.assetId}
             maintenanceIssueId={route.maintenanceIssueId}
             maintenanceWorkOrderId={route.maintenanceWorkOrderId}
             navigate={navigate}

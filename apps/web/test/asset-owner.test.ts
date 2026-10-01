@@ -16,6 +16,7 @@ import {
   assertCreatedAsset,
   assertAssetDestinationSpacesOwner,
   assertAssetDestinationUnitsOwner,
+  assertPropertyAssetsOwner,
   assertUnitAssetsOwner,
 } from '../src/dossier/asset-owner.js';
 
@@ -141,6 +142,21 @@ describe('Asset browser ownership guards', () => {
     ).toThrow('another Asset');
   });
 
+
+  it('accepts mixed Property inventory but rejects another Property owner', () => {
+    expect(() =>
+      assertPropertyAssetsOwner(propertyId, [
+        asset({ unitId: null }),
+        asset({ id: successorId, unitId }),
+      ]),
+    ).not.toThrow();
+
+    expect(() =>
+      assertPropertyAssetsOwner(propertyId, [
+        asset({ propertyId: successorId, unitId: null }),
+      ]),
+    ).toThrow('another Property');
+  });
 
   it('rejects Unit Asset lists containing another current Unit owner', () => {
     expect(() => assertUnitAssetsOwner(unitId, [asset()])).not.toThrow();

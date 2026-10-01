@@ -395,6 +395,49 @@ describe('workspace URL navigation', () => {
     );
   });
 
+  it('deep-links one direct Property Asset without inventing a Unit owner', () => {
+    const selected = propertyRoute(
+      propertyId,
+      '2025-06-30',
+      { assetId },
+    );
+
+    expect(workspaceRouteHref(selected)).toBe(
+      `/properties/${propertyId}?assetId=${assetId}&asOf=2025-06-30`,
+    );
+
+    expect(
+      parseWorkspaceLocation(
+        `/properties/${propertyId}`,
+        `?assetId=${assetId}&asOf=2025-06-30`,
+        '2026-09-21',
+      ),
+    ).toEqual({
+      kind: 'property',
+      propertyId,
+      assetId,
+      asOf: '2025-06-30',
+    });
+  });
+
+  it('canonicalizes conflicting Property Asset and Maintenance selections to Asset', () => {
+    const route = propertyRoute(propertyId, '2025-06-30', {
+      assetId,
+      maintenanceIssueId,
+      maintenanceWorkOrderId,
+    });
+
+    expect(route).toEqual({
+      kind: 'property',
+      propertyId,
+      assetId,
+      asOf: '2025-06-30',
+    });
+    expect(workspaceRouteHref(route)).toBe(
+      `/properties/${propertyId}?assetId=${assetId}&asOf=2025-06-30`,
+    );
+  });
+
   it('deep-links property-level Maintenance without inventing a Unit owner', () => {
     const selected = propertyRoute(
       propertyId,

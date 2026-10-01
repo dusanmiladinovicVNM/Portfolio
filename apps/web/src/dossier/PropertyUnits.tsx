@@ -12,6 +12,7 @@ import {
 import type { PortfolioApi } from '../api/portfolio-api.js';
 import { WorkspaceLink } from '../navigation/WorkspaceLink.js';
 import { CreateUnitForm } from './CreateUnitForm.js';
+import { PropertyAssets } from './PropertyAssets.js';
 import { PropertyCommandCenter } from './PropertyCommandCenter.js';
 import { assertPropertyUnitsOwner } from './route-owner.js';
 import {
@@ -29,6 +30,7 @@ interface PropertyUnitsProps {
   readonly api: PortfolioApi;
   readonly propertyId: string;
   readonly asOf: string;
+  readonly assetId?: string | undefined;
   readonly maintenanceIssueId?: string | undefined;
   readonly maintenanceWorkOrderId?: string | undefined;
   readonly navigate: NavigateWorkspace;
@@ -44,6 +46,7 @@ export function PropertyUnits({
   api,
   propertyId,
   asOf,
+  assetId,
   maintenanceIssueId,
   maintenanceWorkOrderId,
   navigate,
@@ -113,6 +116,15 @@ export function PropertyUnits({
           setNavigationBlocker={setNavigationBlocker}
           workOrderId={maintenanceWorkOrderId}
         />
+      ) : assetId ? (
+        <PropertyAssets
+          api={api}
+          asOf={asOf}
+          assetId={assetId}
+          navigate={navigate}
+          propertyId={propertyId}
+          setNavigationBlocker={setNavigationBlocker}
+        />
       ) : (
         <PropertyCommandCenter
           api={api}
@@ -170,7 +182,17 @@ export function PropertyUnits({
         ) : null}
       </section>
 
-      {data ? (
+      {!maintenanceIssueId && !assetId ? (
+        <PropertyAssets
+          api={api}
+          asOf={asOf}
+          navigate={navigate}
+          propertyId={propertyId}
+          setNavigationBlocker={setNavigationBlocker}
+        />
+      ) : null}
+
+            {data ? (
         <section className="panel page-panel" data-property-section="setup">
           <div className="section-heading">
             <div>
