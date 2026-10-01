@@ -100,21 +100,21 @@ export function UnitSetupReadiness({
       tab: 'spaces',
       label: 'Spaces',
       value: spaceCount === null ? '—' : `${spaceCount} defined`,
-      detail: 'Define rooms and physical spaces first.',
+      detail: 'Confirm rooms and physical spaces first.',
       sequence: '1',
     },
     {
       tab: 'assets',
       label: 'Assets',
       value: `${overview.currentOperations.locatedAssetCount} located`,
-      detail: 'Place equipment in the current Unit structure.',
+      detail: 'Review equipment placement in the current Unit structure.',
       sequence: '2',
     },
     {
       tab: 'meters',
       label: 'Meters',
       value: `${overview.currentOperations.activeMeterCount} active`,
-      detail: 'Record active utility meters and readings.',
+      detail: 'Review active utility meters and readings.',
       sequence: '2',
     },
     {
@@ -124,7 +124,7 @@ export function UnitSetupReadiness({
         activeAccessItemCount === null
           ? '—'
           : `${activeAccessItemCount} active`,
-      detail: 'Record access inventory before custody handover.',
+      detail: 'Review access inventory before custody handover.',
       sequence: '3',
     },
     {
@@ -174,7 +174,7 @@ export function UnitSetupReadiness({
           <div>
             <strong>Start with Spaces</strong>
             <span>
-              Define the Unit structure before locating equipment, access
+              Confirm the Unit structure before locating equipment, access
               items, and room-aware field work.
             </span>
           </div>
@@ -183,7 +183,7 @@ export function UnitSetupReadiness({
             navigate={navigate}
             route={unitRoute(propertyId, unitId, asOf, 'spaces')}
           >
-            Define Spaces
+            Open Spaces
           </WorkspaceLink>
         </div>
       ) : null}
@@ -195,12 +195,13 @@ export function UnitSetupReadiness({
         {steps.map((step) => (
           <WorkspaceLink
             className="unit-setup-readiness-step"
-            data-setup-tab={step.tab}
             key={step.tab}
             navigate={navigate}
             route={unitRoute(propertyId, unitId, asOf, step.tab)}
           >
-            <span>Step {step.sequence} · {step.label}</span>
+            <span data-setup-tab={step.tab}>
+              Step {step.sequence} · {step.label}
+            </span>
             <strong>{step.value}</strong>
             <small>{step.detail}</small>
           </WorkspaceLink>
