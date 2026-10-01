@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  asAssetId,
   asInspectionId,
   asPropertyId,
+  asServicePlanId,
   asUnitId,
   asUserId,
   type DateOnly,
@@ -62,6 +64,32 @@ describe('Work HTTP route', () => {
         },
       ],
       maintenance: [],
+      service: [
+        {
+          kind: 'service',
+          servicePlanId: asServicePlanId(
+            '50000000-0000-4000-8000-000000000001',
+          ),
+          assetId: asAssetId(
+            '60000000-0000-4000-8000-000000000001',
+          ),
+          assetCode: 'AST-LIFT',
+          assetName: 'Passenger lift',
+          planName: 'Quarterly lift inspection',
+          scheduleKind: 'recurring',
+          firstDueOn: '2026-10-01' as DateOnly,
+          intervalMonths: 3,
+          latestLinkedServicePerformedAt: '2026-07-10T06:30:00.000Z',
+          propertyId: asPropertyId(
+            '30000000-0000-4000-8000-000000000001',
+          ),
+          propertyCode: 'PROP-WORK',
+          propertyName: 'Work Property',
+          unitId: null,
+          unitCode: null,
+          unitNumber: null,
+        },
+      ],
       occupancy: [],
     };
 
@@ -83,6 +111,13 @@ describe('Work HTTP route', () => {
             kind: 'inspection',
             attention: 'today',
             inspectionCode: 'INS-WORK-HTTP',
+          }),
+          expect.objectContaining({
+            kind: 'service',
+            attention: 'upcoming',
+            assetCode: 'AST-LIFT',
+            planName: 'Quarterly lift inspection',
+            dueOn: '2026-10-01',
           }),
         ],
       },

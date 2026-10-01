@@ -70,7 +70,27 @@ Ended and cancelled plans are terminal.
 
 A new or reactivated active ServicePlan requires its Asset to be `active` or `inactive`. `retired` and `replaced` Assets are not operationally eligible for future service policy. Asset replacement does not mutate ServicePlan state across bounded contexts; operational applicability is derived from both the Plan status and current Asset lifecycle.
 
-No mutable "next due" fact is stored in this PR. Later reporting/reminder logic may derive due state from the plan plus ServiceEvents.
+No mutable "next due" fact is stored. Operational Work derives due state from
+the current Plan, current Asset lifecycle/placement and linked ServiceEvents.
+
+The derived operational rule is deliberately calendar-anchored:
+
+- only an `active` Plan on an `active` or `inactive` Asset is operationally applicable;
+- a one-time Plan remains due at `firstDueOn` until a linked ServiceEvent is
+  performed on or after that date, after which it has no future due occurrence;
+- a recurring Plan keeps the immutable calendar anchor
+  `firstDueOn + (n × intervalMonths)`;
+- a linked ServiceEvent advances the recurring Plan only past calendar
+  occurrences that have already happened by that event's Europe/Zurich
+  performed date; it never credits a future occurrence;
+- therefore a historical event before `firstDueOn` does not suppress the first
+  due occurrence;
+- queue/reference dates affect only Work attention (`overdue`, `today`,
+  `upcoming`); they never rewind the current Plan/Event set.
+
+No occurrence rows, Task rows, reminder rows or mutable next-due projection are
+created by this derivation. Missed cadence history remains represented by the
+immutable Plan and ServiceEvents rather than synthesized persisted obligations.
 
 ### ServiceEvent
 

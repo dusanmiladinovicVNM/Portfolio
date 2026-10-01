@@ -7,6 +7,7 @@ import type {
   WorkInspectionProjection,
   WorkMaintenanceProjection,
   WorkOccupancyProjection,
+  WorkServiceProjection,
   WorkRepository,
 } from './work-repository.js';
 
@@ -31,6 +32,12 @@ export interface WorkMaintenanceItem
   readonly attention: WorkAttention;
 }
 
+export interface WorkServiceItem
+  extends Omit<WorkServiceProjection, 'latestLinkedServicePerformedAt'> {
+  readonly attention: WorkAttention;
+  readonly dueOn: DateOnly;
+}
+
 export interface WorkOccupancyItem extends WorkOccupancyProjection {
   readonly attention: WorkAttention;
 }
@@ -38,6 +45,7 @@ export interface WorkOccupancyItem extends WorkOccupancyProjection {
 export type OperationalWorkItem =
   | WorkInspectionItem
   | WorkMaintenanceItem
+  | WorkServiceItem
   | WorkOccupancyItem;
 
 export interface OperationalWorkQueue {
@@ -100,8 +108,124 @@ function occupancyItem(
   };
 }
 
+const SWISS_TIME_ZONE = 'Europe/Zurich';
+
+function swissDateOnlyFromInstant(value: string): DateOnly {
+  const instant = new Date(value);
+  if (Number.isNaN(instant.getTime())) {
+    throw new Error('Service Work received an invalid ServiceEvent instant.');
+  }
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: SWISS_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(instant);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((entry) => entry.type === type)?.value ?? '';
+  return asDateOnly(
+    `${part('year')}-${part('month')}-${part('day')}`,
+  );
+}
+
+function anchoredOccurrence(
+  firstDueOn: DateOnly,
+  intervalMonths: number,
+  occurrenceIndex: number,
+): DateOnly {
+  const [yearValue, monthValue, dayValue] = firstDueOn
+    .split('-')
+    .map(Number);
+  if (
+    !Number.isInteger(yearValue) ||
+    !Number.isInteger(monthValue) ||
+    !Number.isInteger(dayValue)
+  ) {
+    throw new Error('Service Work received an invalid first due date.');
+  }
+
+  const monthIndex =
+    yearValue! * 12 + (monthValue! - 1) +
+    intervalMonths * occurrenceIndex;
+  const year = Math.floor(monthIndex / 12);
+  const month = monthIndex % 12;
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const day = Math.min(dayValue!, lastDay);
+  const value =
+    String(year).padStart(4, '0') +
+    '-' +
+    String(month + 1).padStart(2, '0') +
+    '-' +
+    String(day).padStart(2, '0');
+  return asDateOnly(value);
+}
+
+export function deriveServicePlanNextDue(
+  item: WorkServiceProjection,
+): DateOnly | null {
+  const performedAt = item.latestLinkedServicePerformedAt;
+  if (performedAt === null) return item.firstDueOn;
+
+  const performedOn = swissDateOnlyFromInstant(performedAt);
+  if (performedOn < item.firstDueOn) return item.firstDueOn;
+
+  if (item.scheduleKind === 'one_time') return null;
+
+  const intervalMonths = item.intervalMonths;
+  if (!Number.isInteger(intervalMonths) || (intervalMonths ?? 0) <= 0) {
+    throw new Error(
+      'Recurring Service Work is missing a positive intervalMonths.',
+    );
+  }
+
+  const [firstYear, firstMonth] = item.firstDueOn.split('-').map(Number);
+  const [performedYear, performedMonth] = performedOn.split('-').map(Number);
+  const elapsedMonths =
+    (performedYear! - firstYear!) * 12 +
+    (performedMonth! - firstMonth!);
+  let occurrenceIndex = Math.max(
+    0,
+    Math.floor(elapsedMonths / intervalMonths!),
+  );
+
+  while (
+    anchoredOccurrence(
+      item.firstDueOn,
+      intervalMonths!,
+      occurrenceIndex,
+    ) <= performedOn
+  ) {
+    occurrenceIndex += 1;
+  }
+
+  return anchoredOccurrence(
+    item.firstDueOn,
+    intervalMonths!,
+    occurrenceIndex,
+  );
+}
+
+function serviceItem(
+  item: WorkServiceProjection,
+  referenceDate: DateOnly,
+): WorkServiceItem | null {
+  const dueOn = deriveServicePlanNextDue(item);
+  if (dueOn === null) return null;
+  const {
+    latestLinkedServicePerformedAt: _latestLinkedServicePerformedAt,
+    ...publicItem
+  } = item;
+  return {
+    ...publicItem,
+    dueOn,
+    attention: dateAttention(dueOn, referenceDate),
+  };
+}
+
+
 function itemDate(item: OperationalWorkItem): string {
   if (item.kind === 'inspection') return item.scheduledFor ?? '9999-12-31';
+  if (item.kind === 'service') return item.dueOn;
   if (item.kind === 'occupancy') return item.dueDate ?? '9999-12-31';
   return item.reportedAt;
 }
@@ -109,6 +233,7 @@ function itemDate(item: OperationalWorkItem): string {
 function itemCode(item: OperationalWorkItem): string {
   if (item.kind === 'inspection') return item.inspectionCode;
   if (item.kind === 'maintenance') return item.issueCode;
+  if (item.kind === 'service') return item.assetCode + ':' + item.planName;
   return item.tenancyCode;
 }
 
@@ -150,6 +275,7 @@ export async function listOperationalWorkQuery(
   if (actor.role !== 'inspector') {
     requireCapability(actor, 'tenancy:read');
     requireCapability(actor, 'contracts:read');
+    requireCapability(actor, 'service:read');
   }
 
   const referenceDate = asDateOnly(referenceDateValue);
@@ -172,6 +298,13 @@ export async function listOperationalWorkQuery(
     )
     .map(maintenanceItem);
 
+  const service =
+    actor.role === 'inspector'
+      ? []
+      : projection.service
+          .map((item) => serviceItem(item, referenceDate))
+          .filter((item): item is WorkServiceItem => item !== null);
+
   const occupancy =
     actor.role === 'inspector'
       ? []
@@ -181,6 +314,8 @@ export async function listOperationalWorkQuery(
 
   return {
     referenceDate,
-    items: [...inspections, ...maintenance, ...occupancy].sort(sortItems),
+    items: [...inspections, ...maintenance, ...service, ...occupancy].sort(
+      sortItems,
+    ),
   };
 }

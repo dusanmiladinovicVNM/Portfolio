@@ -3,6 +3,7 @@ import {
   INSPECTION_STATUSES,
   INSPECTION_TYPES,
   MAINTENANCE_ISSUE_PRIORITIES,
+  SERVICE_PLAN_KINDS,
   TENANCY_STATUSES,
 } from '@portfolio/domain';
 import { instantSchema } from './api.js';
@@ -62,6 +63,20 @@ export const workMaintenanceItemResponseSchema = workLocationSchema.extend({
   activeWorkOrderCount: z.number().int().nonnegative(),
 });
 
+export const workServiceItemResponseSchema = workLocationSchema.extend({
+  kind: z.literal('service'),
+  attention: z.enum(WORK_ATTENTION_VALUES),
+  servicePlanId: entityIdSchema,
+  assetId: entityIdSchema,
+  assetCode: z.string().trim().min(1),
+  assetName: z.string().trim().min(1),
+  planName: z.string().trim().min(1),
+  scheduleKind: z.enum(SERVICE_PLAN_KINDS),
+  firstDueOn: dateOnlySchema,
+  intervalMonths: z.number().int().positive().nullable(),
+  dueOn: dateOnlySchema,
+});
+
 export const workOccupancyItemResponseSchema = workLocationSchema.extend({
   kind: z.literal('occupancy'),
   attention: z.enum(WORK_ATTENTION_VALUES),
@@ -80,6 +95,7 @@ export const workOccupancyItemResponseSchema = workLocationSchema.extend({
 export const operationalWorkItemResponseSchema = z.discriminatedUnion('kind', [
   workInspectionItemResponseSchema,
   workMaintenanceItemResponseSchema,
+  workServiceItemResponseSchema,
   workOccupancyItemResponseSchema,
 ]);
 
@@ -93,6 +109,9 @@ export type WorkInspectionItemResponse = z.infer<
 >;
 export type WorkMaintenanceItemResponse = z.infer<
   typeof workMaintenanceItemResponseSchema
+>;
+export type WorkServiceItemResponse = z.infer<
+  typeof workServiceItemResponseSchema
 >;
 export type WorkOccupancyItemResponse = z.infer<
   typeof workOccupancyItemResponseSchema

@@ -92,6 +92,13 @@ const workPropertyMaintenanceIssueId =
   'aa100000-0000-4000-8000-000000000001';
 const propertyServiceAssetId =
   'aa300000-0000-4000-8000-000000000001';
+const propertyServiceDueOn = '2026-10-01';
+const propertyServiceAttention =
+  propertyServiceDueOn < operationalToday
+    ? 'overdue'
+    : propertyServiceDueOn === operationalToday
+      ? 'today'
+      : 'upcoming';
 const workPropertyMaintenanceWorkOrderId =
   'aa100000-0000-4000-8000-000000000002';
 const setupMaintenanceWorkOrderId = 'b1000000-0000-4000-8000-000000000046';
@@ -611,6 +618,13 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
+    "//*[@data-portfolio-command-center]//article[@data-work-domain='service'][@data-work-attention='" +
+      propertyServiceAttention +
+      "'][.//strong[normalize-space()='AST-PROPERTY-LIFT-BRW']][contains(normalize-space(),'Quarterly lift inspection')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
     "//*[@data-portfolio-command-center]//article[@data-work-domain='occupancy'][.//strong[normalize-space()='TEN-WORK-BRW']]",
   );
   assertEqual(
@@ -633,6 +647,19 @@ try {
       '&asOf=' +
       operationalToday,
     'Portfolio command center reuses the exact Maintenance owner with the operational Work date',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-portfolio-command-center] article[data-work-domain=\"service\"] a')?.getAttribute('href') || null;",
+    ),
+    '/properties/' +
+      propertyId +
+      '?assetId=' +
+      propertyServiceAssetId +
+      '&asOf=' +
+      operationalToday,
+    'Portfolio command center routes Service to the exact current Property Asset',
   );
   assertEqual(
     await currentUrl(sessionId),
@@ -5969,6 +5996,11 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
+    "//*[@data-operational-work-queue]//article[@data-work-domain='service'][@data-work-attention='upcoming'][.//strong[normalize-space()='AST-PROPERTY-LIFT-BRW']][contains(normalize-space(),'Quarterly lift inspection')][contains(normalize-space(),'Passenger lift')][contains(normalize-space(),'01.10.2026')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
     "//*[@data-operational-work-queue]//article[@data-work-domain='occupancy'][.//strong[normalize-space()='TEN-WORK-BRW']][contains(normalize-space(),'Contract coverage missing')][contains(normalize-space(),'No covering agreement')]",
   );
   await waitForElement(
@@ -6007,6 +6039,32 @@ try {
     false,
     'Domain filter isolates Maintenance from occupancy work',
   );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-operational-work-queue]//article[@data-work-domain='service']",
+    ),
+    false,
+    'Domain filter isolates Maintenance from Service work',
+  );
+  await selectOptionXpath(
+    sessionId,
+    "//*[@data-operational-work-queue]//select[ancestor::label[contains(normalize-space(),'Domain')]]",
+    'service',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-operational-work-queue]//article[@data-work-domain='service'][.//strong[normalize-space()='AST-PROPERTY-LIFT-BRW']]",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-operational-work-queue]//article[@data-work-domain='maintenance']",
+    ),
+    false,
+    'Domain filter isolates Service from Maintenance work',
+  );
   await selectOptionXpath(
     sessionId,
     "//*[@data-operational-work-queue]//select[ancestor::label[contains(normalize-space(),'Domain')]]",
@@ -6016,6 +6074,38 @@ try {
     sessionId,
     'xpath',
     "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='INS-BRW-001']]",
+  );
+
+  await clickXpath(
+    sessionId,
+    "//*[@data-operational-work-queue]//article[@data-work-domain='service'][.//strong[normalize-space()='AST-PROPERTY-LIFT-BRW']]//a[normalize-space()='Open Service']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-property-asset-service]//h2[normalize-space()='AST-PROPERTY-LIFT-BRW · Passenger lift']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-property-asset-service]//article[contains(@class,'asset-service-card')][.//strong[normalize-space()='Quarterly lift inspection']]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' +
+      propertyId +
+      '?assetId=' +
+      propertyServiceAssetId +
+      '&asOf=2025-06-30',
+    'Global Work Service opens the exact canonical Property Asset',
+  );
+
+  await clickXpath(sessionId, "//aside//a[normalize-space()='Work']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='ISS-PROPERTY-WORK-BRW']]",
   );
 
   await clickXpath(
@@ -6107,6 +6197,14 @@ try {
     ),
     false,
     'Inspector Work excludes occupancy/contracts server-side',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-operational-work-queue]//article[@data-work-domain='service']",
+    ),
+    false,
+    'Inspector Work excludes unassigned preventive Service server-side',
   );
   assertEqual(
     await elementExistsXpath(
