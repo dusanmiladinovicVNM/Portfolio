@@ -123,6 +123,9 @@ class InMemoryPortfolioRepository implements PortfolioRepository {
   async listProperties(): Promise<readonly Property[]> {
     return [...this.properties.values()];
   }
+  async listUnits(): Promise<readonly Unit[]> {
+    return [...this.units.values()];
+  }
   async listUnitsByProperty(propertyId: PropertyId): Promise<readonly Unit[]> {
     return [...this.units.values()].filter((item) => item.propertyId === propertyId);
   }
@@ -484,6 +487,53 @@ describe('Portfolio HTTP boundary', () => {
     expect(listed.status).toBe(200);
     expect(await listed.json()).toMatchObject({
       data: { items: [{ code: 'PROP-0001' }] },
+    });
+  });
+
+  it('lists current Units through one canonical Portfolio read', async () => {
+    const handler = buildHandler();
+
+    const propertyResponse = await handler(
+      new Request('https://portfolio.test/properties', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(propertyBody),
+      }),
+      adminIdentity,
+    );
+    const property = (await propertyResponse.json()).data;
+
+    const createdUnit = await handler(
+      new Request('https://portfolio.test/units', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          propertyId: property.id,
+          code: 'UNIT-DISCOVERY',
+          unitNumber: 'D-1',
+          unitType: 'apartment',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(createdUnit.status).toBe(201);
+
+    const listed = await handler(
+      new Request('https://portfolio.test/units'),
+      adminIdentity,
+    );
+
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toMatchObject({
+      data: {
+        items: [
+          {
+            propertyId: property.id,
+            code: 'UNIT-DISCOVERY',
+            unitNumber: 'D-1',
+          },
+        ],
+      },
     });
   });
 
