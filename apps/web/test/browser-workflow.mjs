@@ -5421,7 +5421,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-unit-setup-readiness]//a[@data-setup-tab='spaces'][.//strong[normalize-space()='0 defined']]",
+    "//*[@data-unit-setup-readiness]//a[.//*[@data-setup-tab='spaces']][.//strong[normalize-space()='0 defined']]",
   );
   assertEqual(
     await executeScript(
@@ -5434,7 +5434,7 @@ try {
   assertEqual(
     await executeScript(
       sessionId,
-      "return document.querySelector(\"[data-unit-setup-readiness] [data-setup-tab='keys']\")?.getAttribute('href') || null;",
+      "return document.querySelector(\"[data-unit-setup-readiness] [data-setup-tab='keys']\")?.closest('a')?.getAttribute('href') || null;",
     ),
     '/properties/' +
       propertyId +
@@ -5445,7 +5445,7 @@ try {
   );
   await clickXpath(
     sessionId,
-    "//*[@data-unit-setup-readiness]//a[normalize-space()='Define Spaces']",
+    "//*[@data-unit-setup-readiness]//a[normalize-space()='Open Spaces']",
   );
   await waitForElement(
     sessionId,
