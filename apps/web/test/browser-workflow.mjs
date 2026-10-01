@@ -846,8 +846,16 @@ try {
 
   await clickXpath(sessionId, "//aside//a[normalize-space()='Overview']");
   await waitForElement(sessionId, 'xpath', "//h1[normalize-space()='Portfolio']");
-  await setWindowRect(sessionId, 1440, 1200);
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  await setWindowRect(sessionId, 320, 844);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.documentElement.scrollWidth <= document.documentElement.clientWidth;",
+    ),
+    true,
+    '320px Overview has no page-level horizontal overflow',
+  );
 
   await clickXpath(sessionId, "//aside//a[normalize-space()='Find']");
   await waitForElement(sessionId, 'xpath', "//h1[normalize-space()='Find']");
@@ -871,6 +879,16 @@ try {
     baseUrl + '/find?q=Browser+Street&asOf=2025-06-30',
     'Find query is shareable without changing historical workspace context',
   );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.documentElement.scrollWidth <= document.documentElement.clientWidth;",
+    ),
+    true,
+    '320px Find results have no page-level horizontal overflow',
+  );
+  await setWindowRect(sessionId, 1440, 1200);
+  await new Promise((resolve) => setTimeout(resolve, 100));
   await clearXpath(
     sessionId,
     "//input[@aria-label='Find Property or Unit']",
@@ -3480,6 +3498,18 @@ try {
     createdMeterUrl,
     'Created Meter deep-link',
   );
+  await setWindowRect(sessionId, 320, 844);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.documentElement.scrollWidth <= document.documentElement.clientWidth;",
+    ),
+    true,
+    '320px selected Meter has no page-level horizontal overflow',
+  );
+  await setWindowRect(sessionId, 1440, 1200);
+  await new Promise((resolve) => setTimeout(resolve, 100));
 
   const meterLabelForm = "//form[@data-meter-form='label']";
   await clearXpath(
@@ -3871,6 +3901,18 @@ try {
     'xpath',
     "//article[contains(@class,'asset-history-card')][.//strong[normalize-space()='Asset created']][.//span[contains(normalize-space(),'current')]]",
   );
+  await setWindowRect(sessionId, 320, 844);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.documentElement.scrollWidth <= document.documentElement.clientWidth;",
+    ),
+    true,
+    '320px selected Asset has no page-level horizontal overflow',
+  );
+  await setWindowRect(sessionId, 1440, 1200);
+  await new Promise((resolve) => setTimeout(resolve, 100));
 
   const assetMetadataForm = "//form[@data-asset-form='metadata']";
   await typeXpath(
