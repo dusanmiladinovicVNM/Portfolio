@@ -3580,9 +3580,20 @@ summary:focus-visible {
     min-height: 44px;
   }
 
-  .nav-item,
+  .nav-item {
+    display: flex;
+    align-items: center;
+  }
+
   .dossier-nav-link {
     align-content: center;
+  }
+
+  .inspection-field-navigation-link,
+  .record-action,
+  .work-queue-open {
+    display: inline-flex;
+    align-items: center;
   }
 
   .workspace {
