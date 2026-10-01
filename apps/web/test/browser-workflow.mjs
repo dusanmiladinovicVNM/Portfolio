@@ -4347,7 +4347,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[contains(@class,'maintenance-admin-panel')]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='BED-SETUP']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='AST-SETUP-BRW']][.//dt[normalize-space()='Inspection Finding']/following-sibling::dd[contains(normalize-space(),'INS-MAINT-BRW') and contains(normalize-space(),'Washer leak observed')]]",
+    "//section[contains(@class,'maintenance-admin-panel')]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='BED-SETUP']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='AST-SETUP-BRW']][.//dt[normalize-space()='Current Asset placement']/following-sibling::dd[normalize-space()='BED-SETUP · Setup Bedroom']][.//dt[normalize-space()='Inspection Finding']/following-sibling::dd[contains(normalize-space(),'INS-MAINT-BRW') and contains(normalize-space(),'Washer leak observed')]]",
   );
 
   const issueUpdateForm =
@@ -4779,7 +4779,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[contains(@class,'maintenance-admin-panel')]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Property']/following-sibling::dd[normalize-space()='Current property']][.//dt[normalize-space()='Unit']/following-sibling::dd[normalize-space()='Current unit']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='BED-SETUP']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='AST-SETUP-BRW']]",
+    "//section[contains(@class,'maintenance-admin-panel')]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Property']/following-sibling::dd[normalize-space()='Current property']][.//dt[normalize-space()='Unit']/following-sibling::dd[normalize-space()='Current unit']][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='BED-SETUP']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='AST-SETUP-BRW']][.//dt[normalize-space()='Current Asset placement']/following-sibling::dd[normalize-space()='No current placement']]",
   );
 
   await navigateWithPopState(
@@ -4946,7 +4946,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[contains(@class,'maintenance-admin-panel')]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='KIT-SETUP']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='AST-OVEN-BRW']]",
+    "//section[contains(@class,'maintenance-admin-panel')]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='KIT-SETUP']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='AST-OVEN-BRW']][.//dt[normalize-space()='Current Asset placement']/following-sibling::dd[normalize-space()='KIT-SETUP · Kitchen']]",
   );
   assertEqual(
     await currentUrl(sessionId),
@@ -5027,7 +5027,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//section[contains(@class,'maintenance-admin-panel')]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='HALL-SETUP']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='AST-SMOKE-BRW']]",
+    "//section[contains(@class,'maintenance-admin-panel')]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='HALL-SETUP']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='AST-SMOKE-BRW']][.//dt[normalize-space()='Current Asset placement']/following-sibling::dd[normalize-space()='HALL-SETUP · Entrance Hall']]",
   );
   assertEqual(
     await currentUrl(sessionId),
