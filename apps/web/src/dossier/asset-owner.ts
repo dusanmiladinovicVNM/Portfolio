@@ -76,6 +76,17 @@ export function assertUnitAssetsOwner(
   }
 }
 
+export function assertPropertyAssetsOwner(
+  propertyId: string,
+  assets: readonly AssetResponse[],
+): void {
+  if (assets.some((asset) => asset.propertyId !== propertyId)) {
+    throw new Error(
+      'Property Asset list contains an Asset owned by another Property.',
+    );
+  }
+}
+
 export function assertCreatedAsset(
   expected: {
     readonly code: string;
