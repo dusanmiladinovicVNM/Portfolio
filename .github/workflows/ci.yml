@@ -71,6 +71,9 @@ jobs:
       - name: Current-main deployment fence self-test
         run: bash scripts/deployment/test-current-main-fence.sh
 
+      - name: Supabase migration deployment self-test
+        run: pnpm supabase:migrations:self-test
+
       - name: Unit tests
         env:
           LUZERNER_VISUAL_PROOF_PATH: .artifacts/luzerner/mietvertrag-fixture.pdf
@@ -242,6 +245,7 @@ jobs:
     env:
       SUPABASE_PROJECT_REF: fiowxgamyjjcondlheqg
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_DEPLOY_ACCESS_TOKEN || secrets.SUPABASE_OBSERVABILITY_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -268,6 +272,10 @@ jobs:
         run: |
           test -n "$SUPABASE_ACCESS_TOKEN" || {
             echo "SUPABASE_DEPLOY_ACCESS_TOKEN or SUPABASE_OBSERVABILITY_ACCESS_TOKEN is required." >&2
+            exit 1
+          }
+          test -n "$SUPABASE_DB_PASSWORD" || {
+            echo "SUPABASE_DB_PASSWORD is required for production database migrations." >&2
             exit 1
           }
           test -n "$VERCEL_TOKEN" || {
@@ -301,6 +309,12 @@ jobs:
           else
             echo "deploy=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Apply and verify production database migrations
+        if: steps.freshness.outputs.deploy == 'true'
+        env:
+          DEPLOY_REQUIRE_REMOTE_MAIN: "1"
+        run: pnpm supabase:migrations:deploy
 
       - name: Deploy and verify hosted API SHA
         if: steps.freshness.outputs.deploy == 'true'
