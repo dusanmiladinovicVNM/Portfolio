@@ -53,6 +53,7 @@ export type WorkspaceRoute =
       readonly kind: 'property';
       readonly propertyId: string;
       readonly asOf: string;
+      readonly assetId?: string;
       readonly maintenanceIssueId?: string;
       readonly maintenanceWorkOrderId?: string;
     }
@@ -158,6 +159,7 @@ export function inspectionSchemasRoute(asOf: string): WorkspaceRoute {
 }
 
 export interface PropertyRouteSelection {
+  readonly assetId?: string;
   readonly maintenanceIssueId?: string;
   readonly maintenanceWorkOrderId?: string;
 }
@@ -167,7 +169,10 @@ export function propertyRoute(
   asOf: string,
   selection: PropertyRouteSelection = {},
 ): WorkspaceRoute {
-  const maintenanceIssueId = selection.maintenanceIssueId;
+  const assetId = selection.assetId;
+  const maintenanceIssueId = assetId
+    ? undefined
+    : selection.maintenanceIssueId;
   const maintenanceWorkOrderId = maintenanceIssueId
     ? selection.maintenanceWorkOrderId
     : undefined;
@@ -175,6 +180,7 @@ export function propertyRoute(
     kind: 'property',
     propertyId,
     asOf: requireWorkspaceAsOf(asOf),
+    ...(assetId ? { assetId } : {}),
     ...(maintenanceIssueId ? { maintenanceIssueId } : {}),
     ...(maintenanceWorkOrderId ? { maintenanceWorkOrderId } : {}),
   };
@@ -340,13 +346,15 @@ export function parseWorkspaceLocation(
   if (segments.length === 2 && segments[0] === 'properties') {
     const propertyId = readEntityId(segments[1]);
     if (propertyId) {
-      const maintenanceIssueId = readEntityId(
-        search.get('issueId') ?? undefined,
-      );
+      const assetId = readEntityId(search.get('assetId') ?? undefined);
+      const maintenanceIssueId = assetId
+        ? null
+        : readEntityId(search.get('issueId') ?? undefined);
       const maintenanceWorkOrderId = maintenanceIssueId
         ? readEntityId(search.get('workOrderId') ?? undefined)
         : null;
       return propertyRoute(propertyId, asOf, {
+        ...(assetId ? { assetId } : {}),
         ...(maintenanceIssueId ? { maintenanceIssueId } : {}),
         ...(maintenanceWorkOrderId ? { maintenanceWorkOrderId } : {}),
       });
@@ -359,10 +367,14 @@ export function parseWorkspaceLocation(
 export function workspaceRouteHref(route: WorkspaceRoute): string {
   const search = new URLSearchParams();
 
-  if (route.kind === 'property' && route.maintenanceIssueId) {
-    search.set('issueId', route.maintenanceIssueId);
-    if (route.maintenanceWorkOrderId) {
-      search.set('workOrderId', route.maintenanceWorkOrderId);
+  if (route.kind === 'property') {
+    if (route.assetId) {
+      search.set('assetId', route.assetId);
+    } else if (route.maintenanceIssueId) {
+      search.set('issueId', route.maintenanceIssueId);
+      if (route.maintenanceWorkOrderId) {
+        search.set('workOrderId', route.maintenanceWorkOrderId);
+      }
     }
   }
 
