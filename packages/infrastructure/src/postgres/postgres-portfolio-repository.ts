@@ -181,13 +181,13 @@ export class PostgresPortfolioRepository implements PortfolioRepository {
   }
 
   async listUnits(): Promise<readonly Unit[]> {
-    const rows = await this.sql<UnitRow[]>\`
+    const rows = await this.sql<UnitRow[]>`
       select
         id, property_id, code, unit_number, unit_type, floor,
         area_m2, rooms, status, notes
       from public.units
       order by lower(code), id
-    \`;
+    `;
     return rows.map(mapUnit);
   }
 
