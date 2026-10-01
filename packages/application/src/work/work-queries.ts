@@ -58,9 +58,9 @@ const attentionRank: Readonly<Record<WorkAttention, number>> = {
   overdue: 1,
   today: 2,
   high: 3,
-  upcoming: 4,
-  normal: 5,
-  unscheduled: 6,
+  normal: 4,
+  unscheduled: 5,
+  upcoming: 6,
 };
 
 function dateAttention(
