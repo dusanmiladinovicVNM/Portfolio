@@ -1545,7 +1545,7 @@ try {
   assertEqual(
     await executeScript(
       sessionId,
-      "return document.querySelector('[data-unit-setup-readiness] [data-setup-tab="keys"]')?.getAttribute('href') || null;",
+      "return document.querySelector(\"[data-unit-setup-readiness] [data-setup-tab='keys']\")?.getAttribute('href') || null;",
     ),
     '/properties/' +
       setupPropertyId +
