@@ -5973,6 +5973,11 @@ try {
     'xpath',
     "//*[@data-property-maintenance-issue]//section[contains(@class,'maintenance-admin-panel')]//h2[normalize-space()='ISS-PROPERTY-WORK-BRW · Roof inspection follow-up']",
   );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-property-maintenance-issue]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='Asset-only scope']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='AST-PROPERTY-WORK-BRW']][.//dt[normalize-space()='Current Asset placement']/following-sibling::dd[normalize-space()='Unit placement']]",
+  );
   assertEqual(
     await currentUrl(sessionId),
     baseUrl +
@@ -6056,6 +6061,33 @@ try {
     ),
     false,
     'Inspector Work cannot see contract-gap items',
+  );
+
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextMaintenanceAssetEnrichment = true; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    "//*[@data-operational-work-queue]//article[.//strong[normalize-space()='ISS-PROPERTY-WORK-BRW']]//a[normalize-space()='Open Maintenance']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-property-maintenance-issue]//section[contains(@class,'maintenance-admin-panel')]//h2[normalize-space()='ISS-PROPERTY-WORK-BRW · Roof inspection follow-up']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-property-maintenance-issue]//dl[contains(@class,'maintenance-scope-grid')][.//dt[normalize-space()='Space']/following-sibling::dd[normalize-space()='Asset-only scope']][.//dt[normalize-space()='Asset']/following-sibling::dd[normalize-space()='Assigned asset']][.//dt[normalize-space()='Current Asset placement']/following-sibling::dd[normalize-space()='Current placement unavailable']]",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-property-maintenance-issue]//*[normalize-space()='Issue unavailable']",
+    ),
+    false,
+    'Failed current Asset enrichment does not hide the canonical Maintenance Issue',
   );
 
   await executeScript(
