@@ -8,6 +8,7 @@ export class InMemoryWorkRepository implements WorkRepository {
   projection: OperationalWorkProjection = {
     inspections: [],
     maintenance: [],
+    service: [],
     occupancy: [],
   };
 
