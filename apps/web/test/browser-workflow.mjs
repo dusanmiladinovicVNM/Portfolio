@@ -5411,6 +5411,74 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
+    "//*[@data-unit-setup-readiness][.//h2[normalize-space()='Physical Unit setup']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-setup-readiness]//*[normalize-space()='Start with Spaces']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-setup-readiness]//a[.//*[@data-setup-tab='spaces']][.//strong[normalize-space()='0 defined']]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return Array.from(document.querySelectorAll('[data-unit-setup-readiness] [data-setup-tab]')).map((element) => element.dataset.setupTab).join(',');",
+    ),
+    'spaces,assets,meters,keys,inspections',
+    'Unit Overview exposes the recommended physical setup surfaces',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector(\"[data-unit-setup-readiness] [data-setup-tab='keys']\")?.closest('a')?.getAttribute('href') || null;",
+    ),
+    '/properties/' +
+      propertyId +
+      '/units/' +
+      unitId +
+      '?tab=keys&asOf=2025-06-30',
+    'Setup readiness preserves exact Unit owner and reporting context',
+  );
+  await clickXpath(
+    sessionId,
+    "//*[@data-unit-setup-readiness]//a[normalize-space()='Open Spaces']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[normalize-space()='No Spaces defined for this Unit.']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' +
+      propertyId +
+      '/units/' +
+      unitId +
+      '?tab=spaces&asOf=2025-06-30',
+    'Setup readiness opens the canonical Spaces workspace',
+  );
+  await clickXpath(
+    sessionId,
+    "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Overview']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-setup-readiness]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    unitOverviewUrl,
+    'Setup guidance return restores Unit Overview route',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
     "//*[@data-unit-command-center][.//h2[normalize-space()='What needs attention']]",
   );
   await waitForElement(
