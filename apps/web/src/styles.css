@@ -6,8 +6,8 @@
   text-rendering: optimizeLegibility;
 }
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; min-height: 100vh; }
-button, input { font: inherit; }
+body { margin: 0; min-width: 0; min-height: 100vh; }
+button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 .login-layout {
   min-height: 100vh; display: grid; place-items: center; padding: 32px;
@@ -3538,5 +3538,214 @@ input:focus-visible {
   }
   .nav-group {
     align-content: start;
+  }
+}
+
+
+/* UX Series II — responsive/accessibility closure */
+a[href]:focus-visible,
+button:not(:disabled):focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 3px solid #365f3d;
+  outline-offset: 3px;
+}
+
+.table-wrap {
+  max-width: 100%;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+
+@media (max-width: 760px) {
+  .sidebar {
+    gap: 24px;
+    padding: 22px 18px;
+  }
+
+  .sidebar nav {
+    gap: 16px;
+  }
+
+  .nav-item,
+  .dossier-nav-link,
+  .inspection-section-link,
+  .inspection-field-navigation-link,
+  .record-action,
+  .work-queue-open,
+  button {
+    min-height: 44px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+  }
+
+  .dossier-nav-link {
+    align-content: center;
+  }
+
+  .inspection-field-navigation-link,
+  .record-action,
+  .work-queue-open {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .workspace {
+    padding: 26px 16px 34px;
+  }
+
+  .panel,
+  .portfolio-command-center,
+  .unit-command-center {
+    padding: 18px;
+  }
+
+  .workspace-header {
+    gap: 20px;
+    padding-bottom: 24px;
+  }
+
+  .dashboard-stack,
+  .page-panel,
+  .property-directory,
+  .discovery-panel {
+    margin-top: 22px;
+  }
+
+  .table-wrap {
+    margin-inline: -2px;
+    padding-bottom: 4px;
+  }
+
+  .work-queue-card dd {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .detail-list div,
+  .unit-card dl div,
+  .cost-card dl div {
+    align-items: flex-start;
+  }
+
+  .detail-list dd,
+  .unit-card dd,
+  .cost-card dd {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 520px) {
+  .sidebar nav {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    gap: 20px;
+    padding: 20px 16px;
+  }
+
+  .nav-group {
+    gap: 5px;
+  }
+
+  .nav-group-label {
+    padding-inline: 10px;
+  }
+
+  .workspace {
+    padding-inline: 12px;
+  }
+
+  .panel,
+  .portfolio-command-center,
+  .unit-command-center,
+  .inspection-content-workspace,
+  .inspection-completed-overview {
+    padding: 15px;
+    border-radius: 12px;
+  }
+
+  .section-heading {
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .property-directory-grid,
+  .unit-grid,
+  .document-grid,
+  .asset-grid,
+  .tenancy-grid,
+  .agreement-grid,
+  .selection-grid,
+  .tenancy-admin-grid,
+  .maintenance-issue-grid,
+  .maintenance-workflow-grid,
+  .inspection-assigned-work-list,
+  .inspection-content-grid,
+  .inspection-evidence-steps,
+  .inspection-evidence-advanced-body,
+  .asset-service-grid,
+  .asset-service-history-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .property-directory-card,
+  .unit-card,
+  .document-card,
+  .asset-card,
+  .tenancy-card {
+    padding: 16px;
+  }
+
+  .inspection-field-navigation {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .inspection-field-navigation-link {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .inspection-field-position {
+    white-space: normal;
+  }
+
+  .inspection-item-label,
+  .asset-heading,
+  .record-heading,
+  .maintenance-service-card > div:first-child {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+
+@media (max-width: 520px) {
+  .discovery-result-list,
+  .asset-admin-grid,
+  .meter-grid,
+  .meter-admin-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
