@@ -141,8 +141,8 @@ export function OperationalWorkQueue({
           <h1>Work</h1>
           <p className="header-note">
             {queueScope} The item set is current canonical state. Queue date only
-            derives dated attention for scheduled Inspection and occupancy work;
-            it does not rewind the Work set.
+            derives dated attention for scheduled Inspection, Service and
+            occupancy work; it does not rewind the Work set.
           </p>
         </div>
         <div className="work-queue-date">
