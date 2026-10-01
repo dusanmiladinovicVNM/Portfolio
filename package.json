@@ -14,6 +14,8 @@
     "release:rehearse": "bash scripts/release/rehearse.sh",
     "bootstrap:first-admin": "bash scripts/deployment/bootstrap-first-admin.sh",
     "supabase:function:bundle": "bash scripts/deployment/build-supabase-function.sh",
+    "supabase:migrations:deploy": "bash scripts/deployment/deploy-supabase-migrations.sh",
+    "supabase:migrations:self-test": "bash scripts/deployment/test-supabase-migration-deploy.sh",
     "supabase:function:deploy": "bash scripts/deployment/deploy-supabase-function.sh",
     "web:deployment:check": "node scripts/deployment/check-public-web-deployment.mjs",
     "backup:rehearse": "bash scripts/recovery/test-production-backup.sh",

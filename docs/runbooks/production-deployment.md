@@ -14,16 +14,50 @@ Portfolio keeps business authorization in PostgreSQL. Supabase Auth proves exter
 
 ## 2. Link the Supabase project
 
+For local operator work:
+
 ~~~bash
 supabase login
 supabase link --project-ref <project-ref>
 ~~~
 
-Do not edit production schema manually in the Dashboard. Apply the canonical migrations:
+Do not edit production schema manually in the Dashboard.
 
-~~~bash
-supabase db push
+The canonical GitHub production release now owns migration ordering. Configure these
+repository secrets before a production release:
+
+~~~text
+SUPABASE_DEPLOY_ACCESS_TOKEN
+SUPABASE_DB_PASSWORD   # optional; direct DB auth when configured
 ~~~
+
+The release job requires `SUPABASE_DEPLOY_ACCESS_TOKEN`; the read-oriented
+observability token is never accepted as a fallback credential for production
+DDL or code deployment. When no database password is configured, the
+authenticated Supabase CLI may use its linked-project login role; an explicit
+database password remains preferable where production credential policy
+provides one.
+
+The job starts only from an exact current-main checkout, links that checkout to
+the configured project, then performs one final freshness fence immediately
+before the first production mutation. From the moment `supabase db push`
+begins, that exact release is committed and must finish through API and web
+deployment even if a newer `main` appears; the queued newer release follows
+afterward. The canonical order is:
+
+~~~text
+initial current-main fence
+→ supabase link
+→ final current-main fence
+→ supabase db push
+→ migration history parity
+→ deploy exact API SHA
+→ hosted API SHA verify
+→ Vercel production deploy
+~~~
+
+Manual `supabase db push` remains an operator recovery tool, not the normal
+production release path.
 
 ## 3. Google Drive OAuth
 
@@ -105,11 +139,24 @@ esbuild_version=0.28.2
 
 The generated bundle and manifest are ignored by Git, so their creation does not change the exact source revision.
 
-For production, do not run the raw build/deploy commands separately. Use the verified wrapper:
+For production, do not run the raw build/deploy commands separately. The
+GitHub production workflow is authoritative and runs the migration gate before
+the API wrapper. For an operator recovery deployment, preserve the same order:
 
 ~~~bash
-SUPABASE_PROJECT_REF=<project-ref> pnpm supabase:function:deploy
+export SUPABASE_PROJECT_REF=<project-ref>
+export SUPABASE_ACCESS_TOKEN=<token>
+# optional:
+export SUPABASE_DB_PASSWORD=<database-password>
+
+pnpm supabase:migrations:deploy
+pnpm supabase:function:deploy
 ~~~
+
+Never deploy current application code against a database whose migration history
+has not passed the migration gate. Do not re-run a stale-main abort after
+`db push`: once production schema mutation has started, complete the same exact
+release SHA through API and web deployment before the next queued release.
 
 The wrapper:
 1. requires a clean checkout;
