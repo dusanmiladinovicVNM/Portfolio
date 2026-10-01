@@ -50,6 +50,10 @@ export function propertyUnitsPath(propertyId: string): string {
   return `${propertyPath(propertyId)}/units`;
 }
 
+export function propertyAssetsPath(propertyId: string): string {
+  return `${propertyPath(propertyId)}/assets`;
+}
+
 export function unitPath(unitId: string): string {
   return '/units/' + encodeURIComponent(unitId);
 }
