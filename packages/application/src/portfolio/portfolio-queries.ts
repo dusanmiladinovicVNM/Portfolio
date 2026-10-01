@@ -35,6 +35,14 @@ export function listPropertiesQuery(
   return repository.listProperties();
 }
 
+export function listUnitsQuery(
+  repository: PortfolioRepository,
+  actor: Actor,
+): Promise<readonly Unit[]> {
+  requireCapability(actor, 'portfolio:read');
+  return repository.listUnits();
+}
+
 export async function listUnitsByPropertyQuery(
   repository: PortfolioRepository,
   actor: Actor,
