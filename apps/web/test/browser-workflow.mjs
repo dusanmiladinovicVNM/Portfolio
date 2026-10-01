@@ -466,6 +466,13 @@ async function switchWindow(sessionId, handle) {
   });
 }
 
+async function setWindowRect(sessionId, width, height) {
+  await webdriver(`/session/${sessionId}/window/rect`, {
+    method: 'POST',
+    body: { width, height },
+  });
+}
+
 async function assertActiveHeading(sessionId, expectedText, label) {
   const id = await activeElement(sessionId);
   const [name, text] = await Promise.all([
@@ -726,6 +733,50 @@ try {
     'Shell has no disabled fake destination placeholders',
   );
 
+  await clickXpath(sessionId, "//aside//a[normalize-space()='Work']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-operational-work-queue]//h2[normalize-space()='Active work']",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "const element = document.querySelector('[data-operational-work-queue] select'); if (!element) return false; element.focus(); const style = getComputedStyle(element); return style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) >= 3;",
+    ),
+    true,
+    'Keyboard focus indicator covers Work select controls',
+  );
+  await clickXpath(sessionId, "//aside//a[normalize-space()='Overview']");
+  await waitForElement(sessionId, 'xpath', "//h1[normalize-space()='Portfolio']");
+
+  await setWindowRect(sessionId, 390, 844);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.documentElement.scrollWidth <= document.documentElement.clientWidth;",
+    ),
+    true,
+    'Narrow Dashboard has no page-level horizontal overflow',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return getComputedStyle(document.querySelector('aside nav')).gridTemplateColumns.split(' ').filter(Boolean).length;",
+    ),
+    1,
+    'Narrow shell stacks navigation groups into one column',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return Array.from(document.querySelectorAll('aside .nav-item')).every((element) => element.getBoundingClientRect().height >= 44);",
+    ),
+    true,
+    'Narrow shell navigation keeps touch-sized targets',
+  );
+
   await clickXpath(sessionId, "//aside//a[normalize-space()='Properties']");
   await waitForElement(sessionId, 'xpath', "//h1[normalize-space()='Properties']");
   await waitForElement(
@@ -784,8 +835,19 @@ try {
     'Property directory opens exact canonical Property route',
   );
 
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.documentElement.scrollWidth <= document.documentElement.clientWidth;",
+    ),
+    true,
+    'Narrow Property context has no page-level horizontal overflow',
+  );
+
   await clickXpath(sessionId, "//aside//a[normalize-space()='Overview']");
   await waitForElement(sessionId, 'xpath', "//h1[normalize-space()='Portfolio']");
+  await setWindowRect(sessionId, 1440, 1200);
+  await new Promise((resolve) => setTimeout(resolve, 100));
 
   await clickXpath(sessionId, "//aside//a[normalize-space()='Find']");
   await waitForElement(sessionId, 'xpath', "//h1[normalize-space()='Find']");
