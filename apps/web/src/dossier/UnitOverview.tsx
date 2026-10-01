@@ -12,6 +12,7 @@ import {
   formatSwissDate,
 } from '../presentation/format.js';
 import { UnitOverviewCommandCenter } from './UnitOverviewCommandCenter.js';
+import { UnitSetupReadiness } from './UnitSetupReadiness.js';
 
 interface UnitOverviewProps {
   readonly api: PortfolioApi;
@@ -115,6 +116,15 @@ export function UnitOverview({
       {overview ? (
         <div className="dashboard-stack">
           <UnitOverviewCommandCenter
+            api={api}
+            asOf={asOf}
+            navigate={navigate}
+            overview={overview}
+            propertyId={propertyId}
+            unitId={unitId}
+          />
+
+          <UnitSetupReadiness
             api={api}
             asOf={asOf}
             navigate={navigate}
