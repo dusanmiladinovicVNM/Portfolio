@@ -7,6 +7,20 @@ const vitePort = 4174;
 const driverPort = 9515;
 const baseUrl = `http://127.0.0.1:${vitePort}`;
 const driverUrl = `http://127.0.0.1:${driverPort}`;
+
+function swissDateOnly(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Zurich',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const part = (type) =>
+    parts.find((entry) => entry.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+const operationalToday = swissDateOnly();
 const propertyId = '11111111-1111-4111-8111-111111111111';
 const unitId = '22222222-2222-4222-8222-222222222222';
 const tenancyId = '33333333-3333-4333-8333-333333333333';
@@ -568,6 +582,57 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
+    "//*[@data-portfolio-command-center]//h2[normalize-space()='What needs attention']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-portfolio-command-center]//article[@data-work-domain='inspection'][@data-work-attention='overdue'][.//strong[normalize-space()='INS-BRW-001']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-portfolio-command-center]//*[contains(normalize-space(),'Operational attention is relative to today in Europe/Zurich')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-portfolio-command-center]//article[@data-work-domain='maintenance'][.//strong[normalize-space()='ISS-PROPERTY-WORK-BRW']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-portfolio-command-center]//article[@data-work-domain='occupancy'][.//strong[normalize-space()='TEN-WORK-BRW']]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-portfolio-command-center] a[href^=\"/work?\"]')?.getAttribute('href') || null;",
+    ),
+    '/work?asOf=' + operationalToday,
+    'Portfolio command center opens the canonical full Work queue using Swiss today, not reporting asOf',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-portfolio-command-center] article[data-work-domain=\"maintenance\"] a')?.getAttribute('href') || null;",
+    ),
+    '/properties/' +
+      propertyId +
+      '?issueId=' +
+      workPropertyMaintenanceIssueId +
+      '&asOf=' +
+      operationalToday,
+    'Portfolio command center reuses the exact Maintenance owner with the operational Work date',
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl + '/dashboard?asOf=2025-06-30',
+    'Historical reporting route remains unchanged while Daily Operations uses Swiss today',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
     "//h2[normalize-space()='Occupancy as of 30.06.2025']",
   );
   await waitForElement(
@@ -616,8 +681,8 @@ try {
       sessionId,
       "return Array.from(document.querySelectorAll('[data-portfolio-section]')).map((element) => element.dataset.portfolioSection).join(',');",
     ),
-    'attention,occupancy,properties,costs',
-    'Portfolio Overview prioritizes operations before reporting and costs',
+    'command-center,operations,occupancy,properties,costs',
+    'Portfolio Overview prioritizes actionable Work before operating and reporting context',
   );
   const dashboardUrl = `${baseUrl}/dashboard?asOf=2025-06-30`;
   assertEqual(

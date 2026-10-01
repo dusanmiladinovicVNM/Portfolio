@@ -4,6 +4,7 @@ import {
 } from '@portfolio/contracts';
 import { useEffect, useState } from 'react';
 import { CreatePropertyForm } from '../admin/CreatePropertyForm.js';
+import { PortfolioCommandCenter } from './PortfolioCommandCenter.js';
 import { reportingDashboardPath } from '../api/paths.js';
 import type { PortfolioApi } from '../api/portfolio-api.js';
 import { WorkspaceLink } from '../navigation/WorkspaceLink.js';
@@ -22,6 +23,7 @@ interface PortfolioDashboardProps {
   readonly api: PortfolioApi;
   readonly asOf: string;
   readonly navigate: NavigateWorkspace;
+  readonly staffRole: 'admin' | 'manager' | 'inspector' | null;
 }
 
 function occupancyRate(data: PortfolioDashboardResponse): string {
@@ -42,6 +44,7 @@ export function PortfolioDashboard({
   api,
   asOf,
   navigate,
+  staffRole,
 }: PortfolioDashboardProps) {
   const [data, setData] = useState<PortfolioDashboardResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +104,13 @@ export function PortfolioDashboard({
         </label>
       </header>
 
+      <PortfolioCommandCenter
+        api={api}
+        asOf={asOf}
+        navigate={navigate}
+        staffRole={staffRole}
+      />
+
       <details
         className="portfolio-setup-disclosure"
         data-portfolio-setup
@@ -125,6 +135,8 @@ export function PortfolioDashboard({
         </div>
       </details>
 
+
+
       {error ? (
         <section className="panel state-panel" role="alert">
           <p className="eyebrow">Read failed</p>
@@ -146,15 +158,15 @@ export function PortfolioDashboard({
         <div className="dashboard-stack">
           <section
             className="panel portfolio-attention-panel"
-            data-portfolio-section="attention"
+            data-portfolio-section="operations"
           >
             <div className="section-heading">
               <div>
-                <p className="eyebrow">Current operations</p>
-                <h2>Operational overview</h2>
+                <p className="eyebrow">Operational footprint</p>
+                <h2>Current operating state</h2>
                 <p className="muted">
-                  Live operational counters. Actionable work remains in the
-                  canonical Inspection and Maintenance workflows.
+                  Current Maintenance, Asset, Service and Meter counters. Actionable
+                  work is prioritized above by the canonical Work projection.
                 </p>
               </div>
               <span className="section-note">

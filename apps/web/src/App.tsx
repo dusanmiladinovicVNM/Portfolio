@@ -299,7 +299,12 @@ function AuthenticatedShell({
         tabIndex={-1}
       >
         {route.kind === 'dashboard' ? (
-          <PortfolioDashboard api={api} asOf={route.asOf} navigate={navigate} />
+          <PortfolioDashboard
+            api={api}
+            asOf={route.asOf}
+            navigate={navigate}
+            staffRole={currentStaff?.role ?? null}
+          />
         ) : null}
 
         {route.kind === 'work' ? (
