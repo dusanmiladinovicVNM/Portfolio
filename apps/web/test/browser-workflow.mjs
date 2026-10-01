@@ -701,6 +701,92 @@ try {
     'Empty Dashboard date does not create an invalid route',
   );
 
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return Array.from(document.querySelectorAll('aside [data-nav-group]')).map((element) => element.dataset.navGroup).join(',');",
+    ),
+    'workspace,portfolio,administration',
+    'Top-level shell separates Workspace, Portfolio, and Administration',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//aside//*[@data-nav-group='current-context']",
+    ),
+    false,
+    'Current context navigation is absent without a selected Property',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//aside//*[contains(@class,'nav-item-disabled')]",
+    ),
+    false,
+    'Shell has no disabled fake destination placeholders',
+  );
+
+  await clickXpath(sessionId, "//aside//a[normalize-space()='Properties']");
+  await waitForElement(sessionId, 'xpath', "//h1[normalize-space()='Properties']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-property-directory]//a[.//strong[normalize-space()='Browser Test Property']][contains(normalize-space(),'PROP-BRW')][contains(normalize-space(),'Browser Street 1')]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl + '/properties?asOf=2025-06-30',
+    'Properties has a canonical shareable collection route',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-property-directory]')?.innerText.includes('" +
+        propertyId +
+        "') ?? false;",
+    ),
+    false,
+    'Property directory never exposes internal Property UUID',
+  );
+  await clickXpath(
+    sessionId,
+    "//*[@data-property-directory]//a[.//strong[normalize-space()='Browser Test Property']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//h1[normalize-space()='Browser Test Property']",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return Array.from(document.querySelectorAll('aside [data-nav-group]')).map((element) => element.dataset.navGroup).join(',');",
+    ),
+    'workspace,portfolio,current-context,administration',
+    'Selecting a Property adds a dedicated Current context navigation group',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//aside//*[@data-nav-group='current-context']//a[normalize-space()='Property']",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//aside//*[@data-nav-group='current-context']//a[normalize-space()='Unit dossier']",
+    ),
+    false,
+    'Property context does not pretend a Unit dossier exists',
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl + '/properties/' + propertyId + '?asOf=2025-06-30',
+    'Property directory opens exact canonical Property route',
+  );
+
+  await clickXpath(sessionId, "//aside//a[normalize-space()='Overview']");
+  await waitForElement(sessionId, 'xpath', "//h1[normalize-space()='Portfolio']");
+
   await clickXpath(sessionId, "//aside//a[normalize-space()='Find']");
   await waitForElement(sessionId, 'xpath', "//h1[normalize-space()='Find']");
   assertEqual(

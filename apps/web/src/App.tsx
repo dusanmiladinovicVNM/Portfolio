@@ -10,18 +10,11 @@ import { currentStaffPath } from './api/paths.js';
 import { PortfolioDashboard } from './dashboard/PortfolioDashboard.js';
 import { OperationalWorkQueue } from './work/OperationalWorkQueue.js';
 import { PortfolioDiscovery } from './discovery/PortfolioDiscovery.js';
+import { PropertyDirectory } from './dossier/PropertyDirectory.js';
 import { PropertyUnits } from './dossier/PropertyUnits.js';
 import { UnitDossier } from './dossier/UnitDossier.js';
-import { WorkspaceLink } from './navigation/WorkspaceLink.js';
+import { WorkspaceNavigation } from './navigation/WorkspaceNavigation.js';
 import {
-  dashboardRoute,
-  discoveryRoute,
-  workRoute,
-  partiesRoute,
-  staffRoute,
-  inspectionSchemasRoute,
-  propertyRoute,
-  unitRoute,
   workspaceRouteOwnerKey,
 } from './navigation/workspace-route.js';
 import { useWorkspaceNavigation } from './navigation/use-workspace-navigation.js';
@@ -111,6 +104,8 @@ function AuthenticatedShell({
       ? 'dashboard'
       : route.kind === 'work'
         ? 'work'
+        : route.kind === 'properties'
+          ? 'properties'
         : route.kind === 'discovery'
           ? 'discovery'
           : route.kind === 'parties'
@@ -182,115 +177,11 @@ function AuthenticatedShell({
           <p className="brand">Portfolio</p>
           <p className="eyebrow">Property lifecycle</p>
         </div>
-        <nav aria-label="Primary">
-          <WorkspaceLink
-            ariaCurrent={route.kind === 'dashboard' ? 'page' : undefined}
-            className={`nav-item ${route.kind === 'dashboard' ? 'nav-item-active' : ''}`}
-            navigate={navigate}
-            route={dashboardRoute(route.asOf)}
-          >
-            Overview
-          </WorkspaceLink>
-          <WorkspaceLink
-            ariaCurrent={route.kind === 'work' ? 'page' : undefined}
-            className={`nav-item ${route.kind === 'work' ? 'nav-item-active' : ''}`}
-            navigate={navigate}
-            route={workRoute(route.asOf)}
-          >
-            Work
-          </WorkspaceLink>
-          <WorkspaceLink
-            ariaCurrent={route.kind === 'discovery' ? 'page' : undefined}
-            className={`nav-item ${route.kind === 'discovery' ? 'nav-item-active' : ''}`}
-            navigate={navigate}
-            route={discoveryRoute(route.asOf)}
-          >
-            Find
-          </WorkspaceLink>
-          <WorkspaceLink
-            ariaCurrent={route.kind === 'parties' ? 'page' : undefined}
-            className={'nav-item ' + (route.kind === 'parties' ? 'nav-item-active' : '')}
-            navigate={navigate}
-            route={partiesRoute(route.asOf)}
-          >
-            Parties
-          </WorkspaceLink>
-          {currentStaff?.role === 'admin' ? (
-            <WorkspaceLink
-              ariaCurrent={route.kind === 'staff' ? 'page' : undefined}
-              className={'nav-item ' + (route.kind === 'staff' ? 'nav-item-active' : '')}
-              navigate={navigate}
-              route={staffRoute(route.asOf)}
-            >
-              Staff
-            </WorkspaceLink>
-          ) : null}
-          {currentStaff && currentStaff.role !== 'inspector' ? (
-            <WorkspaceLink
-              ariaCurrent={route.kind === 'inspection-schemas' ? 'page' : undefined}
-              className={
-                'nav-item ' +
-                (route.kind === 'inspection-schemas' ? 'nav-item-active' : '')
-              }
-              navigate={navigate}
-              route={inspectionSchemasRoute(route.asOf)}
-            >
-              Inspection schemas
-            </WorkspaceLink>
-          ) : null}
-          {route.kind === 'property' || route.kind === 'unit' ? (
-            <WorkspaceLink
-              ariaCurrent={route.kind === 'property' ? 'page' : undefined}
-              className={`nav-item ${route.kind === 'property' ? 'nav-item-active' : ''}`}
-              navigate={navigate}
-              route={propertyRoute(route.propertyId, route.asOf)}
-            >
-              Property
-            </WorkspaceLink>
-          ) : (
-            <span className="nav-item nav-item-disabled">Property</span>
-          )}
-          {route.kind === 'unit' ? (
-            <WorkspaceLink
-              ariaCurrent="page"
-              className="nav-item nav-item-active"
-              navigate={navigate}
-              route={unitRoute(
-                route.propertyId,
-                route.unitId,
-                route.asOf,
-                route.tab,
-                {
-                  ...(route.tenancyId ? { tenancyId: route.tenancyId } : {}),
-                  ...(route.agreementId
-                    ? { agreementId: route.agreementId }
-                    : {}),
-                  ...(route.amendmentId
-                    ? { amendmentId: route.amendmentId }
-                    : {}),
-                  ...(route.inspectionId
-                    ? { inspectionId: route.inspectionId }
-                    : {}),
-                  ...(route.inspectionSectionInstanceId
-                    ? { inspectionSectionInstanceId: route.inspectionSectionInstanceId }
-                    : {}),
-                  ...(route.assetId ? { assetId: route.assetId } : {}),
-                  ...(route.meterId ? { meterId: route.meterId } : {}),
-                  ...(route.maintenanceIssueId
-                    ? { maintenanceIssueId: route.maintenanceIssueId }
-                    : {}),
-                  ...(route.maintenanceWorkOrderId
-                    ? { maintenanceWorkOrderId: route.maintenanceWorkOrderId }
-                    : {}),
-                },
-              )}
-            >
-              Unit dossier
-            </WorkspaceLink>
-          ) : (
-            <span className="nav-item nav-item-disabled">Unit dossier</span>
-          )}
-        </nav>
+        <WorkspaceNavigation
+          navigate={navigate}
+          route={route}
+          staffRole={currentStaff?.role ?? null}
+        />
         <div className="session-card">
           <span>{session.email ?? 'Authenticated user'}</span>
           <AccountSecurity sessionGateway={sessionGateway} />
@@ -325,6 +216,14 @@ function AuthenticatedShell({
             asOf={route.asOf}
             navigate={navigate}
             staffRole={currentStaff?.role ?? null}
+          />
+        ) : null}
+
+        {route.kind === 'properties' ? (
+          <PropertyDirectory
+            api={api}
+            asOf={route.asOf}
+            navigate={navigate}
           />
         ) : null}
 
