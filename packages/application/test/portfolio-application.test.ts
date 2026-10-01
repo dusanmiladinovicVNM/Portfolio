@@ -64,6 +64,9 @@ class InMemoryPortfolioRepository implements PortfolioRepository {
     return [...this.properties.values()];
   }
 
+  async listUnits(): Promise<readonly Unit[]> {
+    return [...this.units.values()];
+  }
   async listUnitsByProperty(propertyId: PropertyId): Promise<readonly Unit[]> {
     return [...this.units.values()].filter((unit) => unit.propertyId === propertyId);
   }

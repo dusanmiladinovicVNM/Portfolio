@@ -52,6 +52,10 @@ class ReadRepository implements PortfolioRepository {
     return [];
   }
 
+  async listUnits(): Promise<readonly Unit[]> {
+    return this.storedUnit ? [this.storedUnit] : [];
+  }
+
   async listUnitsByProperty(_propertyId: PropertyId): Promise<readonly Unit[]> {
     return [];
   }

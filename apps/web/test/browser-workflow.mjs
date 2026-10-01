@@ -701,6 +701,99 @@ try {
     'Empty Dashboard date does not create an invalid route',
   );
 
+  await clickXpath(sessionId, "//aside//a[normalize-space()='Find']");
+  await waitForElement(sessionId, 'xpath', "//h1[normalize-space()='Find']");
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl + '/find?asOf=2025-06-30',
+    'Find route preserves reporting context',
+  );
+  await typeXpath(
+    sessionId,
+    "//input[@aria-label='Find Property or Unit']",
+    'Browser Street',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-portfolio-discovery]//*[@data-discovery-kind='property']//a[.//strong[normalize-space()='Browser Test Property']][contains(normalize-space(),'PROP-BRW')][contains(normalize-space(),'Browser Street 1')]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl + '/find?q=Browser+Street&asOf=2025-06-30',
+    'Find query is shareable without changing historical workspace context',
+  );
+  await clearXpath(
+    sessionId,
+    "//input[@aria-label='Find Property or Unit']",
+  );
+  await typeXpath(
+    sessionId,
+    "//input[@aria-label='Find Property or Unit']",
+    'INS-BRW-001',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-portfolio-discovery]//*[@data-discovery-kind='work'][@data-work-domain='inspection']//a[.//strong[normalize-space()='INS-BRW-001']]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-discovery-kind=\"work\"][data-work-domain=\"inspection\"] a')?.getAttribute('href') || null;",
+    ),
+    '/properties/' +
+      propertyId +
+      '/units/' +
+      unitId +
+      '?tab=inspections&inspectionId=' +
+      inspectionId +
+      '&asOf=' +
+      operationalToday,
+    'Find opens active Inspection through canonical Work routing and Swiss operational date',
+  );
+  await clearXpath(
+    sessionId,
+    "//input[@aria-label='Find Property or Unit']",
+  );
+  await typeXpath(
+    sessionId,
+    "//input[@aria-label='Find Property or Unit']",
+    'UNIT-BRW',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-portfolio-discovery]//*[@data-discovery-kind='unit']//a[.//strong[normalize-space()='Unit 1A']][contains(normalize-space(),'PROP-BRW')][contains(normalize-space(),'Browser Test Property')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-portfolio-discovery]')?.innerText.includes('" +
+        unitId +
+        "') ?? false;",
+    ),
+    false,
+    'Find never exposes internal Unit UUID in operator-visible text',
+  );
+  await clickXpath(
+    sessionId,
+    "//*[@data-portfolio-discovery]//*[@data-discovery-kind='unit']//a[.//strong[normalize-space()='Unit 1A']]",
+  );
+  await waitForElement(sessionId, 'xpath', "//h1[normalize-space()='Unit 1A']");
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' +
+      propertyId +
+      '/units/' +
+      unitId +
+      '?tab=overview&asOf=2025-06-30',
+    'Find opens exact canonical Property and Unit owner route',
+  );
+  await clickXpath(sessionId, "//aside//a[normalize-space()='Overview']");
+  await waitForElement(sessionId, 'xpath', "//h1[normalize-space()='Portfolio']");
+
   await clickXpath(sessionId, "//aside//a[normalize-space()='Parties']");
   await waitForElement(sessionId, 'xpath', "//h1[normalize-space()='Parties']");
   await waitForElement(

@@ -106,6 +106,7 @@ class InMemoryPortfolioRepository implements PortfolioRepository {
   async getUnitById(id: UnitId) { return this.units.get(id) ?? null; }
   async getSpaceById(id: SpaceId) { return this.spaces.get(id) ?? null; }
   async listProperties() { return [...this.properties.values()]; }
+  async listUnits() { return [...this.units.values()]; }
   async listUnitsByProperty(propertyId: PropertyId) {
     return [...this.units.values()].filter((item) => item.propertyId === propertyId);
   }

@@ -116,6 +116,7 @@ class EmptyPortfolioRepository implements PortfolioRepository {
   async getUnitById(_id: UnitId): Promise<Unit | null> { return null; }
   async getSpaceById(_id: SpaceId): Promise<Space | null> { return null; }
   async listProperties(): Promise<readonly Property[]> { return []; }
+  async listUnits(): Promise<readonly Unit[]> { return []; }
   async listUnitsByProperty(_propertyId: PropertyId): Promise<readonly Unit[]> { return []; }
   async listSpacesByUnit(_unitId: UnitId): Promise<readonly Space[]> { return []; }
   async propertyCodeExists(_code: string): Promise<boolean> { return false; }
@@ -591,6 +592,7 @@ function buildHandler(options?: {
     },
     async getSpaceById(_id) { return null; },
     async listProperties() { return []; },
+    async listUnits() { return []; },
     async listUnitsByProperty(_propertyId) { return []; },
     async listSpacesByUnit(_unitId) { return []; },
     async propertyCodeExists(_code) { return false; },

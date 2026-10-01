@@ -5050,6 +5050,28 @@ globalThis.fetch = async (
     return json(setupParty, 201);
   }
 
+  if (path === '/properties' && (init?.method ?? 'GET') === 'GET') {
+    return json({
+      items: [
+        property,
+        orchestrationProperty,
+        setupRecoveryProperty,
+        ...(setupProperty ? [setupProperty] : []),
+      ],
+    });
+  }
+
+  if (path === '/units' && (init?.method ?? 'GET') === 'GET') {
+    return json({
+      items: [
+        unit,
+        orchestrationUnit,
+        setupRecoveryUnit,
+        ...(setupUnit ? [setupUnit, setupDestinationUnit] : []),
+      ],
+    });
+  }
+
   if (path === '/reporting/dashboard') {
     const asOf = url.searchParams.get('asOf');
     return json({

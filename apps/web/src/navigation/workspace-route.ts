@@ -29,6 +29,11 @@ export type WorkspaceRoute =
       readonly asOf: string;
     }
   | {
+      readonly kind: 'discovery';
+      readonly asOf: string;
+      readonly query: string;
+    }
+  | {
       readonly kind: 'parties';
       readonly asOf: string;
     }
@@ -67,6 +72,7 @@ export type WorkspaceRoute =
 export function workspaceRouteOwnerKey(route: WorkspaceRoute): string {
   if (route.kind === 'dashboard') return 'dashboard';
   if (route.kind === 'work') return 'work';
+  if (route.kind === 'discovery') return 'discovery';
   if (route.kind === 'parties') return 'parties';
   if (route.kind === 'staff') return 'staff';
   if (route.kind === 'inspection-schemas') return 'inspection-schemas';
@@ -120,6 +126,14 @@ export function dashboardRoute(asOf: string): WorkspaceRoute {
 
 export function workRoute(asOf: string): WorkspaceRoute {
   return { kind: 'work', asOf: requireWorkspaceAsOf(asOf) };
+}
+
+export function discoveryRoute(asOf: string, query = ''): WorkspaceRoute {
+  return {
+    kind: 'discovery',
+    asOf: requireWorkspaceAsOf(asOf),
+    query: query.slice(0, 120),
+  };
 }
 
 export function partiesRoute(asOf: string): WorkspaceRoute {
@@ -294,6 +308,10 @@ export function parseWorkspaceLocation(
     return workRoute(asOf);
   }
 
+  if (segments.length === 1 && segments[0] === 'find') {
+    return discoveryRoute(asOf, search.get('q') ?? '');
+  }
+
   if (segments.length === 1 && segments[0] === 'parties') {
     return partiesRoute(asOf);
   }
@@ -365,6 +383,9 @@ export function workspaceRouteHref(route: WorkspaceRoute): string {
       }
     }
   }
+  if (route.kind === 'discovery' && route.query.trim()) {
+    search.set('q', route.query);
+  }
   search.set('asOf', route.asOf);
 
   if (route.kind === 'dashboard') {
@@ -372,6 +393,9 @@ export function workspaceRouteHref(route: WorkspaceRoute): string {
   }
   if (route.kind === 'work') {
     return '/work?' + search.toString();
+  }
+  if (route.kind === 'discovery') {
+    return '/find?' + search.toString();
   }
   if (route.kind === 'parties') {
     return '/parties?' + search.toString();

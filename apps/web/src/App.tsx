@@ -9,11 +9,13 @@ import { InspectionSchemaAdministration } from './admin/InspectionSchemaAdminist
 import { currentStaffPath } from './api/paths.js';
 import { PortfolioDashboard } from './dashboard/PortfolioDashboard.js';
 import { OperationalWorkQueue } from './work/OperationalWorkQueue.js';
+import { PortfolioDiscovery } from './discovery/PortfolioDiscovery.js';
 import { PropertyUnits } from './dossier/PropertyUnits.js';
 import { UnitDossier } from './dossier/UnitDossier.js';
 import { WorkspaceLink } from './navigation/WorkspaceLink.js';
 import {
   dashboardRoute,
+  discoveryRoute,
   workRoute,
   partiesRoute,
   staffRoute,
@@ -109,7 +111,9 @@ function AuthenticatedShell({
       ? 'dashboard'
       : route.kind === 'work'
         ? 'work'
-        : route.kind === 'parties'
+        : route.kind === 'discovery'
+          ? 'discovery'
+          : route.kind === 'parties'
         ? 'parties'
         : route.kind === 'staff'
           ? 'staff'
@@ -194,6 +198,14 @@ function AuthenticatedShell({
             route={workRoute(route.asOf)}
           >
             Work
+          </WorkspaceLink>
+          <WorkspaceLink
+            ariaCurrent={route.kind === 'discovery' ? 'page' : undefined}
+            className={`nav-item ${route.kind === 'discovery' ? 'nav-item-active' : ''}`}
+            navigate={navigate}
+            route={discoveryRoute(route.asOf)}
+          >
+            Find
           </WorkspaceLink>
           <WorkspaceLink
             ariaCurrent={route.kind === 'parties' ? 'page' : undefined}
@@ -313,6 +325,15 @@ function AuthenticatedShell({
             asOf={route.asOf}
             navigate={navigate}
             staffRole={currentStaff?.role ?? null}
+          />
+        ) : null}
+
+        {route.kind === 'discovery' ? (
+          <PortfolioDiscovery
+            api={api}
+            asOf={route.asOf}
+            navigate={navigate}
+            query={route.query}
           />
         ) : null}
 

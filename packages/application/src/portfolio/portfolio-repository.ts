@@ -13,6 +13,7 @@ export interface PortfolioRepository {
   getSpaceById(id: SpaceId): Promise<Space | null>;
 
   listProperties(): Promise<readonly Property[]>;
+  listUnits(): Promise<readonly Unit[]>;
   listUnitsByProperty(propertyId: PropertyId): Promise<readonly Unit[]>;
   listSpacesByUnit(unitId: UnitId): Promise<readonly Space[]>;
 
