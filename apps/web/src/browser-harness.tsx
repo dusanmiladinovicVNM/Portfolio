@@ -5588,6 +5588,39 @@ globalThis.fetch = async (
       });
     }
 
+    if (
+      !inspectorScoped &&
+      propertyServicePlan.status === 'active' &&
+      (propertyServiceAsset.status === 'active' ||
+        propertyServiceAsset.status === 'inactive')
+    ) {
+      const dueOn = propertyServicePlan.firstDueOn;
+      items.push({
+        kind: 'service',
+        attention:
+          dueOn < referenceDate
+            ? 'overdue'
+            : dueOn === referenceDate
+              ? 'today'
+              : 'upcoming',
+        servicePlanId: propertyServicePlan.id,
+        assetId: propertyServiceAsset.id,
+        assetCode: propertyServiceAsset.code,
+        assetName: propertyServiceAsset.name,
+        planName: propertyServicePlan.name,
+        scheduleKind: propertyServicePlan.scheduleKind,
+        firstDueOn: propertyServicePlan.firstDueOn,
+        intervalMonths: propertyServicePlan.intervalMonths,
+        dueOn,
+        propertyId: property.id,
+        propertyCode: property.code,
+        propertyName: property.name,
+        unitId: null,
+        unitCode: null,
+        unitNumber: null,
+      });
+    }
+
     if (!inspectorScoped) items.push({
       kind: 'occupancy',
       attention:
