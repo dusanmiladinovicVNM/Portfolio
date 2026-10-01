@@ -6,6 +6,7 @@ import {
   getUnitQuery,
   listPropertiesQuery,
   listSpacesByUnitQuery,
+  listUnitsQuery,
   listUnitsByPropertyQuery,
   type Actor,
   type CreatePropertyCommandInput,
@@ -143,6 +144,13 @@ export async function handlePortfolioHttp(
     }
 
     return json({ data: toUnitResponse(unit) });
+  }
+
+  if (method === 'GET' && path === '/units') {
+    const units = await listUnitsQuery(deps.portfolioRepository, actor);
+    return json({
+      data: { items: units.map(toUnitResponse) },
+    });
   }
 
   if (method === 'POST' && path === '/units') {
