@@ -251,6 +251,12 @@ const setupMaintenanceIssueIds = [
 ] as const;
 const workPropertyMaintenanceIssueId =
   'aa100000-0000-4000-8000-000000000001';
+const propertyServiceAssetId =
+  'aa300000-0000-4000-8000-000000000001';
+const propertyServicePlanId =
+  'aa300000-0000-4000-8000-000000000002';
+const propertyUnitShadowAssetId =
+  'aa300000-0000-4000-8000-000000000003';
 const workPropertyMaintenanceAssetId =
   'aa100000-0000-4000-8000-000000000003';
 const setupMaintenanceWorkOrderIds = [
@@ -351,6 +357,49 @@ const setupRecoverySpace: SpaceResponse = {
   areaM2: 30,
   sortOrder: 1,
   active: true,
+};
+
+const propertyServiceAsset: AssetResponse = {
+  id: propertyServiceAssetId,
+  code: 'AST-PROPERTY-LIFT-BRW',
+  name: 'Passenger lift',
+  propertyId,
+  unitId: null,
+  spaceId: null,
+  manufacturer: 'Schindler',
+  model: 'Browser Lift',
+  status: 'active',
+  version: 1,
+  identifiers: [],
+};
+
+const propertyUnitShadowAsset: AssetResponse = {
+  id: propertyUnitShadowAssetId,
+  code: 'AST-UNIT-SHADOW-BRW',
+  name: 'Unit-owned control fixture',
+  propertyId,
+  unitId,
+  spaceId: null,
+  manufacturer: null,
+  model: null,
+  status: 'active',
+  version: 1,
+  identifiers: [],
+};
+
+const propertyServicePlan: ServicePlanResponse = {
+  id: propertyServicePlanId,
+  assetId: propertyServiceAssetId,
+  name: 'Quarterly lift inspection',
+  scheduleKind: 'recurring',
+  firstDueOn: '2026-10-01',
+  intervalMonths: 3,
+  providerPartyId: null,
+  notes: 'Property-level service surface fixture.',
+  status: 'active',
+  version: 1,
+  createdAt: '2026-01-02T08:00:00.000Z',
+  createdByUserId: inspectionUserId,
 };
 
 const orchestrationProperty: PropertyResponse = {
@@ -5145,6 +5194,24 @@ globalThis.fetch = async (
 
   if (path === `/properties/${propertyId}/units`) {
     return json({ items: [unit] });
+  }
+
+  if (path === `/properties/${propertyId}/assets`) {
+    return json({
+      items: [propertyServiceAsset, propertyUnitShadowAsset],
+    });
+  }
+
+  if (path === `/assets/${propertyServiceAssetId}/warranties`) {
+    return json({ items: [] });
+  }
+
+  if (path === `/assets/${propertyServiceAssetId}/service-plans`) {
+    return json({ items: [propertyServicePlan] });
+  }
+
+  if (path === `/assets/${propertyServiceAssetId}/service-events`) {
+    return json({ items: [] });
   }
 
   if (path === `/units/${unitId}`) {
