@@ -251,6 +251,8 @@ const setupMaintenanceIssueIds = [
 ] as const;
 const workPropertyMaintenanceIssueId =
   'aa100000-0000-4000-8000-000000000001';
+const workPropertyMaintenanceAssetId =
+  'aa100000-0000-4000-8000-000000000003';
 const setupMaintenanceWorkOrderIds = [
   'b1000000-0000-4000-8000-000000000046',
   'b1000000-0000-4000-8000-000000000102',
@@ -443,7 +445,7 @@ let setupMaintenanceIssues: MaintenanceIssueResponse[] = [
     propertyId,
     unitId: null,
     spaceId: null,
-    assetId: null,
+    assetId: workPropertyMaintenanceAssetId,
     inspectionFindingId: null,
     title: 'Roof inspection follow-up',
     description: 'Property-level operational issue for Work routing acceptance.',
@@ -1457,6 +1459,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioFailNextInspectionSchemaPublishAfterCommit?: boolean;
   __portfolioFailNextMaintenanceIssueCreateAfterCommit?: boolean;
   __portfolioFailNextMaintenanceWorkOrderCreateAfterCommit?: boolean;
+  __portfolioFailNextMaintenanceAssetEnrichment?: boolean;
   __portfolioFailNextServiceEventCreateAfterCommit?: boolean;
   __portfolioFailNextServiceEventLink?: boolean;
   __portfolioFailNextMeterReadingAfterCommit?: boolean;
@@ -3074,6 +3077,40 @@ globalThis.fetch = async (
       reason: null,
     });
     return json(created, 201);
+  }
+
+  const workPropertyMaintenanceAsset: AssetResponse = {
+    id: workPropertyMaintenanceAssetId,
+    code: 'AST-PROPERTY-WORK-BRW',
+    name: 'Roof access equipment',
+    propertyId,
+    unitId,
+    spaceId: null,
+    manufacturer: null,
+    model: null,
+    status: 'active',
+    version: 2,
+    identifiers: [],
+  };
+
+  if (path === '/assets/' + workPropertyMaintenanceAssetId) {
+    if (browserHarnessWindow.__portfolioFailNextMaintenanceAssetEnrichment) {
+      browserHarnessWindow.__portfolioFailNextMaintenanceAssetEnrichment =
+        false;
+      return apiError(
+        503,
+        'MAINTENANCE_ASSET_ENRICHMENT_TEST_FAILURE',
+        'Intentional current Asset enrichment failure.',
+      );
+    }
+    return json(workPropertyMaintenanceAsset);
+  }
+
+  if (
+    path ===
+    '/assets/' + workPropertyMaintenanceAssetId + '/service-events'
+  ) {
+    return json({ items: [] });
   }
 
   const setupAsset = setupAssets.find((asset) =>
