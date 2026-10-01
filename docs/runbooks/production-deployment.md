@@ -28,11 +28,14 @@ repository secrets before a production release:
 
 ~~~text
 SUPABASE_DEPLOY_ACCESS_TOKEN
-SUPABASE_DB_PASSWORD
+SUPABASE_DB_PASSWORD   # optional; direct DB auth when configured
 ~~~
 
-The release job refuses to deploy without both. It links the exact current-main
-checkout to the configured project, applies canonical migrations with pinned
+The release job requires the deploy access token. When no database password is
+configured, the authenticated Supabase CLI may use its linked-project login
+role; an explicit database password remains preferable where production
+credential policy provides one. The job links the exact current-main checkout
+to the configured project, applies canonical migrations with pinned
 Supabase CLI `2.117.0`, verifies local/remote migration history has no remaining
 version drift, and only then deploys the Edge API and web client:
 
@@ -136,6 +139,7 @@ the API wrapper. For an operator recovery deployment, preserve the same order:
 ~~~bash
 export SUPABASE_PROJECT_REF=<project-ref>
 export SUPABASE_ACCESS_TOKEN=<token>
+# optional:
 export SUPABASE_DB_PASSWORD=<database-password>
 
 pnpm supabase:migrations:deploy
