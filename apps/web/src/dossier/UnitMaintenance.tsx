@@ -87,6 +87,7 @@ import {
   formatSwissDateTime,
   swissLocalDateTimeToInstant,
 } from '../presentation/format.js';
+import { readMaintenanceAssetEnrichment } from './maintenance-asset-enrichment.js';
 import {
   maintenanceAssetCurrentPlacementLabel,
   maintenanceIssueSpaceScopeLabel,
@@ -1748,22 +1749,21 @@ export function UnitMaintenance({
             issueAssetIds
               .filter((assetId) => !currentAssetById.has(assetId))
               .map(async (assetId) => {
-                const asset = await api.get(
-                  assetPath(assetId),
-                  assetResponseSchema,
+                const asset = await readMaintenanceAssetEnrichment(
+                  api,
+                  assetId,
                   { signal: controller.signal },
                 );
-                if (asset.id !== assetId) {
-                  throw new Error(
-                    'Maintenance historical Asset lookup crossed its identity boundary.',
-                  );
-                }
-                return [assetId, asset] as const;
+                return asset === null
+                  ? null
+                  : ([assetId, asset] as const);
               }),
           );
           if (controller.signal.aborted) return;
           const issueAssetMap = new Map(currentAssetById);
-          for (const [assetId, asset] of historicalAssets) {
+          for (const historicalAsset of historicalAssets) {
+            if (historicalAsset === null) continue;
+            const [assetId, asset] = historicalAsset;
             issueAssetMap.set(assetId, asset);
           }
 
@@ -2142,9 +2142,9 @@ export function PropertyMaintenanceIssue({
         ),
         canonicalIssue.assetId === null
           ? Promise.resolve(null)
-          : api.get(
-              assetPath(canonicalIssue.assetId),
-              assetResponseSchema,
+          : readMaintenanceAssetEnrichment(
+              api,
+              canonicalIssue.assetId,
               { signal: controller.signal },
             ),
       ]);
@@ -2153,16 +2153,6 @@ export function PropertyMaintenanceIssue({
         canonicalIssue.id,
         workOrderResponse.items,
       );
-      if (
-        asset &&
-        (asset.id !== canonicalIssue.assetId ||
-          asset.propertyId !== propertyId ||
-          asset.unitId !== null)
-      ) {
-        throw new Error(
-          'Property-level Maintenance Asset crossed its canonical owner.',
-        );
-      }
 
       const eventResponse =
         canonicalIssue.assetId === null
