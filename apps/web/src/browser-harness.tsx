@@ -5202,6 +5202,29 @@ globalThis.fetch = async (
     });
   }
 
+  if (
+    setupProperty &&
+    path === `/properties/${setupPropertyId}/assets`
+  ) {
+    return json({
+      items: setupAssets.filter(
+        (asset) => asset.propertyId === setupPropertyId,
+      ),
+    });
+  }
+
+  if (path === `/properties/${orchestrationPropertyId}/assets`) {
+    return json({ items: [] });
+  }
+
+  if (path === `/properties/${setupRecoveryPropertyId}/assets`) {
+    return json({
+      items: setupAssets.filter(
+        (asset) => asset.propertyId === setupRecoveryPropertyId,
+      ),
+    });
+  }
+
   if (path === `/assets/${propertyServiceAssetId}/warranties`) {
     return json({ items: [] });
   }
