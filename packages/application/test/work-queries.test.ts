@@ -244,10 +244,39 @@ describe('Operational Work query', () => {
       ['maintenance', 'urgent'],
       ['inspection', 'overdue'],
       ['inspection', 'today'],
+      ['maintenance', 'normal'],
       ['service', 'upcoming'],
       ['occupancy', 'upcoming'],
-      ['maintenance', 'normal'],
     ]);
+  });
+
+  it('keeps current unresolved Work ahead of future-dated Work', async () => {
+    const repository = new FakeWorkRepository(projection());
+
+    const result = await listOperationalWorkQuery(
+      repository,
+      manager,
+      '2026-09-30',
+      '2026-10-01',
+    );
+
+    const normalMaintenanceIndex = result.items.findIndex(
+      (item) =>
+        item.kind === 'maintenance' &&
+        item.issueCode === 'MI-NORMAL',
+    );
+    const futureServiceIndex = result.items.findIndex(
+      (item) =>
+        item.kind === 'service' &&
+        item.assetCode === 'AST-LIFT',
+    );
+    const futureOccupancyIndex = result.items.findIndex(
+      (item) => item.kind === 'occupancy',
+    );
+
+    expect(normalMaintenanceIndex).toBeGreaterThanOrEqual(0);
+    expect(futureServiceIndex).toBeGreaterThan(normalMaintenanceIndex);
+    expect(futureOccupancyIndex).toBeGreaterThan(normalMaintenanceIndex);
   });
 
   it('uses queue date only for attention without rewinding the canonical Work set', async () => {
