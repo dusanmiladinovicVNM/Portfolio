@@ -17,8 +17,8 @@ set -euo pipefail
 printf '%s\n' "$*" >> "$FAKE_SUPABASE_LOG"
 
 if [[ "$1" == "link" ]]; then
-  echo "Linked project."
-  exit 0
+  echo "supabase link must not be called by production migration deployment" >&2
+  exit 65
 fi
 
 if [[ "$1" == "db" && "$2" == "push" ]]; then
@@ -74,10 +74,14 @@ run_success() {
   ) >/dev/null
 
   mapfile -t commands < "$LOG"
-  [[ "${commands[0]}" == "link --project-ref test-project" ]]
-  [[ "${commands[1]}" == "current-main-fence" ]]
-  [[ "${commands[2]}" == "db push --linked --yes" ]]
-  [[ "${commands[3]}" == "migration list --linked" ]]
+  [[ "${commands[0]}" == "current-main-fence" ]]
+  [[ "${commands[1]}" == "db push --linked --project-ref test-project --yes" ]]
+  [[ "${commands[2]}" == "migration list --linked --project-ref test-project" ]]
+
+  if grep -q '^link ' "$LOG"; then
+    echo "Migration deploy unexpectedly called supabase link." >&2
+    exit 1
+  fi
 }
 
 run_push_failure() {
