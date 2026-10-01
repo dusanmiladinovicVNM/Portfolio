@@ -23,27 +23,24 @@ import {
   workNeedsActionNow,
 } from '../work/work-presentation.js';
 
-interface PortfolioCommandCenterProps {
+interface PropertyCommandCenterProps {
   readonly api: PortfolioApi;
-  readonly asOf: string;
+  readonly propertyId: string;
   readonly navigate: NavigateWorkspace;
-  readonly staffRole: 'admin' | 'manager' | 'inspector' | null;
 }
 
 const PREVIEW_LIMIT = 5;
 
 function itemContext(item: OperationalWorkItemResponse): string {
-  const property = `${item.propertyName} · ${item.propertyCode}`;
-  if (item.unitId === null) return `${property} · Property-level`;
-  return `${property} · ${item.unitCode} · Unit ${item.unitNumber}`;
+  if (item.unitId === null) return 'Property-level';
+  return item.unitCode + ' · Unit ' + item.unitNumber;
 }
 
-export function PortfolioCommandCenter({
+export function PropertyCommandCenter({
   api,
-  asOf,
+  propertyId,
   navigate,
-  staffRole,
-}: PortfolioCommandCenterProps) {
+}: PropertyCommandCenterProps) {
   const [items, setItems] =
     useState<readonly OperationalWorkItemResponse[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +61,7 @@ export function PortfolioCommandCenter({
       .then((response) => {
         if (controller.signal.aborted) return;
         if (response.referenceDate !== workQueueDate) {
-          setError('Work command center returned a different operational date.');
+          setError('Property Work returned a different operational date.');
           return;
         }
         setItems(response.items);
@@ -74,54 +71,59 @@ export function PortfolioCommandCenter({
         setError(
           cause instanceof Error
             ? cause.message
-            : 'Operational Work could not be loaded.',
+            : 'Property Work could not be loaded.',
         );
       });
 
     return () => controller.abort();
   }, [api, requestVersion, workQueueDate]);
 
+  const propertyItems = useMemo(
+    () =>
+      items === null
+        ? null
+        : items.filter((item) => item.propertyId === propertyId),
+    [items, propertyId],
+  );
+
   const summary = useMemo(() => {
+    const affectedUnits = new Set<string>();
     const counts = {
       active: 0,
       actionNow: 0,
       urgent: 0,
       overdue: 0,
-      today: 0,
+      affectedUnits: 0,
     };
 
-    for (const item of items ?? []) {
+    for (const item of propertyItems ?? []) {
       counts.active += 1;
       if (workNeedsActionNow(item.attention)) counts.actionNow += 1;
       if (item.attention === 'urgent') counts.urgent += 1;
       if (item.attention === 'overdue') counts.overdue += 1;
-      if (item.attention === 'today') counts.today += 1;
+      if (item.unitId !== null) affectedUnits.add(item.unitId);
     }
 
+    counts.affectedUnits = affectedUnits.size;
     return counts;
-  }, [items]);
+  }, [propertyItems]);
 
-  const preview = items?.slice(0, PREVIEW_LIMIT) ?? [];
-  const scopeLabel =
-    staffRole === 'inspector'
-      ? 'Your assigned Work'
-      : 'Portfolio Work';
+  const preview = propertyItems?.slice(0, PREVIEW_LIMIT) ?? [];
 
   return (
     <section
       className="portfolio-command-center"
-      data-portfolio-command-center
-      data-portfolio-section="command-center"
-      aria-labelledby="portfolio-command-center-title"
+      data-property-command-center
+      aria-labelledby="property-command-center-title"
     >
       <div className="section-heading">
         <div>
           <p className="eyebrow">Daily operations</p>
-          <h2 id="portfolio-command-center-title">What needs attention</h2>
+          <h2 id="property-command-center-title">What needs attention</h2>
           <p className="muted">
-            {scopeLabel} is current canonical state. Operational attention is
-            relative to today in Europe/Zurich ({formatSwissDate(workQueueDate)}),
-            independently of the reporting date selected below.
+            Current canonical Work for this Property, relative to today in
+            Europe/Zurich ({formatSwissDate(workQueueDate)}). The server-ranked
+            queue is only narrowed to this Property; it is not re-ranked here.
           </p>
         </div>
         <WorkspaceLink
@@ -135,33 +137,33 @@ export function PortfolioCommandCenter({
 
       <div
         className="portfolio-command-center-metrics"
-        aria-label="Portfolio Work attention summary"
+        aria-label="Property Work attention summary"
       >
         <div>
           <span>Active Work</span>
-          <strong>{items === null ? '—' : summary.active}</strong>
+          <strong>{propertyItems === null ? '—' : summary.active}</strong>
         </div>
         <div>
           <span>Action now</span>
-          <strong>{items === null ? '—' : summary.actionNow}</strong>
+          <strong>{propertyItems === null ? '—' : summary.actionNow}</strong>
         </div>
         <div>
           <span>Urgent</span>
-          <strong>{items === null ? '—' : summary.urgent}</strong>
+          <strong>{propertyItems === null ? '—' : summary.urgent}</strong>
         </div>
         <div>
           <span>Overdue</span>
-          <strong>{items === null ? '—' : summary.overdue}</strong>
+          <strong>{propertyItems === null ? '—' : summary.overdue}</strong>
         </div>
         <div>
-          <span>Today</span>
-          <strong>{items === null ? '—' : summary.today}</strong>
+          <span>Units affected</span>
+          <strong>{propertyItems === null ? '—' : summary.affectedUnits}</strong>
         </div>
       </div>
 
       {error ? (
         <div className="portfolio-command-center-error" role="alert">
-          <strong>Work unavailable</strong>
+          <strong>Property Work unavailable</strong>
           <span>{error}</span>
           <button
             className="button-secondary inline-button"
@@ -173,23 +175,23 @@ export function PortfolioCommandCenter({
         </div>
       ) : null}
 
-      {!error && items === null ? (
+      {!error && propertyItems === null ? (
         <p className="muted" aria-live="polite">
-          Loading operational Work…
+          Loading Property Work…
         </p>
       ) : null}
 
-      {items !== null && items.length === 0 ? (
+      {propertyItems !== null && propertyItems.length === 0 ? (
         <div className="portfolio-command-center-clear">
-          <strong>No active operational Work</strong>
-          <span>The canonical Work projection is currently clear.</span>
+          <strong>No active Work for this Property</strong>
+          <span>The canonical Work projection is currently clear here.</span>
         </div>
       ) : null}
 
       {preview.length > 0 ? (
         <div
           className="portfolio-command-center-actions"
-          aria-label="Highest-priority operational Work"
+          aria-label="Highest-priority Property Work"
         >
           {preview.map((item) => (
             <article
@@ -200,7 +202,7 @@ export function PortfolioCommandCenter({
             >
               <div className="portfolio-command-center-item-main">
                 <span
-                  className={`work-attention work-attention-${item.attention}`}
+                  className={'work-attention work-attention-' + item.attention}
                 >
                   {workAttentionLabel(item.attention)}
                 </span>
@@ -225,9 +227,10 @@ export function PortfolioCommandCenter({
         </div>
       ) : null}
 
-      {items !== null && items.length > PREVIEW_LIMIT ? (
+      {propertyItems !== null && propertyItems.length > PREVIEW_LIMIT ? (
         <p className="portfolio-command-center-more">
-          Showing {PREVIEW_LIMIT} of {items.length} active Work items.
+          Showing {PREVIEW_LIMIT} of {propertyItems.length} active Work items
+          for this Property.
           <WorkspaceLink
             className="portfolio-command-center-more-link"
             navigate={navigate}

@@ -8,6 +8,10 @@ import {
   unitRoute,
   type WorkspaceRoute,
 } from '../navigation/workspace-route.js';
+import {
+  formatDetailKey,
+  formatSwissDate,
+} from '../presentation/format.js';
 
 export type WorkAttention =
   (typeof WORK_ATTENTION_VALUES)[number];
@@ -29,6 +33,36 @@ export function workAttentionLabel(value: WorkAttention): string {
     case 'unscheduled':
       return 'Unscheduled';
   }
+}
+
+export function workNeedsActionNow(value: WorkAttention): boolean {
+  return (
+    value === 'urgent' ||
+    value === 'overdue' ||
+    value === 'today' ||
+    value === 'high'
+  );
+}
+
+export function workItemSummary(
+  item: OperationalWorkItemResponse,
+): string {
+  if (item.kind === 'inspection') {
+    return item.scheduledFor
+      ? formatDetailKey(item.inspectionStatus) +
+          ' · scheduled ' +
+          formatSwissDate(item.scheduledFor)
+      : formatDetailKey(item.inspectionStatus) + ' · unscheduled';
+  }
+
+  if (item.kind === 'maintenance') {
+    return item.title + ' · ' + formatDetailKey(item.priority) + ' priority';
+  }
+
+  const due = item.dueDate
+    ? ' · due ' + formatSwissDate(item.dueDate)
+    : '';
+  return workOccupancyReasonLabel(item.reason) + due;
 }
 
 export function workDomainLabel(
