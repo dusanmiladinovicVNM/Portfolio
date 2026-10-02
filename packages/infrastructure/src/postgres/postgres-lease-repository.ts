@@ -477,14 +477,14 @@ export class PostgresLeaseRepository implements LeaseRepository {
     tenancyId: TenancyId,
     effectiveAt: DateOnly,
   ): Promise<boolean> {
-    const rows = await this.sql<{ exists: boolean }[]>\`
+    const rows = await this.sql<{ exists: boolean }[]>`
       select exists(
         select 1
         from public.tenancy_term_versions
         where tenancy_id = ${tenancyId}
           and effective_from = ${effectiveAt}
       ) as exists
-    \`;
+    `;
     return rows[0]?.exists ?? false;
   }
 
@@ -521,7 +521,7 @@ export class PostgresLeaseRepository implements LeaseRepository {
     expectedVersion: number,
   ): Promise<void> {
     await withTranslatedErrors(async () => {
-      const rows = await this.sql<{ id: string }[]>\`
+      const rows = await this.sql<{ id: string }[]>`
         update public.lease_agreements
         set
           effective_from = ${agreement.effectiveFrom},
