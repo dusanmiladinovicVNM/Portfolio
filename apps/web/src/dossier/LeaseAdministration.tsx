@@ -6,6 +6,7 @@ import {
   leaseAmendmentResponseSchema,
   partyListResponseSchema,
   replaceLeaseAgreementPartiesRequestSchema,
+  replaceLeaseAgreementPeriodRequestSchema,
   signLeaseAgreementRequestSchema,
   signLeaseAmendmentRequestSchema,
   type LeaseAgreementResponse,
@@ -29,6 +30,7 @@ import {
   agreementAmendmentsPath,
   agreementCancelPath,
   agreementPartiesPath,
+  agreementPeriodPath,
   agreementSignPath,
   amendmentCancelPath,
   amendmentSignPath,
@@ -380,6 +382,68 @@ function AgreementCreateForm({
           type="submit"
         >
           Create Agreement draft
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function AgreementPeriodEditForm({
+  agreement,
+  pending,
+  onSubmit,
+}: {
+  readonly agreement: LeaseAgreementResponse;
+  readonly pending: boolean;
+  readonly onSubmit: (
+    event: FormEvent<HTMLFormElement>,
+    agreement: LeaseAgreementResponse,
+  ) => void;
+}) {
+  return (
+    <form
+      className="setup-form contract-admin-form"
+      data-contract-form="agreement-period"
+      onSubmit={(event) => onSubmit(event, agreement)}
+    >
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Draft legal period</p>
+          <h3>Edit {agreement.code} dates</h3>
+        </div>
+        <span className="section-note">
+          Editable only while draft · CAS v{agreement.version}
+        </span>
+      </div>
+      <div className="setup-form-grid">
+        <label>
+          Effective from
+          <input
+            defaultValue={agreement.effectiveFrom}
+            disabled={pending}
+            name="effectiveFrom"
+            required
+            type="date"
+          />
+        </label>
+        <label>
+          Effective to
+          <input
+            defaultValue={agreement.effectiveTo ?? ''}
+            disabled={pending}
+            name="effectiveTo"
+            type="date"
+          />
+        </label>
+      </div>
+      <div className="setup-form-actions">
+        <span className="setup-hint">
+          Only one legal term snapshot may start on a Tenancy per business
+          date. If a saved Luzerner form already exists, update its contract
+          dates after changing this period.
+        </span>
+        <button className="button-secondary" disabled={pending} type="submit">
+          Save Agreement dates
         </button>
       </div>
     </form>
@@ -919,6 +983,55 @@ export function LeaseAdministration({
     }
   }
 
+  async function replaceAgreementPeriod(
+    event: FormEvent<HTMLFormElement>,
+    target: LeaseAgreementResponse,
+  ) {
+    event.preventDefault();
+    if (!beginWrite()) return;
+
+    const targetTenancyId = tenancy.id;
+    const form = new FormData(event.currentTarget);
+    const parsed = replaceLeaseAgreementPeriodRequestSchema.safeParse({
+      expectedVersion: target.version,
+      effectiveFrom: requiredString(form, 'effectiveFrom'),
+      effectiveTo: optionalString(form, 'effectiveTo') ?? null,
+    });
+
+    if (!parsed.success) {
+      finishWrite();
+      setError(contractErrorMessage());
+      return;
+    }
+
+    try {
+      const updated = await api.put(
+        agreementPeriodPath(target.id),
+        parsed.data,
+        leaseAgreementResponseSchema,
+      );
+      assertAgreementMutationOwner(
+        targetTenancyId,
+        target.id,
+        target.version,
+        updated,
+      );
+      canonicalRefreshIfActive(targetTenancyId, target.id);
+    } catch (cause) {
+      if (
+        mountedRef.current &&
+        activeTenancyIdRef.current === targetTenancyId &&
+        activeAgreementIdRef.current === target.id
+      ) {
+        setError(
+          writeError(cause, 'Agreement dates could not be updated.'),
+        );
+      }
+    } finally {
+      finishWrite();
+    }
+  }
+
   async function replaceAgreementParties(
     event: FormEvent<HTMLFormElement>,
     target: LeaseAgreementResponse,
@@ -1276,6 +1389,12 @@ export function LeaseAdministration({
 
         {agreement?.status === 'draft' ? (
           <>
+            <AgreementPeriodEditForm
+              agreement={agreement}
+              key={`agreement-period:${agreement.id}:${agreement.version}`}
+              onSubmit={replaceAgreementPeriod}
+              pending={controlsBlocked}
+            />
             <AgreementPartyEditForm
               agreement={agreement}
               key={`agreement-parties:${agreement.id}:${agreement.version}:${
