@@ -15,6 +15,7 @@ import {
   inspectLuzernerLeaseFormReadiness,
   reviseLuzernerLeaseFormDraft,
   replaceLeaseAgreementParties,
+  replaceLeaseAgreementPeriod,
   signLeaseAgreement,
   signLeaseAmendment,
   supersedeLeaseAgreement,
@@ -84,6 +85,28 @@ describe('LeaseAgreement', () => {
         })),
       }),
     ).toThrowError(/cannot have a predecessor/);
+  });
+
+  it('corrects the legal period only while Agreement is draft', () => {
+    const draft = draftAgreement();
+    const updated = replaceLeaseAgreementPeriod(
+      draft,
+      '2026-10-02',
+      '2027-10-01',
+    );
+
+    expect(updated.effectiveFrom).toBe('2026-10-02');
+    expect(updated.effectiveTo).toBe('2027-10-01');
+    expect(updated.version).toBe(2);
+
+    expect(() =>
+      replaceLeaseAgreementPeriod(draft, '2027-10-02', '2027-10-01'),
+    ).toThrowError(/effectiveTo cannot be earlier/);
+
+    const signed = signLeaseAgreement(updated, '2026-09-20');
+    expect(() =>
+      replaceLeaseAgreementPeriod(signed, '2026-10-03', '2027-10-01'),
+    ).toThrowError(/non-draft lease agreement is immutable/);
   });
 
   it('replaces party composition only while Agreement is draft', () => {
