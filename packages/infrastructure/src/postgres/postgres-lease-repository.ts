@@ -507,7 +507,7 @@ export class PostgresLeaseRepository implements LeaseRepository {
   ): Promise<void> {
     await withTranslatedErrors(async () => {
       await this.sql.begin(async (tx) => {
-        const updated = await tx<{ id: string }[]>\`
+        const updated = await tx<{ id: string }[]>`
           update public.lease_agreements
           set
             version = ${agreement.version},
