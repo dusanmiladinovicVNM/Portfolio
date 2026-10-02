@@ -354,6 +354,13 @@ async function elementDisabledXpath(sessionId, xpath) {
   );
 }
 
+async function elementCheckedXpath(sessionId, xpath) {
+  const id = await waitForElement(sessionId, 'xpath', xpath);
+  return webdriver(
+    `/session/${sessionId}/element/${id}/property/checked`,
+  );
+}
+
 async function clickAndDismissConfirm(sessionId, xpath, expectedText) {
   const id = await waitForElement(sessionId, 'xpath', xpath);
   try {
@@ -2750,6 +2757,117 @@ try {
       '&asOf=2027-01-01',
     'Replacement Agreement deep-link',
   );
+
+  const agreementPartiesForm =
+    "//form[@data-contract-form='agreement-parties']";
+  const landlordPartyGroup =
+    agreementPartiesForm + "//*[@data-agreement-party-role='landlord']";
+  const authorizedSignatoryPartyGroup =
+    agreementPartiesForm +
+    "//*[@data-agreement-party-role='authorized_signatory']";
+  const tenancyAgreementPartyGroup =
+    agreementPartiesForm + "//*[@data-agreement-party-role='tenancy']";
+  const primaryLandlordCheckbox =
+    landlordPartyGroup +
+    "//input[@name='landlordParty' and @value='" + landlordPartyId + "']";
+  const secondLandlordCheckbox =
+    landlordPartyGroup +
+    "//input[@name='landlordParty' and @value='" + setupPartyId + "']";
+  const tenantSignatoryCheckbox =
+    authorizedSignatoryPartyGroup +
+    "//input[@name='authorizedSignatoryParty' and @value='" +
+    tenantPartyId +
+    "']";
+  const setupSignatoryCheckbox =
+    authorizedSignatoryPartyGroup +
+    "//input[@name='authorizedSignatoryParty' and @value='" +
+    setupPartyId +
+    "']";
+  const tenantLegalCheckbox =
+    tenancyAgreementPartyGroup +
+    "//input[@name='tenancyParty' and @value='" +
+    tenantPartyId +
+    ":tenant']";
+
+  await waitForElement(sessionId, 'xpath', agreementPartiesForm);
+  assertEqual(
+    await elementCheckedXpath(sessionId, primaryLandlordCheckbox),
+    true,
+    'Draft party editor prefills existing landlord',
+  );
+  assertEqual(
+    await elementCheckedXpath(sessionId, tenantLegalCheckbox),
+    true,
+    'Draft party editor prefills existing tenant',
+  );
+  assertEqual(
+    await elementCheckedXpath(sessionId, secondLandlordCheckbox),
+    false,
+    'Second landlord starts unselected',
+  );
+  assertEqual(
+    await elementCheckedXpath(sessionId, tenantSignatoryCheckbox),
+    false,
+    'Tenant authorized-signatory role starts unselected',
+  );
+  assertEqual(
+    await elementCheckedXpath(sessionId, setupSignatoryCheckbox),
+    false,
+    'Setup Party authorized-signatory role starts unselected',
+  );
+
+  await clickXpath(sessionId, secondLandlordCheckbox);
+  await clickXpath(sessionId, tenantSignatoryCheckbox);
+  await clickXpath(sessionId, setupSignatoryCheckbox);
+  await clickXpath(
+    sessionId,
+    agreementPartiesForm +
+      "//button[normalize-space()='Save Agreement parties']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementPartiesForm + "//*[contains(normalize-space(),'CAS v2')]",
+  );
+
+  for (const [xpath, label] of [
+    [primaryLandlordCheckbox, 'Primary landlord survives canonical refresh'],
+    [secondLandlordCheckbox, 'Second landlord survives canonical refresh'],
+    [tenantLegalCheckbox, 'Tenant survives canonical refresh'],
+    [tenantSignatoryCheckbox, 'Tenant signatory survives canonical refresh'],
+    [setupSignatoryCheckbox, 'Setup signatory survives canonical refresh'],
+  ]) {
+    assertEqual(
+      await elementCheckedXpath(sessionId, xpath),
+      true,
+      label,
+    );
+  }
+
+  await clickXpath(
+    sessionId,
+    agreementPartiesForm +
+      "//button[normalize-space()='Save Agreement parties']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementPartiesForm + "//*[contains(normalize-space(),'CAS v3')]",
+  );
+
+  for (const [xpath, label] of [
+    [primaryLandlordCheckbox, 'Primary landlord round-trips losslessly'],
+    [secondLandlordCheckbox, 'Second landlord round-trips losslessly'],
+    [tenantLegalCheckbox, 'Tenant round-trips losslessly'],
+    [tenantSignatoryCheckbox, 'Tenant signatory round-trips losslessly'],
+    [setupSignatoryCheckbox, 'Setup signatory round-trips losslessly'],
+  ]) {
+    assertEqual(
+      await elementCheckedXpath(sessionId, xpath),
+      true,
+      label,
+    );
+  }
 
   const luzernerForm =
     "//*[@data-luzerner-lease-form='" + setupReplacementAgreementId + "']";
