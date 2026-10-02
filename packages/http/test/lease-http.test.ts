@@ -1629,13 +1629,53 @@ describe('Lease Agreement draft period correction HTTP', () => {
       },
     });
 
+    const omittedEnd = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/period`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedVersion: 2,
+            effectiveFrom: '2026-10-03',
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(omittedEnd.status).toBe(400);
+
+    const explicitlyOpenEnded = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/period`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedVersion: 2,
+            effectiveFrom: '2026-10-02',
+            effectiveTo: null,
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(explicitlyOpenEnded.status).toBe(200);
+    expect(await explicitlyOpenEnded.json()).toMatchObject({
+      data: {
+        id: agreement.id,
+        effectiveFrom: '2026-10-02',
+        effectiveTo: null,
+        version: 3,
+        status: 'draft',
+      },
+    });
+
     const stale = await handler(
       new Request(
         `https://portfolio.test/agreements/${agreement.id}/period`,
         {
           method: 'PUT',
           body: JSON.stringify({
-            expectedVersion: 1,
+            expectedVersion: 3,
             effectiveFrom: '2026-10-03',
             effectiveTo: '2027-10-01',
           }),
@@ -1689,7 +1729,7 @@ describe('Lease Agreement draft period correction HTTP', () => {
         {
           method: 'POST',
           body: JSON.stringify({
-            expectedVersion: 2,
+            expectedVersion: 3,
             signedAt: '2026-09-26',
             terms: {
               currency: 'CHF',
@@ -1709,9 +1749,9 @@ describe('Lease Agreement draft period correction HTTP', () => {
         {
           method: 'PUT',
           body: JSON.stringify({
-            expectedVersion: 3,
+            expectedVersion: 4,
             effectiveFrom: '2026-10-04',
-            effectiveTo: '2027-10-01',
+            effectiveTo: null,
           }),
         },
       ),
@@ -1909,6 +1949,111 @@ describe('Lease Agreement draft party correction HTTP', () => {
     expect(await frozen.json()).toMatchObject({
       error: { code: 'LEASE_AGREEMENT_PARTIES_IMMUTABLE' },
     });
+  });
+});
+
+describe('Lease Amendment occupied term-date HTTP', () => {
+  it('returns 409 and keeps Amendment draft when its term date is occupied', async () => {
+    const { handler, leaseRepository } = buildHandler();
+
+    const agreementResponse = await handler(
+      new Request(`https://portfolio.test/tenancies/${TENANCY_ID}/agreements`, {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'AGR-AMENDMENT-CONFLICT',
+          agreementType: 'initial',
+          effectiveFrom: '2026-10-01',
+          parties: [
+            { partyId: LANDLORD_ID, role: 'landlord' },
+            { partyId: TENANT_ID, role: 'tenant' },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(agreementResponse.status).toBe(201);
+    const agreement = (await agreementResponse.json()).data as {
+      id: string;
+      version: number;
+    };
+
+    const signedAgreement = await handler(
+      new Request(`https://portfolio.test/agreements/${agreement.id}/sign`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: agreement.version,
+          signedAt: '2026-09-20',
+          terms: {
+            currency: 'CHF',
+            baseRent: '1800.00',
+          },
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(signedAgreement.status).toBe(200);
+
+    const amendmentResponse = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/amendments`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            code: 'AMD-OCCUPIED-DATE',
+            title: 'Occupied date',
+            effectiveFrom: '2026-11-01',
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(amendmentResponse.status).toBe(201);
+    const amendment = (await amendmentResponse.json()).data as {
+      id: string;
+      version: number;
+    };
+
+    leaseRepository.terms.push(
+      createTenancyTermVersion({
+        id: asTenancyTermVersionId(
+          '30000000-0000-4000-8000-000000000005',
+        ),
+        tenancyId: TENANCY_ID,
+        sourceType: 'agreement',
+        sourceAgreementId: asLeaseAgreementId(
+          '30000000-0000-4000-8000-000000000006',
+        ),
+        effectiveFrom: '2026-11-01',
+        currency: 'CHF',
+        baseRent: '1900.00',
+      }),
+    );
+
+    const response = await handler(
+      new Request(
+        `https://portfolio.test/amendments/${amendment.id}/sign`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            expectedVersion: amendment.version,
+            signedAt: '2026-10-20',
+            terms: {
+              currency: 'CHF',
+              baseRent: '1950.00',
+            },
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'TENANCY_TERM_EFFECTIVE_DATE_CONFLICT' },
+    });
+    expect(
+      leaseRepository.amendments.get(asLeaseAmendmentId(amendment.id))?.status,
+    ).toBe('draft');
   });
 });
 
