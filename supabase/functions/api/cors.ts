@@ -1,4 +1,4 @@
-const ALLOWED_METHODS = 'GET,POST,PATCH,OPTIONS';
+const ALLOWED_METHODS = 'GET,POST,PUT,PATCH,OPTIONS';
 const ALLOWED_HEADERS = 'authorization,content-type,x-request-id';
 
 function corsHeaders(origin: string): Headers {

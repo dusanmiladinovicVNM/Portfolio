@@ -37,6 +37,34 @@ Deno.test('CORS permits only configured browser origin', async () => {
   );
 });
 
+Deno.test('CORS preflight explicitly permits PUT legal writes', async () => {
+  const handler = createCorsHandler(
+    'https://portfolio.example.com',
+    async () => Response.json({ ok: true }),
+  );
+
+  const response = await handler(
+    new Request(
+      'https://api.example.com/functions/v1/api/agreements/agreement-id/parties',
+      {
+        method: 'OPTIONS',
+        headers: {
+          origin: 'https://portfolio.example.com',
+          'access-control-request-method': 'PUT',
+          'access-control-request-headers': 'authorization,content-type',
+        },
+      },
+    ),
+  );
+
+  assertEquals(response.status, 204, 'PUT preflight status');
+  assertEquals(
+    response.headers.get('access-control-allow-methods'),
+    'GET,POST,PUT,PATCH,OPTIONS',
+    'PUT allowed methods',
+  );
+});
+
 Deno.test('CORS answers configured preflight without invoking business handler', async () => {
   let calls = 0;
   const handler = createCorsHandler(
@@ -58,7 +86,7 @@ Deno.test('CORS answers configured preflight without invoking business handler',
   assertEquals(calls, 0, 'business calls');
   assertEquals(
     response.headers.get('access-control-allow-methods'),
-    'GET,POST,PATCH,OPTIONS',
+    'GET,POST,PUT,PATCH,OPTIONS',
     'allowed methods',
   );
 });
