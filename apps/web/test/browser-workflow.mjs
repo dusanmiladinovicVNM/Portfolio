@@ -2869,6 +2869,51 @@ try {
     );
   }
 
+  const agreementPeriodForm =
+    "//form[@data-contract-form='agreement-period']";
+  const agreementEffectiveFromInput =
+    agreementPeriodForm + "//input[@name='effectiveFrom']";
+  const agreementEffectiveToInput =
+    agreementPeriodForm + "//input[@name='effectiveTo']";
+
+  await waitForElement(sessionId, 'xpath', agreementPeriodForm);
+  assertEqual(
+    await elementValueXpath(sessionId, agreementEffectiveFromInput),
+    '2027-07-01',
+    'Draft Agreement period editor prefills canonical effectiveFrom',
+  );
+  assertEqual(
+    await elementValueXpath(sessionId, agreementEffectiveToInput),
+    '',
+    'Draft Agreement period editor preserves open-ended effectiveTo',
+  );
+
+  await setInputValueXpath(
+    sessionId,
+    agreementEffectiveFromInput,
+    '2027-07-02',
+  );
+  await clickXpath(
+    sessionId,
+    agreementPeriodForm +
+      "//button[normalize-space()='Save Agreement dates']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    agreementPeriodForm + "//*[contains(normalize-space(),'CAS v4')]",
+  );
+  assertEqual(
+    await elementValueXpath(sessionId, agreementEffectiveFromInput),
+    '2027-07-02',
+    'Draft Agreement effectiveFrom refreshes from canonical v4',
+  );
+  assertEqual(
+    await elementValueXpath(sessionId, agreementEffectiveToInput),
+    '',
+    'Draft Agreement effectiveTo remains open after canonical refresh',
+  );
+
   const luzernerForm =
     "//*[@data-luzerner-lease-form='" + setupReplacementAgreementId + "']";
   await waitForElement(
@@ -2889,7 +2934,7 @@ try {
   await setInputValueXpath(
     sessionId,
     luzernerForm + "//label[normalize-space()='Mietantritt']//input",
-    '2027-07-01',
+    '2027-07-02',
   );
   await selectOptionXpath(
     sessionId,

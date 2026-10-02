@@ -4634,6 +4634,39 @@ globalThis.fetch = async (
 
   if (
     setupAgreement &&
+    path === '/agreements/' + setupAgreement.id + '/period' &&
+    init?.method === 'PUT'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      effectiveFrom: string;
+      effectiveTo: string | null;
+    };
+    if (setupAgreement.status !== 'draft') {
+      return apiError(
+        422,
+        'LEASE_AGREEMENT_PERIOD_IMMUTABLE',
+        'Period of a non-draft lease agreement is immutable.',
+      );
+    }
+    if (body.expectedVersion !== setupAgreement.version) {
+      return contractVersionConflict('LEASE_AGREEMENT_VERSION_CONFLICT');
+    }
+    const updated: LeaseAgreementResponse = {
+      ...setupAgreement,
+      effectiveFrom: body.effectiveFrom,
+      effectiveTo: body.effectiveTo,
+      version: setupAgreement.version + 1,
+    };
+    setupAgreements = setupAgreements.map((item) =>
+      item.id === updated.id ? updated : item,
+    );
+    return json(updated);
+  }
+
+  if (
+    setupAgreement &&
     path === '/agreements/' + setupAgreement.id + '/parties' &&
     init?.method === 'PUT'
   ) {

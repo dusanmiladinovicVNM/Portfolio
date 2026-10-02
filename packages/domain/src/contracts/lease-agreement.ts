@@ -151,6 +151,37 @@ export function createLeaseAgreement(
   };
 }
 
+export function replaceLeaseAgreementPeriod(
+  agreement: LeaseAgreement,
+  effectiveFromValue: string,
+  effectiveToValue: string | null,
+): LeaseAgreement {
+  if (agreement.status !== 'draft') {
+    throw new DomainError(
+      'LEASE_AGREEMENT_PERIOD_IMMUTABLE',
+      'Period of a non-draft lease agreement is immutable.',
+    );
+  }
+
+  const effectiveFrom = asDateOnly(effectiveFromValue);
+  const effectiveTo =
+    effectiveToValue === null ? null : asDateOnly(effectiveToValue);
+
+  if (effectiveTo !== null && effectiveTo < effectiveFrom) {
+    throw new DomainError(
+      'LEASE_AGREEMENT_INVALID_PERIOD',
+      'effectiveTo cannot be earlier than effectiveFrom.',
+    );
+  }
+
+  return {
+    ...agreement,
+    effectiveFrom,
+    effectiveTo,
+    version: agreement.version + 1,
+  };
+}
+
 export function replaceLeaseAgreementParties(
   agreement: LeaseAgreement,
   parties: readonly CreateLeaseAgreementPartyInput[],

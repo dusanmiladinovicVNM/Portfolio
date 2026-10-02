@@ -246,6 +246,12 @@ export const createLeaseAgreementRequestSchema = z.object({
   }
 });
 
+export const replaceLeaseAgreementPeriodRequestSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+  effectiveFrom: isoDateSchema,
+  effectiveTo: isoDateSchema.nullable(),
+});
+
 export const replaceLeaseAgreementPartiesRequestSchema = z.object({
   expectedVersion: z.number().int().positive(),
   parties: z.array(leaseAgreementPartyRequestSchema).min(2),
