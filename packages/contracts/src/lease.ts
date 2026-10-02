@@ -216,18 +216,18 @@ export type LuzernerLeaseFormResponse = z.infer<
   typeof luzernerLeaseFormResponseSchema
 >;
 
+const leaseAgreementPartyRequestSchema = z.object({
+  partyId: entityIdSchema,
+  role: z.enum(LEASE_AGREEMENT_PARTY_ROLES),
+});
+
 export const createLeaseAgreementRequestSchema = z.object({
   code: z.string().trim().min(1),
   agreementType: z.enum(LEASE_AGREEMENT_TYPES),
   predecessorAgreementId: entityIdSchema.optional(),
   effectiveFrom: isoDateSchema,
   effectiveTo: isoDateSchema.nullable().optional(),
-  parties: z.array(
-    z.object({
-      partyId: entityIdSchema,
-      role: z.enum(LEASE_AGREEMENT_PARTY_ROLES),
-    }),
-  ).min(2),
+  parties: z.array(leaseAgreementPartyRequestSchema).min(2),
 }).superRefine((value, ctx) => {
   if (value.agreementType === 'initial' && value.predecessorAgreementId !== undefined) {
     ctx.addIssue({
@@ -244,6 +244,11 @@ export const createLeaseAgreementRequestSchema = z.object({
       message: 'Renewal and replacement agreements require a predecessor.',
     });
   }
+});
+
+export const replaceLeaseAgreementPartiesRequestSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+  parties: z.array(leaseAgreementPartyRequestSchema).min(2),
 });
 
 export const signLeaseAgreementRequestSchema = z.object({
