@@ -38,19 +38,23 @@ authenticated Supabase CLI may use its linked-project login role; an explicit
 database password remains preferable where production credential policy
 provides one.
 
-The job starts only from an exact current-main checkout, links that checkout to
-the configured project, then performs one final freshness fence immediately
-before the first production mutation. From the moment `supabase db push`
-begins, that exact release is committed and must finish through API and web
-deployment even if a newer `main` appears; the queued newer release follows
-afterward. The canonical order is:
+The job starts only from an exact current-main checkout and performs one final
+freshness fence immediately before the first production mutation. Migration
+commands target the configured production project explicitly with
+`--project-ref`; CI intentionally does not run `supabase link`, because that
+command also retrieves project/API-key metadata that is not required to apply
+or verify database migrations and may require broader Management API
+permissions than the scoped deploy token.
+
+From the moment `supabase db push` begins, that exact release is committed and
+must finish through API and web deployment even if a newer `main` appears; the
+queued newer release follows afterward. The canonical order is:
 
 ~~~text
 initial current-main fence
-→ supabase link
 → final current-main fence
-→ supabase db push
-→ migration history parity
+→ supabase db push --project-ref <production-project>
+→ migration history parity --project-ref <production-project>
 → deploy exact API SHA
 → hosted API SHA verify
 → Vercel production deploy

@@ -42,15 +42,13 @@ run_supabase() {
   fi
 }
 
-run_supabase link --project-ref "$PROJECT_REF"
-
 if [[ "${DEPLOY_REQUIRE_REMOTE_MAIN:-0}" == "1" ]]; then
   run_current_main_fence
 fi
 
-run_supabase db push --linked --yes
+run_supabase db push --linked --project-ref "$PROJECT_REF" --yes
 
-MIGRATION_LIST="$(run_supabase migration list --linked)"
+MIGRATION_LIST="$(run_supabase migration list --linked --project-ref "$PROJECT_REF")"
 printf '%s\n' "$MIGRATION_LIST"
 
 drift=0
