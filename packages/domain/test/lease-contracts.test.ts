@@ -14,6 +14,7 @@ import {
   emptyLuzernerLeaseFormContent,
   inspectLuzernerLeaseFormReadiness,
   reviseLuzernerLeaseFormDraft,
+  replaceLeaseAgreementParties,
   signLeaseAgreement,
   signLeaseAmendment,
   supersedeLeaseAgreement,
@@ -83,6 +84,33 @@ describe('LeaseAgreement', () => {
         })),
       }),
     ).toThrowError(/cannot have a predecessor/);
+  });
+
+  it('replaces party composition only while Agreement is draft', () => {
+    const draft = draftAgreement();
+    const updated = replaceLeaseAgreementParties(draft, [
+      {
+        id: asLeaseAgreementPartyId('10000000-0000-4000-8000-000000000007'),
+        partyId: asPartyId('10000000-0000-4000-8000-000000000008'),
+        role: 'landlord',
+      },
+      {
+        id: asLeaseAgreementPartyId('10000000-0000-4000-8000-000000000009'),
+        partyId: asPartyId('10000000-0000-4000-8000-000000000006'),
+        role: 'tenant',
+      },
+    ]);
+
+    expect(updated.version).toBe(2);
+    expect(updated.parties.map((party) => [party.partyId, party.role])).toEqual([
+      ['10000000-0000-4000-8000-000000000008', 'landlord'],
+      ['10000000-0000-4000-8000-000000000006', 'tenant'],
+    ]);
+
+    const signed = signLeaseAgreement(updated, '2026-09-20');
+    expect(() =>
+      replaceLeaseAgreementParties(signed, updated.parties),
+    ).toThrowError(/non-draft lease agreement are immutable/);
   });
 
   it('supersedes only a signed predecessor without rewriting legal content', () => {
