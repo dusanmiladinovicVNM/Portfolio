@@ -317,9 +317,7 @@ export async function handleLeaseHttp(
         agreementId: asLeaseAgreementId(parsedId.data),
         expectedVersion: parsed.data.expectedVersion,
         effectiveFrom: parsed.data.effectiveFrom,
-        ...(parsed.data.effectiveTo !== undefined
-          ? { effectiveTo: parsed.data.effectiveTo }
-          : {}),
+        effectiveTo: parsed.data.effectiveTo,
       },
     );
 
