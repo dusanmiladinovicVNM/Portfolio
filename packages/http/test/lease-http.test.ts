@@ -1571,7 +1571,9 @@ describe('Lease Agreement draft party correction HTTP', () => {
             expectedVersion: agreement.version,
             parties: [
               { partyId: LANDLORD_ID, role: 'landlord' },
+              { partyId: OTHER_ID, role: 'landlord' },
               { partyId: TENANT_ID, role: 'tenant' },
+              { partyId: LANDLORD_ID, role: 'authorized_signatory' },
               { partyId: OTHER_ID, role: 'authorized_signatory' },
             ],
           }),
@@ -1587,7 +1589,9 @@ describe('Lease Agreement draft party correction HTTP', () => {
         status: 'draft',
         parties: [
           { partyId: LANDLORD_ID, role: 'landlord' },
+          { partyId: OTHER_ID, role: 'landlord' },
           { partyId: TENANT_ID, role: 'tenant' },
+          { partyId: LANDLORD_ID, role: 'authorized_signatory' },
           { partyId: OTHER_ID, role: 'authorized_signatory' },
         ],
       },
