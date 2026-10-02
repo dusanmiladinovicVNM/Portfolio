@@ -1,5 +1,6 @@
 import {
   DomainError,
+  asDateOnly,
   asLeaseAgreementId,
   asLeaseAgreementPartyId,
   asLeaseAmendmentId,
