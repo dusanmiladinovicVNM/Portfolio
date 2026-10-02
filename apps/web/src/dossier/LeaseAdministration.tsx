@@ -417,12 +417,14 @@ function AgreementPartyEditForm({
       party.role === 'co_tenant' ||
       party.role === 'guarantor',
   );
-  const landlordPartyId =
-    agreement.parties.find((party) => party.role === 'landlord')?.partyId ?? '';
-  const authorizedSignatoryPartyId =
-    agreement.parties.find(
-      (party) => party.role === 'authorized_signatory',
-    )?.partyId ?? '';
+  function hasAgreementRole(
+    partyId: string,
+    role: 'landlord' | 'authorized_signatory',
+  ): boolean {
+    return agreement.parties.some(
+      (party) => party.partyId === partyId && party.role === role,
+    );
+  }
 
   return (
     <form
@@ -440,41 +442,55 @@ function AgreementPartyEditForm({
         </span>
       </div>
 
-      <div className="setup-form-grid">
-        <label>
-          Landlord
-          <select
-            defaultValue={landlordPartyId}
-            disabled={pending || parties === null}
-            name="landlordPartyId"
-            required
-          >
-            <option value="">Select Party…</option>
-            {activeParties.map((party) => (
-              <option key={party.id} value={party.id}>
-                {party.displayName} · {party.code}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Authorized signatory
-          <select
-            defaultValue={authorizedSignatoryPartyId}
-            disabled={pending || parties === null}
-            name="authorizedSignatoryPartyId"
-          >
-            <option value="">None</option>
-            {activeParties.map((party) => (
-              <option key={party.id} value={party.id}>
-                {party.displayName} · {party.code}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div
+        className="setup-subsection"
+        data-agreement-party-role="landlord"
+      >
+        <h3>Landlords</h3>
+        <div className="contract-party-checklist">
+          {activeParties.map((party) => (
+            <label key={party.id}>
+              <input
+                defaultChecked={hasAgreementRole(party.id, 'landlord')}
+                disabled={pending}
+                name="landlordParty"
+                type="checkbox"
+                value={party.id}
+              />
+              <span>{party.displayName} · {party.code}</span>
+            </label>
+          ))}
+        </div>
       </div>
 
-      <div className="setup-subsection">
+      <div
+        className="setup-subsection"
+        data-agreement-party-role="authorized_signatory"
+      >
+        <h3>Authorized signatories</h3>
+        <div className="contract-party-checklist">
+          {activeParties.map((party) => (
+            <label key={party.id}>
+              <input
+                defaultChecked={hasAgreementRole(
+                  party.id,
+                  'authorized_signatory',
+                )}
+                disabled={pending}
+                name="authorizedSignatoryParty"
+                type="checkbox"
+                value={party.id}
+              />
+              <span>{party.displayName} · {party.code}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div
+        className="setup-subsection"
+        data-agreement-party-role="tenancy"
+      >
         <h3>Tenancy Parties on legal record</h3>
         <div className="contract-party-checklist">
           {tenancyLegalParties.map((party) => (
@@ -922,24 +938,22 @@ export function LeaseAdministration({
           role: value.slice(separator + 1),
         };
       });
-    const landlordPartyId = requiredString(form, 'landlordPartyId');
-    const authorizedSignatoryPartyId = optionalString(
-      form,
-      'authorizedSignatoryPartyId',
-    );
+    const landlordParties = form.getAll('landlordParty').map(String);
+    const authorizedSignatoryParties = form
+      .getAll('authorizedSignatoryParty')
+      .map(String);
     const parsed = replaceLeaseAgreementPartiesRequestSchema.safeParse({
       expectedVersion: target.version,
       parties: [
-        { partyId: landlordPartyId, role: 'landlord' },
+        ...landlordParties.map((partyId) => ({
+          partyId,
+          role: 'landlord' as const,
+        })),
         ...tenancyParties,
-        ...(authorizedSignatoryPartyId
-          ? [
-              {
-                partyId: authorizedSignatoryPartyId,
-                role: 'authorized_signatory',
-              },
-            ]
-          : []),
+        ...authorizedSignatoryParties.map((partyId) => ({
+          partyId,
+          role: 'authorized_signatory' as const,
+        })),
       ],
     });
 
