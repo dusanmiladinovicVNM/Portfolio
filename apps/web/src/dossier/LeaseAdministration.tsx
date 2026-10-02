@@ -5,6 +5,7 @@ import {
   leaseAgreementResponseSchema,
   leaseAmendmentResponseSchema,
   partyListResponseSchema,
+  replaceLeaseAgreementPartiesRequestSchema,
   signLeaseAgreementRequestSchema,
   signLeaseAmendmentRequestSchema,
   type LeaseAgreementResponse,
@@ -27,6 +28,7 @@ import {
 import {
   agreementAmendmentsPath,
   agreementCancelPath,
+  agreementPartiesPath,
   agreementSignPath,
   amendmentCancelPath,
   amendmentSignPath,
@@ -378,6 +380,142 @@ function AgreementCreateForm({
           type="submit"
         >
           Create Agreement draft
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function AgreementPartyEditForm({
+  agreement,
+  tenancy,
+  parties,
+  pending,
+  onSubmit,
+}: {
+  readonly agreement: LeaseAgreementResponse;
+  readonly tenancy: TenancyResponse;
+  readonly parties: readonly PartyResponse[] | null;
+  readonly pending: boolean;
+  readonly onSubmit: (
+    event: FormEvent<HTMLFormElement>,
+    agreement: LeaseAgreementResponse,
+  ) => void;
+}) {
+  const activeParties = useMemo(
+    () =>
+      [...(parties ?? [])]
+        .filter((party) => party.status === 'active')
+        .sort((left, right) =>
+          left.displayName.localeCompare(right.displayName),
+        ),
+    [parties],
+  );
+  const tenancyLegalParties = tenancy.parties.filter(
+    (party) =>
+      party.role === 'tenant' ||
+      party.role === 'co_tenant' ||
+      party.role === 'guarantor',
+  );
+  const landlordPartyId =
+    agreement.parties.find((party) => party.role === 'landlord')?.partyId ?? '';
+  const authorizedSignatoryPartyId =
+    agreement.parties.find(
+      (party) => party.role === 'authorized_signatory',
+    )?.partyId ?? '';
+
+  return (
+    <form
+      className="setup-form contract-admin-form"
+      data-contract-form="agreement-parties"
+      onSubmit={(event) => onSubmit(event, agreement)}
+    >
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Draft legal parties</p>
+          <h3>Edit {agreement.code} parties</h3>
+        </div>
+        <span className="section-note">
+          Editable only while draft · CAS v{agreement.version}
+        </span>
+      </div>
+
+      <div className="setup-form-grid">
+        <label>
+          Landlord
+          <select
+            defaultValue={landlordPartyId}
+            disabled={pending || parties === null}
+            name="landlordPartyId"
+            required
+          >
+            <option value="">Select Party…</option>
+            {activeParties.map((party) => (
+              <option key={party.id} value={party.id}>
+                {party.displayName} · {party.code}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Authorized signatory
+          <select
+            defaultValue={authorizedSignatoryPartyId}
+            disabled={pending || parties === null}
+            name="authorizedSignatoryPartyId"
+          >
+            <option value="">None</option>
+            {activeParties.map((party) => (
+              <option key={party.id} value={party.id}>
+                {party.displayName} · {party.code}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="setup-subsection">
+        <h3>Tenancy Parties on legal record</h3>
+        <div className="contract-party-checklist">
+          {tenancyLegalParties.map((party) => (
+            <label key={party.id}>
+              <input
+                defaultChecked={agreement.parties.some(
+                  (agreementParty) =>
+                    agreementParty.partyId === party.partyId &&
+                    agreementParty.role === party.role,
+                )}
+                disabled={pending}
+                name="tenancyParty"
+                type="checkbox"
+                value={`${party.partyId}:${party.role}`}
+              />
+              <span>
+                {parties?.find((item) => item.id === party.partyId)
+                  ?.displayName ?? party.partyId}
+                {' · '}
+                {formatDetailKey(party.role)}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="setup-form-actions">
+        <span className="setup-hint">
+          Saving replaces the complete draft party snapshot. Signed records
+          remain immutable.
+        </span>
+        <button
+          className="button-secondary"
+          disabled={
+            pending ||
+            parties === null ||
+            tenancyLegalParties.every((party) => party.role === 'guarantor')
+          }
+          type="submit"
+        >
+          Save Agreement parties
         </button>
       </div>
     </form>
@@ -765,6 +903,80 @@ export function LeaseAdministration({
     }
   }
 
+  async function replaceAgreementParties(
+    event: FormEvent<HTMLFormElement>,
+    target: LeaseAgreementResponse,
+  ) {
+    event.preventDefault();
+    if (!beginWrite()) return;
+
+    const targetTenancyId = tenancy.id;
+    const form = new FormData(event.currentTarget);
+    const tenancyParties = form
+      .getAll('tenancyParty')
+      .map(String)
+      .map((value) => {
+        const separator = value.lastIndexOf(':');
+        return {
+          partyId: value.slice(0, separator),
+          role: value.slice(separator + 1),
+        };
+      });
+    const landlordPartyId = requiredString(form, 'landlordPartyId');
+    const authorizedSignatoryPartyId = optionalString(
+      form,
+      'authorizedSignatoryPartyId',
+    );
+    const parsed = replaceLeaseAgreementPartiesRequestSchema.safeParse({
+      expectedVersion: target.version,
+      parties: [
+        { partyId: landlordPartyId, role: 'landlord' },
+        ...tenancyParties,
+        ...(authorizedSignatoryPartyId
+          ? [
+              {
+                partyId: authorizedSignatoryPartyId,
+                role: 'authorized_signatory',
+              },
+            ]
+          : []),
+      ],
+    });
+
+    if (!parsed.success) {
+      finishWrite();
+      setError(contractErrorMessage());
+      return;
+    }
+
+    try {
+      const updated = await api.put(
+        agreementPartiesPath(target.id),
+        parsed.data,
+        leaseAgreementResponseSchema,
+      );
+      assertAgreementMutationOwner(
+        targetTenancyId,
+        target.id,
+        target.version,
+        updated,
+      );
+      canonicalRefreshIfActive(targetTenancyId, target.id);
+    } catch (cause) {
+      if (
+        mountedRef.current &&
+        activeTenancyIdRef.current === targetTenancyId &&
+        activeAgreementIdRef.current === target.id
+      ) {
+        setError(
+          writeError(cause, 'Agreement parties could not be updated.'),
+        );
+      }
+    } finally {
+      finishWrite();
+    }
+  }
+
   async function signAgreement(
     event: FormEvent<HTMLFormElement>,
     target: LeaseAgreementResponse,
@@ -1049,12 +1261,24 @@ export function LeaseAdministration({
         />
 
         {agreement?.status === 'draft' ? (
-          <AgreementDraftActions
-            agreement={agreement}
-            onCancel={(target) => void cancelAgreement(target)}
-            onSign={signAgreement}
-            pending={controlsBlocked}
-          />
+          <>
+            <AgreementPartyEditForm
+              agreement={agreement}
+              key={`agreement-parties:${agreement.id}:${agreement.version}:${
+                parties === null ? 'loading' : 'ready'
+              }`}
+              onSubmit={replaceAgreementParties}
+              parties={parties}
+              pending={controlsBlocked}
+              tenancy={tenancy}
+            />
+            <AgreementDraftActions
+              agreement={agreement}
+              onCancel={(target) => void cancelAgreement(target)}
+              onSign={signAgreement}
+              pending={controlsBlocked}
+            />
+          </>
         ) : null}
 
         {agreement?.status === 'signed' ? (
