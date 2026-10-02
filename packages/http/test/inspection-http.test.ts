@@ -207,7 +207,15 @@ class EmptyLeaseRepository implements LeaseRepository {
   async listAgreementsByTenancy(_tenancyId: TenancyId): Promise<readonly LeaseAgreement[]> { return []; }
   async agreementCodeExists(_code: string): Promise<boolean> { return false; }
   async successorExists(_predecessorAgreementId: LeaseAgreementId): Promise<boolean> { return false; }
+  async termVersionExistsAt(
+    _tenancyId: TenancyId,
+    _effectiveAt: DateOnly,
+  ): Promise<boolean> { return false; }
   async insertAgreement(_agreement: LeaseAgreement): Promise<void> {}
+  async replaceAgreementPeriod(
+    _agreement: LeaseAgreement,
+    _expectedVersion: number,
+  ): Promise<void> {}
   async replaceAgreementParties(
     _agreement: LeaseAgreement,
     _expectedVersion: number,
