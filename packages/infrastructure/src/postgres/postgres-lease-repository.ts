@@ -473,6 +473,21 @@ export class PostgresLeaseRepository implements LeaseRepository {
     return rows[0]?.exists ?? false;
   }
 
+  async termVersionExistsAt(
+    tenancyId: TenancyId,
+    effectiveAt: DateOnly,
+  ): Promise<boolean> {
+    const rows = await this.sql<{ exists: boolean }[]>\`
+      select exists(
+        select 1
+        from public.tenancy_term_versions
+        where tenancy_id = ${tenancyId}
+          and effective_from = ${effectiveAt}
+      ) as exists
+    \`;
+    return rows[0]?.exists ?? false;
+  }
+
   async insertAgreement(agreement: LeaseAgreement): Promise<void> {
     await withTranslatedErrors(async () => {
       await this.sql.begin(async (tx) => {
@@ -498,6 +513,33 @@ export class PostgresLeaseRepository implements LeaseRepository {
           `;
         }
       });
+    });
+  }
+
+  async replaceAgreementPeriod(
+    agreement: LeaseAgreement,
+    expectedVersion: number,
+  ): Promise<void> {
+    await withTranslatedErrors(async () => {
+      const rows = await this.sql<{ id: string }[]>\`
+        update public.lease_agreements
+        set
+          effective_from = ${agreement.effectiveFrom},
+          effective_to = ${agreement.effectiveTo},
+          version = ${agreement.version},
+          updated_at = now()
+        where id = ${agreement.id}
+          and status = 'draft'
+          and version = ${expectedVersion}
+        returning id
+      \`;
+
+      if (rows.length === 0) {
+        throw new DomainError(
+          'LEASE_AGREEMENT_VERSION_CONFLICT',
+          'Lease agreement was modified concurrently.',
+        );
+      }
     });
   }
 
