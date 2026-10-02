@@ -21,6 +21,10 @@ export interface LeaseRepository {
   agreementCodeExists(code: string): Promise<boolean>;
   successorExists(predecessorAgreementId: LeaseAgreementId): Promise<boolean>;
   insertAgreement(agreement: LeaseAgreement): Promise<void>;
+  replaceAgreementParties(
+    agreement: LeaseAgreement,
+    expectedVersion: number,
+  ): Promise<void>;
   signAgreement(
     agreement: LeaseAgreement,
     expectedVersion: number,
