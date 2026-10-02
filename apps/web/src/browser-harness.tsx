@@ -4641,7 +4641,7 @@ globalThis.fetch = async (
     const body = JSON.parse(String(init.body)) as {
       expectedVersion: number;
       effectiveFrom: string;
-      effectiveTo?: string | null;
+      effectiveTo: string | null;
     };
     if (setupAgreement.status !== 'draft') {
       return apiError(
@@ -4656,7 +4656,7 @@ globalThis.fetch = async (
     const updated: LeaseAgreementResponse = {
       ...setupAgreement,
       effectiveFrom: body.effectiveFrom,
-      effectiveTo: body.effectiveTo ?? null,
+      effectiveTo: body.effectiveTo,
       version: setupAgreement.version + 1,
     };
     setupAgreements = setupAgreements.map((item) =>
