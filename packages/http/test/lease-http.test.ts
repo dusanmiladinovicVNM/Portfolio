@@ -1578,6 +1578,216 @@ describe('Lease HTTP lifecycle', () => {
 });
 
 
+describe('Lease Agreement draft period correction HTTP', () => {
+  it('CAS-corrects a draft period, rejects occupied term dates and freezes after signing', async () => {
+    const { handler, leaseRepository } = buildHandler();
+
+    const created = await handler(
+      new Request(`https://portfolio.test/tenancies/${TENANCY_ID}/agreements`, {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'AGR-PERIOD-CORRECTION',
+          agreementType: 'initial',
+          effectiveFrom: '2026-10-01',
+          effectiveTo: '2027-09-30',
+          parties: [
+            { partyId: LANDLORD_ID, role: 'landlord' },
+            { partyId: TENANT_ID, role: 'tenant' },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(created.status).toBe(201);
+    const agreement = (await created.json()).data as {
+      id: string;
+      version: number;
+    };
+
+    const corrected = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/period`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedVersion: agreement.version,
+            effectiveFrom: '2026-10-02',
+            effectiveTo: '2027-10-01',
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(corrected.status).toBe(200);
+    expect(await corrected.json()).toMatchObject({
+      data: {
+        id: agreement.id,
+        effectiveFrom: '2026-10-02',
+        effectiveTo: '2027-10-01',
+        version: 2,
+        status: 'draft',
+      },
+    });
+
+    const stale = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/period`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedVersion: 1,
+            effectiveFrom: '2026-10-03',
+            effectiveTo: '2027-10-01',
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({
+      error: { code: 'LEASE_AGREEMENT_VERSION_CONFLICT' },
+    });
+
+    leaseRepository.terms.push(
+      createTenancyTermVersion({
+        id: asTenancyTermVersionId(
+          '30000000-0000-4000-8000-000000000001',
+        ),
+        tenancyId: TENANCY_ID,
+        sourceType: 'agreement',
+        sourceAgreementId: asLeaseAgreementId(
+          '30000000-0000-4000-8000-000000000002',
+        ),
+        effectiveFrom: '2026-10-03',
+        currency: 'CHF',
+        baseRent: '1000.00',
+      }),
+    );
+
+    const occupied = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/period`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedVersion: 2,
+            effectiveFrom: '2026-10-03',
+            effectiveTo: '2027-10-01',
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(occupied.status).toBe(409);
+    expect(await occupied.json()).toMatchObject({
+      error: { code: 'TENANCY_TERM_EFFECTIVE_DATE_CONFLICT' },
+    });
+
+    const signed = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/sign`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            expectedVersion: 2,
+            signedAt: '2026-09-26',
+            terms: {
+              currency: 'CHF',
+              baseRent: '1850.00',
+              billingFrequency: 'monthly',
+            },
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(signed.status).toBe(200);
+
+    const frozen = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/period`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedVersion: 3,
+            effectiveFrom: '2026-10-04',
+            effectiveTo: '2027-10-01',
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(frozen.status).toBe(422);
+    expect(await frozen.json()).toMatchObject({
+      error: { code: 'LEASE_AGREEMENT_PERIOD_IMMUTABLE' },
+    });
+  });
+
+  it('fails signing before mutation when the Agreement term date became occupied', async () => {
+    const { handler, leaseRepository } = buildHandler();
+
+    const created = await handler(
+      new Request(`https://portfolio.test/tenancies/${TENANCY_ID}/agreements`, {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'AGR-TERM-RACE',
+          agreementType: 'initial',
+          effectiveFrom: '2026-11-01',
+          parties: [
+            { partyId: LANDLORD_ID, role: 'landlord' },
+            { partyId: TENANT_ID, role: 'tenant' },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(created.status).toBe(201);
+    const agreement = (await created.json()).data as {
+      id: string;
+      version: number;
+    };
+
+    leaseRepository.terms.push(
+      createTenancyTermVersion({
+        id: asTenancyTermVersionId(
+          '30000000-0000-4000-8000-000000000003',
+        ),
+        tenancyId: TENANCY_ID,
+        sourceType: 'agreement',
+        sourceAgreementId: asLeaseAgreementId(
+          '30000000-0000-4000-8000-000000000004',
+        ),
+        effectiveFrom: '2026-11-01',
+        currency: 'CHF',
+        baseRent: '900.00',
+      }),
+    );
+
+    const response = await handler(
+      new Request(`https://portfolio.test/agreements/${agreement.id}/sign`, {
+        method: 'POST',
+        body: JSON.stringify({
+          expectedVersion: agreement.version,
+          signedAt: '2026-10-20',
+          terms: {
+            currency: 'CHF',
+            baseRent: '1850.00',
+          },
+        }),
+      }),
+      adminIdentity,
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'TENANCY_TERM_EFFECTIVE_DATE_CONFLICT' },
+    });
+    expect(
+      leaseRepository.agreements.get(asLeaseAgreementId(agreement.id))?.status,
+    ).toBe('draft');
+  });
+});
+
 describe('Lease Agreement draft party correction HTTP', () => {
   it('atomically replaces draft parties with CAS and freezes them after signing', async () => {
     const { handler } = buildHandler();
