@@ -20,7 +20,12 @@ export interface LeaseRepository {
   listAgreementsByTenancy(tenancyId: TenancyId): Promise<readonly LeaseAgreement[]>;
   agreementCodeExists(code: string): Promise<boolean>;
   successorExists(predecessorAgreementId: LeaseAgreementId): Promise<boolean>;
+  termVersionExistsAt(tenancyId: TenancyId, effectiveAt: DateOnly): Promise<boolean>;
   insertAgreement(agreement: LeaseAgreement): Promise<void>;
+  replaceAgreementPeriod(
+    agreement: LeaseAgreement,
+    expectedVersion: number,
+  ): Promise<void>;
   replaceAgreementParties(
     agreement: LeaseAgreement,
     expectedVersion: number,
