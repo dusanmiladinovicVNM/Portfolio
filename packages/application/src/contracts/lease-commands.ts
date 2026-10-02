@@ -11,6 +11,7 @@ import {
   createTenancyTermVersion,
   inspectLuzernerLeaseFormReadiness,
   replaceLeaseAgreementParties,
+  replaceLeaseAgreementPeriod,
   signLeaseAgreement,
   signLeaseAmendment,
   supersedeLeaseAgreement,
@@ -59,6 +60,13 @@ export interface ReplaceLeaseAgreementPartiesCommandInput {
   agreementId: LeaseAgreementId;
   expectedVersion: number;
   parties: readonly LeaseAgreementPartyCommandInput[];
+}
+
+export interface ReplaceLeaseAgreementPeriodCommandInput {
+  agreementId: LeaseAgreementId;
+  expectedVersion: number;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
 }
 
 export interface CreateLeaseAmendmentCommandInput {
@@ -255,6 +263,19 @@ async function validateAgreementParties(
   }
 }
 
+async function assertTermDateAvailable(
+  repository: LeaseRepository,
+  tenancyId: TenancyId,
+  effectiveFrom: string,
+): Promise<void> {
+  if (await repository.termVersionExistsAt(tenancyId, asDateOnly(effectiveFrom))) {
+    throw new DomainError(
+      'TENANCY_TERM_EFFECTIVE_DATE_CONFLICT',
+      'Another term version already becomes effective on this date.',
+    );
+  }
+}
+
 async function validateAgreementChain(
   repository: LeaseRepository,
   agreement: LeaseAgreement,
@@ -350,6 +371,11 @@ export async function createLeaseAgreementCommand(
   });
 
   await validateAgreementChain(deps.leaseRepository, agreement);
+  await assertTermDateAvailable(
+    deps.leaseRepository,
+    agreement.tenancyId,
+    agreement.effectiveFrom,
+  );
 
   if (await deps.leaseRepository.agreementCodeExists(agreement.code)) {
     throw new DomainError(
@@ -360,6 +386,64 @@ export async function createLeaseAgreementCommand(
 
   await deps.leaseRepository.insertAgreement(agreement);
   return agreement;
+}
+
+export async function replaceLeaseAgreementPeriodCommand(
+  deps: Pick<LeaseDependencies, 'leaseRepository'>,
+  actor: Actor,
+  input: ReplaceLeaseAgreementPeriodCommandInput,
+): Promise<LeaseAgreement> {
+  requireCapability(actor, 'contracts:write');
+
+  const agreement = await requireAgreement(
+    deps.leaseRepository,
+    input.agreementId,
+  );
+  assertExpectedVersion(
+    agreement,
+    input.expectedVersion,
+    'LEASE_AGREEMENT_VERSION_CONFLICT',
+    'Lease agreement has changed since the caller last read it.',
+  );
+
+  const updated = replaceLeaseAgreementPeriod(
+    agreement,
+    input.effectiveFrom,
+    input.effectiveTo,
+  );
+
+  if (updated.predecessorAgreementId !== null) {
+    const predecessor = await requireAgreement(
+      deps.leaseRepository,
+      updated.predecessorAgreementId,
+    );
+    if (
+      predecessor.tenancyId !== updated.tenancyId ||
+      predecessor.status !== 'signed'
+    ) {
+      throw new DomainError(
+        'LEASE_AGREEMENT_PREDECESSOR_NOT_SIGNED',
+        'A successor agreement requires a currently signed predecessor in the same tenancy.',
+      );
+    }
+    if (predecessor.effectiveFrom >= updated.effectiveFrom) {
+      throw new DomainError(
+        'LEASE_AGREEMENT_PREDECESSOR_PERIOD_INVALID',
+        'A successor agreement must become effective after its predecessor starts.',
+      );
+    }
+  }
+
+  await assertTermDateAvailable(
+    deps.leaseRepository,
+    updated.tenancyId,
+    updated.effectiveFrom,
+  );
+  await deps.leaseRepository.replaceAgreementPeriod(
+    updated,
+    agreement.version,
+  );
+  return updated;
 }
 
 export async function replaceLeaseAgreementPartiesCommand(
@@ -470,6 +554,12 @@ export async function signLeaseAgreementCommand(
       expectedVersion: predecessor.version,
     };
   }
+
+  await assertTermDateAvailable(
+    deps.leaseRepository,
+    agreement.tenancyId,
+    agreement.effectiveFrom,
+  );
 
   const signed = signLeaseAgreement(agreement, signedAt);
   const luzernerForm = await deps.leaseRepository.getLuzernerLeaseForm(
@@ -612,6 +702,12 @@ export async function createLeaseAmendmentCommand(
     );
   }
 
+  await assertTermDateAvailable(
+    deps.leaseRepository,
+    agreement.tenancyId,
+    amendment.effectiveFrom,
+  );
+
   if (await deps.leaseRepository.amendmentCodeExists(amendment.code)) {
     throw new DomainError(
       'LEASE_AMENDMENT_CODE_ALREADY_EXISTS',
@@ -654,6 +750,11 @@ export async function signLeaseAmendmentCommand(
   }
 
   await requireTenancy(deps.tenancyRepository, agreement.tenancyId);
+  await assertTermDateAvailable(
+    deps.leaseRepository,
+    agreement.tenancyId,
+    amendment.effectiveFrom,
+  );
 
   const signed = signLeaseAmendment(amendment, signedAt);
   const termVersion = createTenancyTermVersion({
