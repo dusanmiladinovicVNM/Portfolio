@@ -1643,6 +1643,9 @@ describe('Lease Agreement draft period correction HTTP', () => {
       adminIdentity,
     );
     expect(omittedEnd.status).toBe(400);
+    expect(await omittedEnd.json()).toMatchObject({
+      error: { code: 'INVALID_REQUEST' },
+    });
 
     const explicitlyOpenEnded = await handler(
       new Request(
@@ -1675,7 +1678,7 @@ describe('Lease Agreement draft period correction HTTP', () => {
         {
           method: 'PUT',
           body: JSON.stringify({
-            expectedVersion: 3,
+            expectedVersion: 2,
             effectiveFrom: '2026-10-03',
             effectiveTo: '2027-10-01',
           }),
@@ -1710,7 +1713,7 @@ describe('Lease Agreement draft period correction HTTP', () => {
         {
           method: 'PUT',
           body: JSON.stringify({
-            expectedVersion: 2,
+            expectedVersion: 3,
             effectiveFrom: '2026-10-03',
             effectiveTo: '2027-10-01',
           }),
