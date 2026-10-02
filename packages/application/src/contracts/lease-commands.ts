@@ -67,7 +67,7 @@ export interface ReplaceLeaseAgreementPeriodCommandInput {
   agreementId: LeaseAgreementId;
   expectedVersion: number;
   effectiveFrom: string;
-  effectiveTo?: string | null;
+  effectiveTo: string | null;
 }
 
 export interface CreateLeaseAmendmentCommandInput {
