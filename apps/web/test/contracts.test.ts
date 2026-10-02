@@ -7,6 +7,7 @@ import {
 import {
   agreementAmendmentsPath,
   agreementCancelPath,
+  agreementPartiesPath,
   agreementSignPath,
   amendmentCancelPath,
   amendmentSignPath,
@@ -75,6 +76,9 @@ describe('Tenancy and Contract dossier contracts', () => {
     );
     expect(agreementCancelPath(agreementId)).toBe(
       `/agreements/${agreementId}/cancel`,
+    );
+    expect(agreementPartiesPath(agreementId)).toBe(
+      `/agreements/${agreementId}/parties`,
     );
     expect(amendmentSignPath(amendmentId)).toBe(
       `/amendments/${amendmentId}/sign`,

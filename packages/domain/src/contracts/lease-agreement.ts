@@ -151,6 +151,24 @@ export function createLeaseAgreement(
   };
 }
 
+export function replaceLeaseAgreementParties(
+  agreement: LeaseAgreement,
+  parties: readonly CreateLeaseAgreementPartyInput[],
+): LeaseAgreement {
+  if (agreement.status !== 'draft') {
+    throw new DomainError(
+      'LEASE_AGREEMENT_PARTIES_IMMUTABLE',
+      'Parties of a non-draft lease agreement are immutable.',
+    );
+  }
+
+  return {
+    ...agreement,
+    version: agreement.version + 1,
+    parties: validateParties(agreement.id, parties),
+  };
+}
+
 export function signLeaseAgreement(
   agreement: LeaseAgreement,
   signedAtValue: string,

@@ -208,6 +208,10 @@ class EmptyLeaseRepository implements LeaseRepository {
   async agreementCodeExists(_code: string): Promise<boolean> { return false; }
   async successorExists(_predecessorAgreementId: LeaseAgreementId): Promise<boolean> { return false; }
   async insertAgreement(_agreement: LeaseAgreement): Promise<void> {}
+  async replaceAgreementParties(
+    _agreement: LeaseAgreement,
+    _expectedVersion: number,
+  ): Promise<void> {}
   async signAgreement(
     _agreement: LeaseAgreement,
     _expectedVersion: number,

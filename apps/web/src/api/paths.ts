@@ -118,6 +118,10 @@ export function agreementPath(agreementId: string): string {
   return `/agreements/${encodeURIComponent(agreementId)}`;
 }
 
+export function agreementPartiesPath(agreementId: string): string {
+  return `${agreementPath(agreementId)}/parties`;
+}
+
 export function agreementLuzernerFormPath(agreementId: string): string {
   return `${agreementPath(agreementId)}/luzerner-form`;
 }

@@ -10,6 +10,7 @@ import {
   generateLuzernerLeaseFinalDocumentCommand,
   listLeaseAgreementsByTenancyQuery,
   renderLuzernerLeasePdfCommand,
+  replaceLeaseAgreementPartiesCommand,
   listLeaseAmendmentsByAgreementQuery,
   saveLuzernerLeaseFormCommand,
   signLeaseAgreementCommand,
@@ -35,6 +36,7 @@ import {
   entityIdSchema,
   leaseTermsRequestSchema,
   putLuzernerLeaseFormRequestSchema,
+  replaceLeaseAgreementPartiesRequestSchema,
   signLeaseAgreementRequestSchema,
   signLeaseAmendmentRequestSchema,
 } from '@portfolio/contracts';
@@ -294,6 +296,38 @@ export async function handleLeaseHttp(
     }
 
     return null;
+  }
+
+  const agreementPartiesMatch =
+    /^\/agreements\/([^/]+)\/parties$/.exec(path);
+  if (method === 'PUT' && agreementPartiesMatch) {
+    const parsedId = entityIdSchema.safeParse(agreementPartiesMatch[1]);
+    if (!parsedId.success) return validationFailure();
+
+    const body = await requestJson(request);
+    const parsed = replaceLeaseAgreementPartiesRequestSchema.safeParse(body);
+    if (!parsed.success) return validationFailure();
+
+    const agreementId = asLeaseAgreementId(parsedId.data);
+    const agreement = await replaceLeaseAgreementPartiesCommand(
+      {
+        leaseRepository: deps.leaseRepository,
+        tenancyRepository: deps.tenancyRepository,
+        partyRepository: deps.partyRepository,
+        idGenerator: deps.idGenerator,
+      },
+      actor,
+      {
+        agreementId,
+        expectedVersion: parsed.data.expectedVersion,
+        parties: parsed.data.parties.map((party) => ({
+          partyId: asPartyId(party.partyId),
+          role: party.role,
+        })),
+      },
+    );
+
+    return json({ data: toLeaseAgreementResponse(agreement) });
   }
 
   const agreementMatch = /^\/agreements\/([^/]+)$/.exec(path);

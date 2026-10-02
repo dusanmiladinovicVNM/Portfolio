@@ -10,6 +10,7 @@ import {
   createLeaseAmendment,
   createTenancyTermVersion,
   inspectLuzernerLeaseFormReadiness,
+  replaceLeaseAgreementParties,
   signLeaseAgreement,
   signLeaseAmendment,
   supersedeLeaseAgreement,
@@ -51,6 +52,12 @@ export interface CreateLeaseAgreementCommandInput {
   predecessorAgreementId?: LeaseAgreementId | null;
   effectiveFrom: string;
   effectiveTo?: string | null;
+  parties: readonly LeaseAgreementPartyCommandInput[];
+}
+
+export interface ReplaceLeaseAgreementPartiesCommandInput {
+  agreementId: LeaseAgreementId;
+  expectedVersion: number;
   parties: readonly LeaseAgreementPartyCommandInput[];
 }
 
@@ -353,6 +360,57 @@ export async function createLeaseAgreementCommand(
 
   await deps.leaseRepository.insertAgreement(agreement);
   return agreement;
+}
+
+export async function replaceLeaseAgreementPartiesCommand(
+  deps: LeaseDependencies,
+  actor: Actor,
+  input: ReplaceLeaseAgreementPartiesCommandInput,
+): Promise<LeaseAgreement> {
+  requireCapability(actor, 'contracts:write');
+
+  const agreement = await requireAgreement(
+    deps.leaseRepository,
+    input.agreementId,
+  );
+  assertExpectedVersion(
+    agreement,
+    input.expectedVersion,
+    'LEASE_AGREEMENT_VERSION_CONFLICT',
+    'Lease agreement has changed since the caller last read it.',
+  );
+
+  if (agreement.status !== 'draft') {
+    throw new DomainError(
+      'LEASE_AGREEMENT_PARTIES_IMMUTABLE',
+      'Parties of a non-draft lease agreement are immutable.',
+    );
+  }
+
+  const tenancy = await requireTenancy(
+    deps.tenancyRepository,
+    agreement.tenancyId,
+  );
+  await validateAgreementParties(
+    deps.partyRepository,
+    tenancy,
+    input.parties,
+  );
+
+  const updated = replaceLeaseAgreementParties(
+    agreement,
+    input.parties.map((party) => ({
+      id: asLeaseAgreementPartyId(deps.idGenerator.next()),
+      partyId: party.partyId,
+      role: party.role,
+    })),
+  );
+
+  await deps.leaseRepository.replaceAgreementParties(
+    updated,
+    agreement.version,
+  );
+  return updated;
 }
 
 export async function signLeaseAgreementCommand(

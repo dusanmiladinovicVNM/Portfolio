@@ -501,6 +501,48 @@ export class PostgresLeaseRepository implements LeaseRepository {
     });
   }
 
+  async replaceAgreementParties(
+    agreement: LeaseAgreement,
+    expectedVersion: number,
+  ): Promise<void> {
+    await withTranslatedErrors(async () => {
+      await this.sql.begin(async (tx) => {
+        const updated = await tx<{ id: string }[]>`
+          update public.lease_agreements
+          set
+            version = ${agreement.version},
+            updated_at = now()
+          where id = ${agreement.id}
+            and status = 'draft'
+            and version = ${expectedVersion}
+          returning id
+        `;
+
+        if (updated.length === 0) {
+          throw new DomainError(
+            'LEASE_AGREEMENT_VERSION_CONFLICT',
+            'Lease agreement was modified concurrently.',
+          );
+        }
+
+        await tx`
+          delete from public.lease_agreement_parties
+          where agreement_id = ${agreement.id}
+        `;
+
+        for (const party of agreement.parties) {
+          await tx`
+            insert into public.lease_agreement_parties (
+              id, agreement_id, party_id, role
+            ) values (
+              ${party.id}, ${party.agreementId}, ${party.partyId}, ${party.role}
+            )
+          `;
+        }
+      });
+    });
+  }
+
   async signAgreement(
     agreement: LeaseAgreement,
     expectedVersion: number,

@@ -151,6 +151,18 @@ const setupAgreementPartyIds = [
   'b1000000-0000-4000-8000-000000000016',
   'b1000000-0000-4000-8000-000000000017',
 ] as const;
+const setupAgreementPartyReplacementIds = [
+  'b3000000-0000-4000-8000-000000000001',
+  'b3000000-0000-4000-8000-000000000002',
+  'b3000000-0000-4000-8000-000000000003',
+  'b3000000-0000-4000-8000-000000000004',
+  'b3000000-0000-4000-8000-000000000005',
+  'b3000000-0000-4000-8000-000000000006',
+  'b3000000-0000-4000-8000-000000000007',
+  'b3000000-0000-4000-8000-000000000008',
+  'b3000000-0000-4000-8000-000000000009',
+  'b3000000-0000-4000-8000-000000000010',
+] as const;
 const setupAmendmentIds = [
   'b1000000-0000-4000-8000-000000000018',
   'b1000000-0000-4000-8000-000000000019',
@@ -458,6 +470,7 @@ let setupAmendments: LeaseAmendmentResponse[] = [];
 let setupTerms: TenancyTermVersionResponse[] = [];
 let setupAgreementSequence = 0;
 let setupAgreementPartySequence = 0;
+let setupAgreementPartyReplacementSequence = 0;
 let setupAmendmentSequence = 0;
 let setupTermSequence = 0;
 let setupDocuments: DocumentResponse[] = [];
@@ -4618,6 +4631,60 @@ globalThis.fetch = async (
   const setupAgreement = setupAgreements.find((item) =>
     path.startsWith('/agreements/' + item.id),
   );
+
+  if (
+    setupAgreement &&
+    path === '/agreements/' + setupAgreement.id + '/parties' &&
+    init?.method === 'PUT'
+  ) {
+    requirePortfolioAuth(init);
+    const body = JSON.parse(String(init.body)) as {
+      expectedVersion: number;
+      parties: Array<{
+        partyId: string;
+        role:
+          | 'landlord'
+          | 'tenant'
+          | 'co_tenant'
+          | 'guarantor'
+          | 'authorized_signatory';
+      }>;
+    };
+    if (setupAgreement.status !== 'draft') {
+      return apiError(
+        422,
+        'LEASE_AGREEMENT_PARTIES_IMMUTABLE',
+        'Parties of a non-draft lease agreement are immutable.',
+      );
+    }
+    if (body.expectedVersion !== setupAgreement.version) {
+      return contractVersionConflict('LEASE_AGREEMENT_VERSION_CONFLICT');
+    }
+    const replacementParties = body.parties.map((party) => {
+      const partyId =
+        setupAgreementPartyReplacementIds[
+          setupAgreementPartyReplacementSequence++
+        ];
+      if (!partyId) {
+        throw new Error('Setup AgreementParty replacement id pool exhausted.');
+      }
+      return {
+        id: partyId,
+        agreementId: setupAgreement.id,
+        partyId: party.partyId,
+        role: party.role,
+      };
+    });
+    const updated: LeaseAgreementResponse = {
+      ...setupAgreement,
+      version: setupAgreement.version + 1,
+      parties: replacementParties,
+    };
+    setupAgreements = setupAgreements.map((item) =>
+      item.id === updated.id ? updated : item,
+    );
+    return json(updated);
+  }
 
   if (
     setupAgreement &&
