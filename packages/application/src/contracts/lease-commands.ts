@@ -380,6 +380,13 @@ export async function replaceLeaseAgreementPartiesCommand(
     'Lease agreement has changed since the caller last read it.',
   );
 
+  if (agreement.status !== 'draft') {
+    throw new DomainError(
+      'LEASE_AGREEMENT_PARTIES_IMMUTABLE',
+      'Parties of a non-draft lease agreement are immutable.',
+    );
+  }
+
   const tenancy = await requireTenancy(
     deps.tenancyRepository,
     agreement.tenancyId,
