@@ -11,6 +11,7 @@ import {
   listLeaseAgreementsByTenancyQuery,
   renderLuzernerLeasePdfCommand,
   replaceLeaseAgreementPartiesCommand,
+  replaceLeaseAgreementPeriodCommand,
   listLeaseAmendmentsByAgreementQuery,
   saveLuzernerLeaseFormCommand,
   signLeaseAgreementCommand,
@@ -37,6 +38,7 @@ import {
   leaseTermsRequestSchema,
   putLuzernerLeaseFormRequestSchema,
   replaceLeaseAgreementPartiesRequestSchema,
+  replaceLeaseAgreementPeriodRequestSchema,
   signLeaseAgreementRequestSchema,
   signLeaseAmendmentRequestSchema,
 } from '@portfolio/contracts';
@@ -296,6 +298,32 @@ export async function handleLeaseHttp(
     }
 
     return null;
+  }
+
+  const agreementPeriodMatch =
+    /^\/agreements\/([^/]+)\/period$/.exec(path);
+  if (method === 'PUT' && agreementPeriodMatch) {
+    const parsedId = entityIdSchema.safeParse(agreementPeriodMatch[1]);
+    if (!parsedId.success) return validationFailure();
+
+    const body = await requestJson(request);
+    const parsed = replaceLeaseAgreementPeriodRequestSchema.safeParse(body);
+    if (!parsed.success) return validationFailure();
+
+    const agreement = await replaceLeaseAgreementPeriodCommand(
+      { leaseRepository: deps.leaseRepository },
+      actor,
+      {
+        agreementId: asLeaseAgreementId(parsedId.data),
+        expectedVersion: parsed.data.expectedVersion,
+        effectiveFrom: parsed.data.effectiveFrom,
+        ...(parsed.data.effectiveTo !== undefined
+          ? { effectiveTo: parsed.data.effectiveTo }
+          : {}),
+      },
+    );
+
+    return json({ data: toLeaseAgreementResponse(agreement) });
   }
 
   const agreementPartiesMatch =
