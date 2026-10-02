@@ -372,11 +372,6 @@ export async function createLeaseAgreementCommand(
   });
 
   await validateAgreementChain(deps.leaseRepository, agreement);
-  await assertTermDateAvailable(
-    deps.leaseRepository,
-    agreement.tenancyId,
-    agreement.effectiveFrom,
-  );
 
   if (await deps.leaseRepository.agreementCodeExists(agreement.code)) {
     throw new DomainError(
@@ -702,12 +697,6 @@ export async function createLeaseAmendmentCommand(
       'Amendment cannot become effective after its agreement ends.',
     );
   }
-
-  await assertTermDateAvailable(
-    deps.leaseRepository,
-    agreement.tenancyId,
-    amendment.effectiveFrom,
-  );
 
   if (await deps.leaseRepository.amendmentCodeExists(amendment.code)) {
     throw new DomainError(
