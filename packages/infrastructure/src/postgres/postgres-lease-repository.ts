@@ -516,7 +516,7 @@ export class PostgresLeaseRepository implements LeaseRepository {
             and status = 'draft'
             and version = ${expectedVersion}
           returning id
-        \`;
+        `;
 
         if (updated.length === 0) {
           throw new DomainError(
@@ -525,19 +525,19 @@ export class PostgresLeaseRepository implements LeaseRepository {
           );
         }
 
-        await tx\`
+        await tx`
           delete from public.lease_agreement_parties
           where agreement_id = ${agreement.id}
-        \`;
+        `;
 
         for (const party of agreement.parties) {
-          await tx\`
+          await tx`
             insert into public.lease_agreement_parties (
               id, agreement_id, party_id, role
             ) values (
               ${party.id}, ${party.agreementId}, ${party.partyId}, ${party.role}
             )
-          \`;
+          `;
         }
       });
     });
