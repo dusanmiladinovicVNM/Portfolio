@@ -257,6 +257,23 @@ class InMemoryLeaseRepository implements LeaseRepository {
     this.agreements.set(agreement.id, agreement);
   }
 
+  async replaceAgreementParties(
+    agreement: LeaseAgreement,
+    expectedVersion: number,
+  ): Promise<void> {
+    const current = this.agreements.get(agreement.id);
+    if (
+      !current ||
+      current.status !== 'draft' ||
+      current.version !== expectedVersion
+    ) {
+      throw Object.assign(new Error('version conflict'), {
+        code: 'LEASE_AGREEMENT_VERSION_CONFLICT',
+      });
+    }
+    this.agreements.set(agreement.id, agreement);
+  }
+
   async signAgreement(
     agreement: LeaseAgreement,
     expectedVersion: number,
@@ -1519,6 +1536,126 @@ describe('Lease HTTP lifecycle', () => {
   });
 });
 
+
+describe('Lease Agreement draft party correction HTTP', () => {
+  it('atomically replaces draft parties with CAS and freezes them after signing', async () => {
+    const { handler } = buildHandler();
+
+    const created = await handler(
+      new Request(`https://portfolio.test/tenancies/${TENANCY_ID}/agreements`, {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'AGR-PARTY-CORRECTION',
+          agreementType: 'initial',
+          effectiveFrom: '2026-10-01',
+          parties: [
+            { partyId: OTHER_ID, role: 'landlord' },
+            { partyId: TENANT_ID, role: 'tenant' },
+          ],
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(created.status).toBe(201);
+    const agreement = (await created.json()).data as {
+      id: string;
+      version: number;
+    };
+
+    const corrected = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/parties`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedVersion: agreement.version,
+            parties: [
+              { partyId: LANDLORD_ID, role: 'landlord' },
+              { partyId: TENANT_ID, role: 'tenant' },
+              { partyId: OTHER_ID, role: 'authorized_signatory' },
+            ],
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(corrected.status).toBe(200);
+    expect(await corrected.json()).toMatchObject({
+      data: {
+        id: agreement.id,
+        version: 2,
+        status: 'draft',
+        parties: [
+          { partyId: LANDLORD_ID, role: 'landlord' },
+          { partyId: TENANT_ID, role: 'tenant' },
+          { partyId: OTHER_ID, role: 'authorized_signatory' },
+        ],
+      },
+    });
+
+    const stale = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/parties`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedVersion: 1,
+            parties: [
+              { partyId: LANDLORD_ID, role: 'landlord' },
+              { partyId: TENANT_ID, role: 'tenant' },
+            ],
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({
+      error: { code: 'LEASE_AGREEMENT_VERSION_CONFLICT' },
+    });
+
+    const signed = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/sign`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            expectedVersion: 2,
+            signedAt: '2026-09-26',
+            terms: {
+              currency: 'CHF',
+              baseRent: '1850.00',
+              billingFrequency: 'monthly',
+            },
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(signed.status).toBe(200);
+
+    const frozen = await handler(
+      new Request(
+        `https://portfolio.test/agreements/${agreement.id}/parties`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            expectedVersion: 3,
+            parties: [
+              { partyId: OTHER_ID, role: 'landlord' },
+              { partyId: TENANT_ID, role: 'tenant' },
+            ],
+          }),
+        },
+      ),
+      adminIdentity,
+    );
+    expect(frozen.status).toBe(422);
+    expect(await frozen.json()).toMatchObject({
+      error: { code: 'LEASE_AGREEMENT_PARTIES_IMMUTABLE' },
+    });
+  });
+});
 
 describe('Luzerner lease form HTTP', () => {
   async function createDraftAgreement(handler: ReturnType<typeof buildHandler>['handler']) {
