@@ -532,7 +532,7 @@ export class PostgresLeaseRepository implements LeaseRepository {
           and status = 'draft'
           and version = ${expectedVersion}
         returning id
-      \`;
+      `;
 
       if (rows.length === 0) {
         throw new DomainError(
