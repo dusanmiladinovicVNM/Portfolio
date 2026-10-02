@@ -23,8 +23,10 @@ import {
   asPropertyId,
   asTenancyId,
   asTenancyPartyId,
+  asTenancyTermVersionId,
   asUnitId,
   asUserId,
+  createTenancyTermVersion,
   emptyLuzernerLeaseFormContent,
   DomainError,
   type DateOnly,
@@ -253,7 +255,35 @@ class InMemoryLeaseRepository implements LeaseRepository {
     );
   }
 
+  async termVersionExistsAt(
+    tenancyId: TenancyId,
+    effectiveAt: DateOnly,
+  ): Promise<boolean> {
+    return this.terms.some(
+      (term) =>
+        term.tenancyId === tenancyId &&
+        term.effectiveFrom === effectiveAt,
+    );
+  }
+
   async insertAgreement(agreement: LeaseAgreement): Promise<void> {
+    this.agreements.set(agreement.id, agreement);
+  }
+
+  async replaceAgreementPeriod(
+    agreement: LeaseAgreement,
+    expectedVersion: number,
+  ): Promise<void> {
+    const current = this.agreements.get(agreement.id);
+    if (
+      !current ||
+      current.status !== 'draft' ||
+      current.version !== expectedVersion
+    ) {
+      throw Object.assign(new Error('version conflict'), {
+        code: 'LEASE_AGREEMENT_VERSION_CONFLICT',
+      });
+    }
     this.agreements.set(agreement.id, agreement);
   }
 
@@ -441,6 +471,17 @@ class InMemoryLeaseRepository implements LeaseRepository {
     if (!current || current.version !== expectedVersion) {
       throw Object.assign(new Error('version conflict'), {
         code: 'LEASE_AMENDMENT_VERSION_CONFLICT',
+      });
+    }
+    if (
+      this.terms.some(
+        (existing) =>
+          existing.tenancyId === terms.tenancyId &&
+          existing.effectiveFrom === terms.effectiveFrom,
+      )
+    ) {
+      throw Object.assign(new Error('term date conflict'), {
+        code: 'TENANCY_TERM_EFFECTIVE_DATE_CONFLICT',
       });
     }
     this.amendments.set(amendment.id, amendment);
