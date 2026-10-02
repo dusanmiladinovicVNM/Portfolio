@@ -154,7 +154,7 @@ export function createLeaseAgreement(
 export function replaceLeaseAgreementPeriod(
   agreement: LeaseAgreement,
   effectiveFromValue: string,
-  effectiveToValue?: string | null,
+  effectiveToValue: string | null,
 ): LeaseAgreement {
   if (agreement.status !== 'draft') {
     throw new DomainError(
@@ -165,9 +165,7 @@ export function replaceLeaseAgreementPeriod(
 
   const effectiveFrom = asDateOnly(effectiveFromValue);
   const effectiveTo =
-    effectiveToValue === undefined || effectiveToValue === null
-      ? null
-      : asDateOnly(effectiveToValue);
+    effectiveToValue === null ? null : asDateOnly(effectiveToValue);
 
   if (effectiveTo !== null && effectiveTo < effectiveFrom) {
     throw new DomainError(
