@@ -92,6 +92,8 @@ const workPropertyMaintenanceIssueId =
   'aa100000-0000-4000-8000-000000000001';
 const propertyServiceAssetId =
   'aa300000-0000-4000-8000-000000000001';
+const propertyServicePlanId =
+  'aa300000-0000-4000-8000-000000000002';
 const propertyServiceDueOn = '2026-10-01';
 const propertyServiceAttention =
   propertyServiceDueOn < operationalToday
@@ -664,9 +666,11 @@ try {
       propertyId +
       '?assetId=' +
       propertyServiceAssetId +
+      '&servicePlanId=' +
+      propertyServicePlanId +
       '&asOf=' +
       operationalToday,
-    'Portfolio command center routes Service to the exact current Property Asset',
+    'Portfolio command center routes Service to the exact current Property Asset and ServicePlan',
   );
   assertEqual(
     await currentUrl(sessionId),
@@ -6317,7 +6321,9 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-property-asset-service]//article[contains(@class,'asset-service-card')][.//strong[normalize-space()='Quarterly lift inspection']]",
+    "//*[@data-property-asset-service]//article[@data-selected-service-plan='true'][@data-service-plan-id='" +
+      propertyServicePlanId +
+      "'][.//strong[normalize-space()='Quarterly lift inspection']]",
   );
   assertEqual(
     await currentUrl(sessionId),
@@ -6326,8 +6332,10 @@ try {
       propertyId +
       '?assetId=' +
       propertyServiceAssetId +
+      '&servicePlanId=' +
+      propertyServicePlanId +
       '&asOf=2025-06-30',
-    'Global Work Service opens the exact canonical Property Asset',
+    'Global Work Service opens the exact canonical Property Asset and ServicePlan',
   );
 
   await clickXpath(sessionId, "//aside//a[normalize-space()='Work']");
