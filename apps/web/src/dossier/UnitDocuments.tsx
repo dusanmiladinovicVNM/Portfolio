@@ -92,10 +92,10 @@ export function UnitDocuments({ api, unitId }: UnitDocumentsProps) {
       <div className="section-heading">
         <div>
           <p className="eyebrow">Document dossier</p>
-          <h2>Documents linked to this Unit</h2>
+          <h2>Documents in this Unit dossier</h2>
         </div>
         <span className="section-note">
-          One row per authoritative DocumentLink
+          Canonical links from Unit and related tenancy/contract records
         </span>
       </div>
 
@@ -110,7 +110,9 @@ export function UnitDocuments({ api, unitId }: UnitDocumentsProps) {
         </p>
       ) : null}
       {items?.length === 0 ? (
-        <p className="muted">No Documents are linked directly to this Unit.</p>
+        <p className="muted">
+          No Documents are linked to this Unit or its tenancy/contract records.
+        </p>
       ) : null}
 
       {items && items.length > 0 ? (
@@ -135,6 +137,10 @@ export function UnitDocuments({ api, unitId }: UnitDocumentsProps) {
                 <div>
                   <dt>Relation</dt>
                   <dd>{formatDetailKey(reference.link.relation)}</dd>
+                </div>
+                <div>
+                  <dt>Linked via</dt>
+                  <dd>{formatDetailKey(reference.link.targetType)}</dd>
                 </div>
                 <div>
                   <dt>Document revision</dt>
