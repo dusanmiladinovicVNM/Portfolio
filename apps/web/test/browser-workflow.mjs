@@ -5657,6 +5657,55 @@ try {
       '&asOf=2025-06-30',
     'Property Asset service surface has an exact canonical deep-link',
   );
+
+  await navigateWithPopState(
+    sessionId,
+    '/properties/' +
+      propertyId +
+      '?assetId=' +
+      propertyServiceAssetId +
+      '&servicePlanId=' +
+      setupServicePlanId +
+      '&asOf=2025-06-30',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-property-asset-service]//h2[normalize-space()='AST-PROPERTY-LIFT-BRW · Passenger lift']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-property-asset-service]//*[contains(@class,'form-error')][normalize-space()='The selected ServicePlan is not available for this Asset.']",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-property-asset-service]//*[@data-selected-service-plan='true']",
+    ),
+    false,
+    'Wrong-owner ServicePlan deep-link never selects a plan outside the exact Asset',
+  );
+  await clickXpath(
+    sessionId,
+    "//*[@data-property-assets]//a[.//span[normalize-space()='AST-PROPERTY-LIFT-BRW']]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + propertyId +
+      '?assetId=' + propertyServiceAssetId +
+      '&asOf=2025-06-30',
+    'Manual Property Asset navigation clears stale ServicePlan identity',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-property-asset-service]//*[contains(@class,'form-error')][normalize-space()='The selected ServicePlan is not available for this Asset.']",
+    ),
+    false,
+    'Clearing ServicePlan identity also clears the invalid-selection warning',
+  );
   assertEqual(
     await elementExistsXpath(
       sessionId,
