@@ -3598,6 +3598,39 @@ try {
     'Unit dossier preserves generated-contract relation from Agreement ownership',
   );
 
+  const unitGeneratedReadsBefore = await executeScript(
+    sessionId,
+    'return window.__portfolioBinaryReads || 0;',
+  );
+  const unitGeneratedOriginalHandle = await webdriver(
+    `/session/${sessionId}/window`,
+  );
+  const unitGeneratedHandlesBefore = await webdriver(
+    `/session/${sessionId}/window/handles`,
+  );
+  await clickXpath(
+    sessionId,
+    unitDocumentDossier +
+      "//article[.//*[normalize-space()='mietvertrag-AGR-REPLACEMENT-BRW.pdf']]" +
+      "//button[normalize-space()='Open']",
+  );
+  await waitForBinaryReads(sessionId, unitGeneratedReadsBefore + 1);
+  const unitGeneratedDocumentHandle = await waitForNewWindow(
+    sessionId,
+    unitGeneratedHandlesBefore,
+  );
+  await switchWindow(sessionId, unitGeneratedDocumentHandle);
+  const unitGeneratedDocumentUrl = await currentUrl(sessionId);
+  if (!unitGeneratedDocumentUrl.startsWith(`blob:${baseUrl}/`)) {
+    throw new Error(
+      `Unit generated contract URL: expected blob:${baseUrl}/..., got ${unitGeneratedDocumentUrl}`,
+    );
+  }
+  await webdriver(`/session/${sessionId}/window`, {
+    method: 'DELETE',
+  });
+  await switchWindow(sessionId, unitGeneratedOriginalHandle);
+
   await navigateWithPopState(
     sessionId,
     '/properties/' + setupPropertyId +
