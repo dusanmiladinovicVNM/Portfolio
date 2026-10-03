@@ -150,6 +150,7 @@ export function UnitDossier({
               ...(inspectionId ? { inspectionId } : {}),
               ...(inspectionSectionInstanceId ? { inspectionSectionInstanceId } : {}),
               ...(assetId ? { assetId } : {}),
+              ...(servicePlanId ? { servicePlanId } : {}),
               ...(meterId ? { meterId } : {}),
               ...(maintenanceIssueId ? { maintenanceIssueId } : {}),
               ...(maintenanceWorkOrderId ? { maintenanceWorkOrderId } : {}),
