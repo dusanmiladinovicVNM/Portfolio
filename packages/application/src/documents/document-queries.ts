@@ -77,10 +77,7 @@ export async function listUnitDocumentsQuery(
     throw new DomainError('UNIT_NOT_FOUND', 'Unit not found.');
   }
 
-  return documentRepository.listTargetDocuments({
-    targetType: 'unit',
-    targetId: unitId,
-  });
+  return documentRepository.listUnitDossierDocuments(unitId);
 }
 
 export async function listLeaseAgreementDocumentsQuery(
