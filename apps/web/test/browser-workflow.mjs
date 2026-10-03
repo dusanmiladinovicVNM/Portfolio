@@ -3591,7 +3591,7 @@ try {
     await elementExistsXpath(
       sessionId,
       unitDocumentDossier +
-        "//article[.//*[normalize-space()='mietvertrag-AGR-REPLACEMENT-BRW.pdf']]" +
+        "//article[contains(normalize-space(.),'mietvertrag-AGR-REPLACEMENT-BRW.pdf')]" +
         "//dd[normalize-space()='Generated contract']",
     ),
     true,
