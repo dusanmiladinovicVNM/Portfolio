@@ -54,6 +54,7 @@ export type WorkspaceRoute =
       readonly propertyId: string;
       readonly asOf: string;
       readonly assetId?: string;
+      readonly servicePlanId?: string;
       readonly maintenanceIssueId?: string;
       readonly maintenanceWorkOrderId?: string;
     }
@@ -69,6 +70,7 @@ export type WorkspaceRoute =
       readonly inspectionId?: string;
       readonly inspectionSectionInstanceId?: string;
       readonly assetId?: string;
+      readonly servicePlanId?: string;
       readonly meterId?: string;
       readonly maintenanceIssueId?: string;
       readonly maintenanceWorkOrderId?: string;
@@ -160,6 +162,7 @@ export function inspectionSchemasRoute(asOf: string): WorkspaceRoute {
 
 export interface PropertyRouteSelection {
   readonly assetId?: string;
+  readonly servicePlanId?: string;
   readonly maintenanceIssueId?: string;
   readonly maintenanceWorkOrderId?: string;
 }
@@ -170,6 +173,7 @@ export function propertyRoute(
   selection: PropertyRouteSelection = {},
 ): WorkspaceRoute {
   const assetId = selection.assetId;
+  const servicePlanId = assetId ? selection.servicePlanId : undefined;
   const maintenanceIssueId = assetId
     ? undefined
     : selection.maintenanceIssueId;
@@ -181,6 +185,7 @@ export function propertyRoute(
     propertyId,
     asOf: requireWorkspaceAsOf(asOf),
     ...(assetId ? { assetId } : {}),
+    ...(servicePlanId ? { servicePlanId } : {}),
     ...(maintenanceIssueId ? { maintenanceIssueId } : {}),
     ...(maintenanceWorkOrderId ? { maintenanceWorkOrderId } : {}),
   };
@@ -193,6 +198,7 @@ export interface UnitRouteSelection {
   readonly inspectionId?: string;
   readonly inspectionSectionInstanceId?: string;
   readonly assetId?: string;
+  readonly servicePlanId?: string;
   readonly meterId?: string;
   readonly maintenanceIssueId?: string;
   readonly maintenanceWorkOrderId?: string;
@@ -221,6 +227,8 @@ export function unitRoute(
       : undefined;
   const assetId =
     tab === 'assets' ? selection.assetId : undefined;
+  const servicePlanId =
+    tab === 'assets' && assetId ? selection.servicePlanId : undefined;
   const meterId =
     tab === 'meters' ? selection.meterId : undefined;
   const maintenanceIssueId =
@@ -242,6 +250,7 @@ export function unitRoute(
     ...(inspectionId ? { inspectionId } : {}),
     ...(inspectionSectionInstanceId ? { inspectionSectionInstanceId } : {}),
     ...(assetId ? { assetId } : {}),
+    ...(servicePlanId ? { servicePlanId } : {}),
     ...(meterId ? { meterId } : {}),
     ...(maintenanceIssueId ? { maintenanceIssueId } : {}),
     ...(maintenanceWorkOrderId ? { maintenanceWorkOrderId } : {}),
@@ -292,6 +301,10 @@ export function parseWorkspaceLocation(
         tab === 'assets'
           ? readEntityId(search.get('assetId') ?? undefined)
           : null;
+      const servicePlanId =
+        tab === 'assets' && assetId
+          ? readEntityId(search.get('servicePlanId') ?? undefined)
+          : null;
       const meterId =
         tab === 'meters'
           ? readEntityId(search.get('meterId') ?? undefined)
@@ -312,6 +325,7 @@ export function parseWorkspaceLocation(
         ...(inspectionId ? { inspectionId } : {}),
         ...(inspectionSectionInstanceId ? { inspectionSectionInstanceId } : {}),
         ...(assetId ? { assetId } : {}),
+        ...(servicePlanId ? { servicePlanId } : {}),
         ...(meterId ? { meterId } : {}),
         ...(maintenanceIssueId ? { maintenanceIssueId } : {}),
         ...(maintenanceWorkOrderId ? { maintenanceWorkOrderId } : {}),
@@ -347,6 +361,9 @@ export function parseWorkspaceLocation(
     const propertyId = readEntityId(segments[1]);
     if (propertyId) {
       const assetId = readEntityId(search.get('assetId') ?? undefined);
+      const servicePlanId = assetId
+        ? readEntityId(search.get('servicePlanId') ?? undefined)
+        : null;
       const maintenanceIssueId = assetId
         ? null
         : readEntityId(search.get('issueId') ?? undefined);
@@ -355,6 +372,7 @@ export function parseWorkspaceLocation(
         : null;
       return propertyRoute(propertyId, asOf, {
         ...(assetId ? { assetId } : {}),
+        ...(servicePlanId ? { servicePlanId } : {}),
         ...(maintenanceIssueId ? { maintenanceIssueId } : {}),
         ...(maintenanceWorkOrderId ? { maintenanceWorkOrderId } : {}),
       });
@@ -370,6 +388,9 @@ export function workspaceRouteHref(route: WorkspaceRoute): string {
   if (route.kind === 'property') {
     if (route.assetId) {
       search.set('assetId', route.assetId);
+      if (route.servicePlanId) {
+        search.set('servicePlanId', route.servicePlanId);
+      }
     } else if (route.maintenanceIssueId) {
       search.set('issueId', route.maintenanceIssueId);
       if (route.maintenanceWorkOrderId) {
@@ -397,6 +418,9 @@ export function workspaceRouteHref(route: WorkspaceRoute): string {
     }
     if (route.tab === 'assets' && route.assetId) {
       search.set('assetId', route.assetId);
+      if (route.servicePlanId) {
+        search.set('servicePlanId', route.servicePlanId);
+      }
     }
     if (route.tab === 'meters' && route.meterId) {
       search.set('meterId', route.meterId);
