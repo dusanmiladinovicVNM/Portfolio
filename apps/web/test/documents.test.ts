@@ -49,10 +49,32 @@ describe('Unit document contract', () => {
             finalizedAt: null,
           },
         },
+        {
+          document,
+          link: {
+            id: '66666666-6666-4666-8666-666666666666',
+            documentId: document.id,
+            documentVersionId: '77777777-7777-4777-8777-777777777777',
+            relation: 'generated_contract',
+            targetType: 'lease_agreement',
+            targetId: '88888888-8888-4888-8888-888888888888',
+          },
+          linkedVersion: {
+            id: '77777777-7777-4777-8777-777777777777',
+            documentId: document.id,
+            versionNumber: 1,
+            fileName: 'mietvertrag.pdf',
+            mimeType: 'application/pdf',
+            byteSize: 11,
+            sha256: 'b'.repeat(64),
+            status: 'final',
+            finalizedAt: '2026-10-03T06:41:15.436Z',
+          },
+        },
       ],
     });
 
-    expect(parsed.items).toHaveLength(2);
+    expect(parsed.items).toHaveLength(3);
     expect(parsed.items[0]?.linkedVersion).toBeNull();
     expect(parsed.items[1]?.linkedVersion?.versionNumber).toBe(1);
   });
