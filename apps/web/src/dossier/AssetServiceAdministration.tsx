@@ -85,6 +85,7 @@ interface AssetServiceAdministrationProps {
   readonly api: PortfolioApi;
   readonly assetId: string;
   readonly assetStatus: 'active' | 'inactive' | 'retired' | 'replaced';
+  readonly selectedServicePlanId?: string | undefined;
   readonly writeGate: SharedWriteGate;
 }
 
@@ -124,6 +125,7 @@ export function AssetServiceAdministration({
   api,
   assetId,
   assetStatus,
+  selectedServicePlanId,
   writeGate,
 }: AssetServiceAdministrationProps) {
   const [warranties, setWarranties] =
@@ -155,6 +157,25 @@ export function AssetServiceAdministration({
     () => allClaims(claimsByWarranty),
     [claimsByWarranty],
   );
+
+  const selectedServicePlanInvalid =
+    plans !== null &&
+    selectedServicePlanId !== undefined &&
+    !plans.some((plan) => plan.id === selectedServicePlanId);
+
+  useEffect(() => {
+    if (
+      selectedServicePlanId === undefined ||
+      plans === null ||
+      selectedServicePlanInvalid
+    ) {
+      return;
+    }
+
+    document
+      .getElementById(`service-plan-${selectedServicePlanId}`)
+      ?.scrollIntoView({ block: 'center' });
+  }, [plans, selectedServicePlanId, selectedServicePlanInvalid]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -635,6 +656,11 @@ export function AssetServiceAdministration({
       </div>
 
       {loadError ? <p className="form-error" role="alert">{loadError}</p> : null}
+      {selectedServicePlanInvalid ? (
+        <p className="form-error" role="alert">
+          The selected ServicePlan is not available for this Asset.
+        </p>
+      ) : null}
       {actionError ? (
         <p className="setup-form-error" role="alert">{actionError}</p>
       ) : null}
@@ -978,7 +1004,18 @@ export function AssetServiceAdministration({
                 <p className="muted">No ServicePlans configured.</p>
               ) : (
                 plans?.map((plan) => (
-                  <article className="asset-service-card" key={plan.id}>
+                  <article
+                    className={
+                      'asset-service-card ' +
+                      (plan.id === selectedServicePlanId ? 'asset-card-active' : '')
+                    }
+                    data-selected-service-plan={
+                      plan.id === selectedServicePlanId ? 'true' : undefined
+                    }
+                    data-service-plan-id={plan.id}
+                    id={`service-plan-${plan.id}`}
+                    key={plan.id}
+                  >
                     <div className="record-heading">
                       <div>
                         <strong>{plan.name}</strong>
