@@ -3630,6 +3630,10 @@ try {
     method: 'DELETE',
   });
   await switchWindow(sessionId, unitGeneratedOriginalHandle);
+  await executeScript(
+    sessionId,
+    'window.__portfolioBinaryReads = ' + unitGeneratedReadsBefore + '; return true;',
+  );
 
   await navigateWithPopState(
     sessionId,
