@@ -119,8 +119,52 @@ function createDocumentReferenceResponseSchema<
     });
 }
 
-export const unitDocumentReferenceResponseSchema =
-  createDocumentReferenceResponseSchema('unit');
+export const unitDocumentReferenceResponseSchema = z
+  .object({
+    document: documentResponseSchema,
+    link: documentLinkResponseSchema.extend({
+      targetType: z.enum([
+        'unit',
+        'tenancy',
+        'lease_agreement',
+        'lease_amendment',
+      ]),
+    }),
+    linkedVersion: documentVersionResponseSchema.nullable(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.link.documentId !== value.document.id) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Document link must reference the returned Document.',
+      });
+    }
+
+    if (
+      value.link.documentVersionId === null &&
+      value.linkedVersion !== null
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Document-level links must not return a linked version.',
+      });
+    }
+
+    if (value.link.documentVersionId !== null) {
+      if (
+        value.linkedVersion === null ||
+        value.linkedVersion.id !== value.link.documentVersionId ||
+        value.linkedVersion.documentId !== value.document.id
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          message:
+            'Version-specific links must return that exact Document version.',
+        });
+      }
+    }
+  });
+
 export const leaseAgreementDocumentReferenceResponseSchema =
   createDocumentReferenceResponseSchema('lease_agreement');
 export const leaseAmendmentDocumentReferenceResponseSchema =
