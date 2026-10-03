@@ -79,6 +79,7 @@ interface UnitAssetsProps {
   readonly unitId: string;
   readonly asOf: string;
   readonly assetId?: string | undefined;
+  readonly servicePlanId?: string | undefined;
   readonly navigate: NavigateWorkspace;
   readonly setNavigationBlocker: SetNavigationBlocker;
 }
@@ -499,6 +500,7 @@ function AssetAdministration({
   unitId,
   asOf,
   asset,
+  servicePlanId,
   units,
   navigate,
   onCanonicalWrite,
@@ -509,6 +511,7 @@ function AssetAdministration({
   readonly unitId: string;
   readonly asOf: string;
   readonly asset: AssetResponse;
+  readonly servicePlanId?: string | undefined;
   readonly units: readonly UnitResponse[];
   readonly navigate: NavigateWorkspace;
   readonly onCanonicalWrite: () => void;
@@ -1115,6 +1118,7 @@ function AssetAdministration({
           api={api}
           assetId={asset.id}
           assetStatus={asset.status}
+          selectedServicePlanId={servicePlanId}
           writeGate={writeGate}
         />
       </div>
@@ -1200,6 +1204,7 @@ export function UnitAssets({
   unitId,
   asOf,
   assetId,
+  servicePlanId,
   navigate,
   setNavigationBlocker,
 }: UnitAssetsProps) {
@@ -1401,6 +1406,7 @@ export function UnitAssets({
           asset={selectedAsset}
           key={selectedAsset.id + ':' + selectedAsset.version}
           navigate={navigate}
+          servicePlanId={servicePlanId}
           onCanonicalWrite={refresh}
           propertyId={propertyId}
           unitId={unitId}

@@ -31,6 +31,7 @@ interface PropertyUnitsProps {
   readonly propertyId: string;
   readonly asOf: string;
   readonly assetId?: string | undefined;
+  readonly servicePlanId?: string | undefined;
   readonly maintenanceIssueId?: string | undefined;
   readonly maintenanceWorkOrderId?: string | undefined;
   readonly navigate: NavigateWorkspace;
@@ -47,6 +48,7 @@ export function PropertyUnits({
   propertyId,
   asOf,
   assetId,
+  servicePlanId,
   maintenanceIssueId,
   maintenanceWorkOrderId,
   navigate,
@@ -121,6 +123,7 @@ export function PropertyUnits({
           api={api}
           asOf={asOf}
           assetId={assetId}
+          servicePlanId={servicePlanId}
           navigate={navigate}
           propertyId={propertyId}
           setNavigationBlocker={setNavigationBlocker}

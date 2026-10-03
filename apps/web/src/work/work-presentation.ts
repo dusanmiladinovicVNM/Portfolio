@@ -176,13 +176,17 @@ export function workItemRoute(
     return item.unitId === null
       ? propertyRoute(item.propertyId, asOf, {
           assetId: item.assetId,
+          servicePlanId: item.servicePlanId,
         })
       : unitRoute(
           item.propertyId,
           item.unitId,
           asOf,
           'assets',
-          { assetId: item.assetId },
+          {
+            assetId: item.assetId,
+            servicePlanId: item.servicePlanId,
+          },
         );
   }
 

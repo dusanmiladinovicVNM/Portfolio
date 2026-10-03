@@ -278,6 +278,7 @@ function AuthenticatedShell({
             api={api}
             asOf={route.asOf}
             assetId={route.assetId}
+            servicePlanId={route.servicePlanId}
             maintenanceIssueId={route.maintenanceIssueId}
             maintenanceWorkOrderId={route.maintenanceWorkOrderId}
             navigate={navigate}
@@ -303,6 +304,7 @@ function AuthenticatedShell({
             inspectionId={route.inspectionId}
             inspectionSectionInstanceId={route.inspectionSectionInstanceId}
             assetId={route.assetId}
+            servicePlanId={route.servicePlanId}
             meterId={route.meterId}
             maintenanceIssueId={route.maintenanceIssueId}
             maintenanceWorkOrderId={route.maintenanceWorkOrderId}

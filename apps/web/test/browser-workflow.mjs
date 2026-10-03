@@ -92,6 +92,8 @@ const workPropertyMaintenanceIssueId =
   'aa100000-0000-4000-8000-000000000001';
 const propertyServiceAssetId =
   'aa300000-0000-4000-8000-000000000001';
+const propertyServicePlanId =
+  'aa300000-0000-4000-8000-000000000002';
 const propertyServiceDueOn = '2026-10-01';
 const propertyServiceAttention =
   propertyServiceDueOn < operationalToday
@@ -664,9 +666,11 @@ try {
       propertyId +
       '?assetId=' +
       propertyServiceAssetId +
+      '&servicePlanId=' +
+      propertyServicePlanId +
       '&asOf=' +
       operationalToday,
-    'Portfolio command center routes Service to the exact current Property Asset',
+    'Portfolio command center routes Service to the exact current Property Asset and ServicePlan',
   );
   assertEqual(
     await currentUrl(sessionId),
@@ -5653,6 +5657,55 @@ try {
       '&asOf=2025-06-30',
     'Property Asset service surface has an exact canonical deep-link',
   );
+
+  await navigateWithPopState(
+    sessionId,
+    '/properties/' +
+      propertyId +
+      '?assetId=' +
+      propertyServiceAssetId +
+      '&servicePlanId=' +
+      setupServicePlanId +
+      '&asOf=2025-06-30',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-property-asset-service]//h2[normalize-space()='AST-PROPERTY-LIFT-BRW · Passenger lift']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-property-asset-service]//*[contains(@class,'form-error')][normalize-space()='The selected ServicePlan is not available for this Asset.']",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-property-asset-service]//*[@data-selected-service-plan='true']",
+    ),
+    false,
+    'Wrong-owner ServicePlan deep-link never selects a plan outside the exact Asset',
+  );
+  await clickXpath(
+    sessionId,
+    "//*[@data-property-assets]//a[.//span[normalize-space()='AST-PROPERTY-LIFT-BRW']]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    baseUrl +
+      '/properties/' + propertyId +
+      '?assetId=' + propertyServiceAssetId +
+      '&asOf=2025-06-30',
+    'Manual Property Asset navigation clears stale ServicePlan identity',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-property-asset-service]//*[contains(@class,'form-error')][normalize-space()='The selected ServicePlan is not available for this Asset.']",
+    ),
+    false,
+    'Clearing ServicePlan identity also clears the invalid-selection warning',
+  );
   assertEqual(
     await elementExistsXpath(
       sessionId,
@@ -6317,7 +6370,9 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-property-asset-service]//article[contains(@class,'asset-service-card')][.//strong[normalize-space()='Quarterly lift inspection']]",
+    "//*[@data-property-asset-service]//article[@data-selected-service-plan='true'][@data-service-plan-id='" +
+      propertyServicePlanId +
+      "'][.//strong[normalize-space()='Quarterly lift inspection']]",
   );
   assertEqual(
     await currentUrl(sessionId),
@@ -6326,8 +6381,10 @@ try {
       propertyId +
       '?assetId=' +
       propertyServiceAssetId +
+      '&servicePlanId=' +
+      propertyServicePlanId +
       '&asOf=2025-06-30',
-    'Global Work Service opens the exact canonical Property Asset',
+    'Global Work Service opens the exact canonical Property Asset and ServicePlan',
   );
 
   await clickXpath(sessionId, "//aside//a[normalize-space()='Work']");

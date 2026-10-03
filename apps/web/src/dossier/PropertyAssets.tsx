@@ -20,6 +20,7 @@ interface PropertyAssetsProps {
   readonly propertyId: string;
   readonly asOf: string;
   readonly assetId?: string | undefined;
+  readonly servicePlanId?: string | undefined;
   readonly navigate: NavigateWorkspace;
   readonly setNavigationBlocker: SetNavigationBlocker;
 }
@@ -29,6 +30,7 @@ export function PropertyAssets({
   propertyId,
   asOf,
   assetId,
+  servicePlanId,
   navigate,
   setNavigationBlocker,
 }: PropertyAssetsProps) {
@@ -220,6 +222,7 @@ export function PropertyAssets({
         api={api}
         assetId={selectedAsset.id}
         assetStatus={selectedAsset.status}
+        selectedServicePlanId={servicePlanId}
         writeGate={writeGate}
       />
     </section>
