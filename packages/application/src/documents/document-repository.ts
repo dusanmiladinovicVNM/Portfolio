@@ -50,6 +50,9 @@ export interface DocumentRepository {
 
   insertLink(link: DocumentLink): Promise<void>;
   listLinksByDocument(documentId: DocumentId): Promise<readonly DocumentLink[]>;
+  listUnitDossierDocuments(
+    unitId: UnitId,
+  ): Promise<readonly TargetDocumentReference[]>;
   listTargetDocuments(
     target: DocumentReadTarget,
   ): Promise<readonly TargetDocumentReference[]>;

@@ -89,6 +89,36 @@ export class InMemoryDocumentRepository implements DocumentRepository {
     return this.links.filter((link) => link.documentId === documentId);
   }
 
+  async listUnitDossierDocuments(unitId: import('@portfolio/domain').UnitId) {
+    return this.links
+      .filter(
+        (link) =>
+          link.targetType === 'unit' &&
+          link.targetId === unitId,
+      )
+      .map((link) => {
+        const document = this.documents.get(link.documentId);
+        if (!document) {
+          throw new Error(
+            'In-memory document link references a missing document.',
+          );
+        }
+
+        const linkedVersion =
+          link.documentVersionId === null
+            ? null
+            : this.versions.get(link.documentVersionId) ?? null;
+
+        if (link.documentVersionId !== null && linkedVersion === null) {
+          throw new Error(
+            'In-memory document link references a missing document version.',
+          );
+        }
+
+        return { document, link, linkedVersion };
+      });
+  }
+
   async listTargetDocuments(
     target: import('@portfolio/application').DocumentReadTarget,
   ) {

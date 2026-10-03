@@ -79,6 +79,13 @@ interface TargetDocumentReferenceRow {
   document_id: string;
   document_version_id: string | null;
   relation: DocumentLinkRelation;
+  target_type: DocumentTargetType;
+  property_id: string | null;
+  unit_id: string | null;
+  party_id: string | null;
+  tenancy_id: string | null;
+  lease_agreement_id: string | null;
+  lease_amendment_id: string | null;
   document_code: string;
   document_title: string;
   document_category: DocumentCategory;
@@ -270,6 +277,13 @@ const targetDocumentReferenceSelect = `
     l.document_id,
     l.document_version_id,
     l.relation,
+    l.target_type,
+    l.property_id,
+    l.unit_id,
+    l.party_id,
+    l.tenancy_id,
+    l.lease_agreement_id,
+    l.lease_amendment_id,
     d.code as document_code,
     d.title as document_title,
     d.category as document_category,
@@ -301,7 +315,6 @@ const targetDocumentReferenceOrder = `
 
 function mapTargetDocumentReference(
   row: TargetDocumentReferenceRow,
-  target: DocumentReadTarget,
 ): TargetDocumentReference {
   const linkedVersion =
     row.linked_version_id === null
@@ -321,6 +334,20 @@ function mapTargetDocumentReference(
           storage_object_key: row.linked_storage_object_key!,
         });
 
+  const link = mapLink({
+    id: row.link_id,
+    document_id: row.document_id,
+    document_version_id: row.document_version_id,
+    relation: row.relation,
+    target_type: row.target_type,
+    property_id: row.property_id,
+    unit_id: row.unit_id,
+    party_id: row.party_id,
+    tenancy_id: row.tenancy_id,
+    lease_agreement_id: row.lease_agreement_id,
+    lease_amendment_id: row.lease_amendment_id,
+  });
+
   return {
     document: mapDocument({
       id: row.document_id,
@@ -331,16 +358,7 @@ function mapTargetDocumentReference(
       latest_version_number: row.document_latest_version_number,
       revision: row.document_revision,
     }),
-    link: {
-      id: asDocumentLinkId(row.link_id),
-      documentId: asDocumentId(row.document_id),
-      documentVersionId:
-        row.document_version_id === null
-          ? null
-          : asDocumentVersionId(row.document_version_id),
-      relation: row.relation,
-      ...target,
-    } as DocumentLink,
+    link,
     linkedVersion,
   };
 }
@@ -634,6 +652,55 @@ export class PostgresDocumentRepository implements DocumentRepository {
     return rows.map(mapLink);
   }
 
+  async listUnitDossierDocuments(
+    unitId: import('@portfolio/domain').UnitId,
+  ): Promise<readonly TargetDocumentReference[]> {
+    const rows = await this.sql<TargetDocumentReferenceRow[]>`
+      ${this.sql.unsafe(targetDocumentReferenceSelect)}
+      where
+        (
+          l.target_type = 'unit'
+          and l.unit_id = ${unitId}
+        )
+        or (
+          l.target_type = 'tenancy'
+          and exists (
+            select 1
+            from public.tenancies t
+            where t.id = l.tenancy_id
+              and t.unit_id = ${unitId}
+          )
+        )
+        or (
+          l.target_type = 'lease_agreement'
+          and exists (
+            select 1
+            from public.lease_agreements a
+            join public.tenancies t
+              on t.id = a.tenancy_id
+            where a.id = l.lease_agreement_id
+              and t.unit_id = ${unitId}
+          )
+        )
+        or (
+          l.target_type = 'lease_amendment'
+          and exists (
+            select 1
+            from public.lease_amendments am
+            join public.lease_agreements a
+              on a.id = am.agreement_id
+            join public.tenancies t
+              on t.id = a.tenancy_id
+            where am.id = l.lease_amendment_id
+              and t.unit_id = ${unitId}
+          )
+        )
+      ${this.sql.unsafe(targetDocumentReferenceOrder)}
+    `;
+
+    return rows.map(mapTargetDocumentReference);
+  }
+
   async listTargetDocuments(
     target: DocumentReadTarget,
   ): Promise<readonly TargetDocumentReference[]> {
@@ -666,6 +733,6 @@ export class PostgresDocumentRepository implements DocumentRepository {
         break;
     }
 
-    return rows.map((row) => mapTargetDocumentReference(row, target));
+    return rows.map(mapTargetDocumentReference);
   }
 }

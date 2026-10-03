@@ -1474,6 +1474,54 @@ function setupDocumentReferences(
     });
 }
 
+function setupUnitDossierDocumentReferences(unitId: string) {
+  const tenancyIds = new Set(
+    [setupTenancy, setupSecondaryTenancy]
+      .filter(
+        (tenancy): tenancy is TenancyResponse =>
+          tenancy !== null && tenancy.unitId === unitId,
+      )
+      .map((tenancy) => tenancy.id),
+  );
+  const agreementIds = new Set(
+    setupAgreements
+      .filter((agreement) => tenancyIds.has(agreement.tenancyId))
+      .map((agreement) => agreement.id),
+  );
+  const amendmentIds = new Set(
+    setupAmendments
+      .filter((amendment) => agreementIds.has(amendment.agreementId))
+      .map((amendment) => amendment.id),
+  );
+
+  return setupDocumentLinks
+    .filter(
+      (link) =>
+        (link.targetType === 'unit' && link.targetId === unitId) ||
+        (link.targetType === 'tenancy' && tenancyIds.has(link.targetId)) ||
+        (link.targetType === 'lease_agreement' &&
+          agreementIds.has(link.targetId)) ||
+        (link.targetType === 'lease_amendment' &&
+          amendmentIds.has(link.targetId)),
+    )
+    .map((link) => {
+      const document = setupDocuments.find(
+        (candidate) => candidate.id === link.documentId,
+      );
+      if (!document) throw new Error('Setup DocumentLink has no Document.');
+      const linkedVersion =
+        link.documentVersionId === null
+          ? null
+          : setupDocumentVersions.find(
+              (candidate) => candidate.id === link.documentVersionId,
+            ) ?? null;
+      if (link.documentVersionId !== null && linkedVersion === null) {
+        throw new Error('Setup DocumentLink has no linked version.');
+      }
+      return { document, link, linkedVersion };
+    });
+}
+
 function apiPath(input: RequestInfo | URL): URL {
   const raw =
     input instanceof Request
@@ -2287,6 +2335,12 @@ globalThis.fetch = async (
 
   if (setupUnit && path === '/units/' + setupUnitId + '/spaces') {
     return json({ items: setupSpaces });
+  }
+
+  if (setupUnit && path === '/units/' + setupUnitId + '/documents') {
+    return json({
+      items: setupUnitDossierDocumentReferences(setupUnitId),
+    });
   }
 
   if (setupUnit && path === '/units/' + setupUnitId + '/access-items') {
