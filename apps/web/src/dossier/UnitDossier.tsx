@@ -42,6 +42,7 @@ interface UnitDossierProps {
   readonly inspectionId?: string | undefined;
   readonly inspectionSectionInstanceId?: string | undefined;
   readonly assetId?: string | undefined;
+  readonly servicePlanId?: string | undefined;
   readonly meterId?: string | undefined;
   readonly maintenanceIssueId?: string | undefined;
   readonly maintenanceWorkOrderId?: string | undefined;
@@ -62,6 +63,7 @@ export function UnitDossier({
   inspectionId,
   inspectionSectionInstanceId,
   assetId,
+  servicePlanId,
   meterId,
   maintenanceIssueId,
   maintenanceWorkOrderId,
@@ -216,6 +218,7 @@ export function UnitDossier({
               api={api}
               asOf={asOf}
               assetId={assetId}
+              servicePlanId={servicePlanId}
               navigate={navigate}
               propertyId={propertyId}
               setNavigationBlocker={setNavigationBlocker}
