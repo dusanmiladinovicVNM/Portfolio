@@ -3568,6 +3568,35 @@ try {
       "//*[normalize-space()='portfolio-agreement-signed-original.pdf']",
   );
 
+  await clickXpath(
+    sessionId,
+    "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Documents']]",
+  );
+  const unitDocumentDossier =
+    "//section[.//h2[normalize-space()='Documents in this Unit dossier']]";
+  await waitForElement(
+    sessionId,
+    'xpath',
+    unitDocumentDossier +
+      "//article[.//*[normalize-space()='mietvertrag-AGR-REPLACEMENT-BRW.pdf']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    unitDocumentDossier +
+      "//article[.//*[normalize-space()='mietvertrag-AGR-REPLACEMENT-BRW.pdf']]" +
+      "//dd[normalize-space()='Lease agreement']",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      unitDocumentDossier +
+        "//article[.//*[normalize-space()='mietvertrag-AGR-REPLACEMENT-BRW.pdf']]" +
+        "//dd[normalize-space()='Generated contract']",
+    ),
+    true,
+    'Unit dossier preserves generated-contract relation from Agreement ownership',
+  );
 
   await navigateWithPopState(
     sessionId,
