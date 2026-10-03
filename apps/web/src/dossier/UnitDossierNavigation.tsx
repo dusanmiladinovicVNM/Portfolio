@@ -93,7 +93,16 @@ function selectionForTab(tab: DossierTab, selection: UnitRouteSelection): UnitRo
         : {}),
     };
   }
-  if (tab === 'assets') return selection.assetId ? { assetId: selection.assetId } : {};
+  if (tab === 'assets') {
+    return selection.assetId
+      ? {
+          assetId: selection.assetId,
+          ...(selection.servicePlanId
+            ? { servicePlanId: selection.servicePlanId }
+            : {}),
+        }
+      : {};
+  }
   if (tab === 'meters') return selection.meterId ? { meterId: selection.meterId } : {};
   if (tab === 'maintenance') {
     return {
@@ -124,7 +133,7 @@ function activeContext(tab: DossierTab, selection: UnitRouteSelection): readonly
   } else if (tab === 'inspections' && selection.inspectionId) {
     context.push(selection.inspectionSectionInstanceId ? 'Field section' : 'Inspection detail');
   } else if (tab === 'assets' && selection.assetId) {
-    context.push('Asset detail');
+    context.push(selection.servicePlanId ? 'Service plan detail' : 'Asset detail');
   } else if (tab === 'meters' && selection.meterId) {
     context.push('Meter detail');
   } else if (tab === 'maintenance' && selection.maintenanceIssueId) {
