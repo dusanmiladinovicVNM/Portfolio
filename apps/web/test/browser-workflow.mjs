@@ -3578,13 +3578,13 @@ try {
     sessionId,
     'xpath',
     unitDocumentDossier +
-      "//article[.//*[normalize-space()='mietvertrag-AGR-REPLACEMENT-BRW.pdf']]",
+      "//article[contains(normalize-space(.),'mietvertrag-AGR-REPLACEMENT-BRW.pdf')]",
   );
   await waitForElement(
     sessionId,
     'xpath',
     unitDocumentDossier +
-      "//article[.//*[normalize-space()='mietvertrag-AGR-REPLACEMENT-BRW.pdf']]" +
+      "//article[contains(normalize-space(.),'mietvertrag-AGR-REPLACEMENT-BRW.pdf')]" +
       "//dd[normalize-space()='Lease agreement']",
   );
   assertEqual(
@@ -3611,7 +3611,7 @@ try {
   await clickXpath(
     sessionId,
     unitDocumentDossier +
-      "//article[.//*[normalize-space()='mietvertrag-AGR-REPLACEMENT-BRW.pdf']]" +
+      "//article[contains(normalize-space(.),'mietvertrag-AGR-REPLACEMENT-BRW.pdf')]" +
       "//button[normalize-space()='Open']",
   );
   await waitForBinaryReads(sessionId, unitGeneratedReadsBefore + 1);
