@@ -152,7 +152,7 @@ export async function generateInspectionFinalReportCommand(
     const expectedDocumentRevision = document.revision;
     // Resolve only active, frozen signatures. Do not use mutable Party images
     // or provider IDs from current Inspection relations.
-    const signatureArtworks = await Promise.all(
+    const resolvedSignatureArtworks = await Promise.all(
       snapshot.payload.signatures
         .filter(({ signature }) => signature.invalidatedAt === null)
         .map(async ({ signature, documentVersion }) => {
@@ -193,6 +193,11 @@ export async function generateInspectionFinalReportCommand(
           };
         }),
     );
+    // Multiple frozen signer relations may legitimately refer to the same
+    // immutable DocumentVersion. Fetch/reuse one artwork identity in the port.
+    const signatureArtworks = [...new Map(
+      resolvedSignatureArtworks.map((artwork) => [artwork.documentVersionId, artwork]),
+    ).values()];
     const rendered = await deps.pdfPort.renderInspectionFinalReport(
       snapshot,
       signatureArtworks,
