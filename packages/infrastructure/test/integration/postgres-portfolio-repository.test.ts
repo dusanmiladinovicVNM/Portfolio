@@ -2295,6 +2295,19 @@ describe('PostgreSQL infrastructure', () => {
       async remove(reference: import('@portfolio/application').StorageObjectReference) {
         reportObjects.delete(reference.objectKey);
       },
+      async read(reference: import('@portfolio/application').StorageObjectReference) {
+        // This concurrency test uses a stub PDF renderer. Return snapshot-matching
+        // signature metadata so it can exercise the new read boundary without
+        // depending on a real binary storage provider.
+        const version = await documentRepository.getVersionById(reference.objectKey as never);
+        if (!version) return null;
+        return {
+          ...reference,
+          byteSize: version.byteSize,
+          sha256: version.sha256,
+          content: new Uint8Array(version.byteSize),
+        };
+      },
     };
 
     const [reportVersion, concurrentReportVersion] = await Promise.all([
