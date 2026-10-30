@@ -161,7 +161,8 @@ function snapshotFixture(): InspectionFinalSnapshot {
             invalidationReason: null,
           },
           documentVersion: {
-            fileName: 'agent-signature.txt',
+            fileName: 'agent-signature.png',
+            mimeType: 'image/png',
           },
         },
       ],
@@ -170,11 +171,26 @@ function snapshotFixture(): InspectionFinalSnapshot {
   } as unknown as InspectionFinalSnapshot;
 }
 
+const TINY_SIGNATURE_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAGElEQVR4nAXBAQEAAAjDIG7/zhOGKleBB0bvBv1lsDJ5AAAAAElFTkSuQmCC',
+  'base64',
+);
+
+function artworkFor(snapshot: InspectionFinalSnapshot) {
+  return snapshot.payload.signatures
+    .filter(({ signature }) => signature.invalidatedAt === null)
+    .map(({ signature }) => ({
+      documentVersionId: signature.signatureDocumentVersionId,
+      mimeType: 'image/png',
+      content: TINY_SIGNATURE_PNG,
+    }));
+}
+
 describe('CanonicalInspectionPdfRenderer', () => {
   it('renders a business-facing final report instead of dumping canonical JSON', async () => {
     const snapshot = snapshotFixture();
     const rendered = await new CanonicalInspectionPdfRenderer()
-      .renderInspectionFinalReport(snapshot);
+      .renderInspectionFinalReport(snapshot, artworkFor(snapshot));
     const source = new TextDecoder().decode(rendered.content);
 
     expect(rendered.fileName).toBe(
@@ -198,6 +214,11 @@ describe('CanonicalInspectionPdfRenderer', () => {
     expect(source).toContain('MINOR - Small paint mark');
     expect(source).toContain('entrance-wall.jpg');
     expect(source).toContain('Dusan Miladinovic');
+    // The artwork must be a real image XObject, not a filename-only legend.
+    expect(source).toContain('/Subtype /Image');
+    expect(source).toContain('/Filter [/ASCIIHexDecode /FlateDecode]');
+    expect(source).toContain('/Sig1 Do');
+    expect(source).toContain('/XObject << /Sig1 ');
     expect(source).toContain('Immutable final snapshot');
     expect(source).toContain('Finalized 25.09.2026 11:00');
     expect(source).toContain('Scheduled for 25.09.2026');
@@ -276,7 +297,7 @@ describe('CanonicalInspectionPdfRenderer', () => {
     mutablePayload.evidence = [];
 
     const rendered = await new CanonicalInspectionPdfRenderer()
-      .renderInspectionFinalReport(snapshot);
+      .renderInspectionFinalReport(snapshot, artworkFor(snapshot));
     const source = new TextDecoder().decode(rendered.content);
 
     expect(source).toContain('Bedroom 1');
@@ -434,7 +455,7 @@ describe('CanonicalInspectionPdfRenderer', () => {
     });
 
     const rendered = await new CanonicalInspectionPdfRenderer()
-      .renderInspectionFinalReport(snapshot);
+      .renderInspectionFinalReport(snapshot, artworkFor(snapshot));
     const source = new TextDecoder().decode(rendered.content);
 
     expect(source).toContain('MAJOR - Kitchen ventilation staining');
@@ -457,7 +478,7 @@ describe('CanonicalInspectionPdfRenderer', () => {
     delete (snapshot.payload as { sectionInstances?: unknown }).sectionInstances;
 
     const rendered = await new CanonicalInspectionPdfRenderer()
-      .renderInspectionFinalReport(snapshot);
+      .renderInspectionFinalReport(snapshot, artworkFor(snapshot));
     const source = new TextDecoder().decode(rendered.content);
 
     expect(source).toContain('Property context unavailable');
@@ -534,7 +555,7 @@ describe('CanonicalInspectionPdfRenderer', () => {
       `EVIDENCE_START ${'evidence detail '.repeat(900)} EVIDENCE_MIDDLE ${'evidence continuation '.repeat(900)} EVIDENCE_END`;
 
     const rendered = await new CanonicalInspectionPdfRenderer()
-      .renderInspectionFinalReport(snapshot);
+      .renderInspectionFinalReport(snapshot, artworkFor(snapshot));
     const source = new TextDecoder().decode(rendered.content);
 
     for (const sentinel of [
@@ -591,4 +612,48 @@ describe('CanonicalInspectionPdfRenderer', () => {
 
     expect(source).not.toContain('(Property & Unit identity (continued)) Tj');
   });
+  it('fails closed if frozen signature artwork is missing', async () => {
+    const snapshot = snapshotFixture();
+    await expect(
+      new CanonicalInspectionPdfRenderer().renderInspectionFinalReport(snapshot, []),
+    ).rejects.toThrow(/artwork identities are incomplete/);
+  });
+
+  it.each(['image/webp', 'application/pdf'])(
+    'rejects unsupported %s artwork rather than silently omitting it',
+    async (mimeType) => {
+      const snapshot = snapshotFixture();
+      await expect(
+        new CanonicalInspectionPdfRenderer().renderInspectionFinalReport(
+          snapshot,
+          artworkFor(snapshot).map((a) => ({ ...a, mimeType })),
+        ),
+      ).rejects.toThrow();
+    },
+  );
+
+  it('renders two distinct active signature images without sharing image identity', async () => {
+    const snapshot = snapshotFixture();
+    const original = snapshot.payload.signatures[0]!;
+    const duplicate = {
+      ...original,
+      signature: {
+        ...original.signature,
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        signatureDocumentVersionId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        signerName: 'Second Test Agent',
+      },
+      documentVersion: { ...original.documentVersion },
+    };
+    (snapshot.payload.signatures as unknown as typeof duplicate[]).push(duplicate);
+    const content = (await new CanonicalInspectionPdfRenderer().renderInspectionFinalReport(
+      snapshot,
+      artworkFor(snapshot),
+    )).content;
+    const pdf = new TextDecoder().decode(content);
+    expect(pdf.match(/\/Subtype \/Image/gu)).toHaveLength(2);
+    expect(pdf).toContain('/Sig1 Do');
+    expect(pdf).toContain('/Sig2 Do');
+  });
+
 });
