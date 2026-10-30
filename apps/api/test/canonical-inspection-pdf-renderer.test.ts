@@ -634,6 +634,44 @@ describe('CanonicalInspectionPdfRenderer', () => {
     },
   );
 
+  it('ignores invalidated signatures without requiring their artwork', async () => {
+    const snapshot = snapshotFixture();
+    (snapshot.payload.signatures[0]!.signature as { invalidatedAt: string | null })
+      .invalidatedAt = '2026-09-25T09:01:00.000Z';
+    const pdf = new TextDecoder().decode(
+      (await new CanonicalInspectionPdfRenderer()
+        .renderInspectionFinalReport(snapshot, [])).content,
+    );
+    expect(pdf).toContain('No active signatures are present');
+    expect(pdf).not.toContain('/Subtype /Image');
+    expect(pdf).toContain('1 invalidated signature');
+  });
+
+  it('renders two signer relations that reuse one immutable DocumentVersion', async () => {
+    const snapshot = snapshotFixture();
+    const original = snapshot.payload.signatures[0]!;
+    const second = {
+      ...original,
+      signature: {
+        ...original.signature,
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        signerRole: 'witness' as const,
+        signerName: 'Second Witness',
+      },
+    };
+    (snapshot.payload.signatures as unknown as typeof second[]).push(second);
+    const source = new TextDecoder().decode(
+      (await new CanonicalInspectionPdfRenderer().renderInspectionFinalReport(
+        snapshot,
+        [artworkFor(snapshot)[0]!],
+      )).content,
+    );
+    expect(source.match(/\\/Subtype \\/Image/gu)).toHaveLength(2);
+    expect(source).toContain('Second Witness');
+    expect(source).toContain('/Sig1 Do');
+    expect(source).toContain('/Sig2 Do');
+  });
+
   it('renders two distinct active signature images without sharing image identity', async () => {
     const snapshot = snapshotFixture();
     const original = snapshot.payload.signatures[0]!;
