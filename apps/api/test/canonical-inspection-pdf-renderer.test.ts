@@ -193,7 +193,8 @@ function artworkFor(snapshot: InspectionFinalSnapshot) {
 function makePngChunk(kind: string, bytes: Uint8Array): Buffer {
   const tag = Buffer.from(kind, 'ascii');
   const payload = Buffer.concat([tag, Buffer.from(bytes)]);
-  const out = Buffer.alloc(payload.length + 12);
+  // Chunk bytes = length(4) + type/payload + CRC(4).
+  const out = Buffer.alloc(payload.length + 8);
   out.writeUInt32BE(bytes.length, 0);
   payload.copy(out, 4);
   let crc = 0xffffffff;
