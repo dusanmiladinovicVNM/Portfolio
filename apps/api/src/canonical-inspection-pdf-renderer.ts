@@ -706,8 +706,11 @@ export class CanonicalInspectionPdfRenderer implements PdfPort {
     const activeFrozenSignatures = snapshot.payload.signatures.filter(
       ({ signature }) => signature.invalidatedAt === null,
     );
+    const referencedVersionIds = new Set(activeFrozenSignatures.map(
+      ({ signature }) => signature.signatureDocumentVersionId,
+    ));
     if (imagesByVersion.size !== signatureArtworks.length ||
-        activeFrozenSignatures.length !== imagesByVersion.size) {
+        referencedVersionIds.size !== imagesByVersion.size) {
       throw new Error('Frozen Inspection signature artwork identities are incomplete or duplicated.');
     }
     const signatureImages = activeFrozenSignatures.map(({ signature, documentVersion }) => {
