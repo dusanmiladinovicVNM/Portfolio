@@ -161,6 +161,7 @@ function snapshotFixture(): InspectionFinalSnapshot {
             invalidationReason: null,
           },
           documentVersion: {
+            id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
             fileName: 'agent-signature.png',
             mimeType: 'image/png',
           },
@@ -623,6 +624,7 @@ describe('CanonicalInspectionPdfRenderer', () => {
     'rejects unsupported %s artwork rather than silently omitting it',
     async (mimeType) => {
       const snapshot = snapshotFixture();
+      (snapshot.payload.signatures[0]!.documentVersion as { mimeType: string }).mimeType = mimeType;
       await expect(
         new CanonicalInspectionPdfRenderer().renderInspectionFinalReport(
           snapshot,
@@ -643,7 +645,10 @@ describe('CanonicalInspectionPdfRenderer', () => {
         signatureDocumentVersionId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
         signerName: 'Second Test Agent',
       },
-      documentVersion: { ...original.documentVersion },
+      documentVersion: {
+        ...original.documentVersion,
+        id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      },
     };
     (snapshot.payload.signatures as unknown as typeof duplicate[]).push(duplicate);
     const content = (await new CanonicalInspectionPdfRenderer().renderInspectionFinalReport(
