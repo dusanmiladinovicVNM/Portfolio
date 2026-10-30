@@ -5,8 +5,15 @@ export interface PdfRenderResult {
   readonly content: Uint8Array;
 }
 
+export interface InspectionSignatureArtwork {
+  readonly documentVersionId: string;
+  readonly mimeType: string;
+  readonly content: Uint8Array;
+}
+
 export interface PdfPort {
   renderInspectionFinalReport(
     snapshot: InspectionFinalSnapshot,
+    signatureArtworks: readonly InspectionSignatureArtwork[],
   ): Promise<PdfRenderResult>;
 }
