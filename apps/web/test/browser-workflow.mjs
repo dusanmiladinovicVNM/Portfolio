@@ -7954,7 +7954,7 @@ try {
   await setFileXpath(
     sessionId,
     signatureForm + "//input[@name='file']",
-    amendmentSignedFilePath,
+    inspectionSignaturePngPath,
   );
   await clickXpath(
     sessionId,
