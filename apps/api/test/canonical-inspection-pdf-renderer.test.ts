@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
+import { deflateSync } from 'node:zlib';
 import type { PdfPort } from '@portfolio/application';
 import { CanonicalInspectionPdfRenderer } from '../src/index.js';
 
@@ -185,6 +188,63 @@ function artworkFor(snapshot: InspectionFinalSnapshot) {
       mimeType: 'image/png',
       content: TINY_SIGNATURE_PNG,
     }));
+}
+
+function makePngChunk(kind: string, bytes: Uint8Array): Buffer {
+  const tag = Buffer.from(kind, 'ascii');
+  const payload = Buffer.concat([tag, Buffer.from(bytes)]);
+  const out = Buffer.alloc(payload.length + 12);
+  out.writeUInt32BE(bytes.length, 0);
+  payload.copy(out, 4);
+  let crc = 0xffffffff;
+  for (const byte of payload) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ ((crc & 1) !== 0 ? 0xedb88320 : 0);
+    }
+  }
+  out.writeUInt32BE((crc ^ 0xffffffff) >>> 0, out.length - 4);
+  return out;
+}
+
+/** A genuine 900x300 transparent RGBA PNG with clearly visible dark strokes. */
+function visualSignatureFixture(): Uint8Array {
+  const width = 900;
+  const height = 300;
+  const pixels = Buffer.alloc((width * 4 + 1) * height);
+  const segments: [number, number, number, number][] = [
+    [65, 210, 155, 82], [155, 82, 205, 211], [205, 211, 270, 111],
+    [270, 111, 323, 211], [323, 211, 405, 83], [405, 83, 470, 211],
+    [470, 211, 553, 99], [553, 99, 617, 204], [617, 204, 715, 85],
+    [715, 85, 809, 200], [809, 200, 853, 135],
+  ];
+  for (const [x1, y1, x2, y2] of segments) {
+    const steps = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1));
+    for (let step = 0; step <= steps; step += 1) {
+      const t = step / steps;
+      const cx = Math.round(x1 + (x2 - x1) * t);
+      const cy = Math.round(y1 + (y2 - y1) * t);
+      for (let dy = -4; dy <= 4; dy += 1) {
+        for (let dx = -4; dx <= 4; dx += 1) {
+          if (dx * dx + dy * dy > 16) continue;
+          const x = cx + dx, y = cy + dy;
+          if (x < 0 || x >= width || y < 0 || y >= height) continue;
+          pixels[y * (width * 4 + 1) + 1 + x * 4 + 3] = 255;
+        }
+      }
+    }
+  }
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8; // eight-bit samples
+  header[9] = 6; // RGBA
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    makePngChunk('IHDR', header),
+    makePngChunk('IDAT', deflateSync(pixels)),
+    makePngChunk('IEND', new Uint8Array()),
+  ]);
 }
 
 describe('CanonicalInspectionPdfRenderer', () => {
@@ -698,5 +758,27 @@ describe('CanonicalInspectionPdfRenderer', () => {
     expect(pdf).toContain('/Sig1 Do');
     expect(pdf).toContain('/Sig2 Do');
   });
+
+  it('creates an inspectable final PDF with real 900x300 drawn signature artwork', async () => {
+    const snapshot = snapshotFixture();
+    const pdf = (await new CanonicalInspectionPdfRenderer().renderInspectionFinalReport(
+      snapshot,
+      [{
+        documentVersionId: snapshot.payload.signatures[0]!.signature.signatureDocumentVersionId,
+        mimeType: 'image/png',
+        content: visualSignatureFixture(),
+      }],
+    )).content;
+    const source = new TextDecoder().decode(pdf);
+    expect(source).toContain('/Subtype /Image /Width 900 /Height 300');
+    expect(source).toContain('/Sig1 Do');
+    expect(source).toContain('Dusan Miladinovic');
+    const proofPath = process.env.INSPECTION_SIGNATURE_VISUAL_PROOF_PATH;
+    if (proofPath) {
+      await mkdir(dirname(proofPath), { recursive: true });
+      await writeFile(proofPath, pdf);
+    }
+  });
+
 
 });
