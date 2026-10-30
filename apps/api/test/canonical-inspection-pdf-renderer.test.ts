@@ -666,7 +666,7 @@ describe('CanonicalInspectionPdfRenderer', () => {
         [artworkFor(snapshot)[0]!],
       )).content,
     );
-    expect(source.match(/\\/Subtype \\/Image/gu)).toHaveLength(2);
+    expect(source.split('/Subtype /Image')).toHaveLength(3);
     expect(source).toContain('Second Witness');
     expect(source).toContain('/Sig1 Do');
     expect(source).toContain('/Sig2 Do');
