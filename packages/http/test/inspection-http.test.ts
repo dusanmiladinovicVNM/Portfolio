@@ -1179,6 +1179,9 @@ describe('Inspection HTTP backbone', () => {
         sha256: 'a'.repeat(64),
         disposition: 'created',
       });
+      // Final-report generation now fetches exact frozen signature bytes.
+      // The pre-seeded version in this HTTP test needs its binary as well.
+      fileStorage.contents.set(reference.objectKey, new Uint8Array(10));
     }
 
     const schemaResponse = await handler(
