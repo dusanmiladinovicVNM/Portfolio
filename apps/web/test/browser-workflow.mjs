@@ -123,6 +123,10 @@ const agreementSignedFilePath = join(
   tmpdir(),
   'portfolio-agreement-signed-original.pdf',
 );
+const inspectionSignaturePngPath = join(
+  tmpdir(),
+  'portfolio-inspection-signature.png',
+);
 const inspectionEvidencePhotoPath = join(
   tmpdir(),
   'portfolio-inspection-window-photo.jpg',
@@ -546,6 +550,13 @@ try {
     writeFile(
       agreementSignedFilePath,
       new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52, 10, 65, 71, 82]),
+    ),
+    writeFile(
+      inspectionSignaturePngPath,
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAGElEQVR4nAXBAQEAAAjDIG7/zhOGKleBB0bvBv1lsDJ5AAAAAElFTkSuQmCC',
+        'base64',
+      ),
     ),
     writeFile(
       inspectionEvidencePhotoPath,
@@ -7865,7 +7876,7 @@ try {
   await setFileXpath(
     sessionId,
     signatureForm + "//input[@name='file']",
-    agreementSignedFilePath,
+    inspectionSignaturePngPath,
   );
   await clickXpath(
     sessionId,
@@ -8114,6 +8125,7 @@ try {
   await Promise.all([
     rm(amendmentSignedFilePath, { force: true }),
     rm(agreementSignedFilePath, { force: true }),
+    rm(inspectionSignaturePngPath, { force: true }),
     rm(inspectionEvidencePhotoPath, { force: true }),
     rm(oversizedInspectionEvidencePhotoPath, { force: true }),
   ]);
