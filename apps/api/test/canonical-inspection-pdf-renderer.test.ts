@@ -360,6 +360,8 @@ describe('CanonicalInspectionPdfRenderer', () => {
       sortOrder: 3,
       options: [],
     };
+    // Simulate an older snapshot whose item omitted optional choice metadata.
+    delete (legacy as { options?: Array<{ value: string; label: string }> }).options;
     payload.schema.sections[0]!.items.push(multi, conditional, legacy);
     payload.responses.push(
       { ...original, id: '99999999-9999-4999-8999-999999999990',
