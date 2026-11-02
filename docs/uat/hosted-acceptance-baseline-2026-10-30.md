@@ -4,6 +4,8 @@
 **Environment:** Vercel Production Web `https://portfolio-iota-wine-47.vercel.app`; Supabase project `fiowxgamyjjcondlheqg`; canonical PostgreSQL; Google Drive-backed DocumentVersions.  
 **Data:** dedicated demo / UAT records. No real tenants or legal records are used as proof in this document.
 
+> **Historical baseline:** the matrix and 2026-10-30 Inspection reproduction below retain their observed state as of 30 October. For the current post-#121 production result and release disposition, see [2026-11-02 follow-up](#hosted-inspection-pdf-signature-follow-up--2026-11-02). The original finalized documents are not amended by this documentation update.
+
 ## Scope, evidence standard, and caveats
 
 This is a **manual UAT register**, not a claim that all Portfolio requirements or every role / concurrency / operational recovery path passed in production.
@@ -90,4 +92,34 @@ Inspection:
 
 Automated CI and `pnpm release:rehearse` complement hosted UAT; neither independently proves all provider configuration, production policy or visual PDF correctness. See [MVP release gate](../runbooks/mvp-release-gate.md), [production backup and restore](../runbooks/production-backup-restore.md), and [binary backup and recovery](../runbooks/production-binary-backup-restore.md).
 
-**Current acceptance statement:** Core online business workflows are usable in the tested demo dataset, and the comprehensive Inspection end-to-end journey is verified through immutable finalization. The hosted product is **not fully release-approved**: visible signed PDF output (#119), recovery evidence, direct role-boundary testing and remaining risk-based UAT must be resolved. UI/UX redesign can begin after stabilizing #119 and should not be deferred until all remaining negative scenarios pass.
+**Acceptance statement as of 2026-10-30 (historical):** Core online business workflows are usable in the tested demo dataset, and the comprehensive Inspection end-to-end journey is verified through immutable finalization. At that date, hosted release acceptance was blocked by visible signed PDF output (#119), recovery evidence, direct role-boundary testing and other risk-based UAT. UI/UX redesign should not be deferred until every negative scenario passes.
+
+
+## Hosted Inspection PDF signature follow-up — 2026-11-02
+
+**Reason for addendum:** [PR #121](https://github.com/dusanmiladinovicVNM/Portfolio/pull/121) was merged into `main` as `9806c58e5365c3a9c108d55e4ca65ba79c5792ad` and deployed. A **new** operator-created mock inspection exercised the actual production PDF renderer. This addendum does not retroactively change the result of the frozen 2026-10-30 report and does not claim that the old PDF was repaired in place.
+
+### New independent UAT fixture
+
+| Check | Canonical / observed result | Evidence |
+| --- | --- | --- |
+| Inspection | `UAT-INSP-SIGNPDF-002`; UUID `ee49d6a7-5d25-4e74-a23c-1492cbe4aac9`; same Unit `ZH-BIR123-301`, `periodic`, published `UAT-INSP-RICH` schema v1, scheduled 2026-11-02. | UI PASS / DB VERIFIED |
+| Draft → Start → answers | 4 instantiated sections; General plus three rooms, 6 responses. General corrected once to remove accidentally copied UI text. Open Office `good`, IT `minor_defect` plus description, Meeting `major_defect` plus description. | UI PASS / DB VERIFIED |
+| Review / lock | All 6 effective required responses saved; locked lifecycle version 3, content revision 6. | UI PASS / DB VERIFIED |
+| Drawn Agent signature | `Portfolio UAT Test Agent`, signature UUID `ee188d3b-0ac7-4947-8408-9af71050ab7c`; active, not invalidated. Frozen `image/png` DocumentVersion `ba55a467-cc87-4691-ba93-93c1a973939f`, 23,019 bytes, final, SHA-256 `b82d3f029a687a16adf4a9f41b4ede1e19b2244b3840217d3632d85f4caedd8a`. Content revision advanced to 7. | UI PASS / DB VERIFIED |
+| Finalization | `finalized` lifecycle version 4, content revision 7. Immutable snapshot UUID `795abba3-e5bf-4aca-9b28-6dcfd3e70217`, snapshot v1 sourced from locked lifecycle v3 / content r7, includes the exact active signature DocumentVersion, all six responses and four section instances, with zero findings / Evidence by test design. | UI PASS / DB VERIFIED |
+| Final PDF | `inspection-UAT-INSP-SIGNPDF-002-final.pdf`; DocumentVersion `540cefe4-9c4d-4a0c-a1a5-e53dd4244a78`, `application/pdf`, 27,982 bytes, status `final`, recorded SHA-256 `c18e8d7bc3b15f3f227e9d771b4f5e69a6e9f3ef0fbdddf1344aae3498d51ca5`. | DB VERIFIED (document metadata) |
+| **Graphical signature artwork** | **Actual browser-opened, 2-page production PDF visibly displays the drawn signature image on page 2**, under Agent name/date/filename. Three operator screenshots also show overall PDF structure and report content. | **HOSTED VISUAL UAT PASS** |
+
+**Integrity/evidence boundary:** The read-only PostgreSQL checks confirm canonical identities, recorded document sizes/SHA-256, version status, and the frozen snapshot's exact signature DocumentVersion reference. The rendered PDF was visually inspected from operator-supplied production-browser screenshots. This was **not** an independent download/re-hash of the PDF bytes; original screenshot files and query transcripts are not committed to this repository as artifacts. See the [#119 closure evidence](https://github.com/dusanmiladinovicVNM/Portfolio/issues/119#issuecomment-6578977200).
+
+**Disposition:** [#119](https://github.com/dusanmiladinovicVNM/Portfolio/issues/119) **CLOSED / completed** on 2026-11-02 for the P2 missing-graphical-signature defect. The original 2026-10-30 finalized PDF and other historical immutable documents remain unchanged. PR #121 supports PNG/JPEG image signatures; new WebP/PDF signature uploads are rejected rather than represented by misleading filename-only artwork. Separate audited reissue policy for legacy unsupported signatures remains out of scope.
+
+### Still open, separately tracked
+
+- **[#123](https://github.com/dusanmiladinovicVNM/Portfolio/issues/123) — P3 PDF presentation:** The new production PDF still exposes raw select codes `good`, `minor_defect`, `major_defect`; renders Unicode separators as `?`; and leaves `IT / Technical Room` heading orphaned at the end of page 1. Screen-confirmed again on 2026-11-02; see [reproduction comment](https://github.com/dusanmiladinovicVNM/Portfolio/issues/123#issuecomment-6578978165).
+- **[#124](https://github.com/dusanmiladinovicVNM/Portfolio/issues/124) — UX workflow-first redesign:** Not addressed by PDF patch; design/task map and operator flow acceptance still required.
+- **[#120](https://github.com/dusanmiladinovicVNM/Portfolio/issues/120) — 5xx observability incident:** Issue subsequently closed; this does **not** replace independent proof of sustained healthy monitoring or production OAuth credential lifecycle.
+- **Risk-based release gates remain OPEN:** Production database and independent binary disaster recovery; direct multi-role, object-level API authorization; conflict/CAS retry, multi-signer and unlock negative tests; cross-module linking; historical reporting arithmetic; mobile/touch and provider failure/recovery. A clean manual happy path is not acceptance for these scenarios.
+
+**Updated acceptance statement as of 2026-11-02:** The **Inspection graphical-signature P2 blocker is resolved and confirmed by real hosted visual UAT**. The broader product is **not yet fully release-approved** because security, backup/recovery, operational, and risk-based negative acceptance gates above remain open. P3 PDF presentation work (#123) and workflow-first UI/UX design (#124) can proceed independently without changing existing immutable PDFs.
