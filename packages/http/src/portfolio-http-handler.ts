@@ -393,6 +393,7 @@ export function createPortfolioHttpHandler(
             {
               inspectionRepository: deps.inspectionRepository,
               documentRepository: deps.documentRepository,
+              inspectionRepository: deps.inspectionRepository,
               fileStorage: deps.fileStorage,
               pdfPort: deps.pdfPort,
               sha256: deps.sha256,
