@@ -226,6 +226,25 @@ function wrapText(
   return result;
 }
 
+// Keep page-reservation measurements in sync with actual item rendering.
+function itemContentLines(label: string, answer: string, comment: string | null) {
+  return {
+    labelLines: wrapText(label, CONTENT_WIDTH - 16, 8, true),
+    answerLines: wrapText(answer || 'Not recorded', CONTENT_WIDTH - 16, 10, true),
+    commentLines: comment
+      ? wrapText(`Comment: ${comment}`, CONTENT_WIDTH - 16, 8, false)
+      : [],
+  };
+}
+
+function itemBlockHeight(label: string, answer: string, comment: string | null): number {
+  const { labelLines, answerLines, commentLines } =
+    itemContentLines(label, answer, comment);
+  // Match ReportLayout.item line heights and the trailing 12-point rule gap.
+  return labelLines.length * 14 + answerLines.length * 13 +
+    commentLines.length * 10 + 12;
+}
+
 function drawText(
   page: PdfPage,
   value: string,
@@ -415,16 +434,8 @@ class ReportLayout {
   }
 
   item(label: string, answer: string, comment: string | null): void {
-    const labelLines = wrapText(label, CONTENT_WIDTH - 16, 8, true);
-    const answerLines = wrapText(
-      answer || 'Not recorded',
-      CONTENT_WIDTH - 16,
-      10,
-      true,
-    );
-    const commentLines = comment
-      ? wrapText(`Comment: ${comment}`, CONTENT_WIDTH - 16, 8, false)
-      : [];
+    const { labelLines, answerLines, commentLines } =
+      itemContentLines(label, answer, comment);
 
     const drawContinuation = (): void => {
       this.ensure(18);
@@ -819,8 +830,7 @@ export class CanonicalInspectionPdfRenderer implements PdfPort {
       for (const section of view.sections) {
         const first = section.items[0];
         const firstItemHeight = first
-          ? wrapText(first.label, CONTENT_WIDTH - 16, 8, true).length * 14 +
-            13 + 12
+          ? itemBlockHeight(first.label, first.answer, first.comment)
           : 0;
         layout.sectionTitle(section.title, section.description, firstItemHeight);
         for (const item of section.items) {
