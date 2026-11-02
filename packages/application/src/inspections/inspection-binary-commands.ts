@@ -13,6 +13,7 @@ import type { ClockPort } from '../shared/clock.js';
 import type { IdGenerator } from '../shared/id-generator.js';
 import type { Sha256Port } from '../shared/sha256-port.js';
 import { assertBufferedDocumentBinaryWriteSize } from '../documents/document-binary-policy.js';
+import { assertSupportedInspectionSignatureMimeType } from './inspection-signature-format.js';
 import type { DocumentRepository } from '../documents/document-repository.js';
 import type { FileStorageWritePort } from '../documents/file-storage-port.js';
 import {
@@ -220,6 +221,9 @@ export async function uploadInspectionBinaryCommand(
     );
   }
 
+  if (input.purpose === 'signature') {
+    assertSupportedInspectionSignatureMimeType(input.mimeType);
+  }
   assertBufferedDocumentBinaryWriteSize(input.content.byteLength);
 
   const expectedVersionId = asDocumentVersionId(input.uploadKey);
