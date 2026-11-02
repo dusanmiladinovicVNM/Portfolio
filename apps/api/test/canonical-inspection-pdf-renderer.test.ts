@@ -822,6 +822,23 @@ describe('CanonicalInspectionPdfRenderer', () => {
     expect(source).toContain(`Page 1 of ${pageCount}`);
     expect(source).toContain(`Page ${pageCount} of ${pageCount}`);
 
+    // An unbounded historical section description may span many pages.
+    // Never reserve more than a fresh page can hold and create empty pages.
+    const contentStreams = [...source.matchAll(
+      /<< \/Length \d+ >>\nstream\n([\s\S]*?)\nendstream/gu,
+    )].map((match) => match[1]!);
+    expect(contentStreams).toHaveLength(pageCount);
+    for (const stream of contentStreams) {
+      const contentText = [...stream.matchAll(/\(([^)]*)\) Tj/gu)]
+        .map((match) => match[1]!)
+        .filter((line) => line !== 'PORTFOLIO' &&
+          line !== 'INSPECTION REPORT' &&
+          !line.startsWith('Page ') &&
+          !line.startsWith('Immutable final snapshot v'));
+      expect(contentText.length).toBeGreaterThan(0);
+    }
+
+
     const textYCoordinates = [...source.matchAll(
       /(?:^|\n)-?\d+(?:\.\d+)? (-?\d+(?:\.\d+)?) Td(?:\n|$)/gu,
     )].map((match) => Number(match[1]));
