@@ -99,16 +99,68 @@ function safeFileSegment(value: string): string {
   return normalized || 'final';
 }
 
+// Helvetica uses /WinAnsiEncoding: represent supported non-ASCII glyphs as
+// single-byte octal escapes inside PDF literal strings. Do not UTF-8 encode
+// characters into a Type 1 WinAnsi text stream (which displays garbage).
+const winAnsiExtra = new Map<string, number>([
+  ['€', 0x80], ['‚', 0x82], ['ƒ', 0x83], ['„', 0x84],
+  ['…', 0x85], ['†', 0x86], ['‡', 0x87], ['ˆ', 0x88],
+  ['‰', 0x89], ['Š', 0x8a], ['‹', 0x8b], ['Œ', 0x8c],
+  ['Ž', 0x8e], ['‘', 0x91], ['’', 0x92], ['“', 0x93],
+  ['”', 0x94], ['•', 0x95], ['–', 0x96], ['—', 0x97],
+  ['˜', 0x98], ['™', 0x99], ['š', 0x9a], ['›', 0x9b],
+  ['œ', 0x9c], ['ž', 0x9e], ['Ÿ', 0x9f],
+]);
+
+const pdfFallback = new Map<string, string>([
+  ['Đ', 'D'], ['đ', 'd'], ['Ł', 'L'], ['ł', 'l'],
+  ['−', '-'], ['‑', '-'], ['→', '->'], ['←', '<-'],
+  ['\u00a0', ' '], ['\u202f', ' '], ['\u2009', ' '],
+  ['\u200b', ''], ['\u2060', ''], ['\r', '\n'],
+]);
+
+function pdfDisplayText(value: string): string {
+  let result = '';
+  for (const char of value.normalize('NFC')) {
+    const replacement = pdfFallback.get(char);
+    if (replacement !== undefined) {
+      result += replacement;
+      continue;
+    }
+    const code = char.charCodeAt(0);
+    if (char === '\n' || (code >= 0x20 && code <= 0x7e) ||
+        (code >= 0xa0 && code <= 0xff) || winAnsiExtra.has(char)) {
+      result += char;
+      continue;
+    }
+    const folded = ascii(char);
+    // Explicit, traceable fallback for glyphs not representable by Helvetica
+    // WinAnsi; do not silently render an arbitrary '?' in business documents.
+    result += folded !== '?' ? folded
+      : '[U+' + char.codePointAt(0)!.toString(16).toUpperCase() + ']';
+  }
+  return result;
+}
+
 function pdfString(value: string): string {
-  return ascii(value)
-    .replaceAll('\\', '\\\\')
-    .replaceAll('(', '\\(')
-    .replaceAll(')', '\\)');
+  let result = '';
+  for (const char of pdfDisplayText(value)) {
+    if (char === '\\' || char === '(' || char === ')') {
+      result += '\\' + char;
+      continue;
+    }
+    const code = char.charCodeAt(0);
+    const byte = winAnsiExtra.get(char) ?? code;
+    result += byte >= 0x7f
+      ? '\\' + byte.toString(8).padStart(3, '0')
+      : char;
+  }
+  return result;
 }
 
 function textWidth(value: string, size: number, bold: boolean): number {
   let units = 0;
-  for (const char of ascii(value)) {
+  for (const char of pdfDisplayText(value)) {
     if (char === ' ') units += 0.28;
     else if ('ilI.,:;!|'.includes(char)) units += 0.28;
     else if ('MW@%'.includes(char)) units += 0.82;
@@ -146,7 +198,7 @@ function wrapText(
   bold = false,
 ): string[] {
   const result: string[] = [];
-  for (const paragraph of ascii(value).split(/\n/u)) {
+  for (const paragraph of pdfDisplayText(value).split(/\n/u)) {
     if (!paragraph.trim()) {
       result.push('');
       continue;
@@ -306,11 +358,22 @@ class ReportLayout {
     return `${value} (continued)`;
   }
 
-  sectionTitle(title: string, subtitle: string | null = null): void {
+  sectionTitle(
+    title: string,
+    subtitle: string | null = null,
+    firstItemHeight = 0,
+  ): void {
     const titleLines = wrapText(title, CONTENT_WIDTH - 24, 12, true);
     const subtitleLines = subtitle
       ? wrapText(subtitle, CONTENT_WIDTH - 24, 8, false)
       : [];
+
+    // Reserve the section heading, its complete subtitle and the first
+    // answer together. A header by itself at the foot of a page is misleading.
+    this.ensure(
+      Math.max(1, titleLines.length) * 28 +
+      subtitleLines.length * 12 + 4 + firstItemHeight,
+    );
 
     const drawTitleLine = (line: string, continued: boolean): void => {
       fillRect(this.page, MARGIN, this.y - 16, CONTENT_WIDTH, 24, ACCENT);
@@ -747,7 +810,12 @@ export class CanonicalInspectionPdfRenderer implements PdfPort {
       layout.gap(8);
     } else {
       for (const section of view.sections) {
-        layout.sectionTitle(section.title, section.description);
+        const first = section.items[0];
+        const firstItemHeight = first
+          ? wrapText(first.label, CONTENT_WIDTH - 16, 8, true).length * 14 +
+            13 + 12
+          : 0;
+        layout.sectionTitle(section.title, section.description, firstItemHeight);
         for (const item of section.items) {
           layout.item(item.label, item.answer, item.comment);
         }
