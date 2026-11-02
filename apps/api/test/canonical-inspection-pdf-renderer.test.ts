@@ -531,6 +531,65 @@ describe('CanonicalInspectionPdfRenderer', () => {
     }
   });
 
+  it('keeps multi-line first response and comment with their room heading when a full block fits', async () => {
+    const snapshot = snapshotFixture();
+    const payload = snapshot.payload as unknown as {
+      schema: { sections: Array<{ scope: string; spaceTypes: string[] }> };
+      sectionInstances: Array<Record<string, unknown>>;
+      responses: Array<Record<string, unknown>>;
+      findings: unknown[];
+      evidence: unknown[];
+    };
+    payload.schema.sections[0]!.scope = 'space';
+    payload.schema.sections[0]!.spaceTypes = ['bedroom'];
+
+    const instanceTemplate = payload.sectionInstances[0]!;
+    const responseTemplate = payload.responses[0]!;
+    const roomCount = 22;
+    payload.sectionInstances = Array.from({ length: roomCount }, (_, index) => ({
+      ...instanceTemplate,
+      id: 'room-instance-' + index,
+      scope: 'space',
+      spaceId: 'room-space-' + index,
+      spaceCode: 'ROOM-' + index,
+      spaceName: 'ROOM_' + index + '_TITLE',
+      spaceType: 'bedroom',
+      spaceSortOrder: index,
+    }));
+    payload.responses = payload.sectionInstances.map((instance, index) => ({
+      ...responseTemplate,
+      id: 'room-response-' + index,
+      sectionInstanceId: instance.id,
+      value: 'ANSWER_START_' + index + ' ' +
+        'Detailed condition notes across the room and its fixed equipment. '.repeat(4) +
+        'ANSWER_END_' + index,
+      comment: 'COMMENT_START_' + index + ' ' +
+        'Recorded follow-up context with supplementary observations. '.repeat(4) +
+        'COMMENT_END_' + index,
+    }));
+    payload.findings = [];
+    payload.evidence = [];
+
+    const source = new TextDecoder().decode(
+      (await new CanonicalInspectionPdfRenderer()
+        .renderInspectionFinalReport(snapshot, artworkFor(snapshot))).content,
+    );
+    const streams = [...source.matchAll(
+      /<< \/Length \d+ >>\nstream\n([\s\S]*?)\nendstream/gu,
+    )].map((match) => match[1]!);
+    expect(streams.length).toBeGreaterThan(3);
+    for (let index = 0; index < roomCount; index += 1) {
+      const title = '(ROOM_' + index + '_TITLE) Tj';
+      const answerEnd = 'ANSWER_END_' + index + ') Tj';
+      const commentEnd = 'COMMENT_END_' + index + ') Tj';
+      expect(streams.some((stream) =>
+        stream.includes(title) &&
+        stream.includes(answerEnd) &&
+        stream.includes(commentEnd),
+      )).toBe(true);
+    }
+  });
+
   it('renders room-owned Kitchen Findings and Bathroom Evidence into the final PDF artifact', async () => {
     const snapshot = snapshotFixture();
     const mutablePayload = snapshot.payload as unknown as {
