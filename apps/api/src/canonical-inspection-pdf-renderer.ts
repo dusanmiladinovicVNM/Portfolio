@@ -369,10 +369,17 @@ class ReportLayout {
       : [];
 
     // Reserve the section heading, its complete subtitle and the first
-    // answer together. A header by itself at the foot of a page is misleading.
+    // answer together when they can fit on one page. For unbounded legacy
+    // subtitles, reserve only the leading heading/subtitle; otherwise the
+    // impossible height request would create an empty continuation page.
+    const headingHeight = Math.max(1, titleLines.length) * 28;
+    const combinedHeight = headingHeight +
+      subtitleLines.length * 12 + 4 + firstItemHeight;
+    const freshPageCapacity = 780 - 62;
     this.ensure(
-      Math.max(1, titleLines.length) * 28 +
-      subtitleLines.length * 12 + 4 + firstItemHeight,
+      combinedHeight <= freshPageCapacity
+        ? combinedHeight
+        : Math.min(freshPageCapacity, headingHeight + (subtitleLines.length > 0 ? 12 : 0)),
     );
 
     const drawTitleLine = (line: string, continued: boolean): void => {
