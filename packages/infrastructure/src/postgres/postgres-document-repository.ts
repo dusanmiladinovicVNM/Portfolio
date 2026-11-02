@@ -10,6 +10,7 @@ import {
   asDocumentId,
   asDocumentLinkId,
   asDocumentVersionId,
+  asInspectionId,
   asLeaseAgreementId,
   asLeaseAmendmentId,
   asPartyId,
@@ -385,6 +386,26 @@ export class PostgresDocumentRepository implements DocumentRepository {
       order by lower(code), id
     `;
     return rows.map(mapDocument);
+  }
+
+  async listInspectionIdsForDocument(documentId: DocumentId) {
+    // Inspect the authoritative references. Code-only ownership is additionally
+    // checked by the application layer because unlinked uploads still exist.
+    const rows = await this.sql<{ inspection_id: string }[]>`
+      select distinct inspection_id
+      from (
+        select e.inspection_id
+        from public.inspection_evidence e
+        join public.document_versions v on v.id = e.document_version_id
+        where v.document_id = ${documentId}
+        union all
+        select s.inspection_id
+        from public.inspection_signatures s
+        join public.document_versions v on v.id = s.signature_document_version_id
+        where v.document_id = ${documentId}
+      ) ownership
+    `;
+    return rows.map((row) => asInspectionId(row.inspection_id));
   }
 
   async documentCodeExists(code: string): Promise<boolean> {
