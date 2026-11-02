@@ -93,7 +93,7 @@ function displayAnswer(
   // Labels belong to the frozen schema in the final snapshot, never today's
   // editable schema. Preserve unknown/legacy values rather than guessing.
   const displayChoice = (choice: string): string =>
-    item.options.find((option) => option.value === choice)?.label ?? choice;
+    item.options?.find((option) => option.value === choice)?.label ?? choice;
 
   if (typeof value === 'string') return displayChoice(value);
   return [...value].map(displayChoice).join(', ');
