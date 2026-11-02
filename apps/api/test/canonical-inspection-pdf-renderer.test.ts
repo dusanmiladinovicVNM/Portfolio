@@ -399,9 +399,9 @@ describe('CanonicalInspectionPdfRenderer', () => {
     );
     // PDF font declares WinAnsi; all non-ASCII bytes use octal literal escapes.
     expect(source).toContain('/Encoding /WinAnsiEncoding');
-    expect(source).toContain('(\334ber Z\374rich \267 Stra\337e \227 B\374ro) Tj');
-    expect(source).toContain('(Gr\366\337e: 25 m\262 \267 Pr\374fung) Tj');
-    expect(source).toContain('(Comment: T\374r\366ffnung \226 Z\374rich) Tj');
+    expect(source).toContain('(\\334ber Z\\374rich \\267 Stra\\337e \\227 B\\374ro) Tj');
+    expect(source).toContain('(Gr\\366\\337e: 25 m\\262 \\267 Pr\\374fung) Tj');
+    expect(source).toContain('(Comment: T\\374r\\366ffnung \\226 Z\\374rich) Tj');
     expect(source).not.toContain('Z?rich');
     expect(source).not.toContain('Room condition ?');
   });
