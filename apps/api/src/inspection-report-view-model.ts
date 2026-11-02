@@ -81,10 +81,22 @@ function displayEnum(value: string): string {
     .join(' ');
 }
 
-function displayAnswer(value: InspectionAnswerValue): string {
+type InspectionSchemaItem =
+  InspectionFinalSnapshot['payload']['schema']['sections'][number]['items'][number];
+
+function displayAnswer(
+  value: InspectionAnswerValue,
+  item: InspectionSchemaItem,
+): string {
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  if (typeof value === 'string') return value;
-  return [...value].join(', ');
+
+  // Labels belong to the frozen schema in the final snapshot, never today's
+  // editable schema. Preserve unknown/legacy values rather than guessing.
+  const displayChoice = (choice: string): string =>
+    item.options?.find((option) => option.value === choice)?.label ?? choice;
+
+  if (typeof value === 'string') return displayChoice(value);
+  return [...value].map(displayChoice).join(', ');
 }
 
 function propertyAddress(
@@ -193,7 +205,7 @@ export function buildInspectionReportViewModel(
                 if (!response) return [];
                 return [{
                   label: item.label,
-                  answer: displayAnswer(response.value),
+                  answer: displayAnswer(response.value, item),
                   comment: response.comment,
                 }];
               });
@@ -219,7 +231,7 @@ export function buildInspectionReportViewModel(
                 if (!response) return [];
                 return [{
                   label: item.label,
-                  answer: displayAnswer(response.value),
+                  answer: displayAnswer(response.value, item),
                   comment: response.comment,
                 }];
               }),

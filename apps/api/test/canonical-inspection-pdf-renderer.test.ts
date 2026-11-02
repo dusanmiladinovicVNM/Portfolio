@@ -262,10 +262,10 @@ describe('CanonicalInspectionPdfRenderer', () => {
     expect(source.endsWith('%%EOF\n')).toBe(true);
 
     expect(source).toContain('INSPECTION REPORT');
-    expect(source).toContain('Birmensdorferstrasse 123 - Demo');
+    expect(source).toContain('Birmensdorferstrasse 123 \\227 Demo');
     expect(source).toContain('(Portfolio) Tj');
     expect(source).toContain('Property & Unit identity');
-    expect(source).toContain('Birmensdorferstrasse 123, 8003 Zurich, CH');
+    expect(source).toContain('Birmensdorferstrasse 123, 8003 Z\\374rich, CH');
     expect(source).toContain('Code: ZH-BIR-123');
     expect(source).toContain('Unit 3.01');
     expect(source).toContain('Code: ZH-BIR123-301');
@@ -275,7 +275,7 @@ describe('CanonicalInspectionPdfRenderer', () => {
     expect(source).toContain('No material defects observed.');
     expect(source).toContain('MINOR - Small paint mark');
     expect(source).toContain('entrance-wall.jpg');
-    expect(source).toContain('Dusan Miladinovic');
+    expect(source).toContain('Du\\232an Miladinovic');
     // The artwork must be a real image XObject, not a filename-only legend.
     expect(source).toContain('/Subtype /Image');
     expect(source).toContain('/Filter [/ASCIIHexDecode /FlateDecode]');
@@ -294,6 +294,118 @@ describe('CanonicalInspectionPdfRenderer', () => {
     expect(source).not.toContain('Canonical final snapshot');
     expect(source).not.toContain('\\\\u0161');
     expect(source).not.toContain('"payload"');
+  });
+
+  it('uses frozen schema option labels for select and multiselect without changing stored answers', async () => {
+    const snapshot = snapshotFixture();
+    const payload = snapshot.payload as unknown as {
+      schema: {
+        sections: Array<{
+          items: Array<{
+            id: string;
+            key: string;
+            label: string;
+            type: string;
+            sortOrder: number;
+            options: Array<{ value: string; label: string }>;
+            visibleWhen: unknown;
+            requiredWhen: unknown;
+          }>;
+        }>;
+      };
+      responses: Array<{ id: string; itemId: string; value: string | string[] }>;
+    };
+    const condition = payload.schema.sections[0]!.items[0]!;
+    condition.type = 'select';
+    condition.options = [
+      { value: 'good', label: 'Good condition' },
+      { value: 'minor_defect', label: 'Minor defects' },
+    ];
+    const original = payload.responses[0]!;
+    original.value = 'minor_defect';
+
+    const multi = {
+      ...condition,
+      id: '88888888-8888-4888-8888-888888888889',
+      key: 'affected_areas',
+      type: 'multi_select',
+      label: 'Affected areas',
+      sortOrder: 1,
+      options: [
+        { value: 'ceiling', label: 'Ceiling' },
+        { value: 'wall', label: 'Walls' },
+      ],
+    };
+    const conditional = {
+      ...condition,
+      id: '88888888-8888-4888-8888-888888888890',
+      key: 'description',
+      type: 'textarea',
+      label: 'Description of defects',
+      sortOrder: 2,
+      options: [],
+      visibleWhen: {
+        fieldKey: 'condition', operator: 'in', value: ['minor_defect'],
+      },
+      requiredWhen: {
+        fieldKey: 'condition', operator: 'in', value: ['minor_defect'],
+      },
+    };
+    const legacy = {
+      ...condition,
+      id: '88888888-8888-4888-8888-888888888891',
+      key: 'legacy_condition',
+      type: 'select',
+      label: 'Archived rating',
+      sortOrder: 3,
+      options: [],
+    };
+    // Simulate an older snapshot whose item omitted optional choice metadata.
+    delete (legacy as { options?: Array<{ value: string; label: string }> }).options;
+    payload.schema.sections[0]!.items.push(multi, conditional, legacy);
+    payload.responses.push(
+      { ...original, id: '99999999-9999-4999-8999-999999999990',
+        itemId: multi.id, value: ['ceiling', 'wall', 'legacy_extra'] },
+      { ...original, id: '99999999-9999-4999-8999-999999999991',
+        itemId: conditional.id, value: 'Damage near window' },
+      { ...original, id: '99999999-9999-4999-8999-999999999992',
+        itemId: legacy.id, value: 'unknown_historical_code' },
+    );
+
+    const source = new TextDecoder().decode(
+      (await new CanonicalInspectionPdfRenderer()
+        .renderInspectionFinalReport(snapshot, artworkFor(snapshot))).content,
+    );
+    expect(source).toContain('(Minor defects) Tj');
+    expect(source).toContain('(Ceiling, Walls, legacy_extra) Tj');
+    expect(source).toContain('(Damage near window) Tj');
+    expect(source).toContain('(unknown_historical_code) Tj');
+    expect(source).not.toContain('(minor_defect) Tj');
+    // The canonical frozen answer values remain unchanged in memory/storage.
+    expect(original.value).toBe('minor_defect');
+  });
+
+  it('encodes Swiss diacritics and Unicode separators as WinAnsi instead of question marks', async () => {
+    const snapshot = snapshotFixture();
+    const payload = snapshot.payload as unknown as {
+      reportContext: { property: { name: string; city: string } };
+      responses: Array<{ value: string; comment: string | null }>;
+    };
+    payload.reportContext.property.name = 'Über Zürich · Straße — Büro';
+    payload.reportContext.property.city = 'Zürich';
+    payload.responses[0]!.value = 'Größe: 25 m² · Prüfung';
+    payload.responses[0]!.comment = 'Türöffnung – Zürich';
+    const source = new TextDecoder().decode(
+      (await new CanonicalInspectionPdfRenderer()
+        .renderInspectionFinalReport(snapshot, artworkFor(snapshot))).content,
+    );
+    // PDF font declares WinAnsi; all non-ASCII bytes use octal literal escapes.
+    expect(source).toContain('/Encoding /WinAnsiEncoding');
+    expect(source).toContain('(\\334ber Z\\374rich \\267 Stra\\337e \\227 B\\374ro) Tj');
+    expect(source).toContain('(Gr\\366\\337e: 25 m\\262 \\267 Pr\\374fung) Tj');
+    expect(source).toContain('(Comment: T\\374r\\366ffnung \\226 Z\\374rich) Tj');
+    expect(source).not.toContain('Z?rich');
+    expect(source).not.toContain('Room condition ?');
   });
 
   it('renders repeated schema sections by frozen Space instance without merging their answers', async () => {
@@ -368,6 +480,114 @@ describe('CanonicalInspectionPdfRenderer', () => {
     expect(source).toContain('Damaged');
     expect(source).toContain('BED-1');
     expect(source).toContain('BED-2');
+  });
+
+  it('keeps repeated room heading and first response together across PDF pages', async () => {
+    const snapshot = snapshotFixture();
+    const payload = snapshot.payload as unknown as {
+      schema: { sections: Array<{ scope: string; spaceTypes: string[] }> };
+      sectionInstances: Array<Record<string, unknown>>;
+      responses: Array<Record<string, unknown>>;
+      findings: unknown[];
+      evidence: unknown[];
+    };
+    payload.schema.sections[0]!.scope = 'space';
+    payload.schema.sections[0]!.spaceTypes = ['bedroom'];
+    const template = payload.sectionInstances[0]!;
+    const original = payload.responses[0]!;
+    payload.sectionInstances = Array.from({ length: 20 }, (_, index) => ({
+      ...template,
+      id: 'instance-' + index,
+      scope: 'space',
+      spaceId: 'space-' + index,
+      spaceCode: 'ROOM-' + index,
+      spaceName: 'ROOM_' + index + '_TITLE',
+      spaceType: 'bedroom',
+      spaceSortOrder: index,
+    }));
+    payload.responses = payload.sectionInstances.map((instance, index) => ({
+      ...original,
+      id: 'answer-' + index,
+      sectionInstanceId: instance.id,
+      value: 'ANSWER_ROOM_' + index,
+    }));
+    payload.findings = [];
+    payload.evidence = [];
+
+    const source = new TextDecoder().decode(
+      (await new CanonicalInspectionPdfRenderer()
+        .renderInspectionFinalReport(snapshot, artworkFor(snapshot))).content,
+    );
+    const streams = [...source.matchAll(
+      /<< \/Length \d+ >>\nstream\n([\s\S]*?)\nendstream/gu,
+    )].map((match) => match[1]!);
+    expect(streams.length).toBeGreaterThan(2);
+    for (let index = 0; index < 20; index += 1) {
+      const title = '(ROOM_' + index + '_TITLE) Tj';
+      const answer = '(ANSWER_ROOM_' + index + ') Tj';
+      expect(streams.some((stream) =>
+        stream.includes(title) && stream.includes(answer),
+      )).toBe(true);
+    }
+  });
+
+  it('keeps multi-line first response and comment with their room heading when a full block fits', async () => {
+    const snapshot = snapshotFixture();
+    const payload = snapshot.payload as unknown as {
+      schema: { sections: Array<{ scope: string; spaceTypes: string[] }> };
+      sectionInstances: Array<Record<string, unknown>>;
+      responses: Array<Record<string, unknown>>;
+      findings: unknown[];
+      evidence: unknown[];
+    };
+    payload.schema.sections[0]!.scope = 'space';
+    payload.schema.sections[0]!.spaceTypes = ['bedroom'];
+
+    const instanceTemplate = payload.sectionInstances[0]!;
+    const responseTemplate = payload.responses[0]!;
+    const roomCount = 22;
+    payload.sectionInstances = Array.from({ length: roomCount }, (_, index) => ({
+      ...instanceTemplate,
+      id: 'room-instance-' + index,
+      scope: 'space',
+      spaceId: 'room-space-' + index,
+      spaceCode: 'ROOM-' + index,
+      spaceName: 'ROOM_' + index + '_TITLE',
+      spaceType: 'bedroom',
+      spaceSortOrder: index,
+    }));
+    payload.responses = payload.sectionInstances.map((instance, index) => ({
+      ...responseTemplate,
+      id: 'room-response-' + index,
+      sectionInstanceId: instance.id,
+      value: 'ANSWER_START_' + index + ' ' +
+        'Detailed condition notes across the room and its fixed equipment. '.repeat(4) +
+        'ANSWER_END_' + index,
+      comment: 'COMMENT_START_' + index + ' ' +
+        'Recorded follow-up context with supplementary observations. '.repeat(4) +
+        'COMMENT_END_' + index,
+    }));
+    payload.findings = [];
+    payload.evidence = [];
+
+    const source = new TextDecoder().decode(
+      (await new CanonicalInspectionPdfRenderer()
+        .renderInspectionFinalReport(snapshot, artworkFor(snapshot))).content,
+    );
+    const streams = [...source.matchAll(
+      /<< \/Length \d+ >>\nstream\n([\s\S]*?)\nendstream/gu,
+    )].map((match) => match[1]!);
+    expect(streams.length).toBeGreaterThan(3);
+    for (let index = 0; index < roomCount; index += 1) {
+      const title = '(ROOM_' + index + '_TITLE) Tj';
+      const answerEnd = 'ANSWER_END_' + index + ') Tj';
+      const commentEnd = 'COMMENT_END_' + index + ') Tj';
+      expect(streams.some((stream) =>
+        stream.includes(title) &&
+        stream.includes(answerEnd) &&
+        stream.includes(commentEnd),
+      )).toBe(true);
+    }
   });
 
   it('renders room-owned Kitchen Findings and Bathroom Evidence into the final PDF artifact', async () => {
@@ -663,6 +883,23 @@ describe('CanonicalInspectionPdfRenderer', () => {
     expect(source).toContain(`Page 1 of ${pageCount}`);
     expect(source).toContain(`Page ${pageCount} of ${pageCount}`);
 
+    // An unbounded historical section description may span many pages.
+    // Never reserve more than a fresh page can hold and create empty pages.
+    const contentStreams = [...source.matchAll(
+      /<< \/Length \d+ >>\nstream\n([\s\S]*?)\nendstream/gu,
+    )].map((match) => match[1]!);
+    expect(contentStreams).toHaveLength(pageCount);
+    for (const stream of contentStreams) {
+      const contentText = [...stream.matchAll(/\(([^)]*)\) Tj/gu)]
+        .map((match) => match[1]!)
+        .filter((line) => line !== 'PORTFOLIO' &&
+          line !== 'INSPECTION REPORT' &&
+          !line.startsWith('Page ') &&
+          !line.startsWith('Immutable final snapshot v'));
+      expect(contentText.length).toBeGreaterThan(0);
+    }
+
+
     const textYCoordinates = [...source.matchAll(
       /(?:^|\n)-?\d+(?:\.\d+)? (-?\d+(?:\.\d+)?) Td(?:\n|$)/gu,
     )].map((match) => Number(match[1]));
@@ -773,7 +1010,7 @@ describe('CanonicalInspectionPdfRenderer', () => {
     const source = new TextDecoder().decode(pdf);
     expect(source).toContain('/Subtype /Image /Width 900 /Height 300');
     expect(source).toContain('/Sig1 Do');
-    expect(source).toContain('Dusan Miladinovic');
+    expect(source).toContain('Du\\232an Miladinovic');
     const proofPath = process.env.INSPECTION_SIGNATURE_VISUAL_PROOF_PATH;
     if (proofPath) {
       await mkdir(dirname(proofPath), { recursive: true });
