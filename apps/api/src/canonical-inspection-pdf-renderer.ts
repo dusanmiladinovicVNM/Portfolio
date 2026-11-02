@@ -1,4 +1,12 @@
-import type { PdfPort, PdfRenderResult } from '@portfolio/application';
+import type {
+  InspectionSignatureArtwork,
+  PdfPort,
+  PdfRenderResult,
+} from '@portfolio/application';
+import {
+  prepareSignaturePdfImage,
+  type SignaturePdfImage,
+} from './inspection-signature-image.js';
 import { buildInspectionReportViewModel } from './inspection-report-view-model.js';
 
 type InspectionFinalSnapshot = Parameters<
@@ -23,6 +31,7 @@ type FontName = 'F1' | 'F2';
 
 interface PdfPage {
   readonly commands: string[];
+  readonly imageIndices: number[];
 }
 
 function ascii(value: string): string {
@@ -242,7 +251,7 @@ class ReportLayout {
   }
 
   private newPage(continuation: boolean): void {
-    this.page = { commands: [] };
+    this.page = { commands: [], imageIndices: [] };
     this.pages.push(this.page);
     if (continuation) {
       drawText(this.page, 'PORTFOLIO', MARGIN, 810, 8, 'F2', MUTED);
@@ -391,6 +400,25 @@ class ReportLayout {
       '0.90 0.90 0.87',
     );
     this.y -= 8;
+  }
+
+  signatureImage(imageIndex: number, image: SignaturePdfImage): void {
+    const scale = Math.min(1, 270 / image.width, 90 / image.height);
+    const width = Math.max(1, Number((image.width * scale).toFixed(2)));
+    const height = Math.max(1, Number((image.height * scale).toFixed(2)));
+    this.ensure(height + 22);
+    const x = MARGIN + 14;
+    const y = this.y - height - 3;
+    fillRect(this.page, x - 2, y - 3, width + 4, height + 6, WHITE);
+    strokeRect(this.page, x - 2, y - 3, width + 4, height + 6);
+    this.page.imageIndices.push(imageIndex);
+    this.page.commands.push(
+      'q',
+      String(width) + ' 0 0 ' + String(height) + ' ' + String(x) + ' ' + String(y) + ' cm',
+      '/Sig' + String(imageIndex + 1) + ' Do',
+      'Q',
+    );
+    this.y -= height + 20;
   }
 
   card(
@@ -583,7 +611,10 @@ class ReportLayout {
   }
 }
 
-function buildPdf(pages: readonly PdfPage[]): Uint8Array {
+function buildPdf(
+  pages: readonly PdfPage[],
+  signatureImages: readonly SignaturePdfImage[],
+): Uint8Array {
   const objects = new Map<number, string>();
   const pageObjectNumbers: number[] = [];
 
@@ -598,6 +629,21 @@ function buildPdf(pages: readonly PdfPage[]): Uint8Array {
   );
 
   let nextObject = 5;
+  const imageObjectNumbers = signatureImages.map(() => nextObject++);
+  signatureImages.forEach((image, index) => {
+    const bytesAsHex = Buffer.from(image.data).toString('hex') + '>';
+    const encoding = image.format === 'flate' ? '/FlateDecode' : '/DCTDecode';
+    objects.set(
+      imageObjectNumbers[index]!,
+      '<< /Type /XObject /Subtype /Image /Width ' + image.width +
+        ' /Height ' + image.height +
+        ' /ColorSpace /DeviceRGB /BitsPerComponent 8' +
+        ' /Filter [/ASCIIHexDecode ' + encoding + ']' +
+        ' /Length ' + bytesAsHex.length + ' >>\nstream\n' +
+        bytesAsHex + '\nendstream',
+    );
+  });
+
   for (const page of pages) {
     const pageObject = nextObject++;
     const contentObject = nextObject++;
@@ -609,9 +655,13 @@ function buildPdf(pages: readonly PdfPage[]): Uint8Array {
       contentObject,
       `<< /Length ${byteLength} >>\nstream\n${stream}\nendstream`,
     );
+    const xObjects = [...new Set(page.imageIndices)].map(
+      (index) => '/Sig' + String(index + 1) + ' ' +
+        String(imageObjectNumbers[index]) + ' 0 R',
+    ).join(' ');
     objects.set(
       pageObject,
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentObject} 0 R >>`,
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> /XObject << ${xObjects} >> >> /Contents ${contentObject} 0 R >>`,
     );
   }
 
@@ -647,8 +697,31 @@ function buildPdf(pages: readonly PdfPage[]): Uint8Array {
 export class CanonicalInspectionPdfRenderer implements PdfPort {
   async renderInspectionFinalReport(
     snapshot: InspectionFinalSnapshot,
+    signatureArtworks: readonly InspectionSignatureArtwork[],
   ): Promise<PdfRenderResult> {
     const view = buildInspectionReportViewModel(snapshot);
+    const imagesByVersion = new Map(signatureArtworks.map(
+      (artwork) => [artwork.documentVersionId, artwork] as const,
+    ));
+    const activeFrozenSignatures = snapshot.payload.signatures.filter(
+      ({ signature }) => signature.invalidatedAt === null,
+    );
+    const referencedVersionIds = new Set(activeFrozenSignatures.map(
+      ({ signature }) => signature.signatureDocumentVersionId,
+    ));
+    if (imagesByVersion.size !== signatureArtworks.length ||
+        referencedVersionIds.size !== imagesByVersion.size) {
+      throw new Error('Frozen Inspection signature artwork identities are incomplete or duplicated.');
+    }
+    const signatureImages = activeFrozenSignatures.map(({ signature, documentVersion }) => {
+      const artwork = imagesByVersion.get(signature.signatureDocumentVersionId);
+      if (!artwork ||
+          artwork.documentVersionId !== documentVersion.id ||
+          artwork.mimeType !== documentVersion.mimeType) {
+        throw new Error('A frozen Inspection signature has no matching exact binary.');
+      }
+      return prepareSignaturePdfImage(artwork.mimeType, artwork.content);
+    });
     const layout = new ReportLayout(view.inspectionCode);
 
     layout.renderCover(view);
@@ -728,12 +801,15 @@ export class CanonicalInspectionPdfRenderer implements PdfPort {
         color: MUTED,
       });
     } else {
-      for (const signature of view.signatures) {
+      for (const [index, signature] of view.signatures.entries()) {
+        // Keep the text and image on the same page for ordinary 900x300 signatures.
+        layout.ensure(156);
         layout.card(signature.role, [
           signature.signerName,
           `Signed ${formatSwissDateTime(signature.signedAt)}`,
           `Evidence: ${signature.documentFileName}`,
         ]);
+        layout.signatureImage(index, signatureImages[index]!);
       }
     }
     if (view.invalidatedSignaturesCount > 0 || view.unlockCount > 0) {
@@ -753,7 +829,7 @@ export class CanonicalInspectionPdfRenderer implements PdfPort {
       `Snapshot created: ${formatSwissDateTime(view.createdAt)}`,
     ]);
 
-    const content = buildPdf(layout.finish(view));
+    const content = buildPdf(layout.finish(view), signatureImages);
     return {
       fileName: `inspection-${safeFileSegment(view.inspectionCode)}-final.pdf`,
       content,

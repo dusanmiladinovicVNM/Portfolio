@@ -1,3 +1,4 @@
+import { assertSupportedInspectionSignatureMimeType } from './inspection-signature-format.js';
 import {
   DomainError,
   asDateOnly,
@@ -784,6 +785,7 @@ export async function addInspectionSignatureCommand(
       'Signature must reference a final DocumentVersion owned by a signature document.',
     );
   }
+  assertSupportedInspectionSignatureMimeType(version.mimeType);
   await assertDocumentVersionStorageIntegrity(deps, version);
 
   const partyRequired =

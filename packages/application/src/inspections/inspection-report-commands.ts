@@ -15,7 +15,9 @@ import {
   uploadDocumentVersionCommand,
 } from '../documents/document-commands.js';
 import type { DocumentRepository } from '../documents/document-repository.js';
-import type { FileStorageWritePort } from '../documents/file-storage-port.js';
+import type { FileStoragePort } from '../documents/file-storage-port.js';
+import { DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY } from '../documents/document-binary-policy.js';
+import { getDocumentVersionContentQuery } from '../documents/document-queries.js';
 import type { PdfPort } from '../documents/pdf-port.js';
 import type { InspectionRepository } from './inspection-repository.js';
 import { resolveInspectionFinalReport } from './inspection-report-service.js';
@@ -23,7 +25,7 @@ import { resolveInspectionFinalReport } from './inspection-report-service.js';
 export interface GenerateInspectionFinalReportDependencies {
   readonly inspectionRepository: InspectionRepository;
   readonly documentRepository: DocumentRepository;
-  readonly fileStorage: FileStorageWritePort;
+  readonly fileStorage: FileStoragePort;
   readonly pdfPort: PdfPort;
   readonly idGenerator: IdGenerator;
   readonly clock: ClockPort;
@@ -148,7 +150,58 @@ export async function generateInspectionFinalReportCommand(
   let canonicalVersion = await resolveCanonicalVersion();
   if (!canonicalVersion) {
     const expectedDocumentRevision = document.revision;
-    const rendered = await deps.pdfPort.renderInspectionFinalReport(snapshot);
+    // Resolve only active, frozen signatures. Do not use mutable Party images
+    // or provider IDs from current Inspection relations.
+    const resolvedSignatureArtworks = await Promise.all(
+      snapshot.payload.signatures
+        .filter(({ signature }) => signature.invalidatedAt === null)
+        .map(async ({ signature, documentVersion }) => {
+          if (
+            signature.signatureDocumentVersionId !== documentVersion.id ||
+            documentVersion.status !== 'final'
+          ) {
+            throw new DomainError(
+              'INSPECTION_SIGNATURE_SNAPSHOT_INVALID',
+              'Frozen signature does not reference one final DocumentVersion.',
+            );
+          }
+          const binary = await getDocumentVersionContentQuery(
+            {
+              documentRepository: deps.documentRepository,
+              fileStorage: deps.fileStorage,
+              binaryPolicy: DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
+            },
+            actor,
+            documentVersion.id,
+          );
+          if (
+            binary.version.id !== documentVersion.id ||
+            binary.version.byteSize !== documentVersion.byteSize ||
+            binary.version.mimeType !== documentVersion.mimeType ||
+            binary.version.sha256.toLowerCase() !==
+              documentVersion.sha256.toLowerCase()
+          ) {
+            throw new DomainError(
+              'INSPECTION_SIGNATURE_SNAPSHOT_BINARY_MISMATCH',
+              'The signature binary is not identical to its immutable final snapshot.',
+            );
+          }
+          return {
+            documentVersionId: documentVersion.id,
+            mimeType: binary.version.mimeType,
+            content: binary.content,
+          };
+        }),
+    );
+    // Multiple frozen signer relations may legitimately refer to the same
+    // immutable DocumentVersion. Fetch/reuse one artwork identity in the port.
+    const signatureArtworks = [...new Map(
+      resolvedSignatureArtworks.map((artwork) => [artwork.documentVersionId, artwork]),
+    ).values()];
+    const rendered = await deps.pdfPort.renderInspectionFinalReport(
+      snapshot,
+      signatureArtworks,
+    );
     if (rendered.content.byteLength === 0) {
       throw new DomainError(
         'INSPECTION_FINAL_REPORT_EMPTY',

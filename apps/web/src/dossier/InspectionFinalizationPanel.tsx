@@ -514,6 +514,10 @@ export function InspectionFinalizationPanel({
       setError('Choose a non-empty signature file.');
       return null;
     }
+    if (!['image/png', 'image/jpeg'].includes(fileValue.type.toLowerCase())) {
+      setError('Signature artwork must be a PNG or JPEG image. Attach PDF/WebP as supporting evidence instead.');
+      return null;
+    }
     if (fileValue.size > MAX_BINARY_BYTES) {
       setError('Signature files are currently limited to 16 MiB.');
       return null;
@@ -1183,7 +1187,7 @@ export function InspectionFinalizationPanel({
                 <label>
                   Signature file
                   <input
-                    accept="image/png,image/jpeg,image/webp,application/pdf"
+                    accept="image/png,image/jpeg"
                     disabled={blocked || signatureVersion !== null}
                     name="file"
                     required
@@ -1191,8 +1195,9 @@ export function InspectionFinalizationPanel({
                   />
                 </label>
                 <p className="setup-hint">
-                  The file is stored with this Inspection and then registered
-                  against the signer selected above.
+                  Upload PNG or JPEG signature artwork only. PDF/WebP files can
+                  be attached separately as Inspection evidence. The image is
+                  frozen with the selected signer and embedded in the final PDF.
                 </p>
                 <button
                   className="button-primary"

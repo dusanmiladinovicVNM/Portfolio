@@ -77,7 +77,16 @@ jobs:
       - name: Unit tests
         env:
           LUZERNER_VISUAL_PROOF_PATH: .artifacts/luzerner/mietvertrag-fixture.pdf
+          INSPECTION_SIGNATURE_VISUAL_PROOF_PATH: .artifacts/inspections/inspection-signature-fixture.pdf
         run: pnpm test
+
+      - name: Upload Inspection signature visual proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: inspection-signature-visual-proof
+          path: .artifacts/inspections/inspection-signature-fixture.pdf
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload Luzerner visual proof
         uses: actions/upload-artifact@v4
