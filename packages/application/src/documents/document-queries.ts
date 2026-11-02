@@ -41,14 +41,14 @@ function canonicalInspectionId(document: Document): InspectionId | null {
 
 async function canReadDocument(
   documentRepository: DocumentRepository,
-  inspectionRepository: InspectionReadRepository,
+  inspectionRepository: InspectionReadRepository | undefined,
   actor: Actor,
   document: Document,
 ): Promise<boolean> {
   if (actor.role !== 'inspector') return true;
 
   // A missing provenance adapter must never turn into an allow-all policy.
-  if (!documentRepository.listInspectionIdsForDocument) return false;
+  if (!documentRepository.listInspectionIdsForDocument || !inspectionRepository) return false;
   const related = await documentRepository.listInspectionIdsForDocument(document.id);
   const canonical = canonicalInspectionId(document);
   const prefixed = document.code.toUpperCase().startsWith('INSPECTION-');
@@ -69,7 +69,7 @@ async function canReadDocument(
 
 async function assertDocumentReadable(
   documentRepository: DocumentRepository,
-  inspectionRepository: InspectionReadRepository,
+  inspectionRepository: InspectionReadRepository | undefined,
   actor: Actor,
   document: Document,
 ): Promise<void> {
@@ -83,7 +83,7 @@ async function assertDocumentReadable(
 
 async function visibleDocumentReferences(
   documentRepository: DocumentRepository,
-  inspectionRepository: InspectionReadRepository,
+  inspectionRepository: InspectionReadRepository | undefined,
   actor: Actor,
   references: readonly TargetDocumentReference[],
 ): Promise<readonly TargetDocumentReference[]> {
@@ -97,7 +97,7 @@ async function visibleDocumentReferences(
 export async function listDocumentsQuery(
   repository: DocumentRepository,
   actor: Actor,
-  inspections: InspectionReadRepository,
+  inspections?: InspectionReadRepository,
 ): Promise<readonly Document[]> {
   requireCapability(actor, 'documents:read');
   const documents = await repository.listDocuments();
@@ -112,7 +112,7 @@ export async function getDocumentQuery(
   repository: DocumentRepository,
   actor: Actor,
   id: DocumentId,
-  inspections: InspectionReadRepository,
+  inspections?: InspectionReadRepository,
 ): Promise<Document> {
   requireCapability(actor, 'documents:read');
   const document = await repository.getDocumentById(id);
@@ -125,7 +125,7 @@ export async function listDocumentVersionsQuery(
   repository: DocumentRepository,
   actor: Actor,
   id: DocumentId,
-  inspections: InspectionReadRepository,
+  inspections?: InspectionReadRepository,
 ): Promise<readonly DocumentVersion[]> {
   const document = await getDocumentQuery(repository, actor, id, inspections);
   return repository.listVersionsByDocument(document.id);
@@ -135,7 +135,7 @@ export async function listDocumentLinksQuery(
   repository: DocumentRepository,
   actor: Actor,
   id: DocumentId,
-  inspections: InspectionReadRepository,
+  inspections?: InspectionReadRepository,
 ): Promise<readonly DocumentLink[]> {
   const document = await getDocumentQuery(repository, actor, id, inspections);
   return repository.listLinksByDocument(document.id);
@@ -146,7 +146,7 @@ export async function listUnitDocumentsQuery(
   portfolioRepository: PortfolioRepository,
   actor: Actor,
   unitId: UnitId,
-  inspections: InspectionReadRepository,
+  inspections?: InspectionReadRepository,
 ): Promise<readonly TargetDocumentReference[]> {
   requireCapability(actor, 'documents:read');
   if (!(await portfolioRepository.getUnitById(unitId))) {
@@ -163,7 +163,7 @@ export async function listLeaseAgreementDocumentsQuery(
   leaseRepository: LeaseRepository,
   actor: Actor,
   agreementId: LeaseAgreementId,
-  inspections: InspectionReadRepository,
+  inspections?: InspectionReadRepository,
 ): Promise<readonly TargetDocumentReference[]> {
   requireCapability(actor, 'documents:read');
   if (!(await leaseRepository.getAgreementById(agreementId))) {
@@ -180,7 +180,7 @@ export async function listLeaseAmendmentDocumentsQuery(
   leaseRepository: LeaseRepository,
   actor: Actor,
   amendmentId: LeaseAmendmentId,
-  inspections: InspectionReadRepository,
+  inspections?: InspectionReadRepository,
 ): Promise<readonly TargetDocumentReference[]> {
   requireCapability(actor, 'documents:read');
   if (!(await leaseRepository.getAmendmentById(amendmentId))) {
