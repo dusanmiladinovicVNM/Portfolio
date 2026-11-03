@@ -1269,6 +1269,21 @@ describe('Inspection HTTP backbone', () => {
       version: number;
     };
 
+    // Signature records are created through the Inspection-scoped binary
+    // upload path; use its canonical immutable parent codes in the fixture.
+    for (const [documentId, versionId] of [
+      ['83000000-0000-4000-8000-000000000012', '83000000-0000-4000-8000-000000000002'],
+      ['83000000-0000-4000-8000-000000000013', '83000000-0000-4000-8000-000000000003'],
+    ] as const) {
+      const id = asDocumentId(documentId);
+      const document = documentRepository.documents.get(id);
+      if (!document) throw new Error('Missing seeded signature document');
+      documentRepository.documents.set(id, {
+        ...document,
+        code: `INSPECTION-${inspection.id}-signature-${versionId}`,
+      });
+    }
+
     await handler(
       new Request(`https://portfolio.test/inspections/${inspection.id}/start`, {
         method: 'POST',
