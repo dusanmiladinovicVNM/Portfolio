@@ -1790,9 +1790,9 @@ describe('PostgreSQL infrastructure', () => {
         id, code, title, category, status, latest_version_number, revision
       ) values
         ('a2000000-0000-4000-8000-000000000001', 'DOC-EVIDENCE-PHOTO', 'Photo', 'photo', 'active', 1, 2),
-        ('a2000000-0000-4000-8000-000000000002', 'DOC-EVIDENCE-LANDLORD-1', 'Landlord signature 1', 'signature', 'active', 1, 2),
-        ('a2000000-0000-4000-8000-000000000003', 'DOC-EVIDENCE-LANDLORD-2', 'Landlord signature 2', 'signature', 'active', 1, 2),
-        ('a2000000-0000-4000-8000-000000000004', 'DOC-EVIDENCE-TENANT', 'Tenant signature', 'signature', 'active', 1, 2)
+        ('a2000000-0000-4000-8000-000000000002', ${'INSPECTION-' + inspection.id + '-signature-a3000000-0000-4000-8000-000000000002'}, 'Landlord signature 1', 'signature', 'active', 1, 2),
+        ('a2000000-0000-4000-8000-000000000003', ${'INSPECTION-' + inspection.id + '-signature-a3000000-0000-4000-8000-000000000003'}, 'Landlord signature 2', 'signature', 'active', 1, 2),
+        ('a2000000-0000-4000-8000-000000000004', ${'INSPECTION-' + inspection.id + '-signature-a3000000-0000-4000-8000-000000000004'}, 'Tenant signature', 'signature', 'active', 1, 2)
     `;
     await sql`
       insert into public.document_versions (
