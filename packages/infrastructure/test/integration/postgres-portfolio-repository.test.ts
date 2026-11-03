@@ -1919,6 +1919,12 @@ describe('PostgreSQL infrastructure', () => {
     expect(evidence.documentVersionId).toBe(
       'a3000000-0000-4000-8000-000000000001',
     );
+    // Proves real Postgres evidence/version joins used by the read policy.
+    const photoOwners = await documentRepository.listInspectionIdsForDocument(
+      asDocumentId('a2000000-0000-4000-8000-000000000001'),
+    );
+    expect(photoOwners).toEqual([inspection.id]);
+
 
     const beforeLock = (await inspectionRepository.getById(inspection.id))!;
     const locked = await lockInspectionCommand(
