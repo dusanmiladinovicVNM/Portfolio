@@ -1790,9 +1790,9 @@ describe('PostgreSQL infrastructure', () => {
         id, code, title, category, status, latest_version_number, revision
       ) values
         ('a2000000-0000-4000-8000-000000000001', 'DOC-EVIDENCE-PHOTO', 'Photo', 'photo', 'active', 1, 2),
-        ('a2000000-0000-4000-8000-000000000002', 'DOC-EVIDENCE-LANDLORD-1', 'Landlord signature 1', 'signature', 'active', 1, 2),
-        ('a2000000-0000-4000-8000-000000000003', 'DOC-EVIDENCE-LANDLORD-2', 'Landlord signature 2', 'signature', 'active', 1, 2),
-        ('a2000000-0000-4000-8000-000000000004', 'DOC-EVIDENCE-TENANT', 'Tenant signature', 'signature', 'active', 1, 2)
+        ('a2000000-0000-4000-8000-000000000002', ${'INSPECTION-' + inspection.id + '-signature-a3000000-0000-4000-8000-000000000002'}, 'Landlord signature 1', 'signature', 'active', 1, 2),
+        ('a2000000-0000-4000-8000-000000000003', ${'INSPECTION-' + inspection.id + '-signature-a3000000-0000-4000-8000-000000000003'}, 'Landlord signature 2', 'signature', 'active', 1, 2),
+        ('a2000000-0000-4000-8000-000000000004', ${'INSPECTION-' + inspection.id + '-signature-a3000000-0000-4000-8000-000000000004'}, 'Tenant signature', 'signature', 'active', 1, 2)
     `;
     await sql`
       insert into public.document_versions (
@@ -1829,6 +1829,57 @@ describe('PostgreSQL infrastructure', () => {
           'test', 'sig-tenant', 'sig-key-tenant'
         )
     `;
+
+    // Real PostgreSQL guard: B-scoped versions cannot be linked to A,
+    // even if a direct SQL writer bypasses application authorization.
+    const foreignInspectionId = 'a9000000-0000-4000-8000-000000000001';
+    const foreignPhotoVersionId = 'a3000000-0000-4000-8000-000000000005';
+    const foreignSignatureVersionId = 'a3000000-0000-4000-8000-000000000006';
+    await sql`
+      insert into public.documents (
+        id, code, title, category, status, latest_version_number, revision
+      ) values
+        (
+          'a2000000-0000-4000-8000-000000000005',
+          ${'INSPECTION-' + foreignInspectionId + '-photo-' + foreignPhotoVersionId},
+          'Foreign photo', 'photo', 'active', 1, 2
+        ),
+        (
+          'a2000000-0000-4000-8000-000000000006',
+          ${'INSPECTION-' + foreignInspectionId + '-signature-' + foreignSignatureVersionId},
+          'Foreign signature', 'signature', 'active', 1, 2
+        )
+    `;
+    await sql`
+      insert into public.document_versions (
+        id, document_id, version_number, file_name, mime_type, byte_size,
+        sha256, status, finalized_at, storage_provider, storage_object_id, storage_object_key
+      ) values
+        (
+          ${foreignPhotoVersionId},
+          'a2000000-0000-4000-8000-000000000005', 1, 'foreign.jpg',
+          'image/jpeg', 10, ${'5'.repeat(64)}, 'final',
+          '2026-09-21T08:14:00.000Z', 'test', 'foreign-photo', 'foreign-photo-key'
+        ),
+        (
+          ${foreignSignatureVersionId},
+          'a2000000-0000-4000-8000-000000000006', 1, 'foreign.png',
+          'image/png', 10, ${'6'.repeat(64)}, 'final',
+          '2026-09-21T08:14:00.000Z', 'test', 'foreign-signature', 'foreign-signature-key'
+        )
+    `;
+    await expect(sql`
+      insert into public.inspection_evidence (
+        id, inspection_id, schema_version_id, document_version_id,
+        kind, created_by_user_id, created_at
+      ) values (
+        'a7000000-0000-4000-8000-000000000005',
+        ${inspection.id}, ${published.id}, ${foreignPhotoVersionId},
+        'photo', ${actor.userId}, '2026-09-21T08:14:30.000Z'
+      )
+    `).rejects.toMatchObject({
+      code: '23514', constraint_name: 'inspection_document_owner_mismatch',
+    });
 
     const evidenceBinaries = new Map([
       ['photo-1', { byteSize: 10, sha256: '1111111111111111111111111111111111111111111111111111111111111111' }],
@@ -1868,6 +1919,12 @@ describe('PostgreSQL infrastructure', () => {
     expect(evidence.documentVersionId).toBe(
       'a3000000-0000-4000-8000-000000000001',
     );
+    // Proves real Postgres evidence/version joins used by the read policy.
+    const photoOwners = await documentRepository.listInspectionIdsForDocument(
+      asDocumentId('a2000000-0000-4000-8000-000000000001'),
+    );
+    expect(photoOwners).toEqual([inspection.id]);
+
 
     const beforeLock = (await inspectionRepository.getById(inspection.id))!;
     const locked = await lockInspectionCommand(
@@ -1898,6 +1955,19 @@ describe('PostgreSQL infrastructure', () => {
         },
       ),
     ).rejects.toMatchObject({ code: 'INSPECTION_CONTENT_LOCKED' });
+
+    await expect(sql`
+      insert into public.inspection_signatures (
+        id, inspection_id, signer_role, signer_name, signature_document_version_id,
+        signed_by_user_id, signed_at
+      ) values (
+        'a8000000-0000-4000-8000-000000000005',
+        ${inspection.id}, 'witness', 'Wrong Inspection owner',
+        ${foreignSignatureVersionId}, ${actor.userId}, '2026-09-21T08:24:30.000Z'
+      )
+    `).rejects.toMatchObject({
+      code: '23514', constraint_name: 'inspection_document_owner_mismatch',
+    });
 
     const landlord1 = await addInspectionSignatureCommand(
       {
@@ -1942,7 +2012,7 @@ describe('PostgreSQL infrastructure', () => {
         },
       ),
     ).rejects.toMatchObject({
-      code: 'INSPECTION_SIGNATURE_DOCUMENT_CATEGORY_INVALID',
+      code: 'INSPECTION_ACCESS_DENIED',
     });
 
     await expect(
@@ -1959,7 +2029,7 @@ describe('PostgreSQL infrastructure', () => {
       `,
     ).rejects.toMatchObject({
       code: '23514',
-      constraint_name: 'inspection_signature_document_category_invalid',
+      constraint_name: 'inspection_document_owner_mismatch',
     });
 
     await expect(
@@ -2246,7 +2316,7 @@ describe('PostgreSQL infrastructure', () => {
       `,
     ).rejects.toMatchObject({
       code: '23514',
-      constraint_name: 'inspection_final_report_document_category_invalid',
+      constraint_name: 'inspection_document_owner_mismatch',
     });
 
     let renderCalls = 0;

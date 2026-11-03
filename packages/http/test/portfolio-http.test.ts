@@ -15,6 +15,9 @@ import {
   asDocumentId,
   asDocumentLinkId,
   asDocumentVersionId,
+  asInspectionId,
+  asInspectionSchemaVersionId,
+  createInspection,
   asLeaseAgreementId,
   asLeaseAmendmentId,
   asPropertyId,
@@ -76,6 +79,11 @@ const inspectorIdentity: VerifiedIdentity = {
   subject: 'inspector-subject',
 };
 
+const managerIdentity: VerifiedIdentity = {
+  provider: 'supabase',
+  subject: 'manager-subject',
+};
+
 class FixedIds implements IdGenerator {
   private index = 0;
 
@@ -100,6 +108,12 @@ class InMemoryAccessRepository implements UserAccessRepository {
       return {
         userId: asUserId('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'),
         role: 'inspector',
+      };
+    }
+    if (identity.subject === 'manager-subject') {
+      return {
+        userId: asUserId('cccccccc-cccc-4ccc-8ccc-cccccccccccc'),
+        role: 'manager',
       };
     }
     return null;
@@ -366,6 +380,7 @@ function buildHandler(
     readonly reportingRepository?: InMemoryReportingRepository;
     readonly leaseRepository?: EmptyLeaseRepository;
     readonly documentRepository?: InMemoryDocumentRepository;
+    readonly inspectionRepository?: InMemoryInspectionRepository;
     readonly fileStorage?: MemoryFileStorage;
     readonly readinessCheck?: () => Promise<void>;
   } = {},
@@ -392,7 +407,7 @@ function buildHandler(
     leaseRepository: overrides.leaseRepository ?? new EmptyLeaseRepository(),
     documentRepository:
       overrides.documentRepository ?? new InMemoryDocumentRepository(),
-    inspectionRepository: new InMemoryInspectionRepository(),
+    inspectionRepository: overrides.inspectionRepository ?? new InMemoryInspectionRepository(),
     staffDirectoryRepository: new InMemoryStaffDirectoryRepository(),
     fileStorage: overrides.fileStorage ?? new MemoryFileStorage(),
     pdfPort: unusedPdfPort,
@@ -2877,6 +2892,199 @@ describe('Portfolio HTTP boundary', () => {
     expect(inspectorWrite.status).toBe(403);
   });
 
+
+  it('denies unassigned Inspection PDFs and signatures through every generic Document read while retaining assigned and business access', async () => {
+    const documents = new InMemoryDocumentRepository();
+    const inspections = new InMemoryInspectionRepository();
+    const storage = new MemoryFileStorage();
+    const leaseRepository = new EmptyLeaseRepository();
+    const unassignedId = asInspectionId('e2600000-0000-4000-8000-000000000001');
+    const assignedId = asInspectionId('e2600000-0000-4000-8000-000000000002');
+    const adminId = asUserId('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    const inspectorId = asUserId('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+
+    for (const [id, assignee] of [
+      [unassignedId, adminId],
+      [assignedId, inspectorId],
+    ] as const) {
+      inspections.inspections.set(id, createInspection({
+        id, code: 'UAT-SEC-' + id, inspectionType: 'periodic',
+        unitId: asUnitId('e2600000-0000-4000-8000-000000000003'),
+        schemaVersionId: asInspectionSchemaVersionId('e2600000-0000-4000-8000-000000000004'),
+        assignedToUserId: assignee, createdByUserId: adminId,
+      }));
+    }
+
+    const bytes = new Uint8Array([1, 2, 3]);
+    const hash = await testSha256.digest(bytes);
+    function addDocument(idString: string, versionString: string, code: string, category: 'inspection' | 'signature' | 'legal' | 'photo') {
+      const id = asDocumentId(idString);
+      const versionId = asDocumentVersionId(versionString);
+      documents.documents.set(id, {
+        id, code, title: code, category, status: 'active',
+        latestVersionNumber: 1, revision: 2,
+      });
+      documents.versions.set(versionId, {
+        id: versionId, documentId: id, versionNumber: 1, fileName: 'test.pdf',
+        mimeType: 'application/pdf', byteSize: bytes.length, sha256: hash,
+        status: 'final', finalizedAt: '2026-11-02T16:00:00.000Z',
+      });
+      const key = 'document-version:' + versionString;
+      const reference = { provider: 'memory', objectId: key, objectKey: key };
+      documents.storage.set(versionId, reference);
+      storage.objects.set(key, { ...reference, byteSize: bytes.length, sha256: hash, disposition: 'created' });
+      storage.contents.set(key, bytes);
+      return { id, versionId };
+    }
+
+    const forbiddenPdf = addDocument(
+      'e2600000-0000-4000-8000-000000000010',
+      'e2600000-0000-4000-8000-000000000011',
+      'INSPECTION-FINAL-' + unassignedId, 'inspection',
+    );
+    const allowedPdf = addDocument(
+      'e2600000-0000-4000-8000-000000000012',
+      'e2600000-0000-4000-8000-000000000013',
+      'INSPECTION-FINAL-' + assignedId, 'inspection',
+    );
+    const forbiddenSignature = addDocument(
+      'e2600000-0000-4000-8000-000000000014',
+      'e2600000-0000-4000-8000-000000000015',
+      'INSPECTION-' + unassignedId + '-signature-e2600000-0000-4000-8000-000000000015', 'signature',
+    );
+    const unrelatedBusiness = addDocument(
+      'e2600000-0000-4000-8000-000000000016',
+      'e2600000-0000-4000-8000-000000000017',
+      'BUSINESS-LEASE-001', 'legal',
+    );
+    const borrowedEvidence = addDocument(
+      'e2600000-0000-4000-8000-000000000018',
+      'e2600000-0000-4000-8000-000000000019',
+      'BUSINESS-PHOTO-001', 'photo',
+    );
+    // A generic document linked through canonical evidence FKs is Inspection-scoped too.
+    documents.inspectionIdsByDocument.set(borrowedEvidence.id, [unassignedId]);
+
+    const handler = buildHandler(undefined, new FixedClock(), {
+      documentRepository: documents, inspectionRepository: inspections,
+      fileStorage: storage, leaseRepository,
+    });
+    for (const path of [
+      '/documents/' + forbiddenPdf.id,
+      '/documents/' + forbiddenPdf.id + '/versions',
+      '/documents/' + forbiddenPdf.id + '/links',
+      '/document-versions/' + forbiddenPdf.versionId + '/content',
+      '/document-versions/' + forbiddenSignature.versionId + '/content',
+      '/document-versions/' + borrowedEvidence.versionId + '/content',
+    ]) {
+      const response = await handler(new Request('https://portfolio.test' + path), inspectorIdentity);
+      expect(response.status, path).toBe(403);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'INSPECTION_ACCESS_DENIED' },
+      });
+    }
+    const listing = await handler(new Request('https://portfolio.test/documents'), inspectorIdentity);
+    expect(listing.status).toBe(200);
+    const visible = ((await listing.json()) as { data: { items: { id: string }[] } }).data.items.map((x) => x.id);
+    expect(visible).toContain(allowedPdf.id);
+    expect(visible).toContain(unrelatedBusiness.id);
+    expect(visible).not.toContain(forbiddenPdf.id);
+    expect(visible).not.toContain(forbiddenSignature.id);
+    expect(visible).not.toContain(borrowedEvidence.id);
+
+    const assignedBinary = await handler(
+      new Request('https://portfolio.test/document-versions/' + allowedPdf.versionId + '/content'),
+      inspectorIdentity,
+    );
+    expect(assignedBinary.status).toBe(200);
+    expect([...new Uint8Array(await assignedBinary.arrayBuffer())]).toEqual([1, 2, 3]);
+    const businessBinary = await handler(
+      new Request('https://portfolio.test/document-versions/' + unrelatedBusiness.versionId + '/content'),
+      inspectorIdentity,
+    );
+    expect(businessBinary.status).toBe(200);
+    const adminBinary = await handler(
+      new Request('https://portfolio.test/document-versions/' + forbiddenPdf.versionId + '/content'),
+      adminIdentity,
+    );
+    expect(adminBinary.status).toBe(200);
+    const managerBinary = await handler(
+      new Request('https://portfolio.test/document-versions/' + forbiddenPdf.versionId + '/content'),
+      managerIdentity,
+    );
+    expect(managerBinary.status).toBe(200);
+
+    const createdProperty = await handler(
+      new Request('https://portfolio.test/properties', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(propertyBody),
+      }),
+      adminIdentity,
+    );
+    expect(createdProperty.status).toBe(201);
+    const propertyId = (await createdProperty.json()).data.id as string;
+    const createdUnit = await handler(
+      new Request('https://portfolio.test/units', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          propertyId, code: 'UAT-SEC-DOCS', unitNumber: 'SEC-1', unitType: 'apartment',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(createdUnit.status).toBe(201);
+    const unitId = asUnitId((await createdUnit.json()).data.id as string);
+    const agreementId = asLeaseAgreementId('e2600000-0000-4000-8000-000000000030');
+    const amendmentId = asLeaseAmendmentId('e2600000-0000-4000-8000-000000000031');
+    leaseRepository.agreements.set(agreementId, {
+      id: agreementId,
+      tenancyId: asTenancyId('e2600000-0000-4000-8000-000000000032'),
+      code: 'UAT-SEC-AGR', agreementType: 'initial', predecessorAgreementId: null,
+      effectiveFrom: '2025-01-01' as DateOnly, effectiveTo: null,
+      status: 'signed', signedAt: '2025-01-01' as DateOnly, version: 2, parties: [],
+    });
+    leaseRepository.amendments.set(amendmentId, {
+      id: amendmentId, agreementId, code: 'UAT-SEC-AMD', title: 'Change',
+      description: null, effectiveFrom: '2025-07-01' as DateOnly,
+      status: 'signed', signedAt: '2025-07-01' as DateOnly, version: 2,
+    });
+
+    const cases = [
+      { url: '/units/' + unitId + '/documents', targetType: 'unit' as const, targetId: unitId },
+      { url: '/agreements/' + agreementId + '/documents', targetType: 'lease_agreement' as const, targetId: agreementId },
+      { url: '/amendments/' + amendmentId + '/documents', targetType: 'lease_amendment' as const, targetId: amendmentId },
+    ];
+    let linkCounter = 40;
+    for (const entry of cases) {
+      for (const doc of [forbiddenPdf, allowedPdf, unrelatedBusiness]) {
+        const linkId = asDocumentLinkId(
+          'e2600000-0000-4000-8000-' + String(linkCounter++).padStart(12, '0'),
+        );
+        documents.links.push({
+          id: linkId, documentId: doc.id, documentVersionId: doc.versionId,
+          relation: 'supporting', targetType: entry.targetType, targetId: entry.targetId,
+        } as import('@portfolio/domain').DocumentLink);
+      }
+      const inspectorList = await handler(
+        new Request('https://portfolio.test' + entry.url), inspectorIdentity,
+      );
+      expect(inspectorList.status).toBe(200);
+      const items = ((await inspectorList.json()) as {
+        data: { items: { document: { id: string } }[] }
+      }).data.items;
+      expect(items.map((x) => x.document.id)).toContain(allowedPdf.id);
+      expect(items.map((x) => x.document.id)).toContain(unrelatedBusiness.id);
+      expect(items.map((x) => x.document.id)).not.toContain(forbiddenPdf.id);
+      const managerList = await handler(
+        new Request('https://portfolio.test' + entry.url), managerIdentity,
+      );
+      expect(managerList.status).toBe(200);
+      const managerItems = ((await managerList.json()) as {
+        data: { items: { document: { id: string } }[] }
+      }).data.items;
+      expect(managerItems.map((x) => x.document.id)).toContain(forbiddenPdf.id);
+    }
+  });
 
   it('runs Maintenance Issue -> WorkOrder -> Cost through HTTP', async () => {
     const propertyId = '91000000-0000-4000-8000-000000000001';

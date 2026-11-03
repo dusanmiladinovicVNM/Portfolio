@@ -464,6 +464,11 @@ function translate(error: unknown): DomainError | null {
 
   if (pg.code === '23514') {
     switch (pg.constraint_name) {
+      case 'inspection_document_owner_mismatch':
+        return new DomainError(
+          'INSPECTION_ACCESS_DENIED',
+          'Document version cannot be registered for this Inspection.',
+        );
       case 'inspection_content_locked':
         return new DomainError(
           'INSPECTION_CONTENT_LOCKED',
