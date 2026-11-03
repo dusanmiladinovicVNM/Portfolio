@@ -79,6 +79,11 @@ const inspectorIdentity: VerifiedIdentity = {
   subject: 'inspector-subject',
 };
 
+const managerIdentity: VerifiedIdentity = {
+  provider: 'supabase',
+  subject: 'manager-subject',
+};
+
 class FixedIds implements IdGenerator {
   private index = 0;
 
@@ -103,6 +108,12 @@ class InMemoryAccessRepository implements UserAccessRepository {
       return {
         userId: asUserId('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'),
         role: 'inspector',
+      };
+    }
+    if (identity.subject === 'manager-subject') {
+      return {
+        userId: asUserId('cccccccc-cccc-4ccc-8ccc-cccccccccccc'),
+        role: 'manager',
       };
     }
     return null;
@@ -2886,6 +2897,7 @@ describe('Portfolio HTTP boundary', () => {
     const documents = new InMemoryDocumentRepository();
     const inspections = new InMemoryInspectionRepository();
     const storage = new MemoryFileStorage();
+    const leaseRepository = new EmptyLeaseRepository();
     const unassignedId = asInspectionId('e2600000-0000-4000-8000-000000000001');
     const assignedId = asInspectionId('e2600000-0000-4000-8000-000000000002');
     const adminId = asUserId('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
@@ -2953,8 +2965,9 @@ describe('Portfolio HTTP boundary', () => {
     // A generic document linked through canonical evidence FKs is Inspection-scoped too.
     documents.inspectionIdsByDocument.set(borrowedEvidence.id, [unassignedId]);
 
-    const handler = buildHandler([], new FixedClock(), {
-      documentRepository: documents, inspectionRepository: inspections, fileStorage: storage,
+    const handler = buildHandler(undefined, new FixedClock(), {
+      documentRepository: documents, inspectionRepository: inspections,
+      fileStorage: storage, leaseRepository,
     });
     for (const path of [
       '/documents/' + forbiddenPdf.id,
@@ -2995,6 +3008,82 @@ describe('Portfolio HTTP boundary', () => {
       adminIdentity,
     );
     expect(adminBinary.status).toBe(200);
+    const managerBinary = await handler(
+      new Request('https://portfolio.test/document-versions/' + forbiddenPdf.versionId + '/content'),
+      managerIdentity,
+    );
+    expect(managerBinary.status).toBe(200);
+
+    const createdProperty = await handler(
+      new Request('https://portfolio.test/properties', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(propertyBody),
+      }),
+      adminIdentity,
+    );
+    expect(createdProperty.status).toBe(201);
+    const propertyId = (await createdProperty.json()).data.id as string;
+    const createdUnit = await handler(
+      new Request('https://portfolio.test/units', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          propertyId, code: 'UAT-SEC-DOCS', unitNumber: 'SEC-1', unitType: 'apartment',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(createdUnit.status).toBe(201);
+    const unitId = asUnitId((await createdUnit.json()).data.id as string);
+    const agreementId = asLeaseAgreementId('e2600000-0000-4000-8000-000000000030');
+    const amendmentId = asLeaseAmendmentId('e2600000-0000-4000-8000-000000000031');
+    leaseRepository.agreements.set(agreementId, {
+      id: agreementId,
+      tenancyId: asTenancyId('e2600000-0000-4000-8000-000000000032'),
+      code: 'UAT-SEC-AGR', agreementType: 'initial', predecessorAgreementId: null,
+      effectiveFrom: '2025-01-01' as DateOnly, effectiveTo: null,
+      status: 'signed', signedAt: '2025-01-01' as DateOnly, version: 2, parties: [],
+    });
+    leaseRepository.amendments.set(amendmentId, {
+      id: amendmentId, agreementId, code: 'UAT-SEC-AMD', title: 'Change',
+      description: null, effectiveFrom: '2025-07-01' as DateOnly,
+      status: 'signed', signedAt: '2025-07-01' as DateOnly, version: 2,
+    });
+
+    const cases = [
+      { url: '/units/' + unitId + '/documents', targetType: 'unit' as const, targetId: unitId },
+      { url: '/agreements/' + agreementId + '/documents', targetType: 'lease_agreement' as const, targetId: agreementId },
+      { url: '/amendments/' + amendmentId + '/documents', targetType: 'lease_amendment' as const, targetId: amendmentId },
+    ];
+    let linkCounter = 40;
+    for (const entry of cases) {
+      for (const doc of [forbiddenPdf, allowedPdf, unrelatedBusiness]) {
+        const linkId = asDocumentLinkId(
+          'e2600000-0000-4000-8000-' + String(linkCounter++).padStart(12, '0'),
+        );
+        documents.links.push({
+          id: linkId, documentId: doc.id, documentVersionId: doc.versionId,
+          relation: 'supporting', targetType: entry.targetType, targetId: entry.targetId,
+        } as import('@portfolio/domain').DocumentLink);
+      }
+      const inspectorList = await handler(
+        new Request('https://portfolio.test' + entry.url), inspectorIdentity,
+      );
+      expect(inspectorList.status).toBe(200);
+      const items = ((await inspectorList.json()) as {
+        data: { items: { document: { id: string } }[] }
+      }).data.items;
+      expect(items.map((x) => x.document.id)).toContain(allowedPdf.id);
+      expect(items.map((x) => x.document.id)).toContain(unrelatedBusiness.id);
+      expect(items.map((x) => x.document.id)).not.toContain(forbiddenPdf.id);
+      const managerList = await handler(
+        new Request('https://portfolio.test' + entry.url), managerIdentity,
+      );
+      expect(managerList.status).toBe(200);
+      const managerItems = ((await managerList.json()) as {
+        data: { items: { document: { id: string } }[] }
+      }).data.items;
+      expect(managerItems.map((x) => x.document.id)).toContain(forbiddenPdf.id);
+    }
   });
 
   it('runs Maintenance Issue -> WorkOrder -> Cost through HTTP', async () => {
