@@ -58,7 +58,8 @@ begin
       v_expected_code := 'INSPECTION-' || new.inspection_id::text
                          || '-' || v_purpose || '-' || v_version_id::text;
       if lower(v_code) <> lower(v_expected_code)
-         or v_category <> case when v_purpose = 'photo' then 'photo' else 'inspection' end
+         or (v_purpose = 'photo' and v_category <> 'photo')
+         or (v_purpose = 'attachment' and v_category <> 'inspection')
       then
         raise exception 'Scoped evidence document belongs to another Inspection.'
           using errcode = '23514',
