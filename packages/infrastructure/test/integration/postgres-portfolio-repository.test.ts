@@ -2316,7 +2316,7 @@ describe('PostgreSQL infrastructure', () => {
       `,
     ).rejects.toMatchObject({
       code: '23514',
-      constraint_name: 'inspection_final_report_document_category_invalid',
+      constraint_name: 'inspection_document_owner_mismatch',
     });
 
     let renderCalls = 0;
