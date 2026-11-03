@@ -2006,7 +2006,7 @@ describe('PostgreSQL infrastructure', () => {
         },
       ),
     ).rejects.toMatchObject({
-      code: 'INSPECTION_SIGNATURE_DOCUMENT_CATEGORY_INVALID',
+      code: 'INSPECTION_ACCESS_DENIED',
     });
 
     await expect(
