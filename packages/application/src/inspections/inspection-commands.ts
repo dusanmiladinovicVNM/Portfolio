@@ -1,4 +1,5 @@
 import { assertSupportedInspectionSignatureMimeType } from './inspection-signature-format.js';
+import { assertInspectionVersionOwnership } from './inspection-document-ownership.js';
 import {
   DomainError,
   asDateOnly,
@@ -673,6 +674,9 @@ export async function attachInspectionEvidenceCommand(
       'Evidence document version not found.',
     );
   }
+  await assertInspectionVersionOwnership(
+    deps.documentRepository, inspection.id, version, input.kind,
+  );
   await assertDocumentVersionStorageIntegrity(deps, version);
 
   const schema = await requireSchema(
@@ -770,21 +774,9 @@ export async function addInspectionSignatureCommand(
     );
   }
 
-  const signatureDocument = await deps.documentRepository.getDocumentById(
-    version.documentId,
+  await assertInspectionVersionOwnership(
+    deps.documentRepository, inspection.id, version, 'signature',
   );
-  if (!signatureDocument) {
-    throw new DomainError(
-      'DOCUMENT_NOT_FOUND',
-      'Signature parent document not found.',
-    );
-  }
-  if (signatureDocument.category !== 'signature') {
-    throw new DomainError(
-      'INSPECTION_SIGNATURE_DOCUMENT_CATEGORY_INVALID',
-      'Signature must reference a final DocumentVersion owned by a signature document.',
-    );
-  }
   assertSupportedInspectionSignatureMimeType(version.mimeType);
   await assertDocumentVersionStorageIntegrity(deps, version);
 
