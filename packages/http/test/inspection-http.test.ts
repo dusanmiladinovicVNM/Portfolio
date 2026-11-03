@@ -1121,6 +1121,127 @@ describe('Inspection HTTP backbone', () => {
     });
   });
 
+  it('rejects cross-Inspection signature and evidence registration at the HTTP write boundary', async () => {
+    const {
+      handler, inspectionRepository, documentRepository, fileStorage,
+    } = buildHandler();
+    const targetId = asInspectionId('c1260000-0000-4000-8000-000000000001');
+    const sourceId = asInspectionId('c1260000-0000-4000-8000-000000000002');
+    const unitId = asUnitId('c1260000-0000-4000-8000-000000000003');
+    const schemaVersionId = asInspectionSchemaVersionId('c1260000-0000-4000-8000-000000000004');
+    const target = createInspection({
+      id: targetId, code: 'UAT-SEC-TARGET', inspectionType: 'periodic',
+      unitId, schemaVersionId,
+      assignedToUserId: asUserId('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'),
+      createdByUserId: asUserId('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
+    });
+    const source = createInspection({
+      id: sourceId, code: 'UAT-SEC-SOURCE', inspectionType: 'periodic',
+      unitId, schemaVersionId,
+      assignedToUserId: asUserId('dddddddd-dddd-4ddd-8ddd-dddddddddddd'),
+      createdByUserId: asUserId('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
+    });
+    inspectionRepository.inspections.set(targetId, target);
+    inspectionRepository.inspections.set(sourceId, source);
+
+    const seed = (documentNumber: string, versionNumber: string, code: string, category: 'signature' | 'photo') => {
+      const docId = asDocumentId(documentNumber);
+      const versionId = asDocumentVersionId(versionNumber);
+      documentRepository.documents.set(docId, {
+        id: docId, code, title: 'Mock binary', category, status: 'active',
+        latestVersionNumber: 1, revision: 2,
+      });
+      documentRepository.versions.set(versionId, {
+        id: versionId, documentId: docId,
+        versionNumber: 1, fileName: category === 'signature' ? 'signature.png' : 'evidence.jpg',
+        mimeType: category === 'signature' ? 'image/png' : 'image/jpeg',
+        byteSize: 3, sha256: 'a'.repeat(64),
+        status: 'final', finalizedAt: '2026-11-02T12:00:00.000Z',
+      });
+      const key = `storage:${versionNumber}`;
+      documentRepository.storage.set(versionId, { provider: 'memory', objectId: key, objectKey: key });
+      fileStorage.objects.set(key, {
+        provider: 'memory', objectId: key, objectKey: key, byteSize: 3,
+        sha256: 'a'.repeat(64), disposition: 'created',
+      });
+      fileStorage.contents.set(key, new Uint8Array([1, 2, 3]));
+      return { docId, versionId };
+    };
+
+    const sourcePhotoId = 'c1260000-0000-4000-8000-000000000011';
+    const sourceSignatureId = 'c1260000-0000-4000-8000-000000000012';
+    const sourcePhoto = seed(
+      'c1260000-0000-4000-8000-000000000021', sourcePhotoId,
+      `INSPECTION-${sourceId}-photo-${sourcePhotoId}`, 'photo',
+    );
+    const sourceSignature = seed(
+      'c1260000-0000-4000-8000-000000000022', sourceSignatureId,
+      `INSPECTION-${sourceId}-signature-${sourceSignatureId}`, 'signature',
+    );
+    const borrowedBusiness = seed(
+      'c1260000-0000-4000-8000-000000000023',
+      'c1260000-0000-4000-8000-000000000013',
+      'BUSINESS-PHOTO-EXISTING', 'photo',
+    );
+    documentRepository.inspectionIdsByDocument.set(borrowedBusiness.docId, [sourceId]);
+
+    for (const versionId of [sourcePhoto.versionId, borrowedBusiness.versionId]) {
+      const response = await handler(
+        new Request(`https://portfolio.test/inspections/${targetId}/evidence`, {
+          method: 'POST',
+          body: JSON.stringify({ documentVersionId: versionId, kind: 'photo' }),
+        }),
+        inspectorIdentity,
+      );
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'INSPECTION_ACCESS_DENIED' },
+      });
+    }
+    expect(inspectionRepository.evidence).toHaveLength(0);
+
+    // Same Inspection progresses to locked without any write in this test.
+    inspectionRepository.inspections.set(targetId, {
+      ...target, status: 'locked', lockedAt: '2026-11-02T12:30:00.000Z', version: 3,
+    });
+    for (const actor of [inspectorIdentity, adminIdentity]) {
+      const response = await handler(
+        new Request(`https://portfolio.test/inspections/${targetId}/signatures`, {
+          method: 'POST',
+          body: JSON.stringify({
+            signerRole: 'witness', signerName: 'Wrong source',
+            signatureDocumentVersionId: sourceSignature.versionId,
+          }),
+        }),
+        actor,
+      );
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'INSPECTION_ACCESS_DENIED' },
+      });
+    }
+    expect(inspectionRepository.signatures).toHaveLength(0);
+
+    const localSignatureVersionId = 'c1260000-0000-4000-8000-000000000014';
+    const localSignature = seed(
+      'c1260000-0000-4000-8000-000000000024', localSignatureVersionId,
+      `INSPECTION-${targetId}-signature-${localSignatureVersionId}`, 'signature',
+    );
+    const accepted = await handler(
+      new Request(`https://portfolio.test/inspections/${targetId}/signatures`, {
+        method: 'POST',
+        body: JSON.stringify({
+          signerRole: 'witness', signerName: 'Correct source',
+          signatureDocumentVersionId: localSignature.versionId,
+        }),
+      }),
+      inspectorIdentity,
+    );
+    expect(accepted.status).toBe(201);
+    expect(inspectionRepository.signatures).toHaveLength(1);
+    expect(inspectionRepository.signatures[0]?.inspectionId).toBe(targetId);
+  });
+
   it('enforces evidence/signature permissions and returns final snapshot over HTTP', async () => {
     const { handler, documentRepository, fileStorage, getPdfRenderCount } =
       buildHandler();
