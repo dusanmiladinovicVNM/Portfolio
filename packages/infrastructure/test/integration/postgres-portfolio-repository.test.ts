@@ -2029,7 +2029,7 @@ describe('PostgreSQL infrastructure', () => {
       `,
     ).rejects.toMatchObject({
       code: '23514',
-      constraint_name: 'inspection_signature_document_category_invalid',
+      constraint_name: 'inspection_document_owner_mismatch',
     });
 
     await expect(
