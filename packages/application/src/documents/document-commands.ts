@@ -110,7 +110,13 @@ export interface LinkDocumentDependencies extends DocumentDependencies {
   readonly leaseRepository: LeaseRepository;
 }
 
-const SYSTEM_OWNED_DOCUMENT_CODE_PREFIXES = ['LUZERNER-FINAL-'] as const;
+// System-generated Inspection binaries and final reports must never be
+// created, versioned, finalized or linked through generic user Document APIs.
+// Inspection workflows use the trusted document-write service instead.
+const SYSTEM_OWNED_DOCUMENT_CODE_PREFIXES = [
+  'LUZERNER-FINAL-',
+  'INSPECTION-',
+] as const;
 
 function isSystemOwnedDocumentCode(code: string): boolean {
   const normalized = code.trim().toUpperCase();
