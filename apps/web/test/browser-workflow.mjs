@@ -6688,6 +6688,22 @@ try {
     'xpath',
     "//*[@data-inspection-required-progress]//*[contains(normalize-space(),'0 / 1 saved')]",
   );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "const cards = Array.from(document.querySelectorAll('.inspection-section-form .inspection-item')); return cards.length > 0 && cards.every((card) => { const answer = card.querySelector('.inspection-field > input, .inspection-field > select, .inspection-field > textarea'); if (answer) return Boolean(answer.id) && card.querySelector('label.inspection-item-label')?.control === answer; const fieldset = card.querySelector('.inspection-field > fieldset.inspection-multiselect'); return Boolean(fieldset && fieldset.querySelector('legend')?.textContent?.trim()); });",
+    ),
+    true,
+    'Inspection question controls have native label or fieldset/legend semantics',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "const announcer = document.querySelector('[data-inspection-field-save-status]'); const duplicate = document.querySelector('[data-inspection-autosave-status]'); return announcer?.getAttribute('role') === 'status' && announcer.getAttribute('aria-live') === 'polite' && announcer.getAttribute('aria-atomic') === 'true' && duplicate?.getAttribute('aria-hidden') === 'true';",
+    ),
+    true,
+    'Inspection autosave has one polite live region and a hidden visual duplicate',
+  );
   await clickXpath(
     sessionId,
     "//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='Kitchen']",
