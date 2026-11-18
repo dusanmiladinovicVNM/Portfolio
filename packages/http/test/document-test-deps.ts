@@ -13,6 +13,7 @@ import type {
   DocumentLink,
   DocumentVersion,
   DocumentVersionId,
+  InspectionId,
 } from '@portfolio/domain';
 import { testSha256 } from './hash-test-deps.js';
 
@@ -21,6 +22,11 @@ export class InMemoryDocumentRepository implements DocumentRepository {
   readonly versions = new Map<DocumentVersionId, DocumentVersion>();
   readonly storage = new Map<DocumentVersionId, StorageObjectReference>();
   readonly links: DocumentLink[] = [];
+  readonly inspectionIdsByDocument = new Map<DocumentId, readonly InspectionId[]>();
+
+  async listInspectionIdsForDocument(documentId: DocumentId) {
+    return this.inspectionIdsByDocument.get(documentId) ?? [];
+  }
 
   async getDocumentById(id: DocumentId) {
     return this.documents.get(id) ?? null;

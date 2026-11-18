@@ -1,5 +1,7 @@
 import {
   DomainError,
+  asInspectionId,
+  type InspectionId,
   type Document,
   type DocumentId,
   type DocumentLink,
@@ -15,6 +17,7 @@ import type {
   DocumentRepository,
   TargetDocumentReference,
 } from './document-repository.js';
+import type { InspectionRepository } from '../inspections/inspection-repository.js';
 import type { LeaseRepository } from '../contracts/lease-repository.js';
 import type { PortfolioRepository } from '../portfolio/portfolio-repository.js';
 import {
@@ -23,22 +26,98 @@ import {
 import type { BufferedDocumentBinaryPolicy } from './document-binary-policy.js';
 import type { FileStorageReadPort } from './file-storage-port.js';
 
+type InspectionReadRepository = Pick<InspectionRepository, 'getById'>;
+
+/** Canonical inspection-generated documents also exist before they are
+ * attached to evidence/signatures. The source ID is therefore extracted from
+ * the server-generated Document.code AND checked against FK provenance. */
+function canonicalInspectionId(document: Document): InspectionId | null {
+  const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+  const final = new RegExp('^INSPECTION-FINAL-(' + uuid + ')$', 'i').exec(document.code);
+  const binary = new RegExp('^INSPECTION-(' + uuid + ')-(?:photo|attachment|signature)-' + uuid + '$', 'i').exec(document.code);
+  const id = final?.[1] ?? binary?.[1];
+  return id ? asInspectionId(id) : null;
+}
+
+async function canReadDocument(
+  documentRepository: DocumentRepository,
+  inspectionRepository: InspectionReadRepository | undefined,
+  actor: Actor,
+  document: Document,
+): Promise<boolean> {
+  if (actor.role !== 'inspector') return true;
+
+  // A missing provenance adapter must never turn into an allow-all policy.
+  if (!documentRepository.listInspectionIdsForDocument || !inspectionRepository) return false;
+  const related = await documentRepository.listInspectionIdsForDocument(document.id);
+  const canonical = canonicalInspectionId(document);
+  const prefixed = document.code.toUpperCase().startsWith('INSPECTION-');
+  if (prefixed && !canonical) return false;
+
+  const owners = new Set<InspectionId>(related);
+  if (canonical) owners.add(canonical);
+  if (owners.size === 0) {
+    // An unclassified signature/report is not a company-wide document.
+    return document.category !== 'signature' && document.category !== 'inspection';
+  }
+  for (const id of owners) {
+    const inspection = await inspectionRepository.getById(id);
+    if (!inspection || inspection.assignedToUserId !== actor.userId) return false;
+  }
+  return true;
+}
+
+async function assertDocumentReadable(
+  documentRepository: DocumentRepository,
+  inspectionRepository: InspectionReadRepository | undefined,
+  actor: Actor,
+  document: Document,
+): Promise<void> {
+  if (!(await canReadDocument(documentRepository, inspectionRepository, actor, document))) {
+    throw new DomainError(
+      'INSPECTION_ACCESS_DENIED',
+      'Inspector may only access documents belonging to their assigned inspections.',
+    );
+  }
+}
+
+async function visibleDocumentReferences(
+  documentRepository: DocumentRepository,
+  inspectionRepository: InspectionReadRepository | undefined,
+  actor: Actor,
+  references: readonly TargetDocumentReference[],
+): Promise<readonly TargetDocumentReference[]> {
+  if (actor.role !== 'inspector') return references;
+  const allowed = await Promise.all(references.map(async (reference) =>
+    canReadDocument(documentRepository, inspectionRepository, actor, reference.document),
+  ));
+  return references.filter((_, index) => allowed[index]);
+}
+
 export async function listDocumentsQuery(
   repository: DocumentRepository,
   actor: Actor,
+  inspections?: InspectionReadRepository,
 ): Promise<readonly Document[]> {
   requireCapability(actor, 'documents:read');
-  return repository.listDocuments();
+  const documents = await repository.listDocuments();
+  if (actor.role !== 'inspector') return documents;
+  const allowed = await Promise.all(documents.map((document) =>
+    canReadDocument(repository, inspections, actor, document),
+  ));
+  return documents.filter((_, index) => allowed[index]);
 }
 
 export async function getDocumentQuery(
   repository: DocumentRepository,
   actor: Actor,
   id: DocumentId,
+  inspections?: InspectionReadRepository,
 ): Promise<Document> {
   requireCapability(actor, 'documents:read');
   const document = await repository.getDocumentById(id);
   if (!document) throw new DomainError('DOCUMENT_NOT_FOUND', 'Document not found.');
+  await assertDocumentReadable(repository, inspections, actor, document);
   return document;
 }
 
@@ -46,38 +125,37 @@ export async function listDocumentVersionsQuery(
   repository: DocumentRepository,
   actor: Actor,
   id: DocumentId,
+  inspections?: InspectionReadRepository,
 ): Promise<readonly DocumentVersion[]> {
-  requireCapability(actor, 'documents:read');
-  const document = await repository.getDocumentById(id);
-  if (!document) throw new DomainError('DOCUMENT_NOT_FOUND', 'Document not found.');
-  return repository.listVersionsByDocument(id);
+  const document = await getDocumentQuery(repository, actor, id, inspections);
+  return repository.listVersionsByDocument(document.id);
 }
 
 export async function listDocumentLinksQuery(
   repository: DocumentRepository,
   actor: Actor,
   id: DocumentId,
+  inspections?: InspectionReadRepository,
 ): Promise<readonly DocumentLink[]> {
-  requireCapability(actor, 'documents:read');
-  const document = await repository.getDocumentById(id);
-  if (!document) throw new DomainError('DOCUMENT_NOT_FOUND', 'Document not found.');
-  return repository.listLinksByDocument(id);
+  const document = await getDocumentQuery(repository, actor, id, inspections);
+  return repository.listLinksByDocument(document.id);
 }
-
 
 export async function listUnitDocumentsQuery(
   documentRepository: DocumentRepository,
   portfolioRepository: PortfolioRepository,
   actor: Actor,
   unitId: UnitId,
+  inspections?: InspectionReadRepository,
 ): Promise<readonly TargetDocumentReference[]> {
   requireCapability(actor, 'documents:read');
-
   if (!(await portfolioRepository.getUnitById(unitId))) {
     throw new DomainError('UNIT_NOT_FOUND', 'Unit not found.');
   }
-
-  return documentRepository.listUnitDossierDocuments(unitId);
+  return visibleDocumentReferences(
+    documentRepository, inspections, actor,
+    await documentRepository.listUnitDossierDocuments(unitId),
+  );
 }
 
 export async function listLeaseAgreementDocumentsQuery(
@@ -85,20 +163,16 @@ export async function listLeaseAgreementDocumentsQuery(
   leaseRepository: LeaseRepository,
   actor: Actor,
   agreementId: LeaseAgreementId,
+  inspections?: InspectionReadRepository,
 ): Promise<readonly TargetDocumentReference[]> {
   requireCapability(actor, 'documents:read');
-
   if (!(await leaseRepository.getAgreementById(agreementId))) {
-    throw new DomainError(
-      'LEASE_AGREEMENT_NOT_FOUND',
-      'Lease agreement not found.',
-    );
+    throw new DomainError('LEASE_AGREEMENT_NOT_FOUND', 'Lease agreement not found.');
   }
-
-  return documentRepository.listTargetDocuments({
-    targetType: 'lease_agreement',
-    targetId: agreementId,
-  });
+  return visibleDocumentReferences(
+    documentRepository, inspections, actor,
+    await documentRepository.listTargetDocuments({ targetType: 'lease_agreement', targetId: agreementId }),
+  );
 }
 
 export async function listLeaseAmendmentDocumentsQuery(
@@ -106,22 +180,17 @@ export async function listLeaseAmendmentDocumentsQuery(
   leaseRepository: LeaseRepository,
   actor: Actor,
   amendmentId: LeaseAmendmentId,
+  inspections?: InspectionReadRepository,
 ): Promise<readonly TargetDocumentReference[]> {
   requireCapability(actor, 'documents:read');
-
   if (!(await leaseRepository.getAmendmentById(amendmentId))) {
-    throw new DomainError(
-      'LEASE_AMENDMENT_NOT_FOUND',
-      'Lease amendment not found.',
-    );
+    throw new DomainError('LEASE_AMENDMENT_NOT_FOUND', 'Lease amendment not found.');
   }
-
-  return documentRepository.listTargetDocuments({
-    targetType: 'lease_amendment',
-    targetId: amendmentId,
-  });
+  return visibleDocumentReferences(
+    documentRepository, inspections, actor,
+    await documentRepository.listTargetDocuments({ targetType: 'lease_amendment', targetId: amendmentId }),
+  );
 }
-
 
 export interface DocumentVersionContent {
   readonly version: DocumentVersion;
@@ -133,6 +202,7 @@ export async function getDocumentVersionContentQuery(
     readonly documentRepository: DocumentRepository;
     readonly fileStorage: FileStorageReadPort;
     readonly binaryPolicy: BufferedDocumentBinaryPolicy;
+    readonly inspectionRepository?: InspectionReadRepository;
   },
   actor: Actor,
   versionId: DocumentVersionId,
@@ -145,6 +215,15 @@ export async function getDocumentVersionContentQuery(
       'DOCUMENT_VERSION_NOT_FOUND',
       'Document version not found.',
     );
+  }
+
+  if (actor.role === 'inspector') {
+    if (!deps.inspectionRepository) {
+      throw new DomainError('INSPECTION_ACCESS_DENIED', 'Inspection document scope is unavailable.');
+    }
+    const document = await deps.documentRepository.getDocumentById(version.documentId);
+    if (!document) throw new DomainError('DOCUMENT_NOT_FOUND', 'Document not found.');
+    await assertDocumentReadable(deps.documentRepository, deps.inspectionRepository, actor, document);
   }
 
   if (version.byteSize > deps.binaryPolicy.maxBytes) {

@@ -18,6 +18,7 @@ import {
   type DocumentRepository,
   type FileStoragePort,
   type IdGenerator,
+  type InspectionRepository,
   type LeaseRepository,
   type PartyRepository,
   type PortfolioRepository,
@@ -52,6 +53,7 @@ import {
 
 export interface DocumentHttpDependencies {
   readonly documentRepository: DocumentRepository;
+  readonly inspectionRepository: InspectionRepository;
   readonly fileStorage: FileStoragePort;
   readonly clock: ClockPort;
   readonly portfolioRepository: PortfolioRepository;
@@ -117,6 +119,7 @@ export async function handleDocumentHttp(
       const documents = await listDocumentsQuery(
         deps.documentRepository,
         actor,
+        deps.inspectionRepository,
       );
       return json({ data: { items: documents.map(toDocumentResponse) } });
     }
@@ -152,6 +155,7 @@ export async function handleDocumentHttp(
       deps.portfolioRepository,
       actor,
       asUnitId(parsedId.data),
+      deps.inspectionRepository,
     );
 
     return json({
@@ -179,6 +183,7 @@ export async function handleDocumentHttp(
       deps.leaseRepository,
       actor,
       asLeaseAgreementId(parsedId.data),
+      deps.inspectionRepository,
     );
 
     return json({
@@ -206,6 +211,7 @@ export async function handleDocumentHttp(
       deps.leaseRepository,
       actor,
       asLeaseAmendmentId(parsedId.data),
+      deps.inspectionRepository,
     );
 
     return json({
@@ -231,6 +237,7 @@ export async function handleDocumentHttp(
       deps.documentRepository,
       actor,
       asDocumentId(parsedId.data),
+      deps.inspectionRepository,
     );
 
     return json({ data: toDocumentResponse(document) });
@@ -247,6 +254,7 @@ export async function handleDocumentHttp(
         deps.documentRepository,
         actor,
         documentId,
+        deps.inspectionRepository,
       );
       return json({
         data: { items: versions.map(toDocumentVersionResponse) },
@@ -315,6 +323,7 @@ export async function handleDocumentHttp(
         documentRepository: deps.documentRepository,
         fileStorage: deps.fileStorage,
         binaryPolicy: DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY,
+        inspectionRepository: deps.inspectionRepository,
       },
       actor,
       asDocumentVersionId(parsedId.data),
@@ -352,6 +361,7 @@ export async function handleDocumentHttp(
         deps.documentRepository,
         actor,
         documentId,
+        deps.inspectionRepository,
       );
       return json({ data: { items: links.map(toDocumentLinkResponse) } });
     }

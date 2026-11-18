@@ -412,6 +412,7 @@ export function createPortfolioHttpHandler(
           handleDocumentHttp(
             {
               documentRepository: deps.documentRepository,
+              inspectionRepository: deps.inspectionRepository,
               fileStorage: deps.fileStorage,
               clock: deps.clock,
               portfolioRepository: deps.portfolioRepository,

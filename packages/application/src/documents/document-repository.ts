@@ -6,6 +6,7 @@ import type {
   DocumentVersionId,
   LeaseAgreementId,
   LeaseAmendmentId,
+  InspectionId,
   UnitId,
 } from '@portfolio/domain';
 import type { StorageObjectReference } from './file-storage-port.js';
@@ -30,6 +31,11 @@ export interface TargetDocumentReference {
 export interface DocumentRepository {
   getDocumentById(id: DocumentId): Promise<Document | null>;
   listDocuments(): Promise<readonly Document[]>;
+  /** Inspection provenance from evidence/signature FKs. Required for Inspector reads;
+   * absent implementations must fail closed, never imply global access. */
+  listInspectionIdsForDocument?(
+    documentId: DocumentId,
+  ): Promise<readonly InspectionId[]>;
   documentCodeExists(code: string): Promise<boolean>;
   insertDocument(document: Document): Promise<void>;
 
