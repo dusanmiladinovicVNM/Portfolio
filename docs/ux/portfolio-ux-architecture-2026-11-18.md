@@ -166,3 +166,5 @@ Suggested design gates:
 The [2026-11-18 risk register](../uat/risk-based-production-acceptance-2026-11-18.md) still marks broader cross-role/object authorization, full provider-loss recovery, two-session concurrency, adversarial sign/unlock and physical mobile workflows as incomplete. They proceed independently. UX PR acceptance never upgrades those release gates to PASS just because browser unit tests or a screenshot succeed.
 
 Inspection-specific wireflow, UI state contract and desktop/tablet/mobile sketches: [inspection-wireflow-2026-11-18.md](inspection-wireflow-2026-11-18.md).
+Additional static mobile/accessibility code audit and next runtime test contracts: [inspection-mobile-accessibility-audit-2026-11-18.md](inspection-mobile-accessibility-audit-2026-11-18.md).
+
