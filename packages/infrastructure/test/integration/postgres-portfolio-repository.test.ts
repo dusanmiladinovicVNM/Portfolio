@@ -1833,6 +1833,24 @@ describe('PostgreSQL infrastructure', () => {
     // Real PostgreSQL guard: B-scoped versions cannot be linked to A,
     // even if a direct SQL writer bypasses application authorization.
     const foreignInspectionId = 'a9000000-0000-4000-8000-000000000001';
+    // This is a real second Inspection, not merely an ID embedded in a
+    // document code. Its assignee is Admin; A is assigned to the Inspector.
+    await sql`
+      insert into public.inspections (
+        id, code, inspection_type, unit_id, tenancy_id, schema_version_id,
+        assigned_to_user_id, created_by_user_id, status, version
+      ) values (
+        ${foreignInspectionId}, 'INS-EVIDENCE-FOREIGN', 'move_in',
+        ${unit.id}, ${tenancyId}, ${published.id},
+        ${actor.userId}, ${actor.userId}, 'draft', 1
+      )
+    `;
+    const persistedForeign = await inspectionRepository.getById(
+      asInspectionId(foreignInspectionId),
+    );
+    expect(persistedForeign?.id).toBe(foreignInspectionId);
+    expect(persistedForeign?.assignedToUserId).toBe(actor.userId);
+
     const foreignPhotoVersionId = 'a3000000-0000-4000-8000-000000000005';
     const foreignSignatureVersionId = 'a3000000-0000-4000-8000-000000000006';
     await sql`
@@ -1868,6 +1886,20 @@ describe('PostgreSQL infrastructure', () => {
           '2026-09-21T08:14:00.000Z', 'test', 'foreign-signature', 'foreign-signature-key'
         )
     `;
+    await sql`
+      insert into public.inspection_evidence (
+        id, inspection_id, schema_version_id, document_version_id,
+        kind, created_by_user_id, created_at
+      ) values (
+        'a7000000-0000-4000-8000-000000000006',
+        ${foreignInspectionId}, ${published.id}, ${foreignPhotoVersionId},
+        'photo', ${actor.userId}, '2026-09-21T08:14:10.000Z'
+      )
+    `;
+    expect(await documentRepository.listInspectionIdsForDocument(
+      asDocumentId('a2000000-0000-4000-8000-000000000005'),
+    )).toEqual([foreignInspectionId]);
+
     await expect(sql`
       insert into public.inspection_evidence (
         id, inspection_id, schema_version_id, document_version_id,
@@ -1880,6 +1912,12 @@ describe('PostgreSQL infrastructure', () => {
     `).rejects.toMatchObject({
       code: '23514', constraint_name: 'inspection_document_owner_mismatch',
     });
+    const foreignEvidenceRowCount = await sql<{ count: string }[]>`
+      select count(*)::text as count
+      from public.inspection_evidence
+      where document_version_id = ${foreignPhotoVersionId}
+    `;
+    expect(foreignEvidenceRowCount[0]?.count).toBe('1');
 
     const evidenceBinaries = new Map([
       ['photo-1', { byteSize: 10, sha256: '1111111111111111111111111111111111111111111111111111111111111111' }],
@@ -1924,6 +1962,26 @@ describe('PostgreSQL infrastructure', () => {
       asDocumentId('a2000000-0000-4000-8000-000000000001'),
     );
     expect(photoOwners).toEqual([inspection.id]);
+
+    // The parent Document code has no Inspection ID. Only the authoritative
+    // FK relation tells us it belongs to A; B must not register another link
+    // to the very same global photo via a different Inspection.
+    await expect(sql`
+      insert into public.inspection_evidence (
+        id, inspection_id, schema_version_id, document_version_id,
+        kind, created_by_user_id, created_at
+      ) values (
+        'a7000000-0000-4000-8000-000000000007',
+        ${foreignInspectionId}, ${published.id},
+        'a3000000-0000-4000-8000-000000000001',
+        'photo', ${actor.userId}, '2026-09-21T08:16:00.000Z'
+      )
+    `).rejects.toMatchObject({
+      code: '23514', constraint_name: 'inspection_document_owner_mismatch',
+    });
+    expect(await documentRepository.listInspectionIdsForDocument(
+      asDocumentId('a2000000-0000-4000-8000-000000000001'),
+    )).toEqual([inspection.id]);
 
 
     const beforeLock = (await inspectionRepository.getById(inspection.id))!;
