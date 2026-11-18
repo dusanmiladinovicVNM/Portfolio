@@ -350,25 +350,58 @@ export function mergeInspectionSectionSave(
   };
 }
 
-function Field({
+
+/**
+ * A schema item has one visible question label bound to its answer control.
+ * The field ID includes the frozen SectionInstance identity so repeated
+ * room items never share a DOM label target.
+ */
+export function InspectionQuestionField({
   item,
   entry,
   disabled,
+  required,
+  requiredMissing,
+  fieldId,
   onChange,
 }: {
   readonly item: SchemaItem;
   readonly entry: DraftEntry;
   readonly disabled: boolean;
+  readonly required: boolean;
+  readonly requiredMissing: boolean;
+  readonly fieldId: string;
   readonly onChange: (entry: DraftEntry) => void;
 }) {
   const updateValue = (value: InspectionAnswerValue | undefined) =>
     onChange({ ...entry, value });
+  const requiredMessageId = fieldId + '-required';
+  const answerAccessibility = {
+    id: fieldId,
+    'aria-required': required || undefined,
+    'aria-invalid': requiredMissing || undefined,
+    'aria-describedby': requiredMissing ? requiredMessageId : undefined,
+  };
+  const questionTitle = (
+    <>
+      <span>
+        {item.label}
+        {required ? (
+          <strong aria-label="Required" className="inspection-required">
+            {' '}*
+          </strong>
+        ) : null}
+      </span>
+      <small>{formatDetailKey(item.type)}</small>
+    </>
+  );
 
   let control;
   switch (item.type) {
     case 'textarea':
       control = (
         <textarea
+          {...answerAccessibility}
           disabled={disabled}
           onChange={(event) => updateValue(event.currentTarget.value)}
           rows={4}
@@ -379,12 +412,11 @@ function Field({
     case 'checkbox':
       control = (
         <select
+          {...answerAccessibility}
           disabled={disabled}
           onChange={(event) => {
             const value = event.currentTarget.value;
-            updateValue(
-              value === '' ? undefined : value === 'true',
-            );
+            updateValue(value === '' ? undefined : value === 'true');
           }}
           value={
             typeof entry.value === 'boolean'
@@ -402,6 +434,7 @@ function Field({
     case 'radio':
       control = (
         <select
+          {...answerAccessibility}
           disabled={disabled}
           onChange={(event) =>
             updateValue(event.currentTarget.value || undefined)
@@ -420,7 +453,11 @@ function Field({
     case 'multiselect': {
       const selected = Array.isArray(entry.value) ? entry.value : [];
       control = (
-        <div className="inspection-multiselect">
+        <fieldset
+          aria-describedby={requiredMissing ? requiredMessageId : undefined}
+          className="inspection-multiselect"
+        >
+          <legend className="inspection-item-label">{questionTitle}</legend>
           {item.options.map((option) => (
             <label key={option.value}>
               <input
@@ -437,13 +474,14 @@ function Field({
               {option.label}
             </label>
           ))}
-        </div>
+        </fieldset>
       );
       break;
     }
     case 'date':
       control = (
         <input
+          {...answerAccessibility}
           disabled={disabled}
           onChange={(event) =>
             updateValue(event.currentTarget.value || undefined)
@@ -456,6 +494,7 @@ function Field({
     case 'number':
       control = (
         <input
+          {...answerAccessibility}
           disabled={disabled}
           inputMode="decimal"
           onChange={(event) =>
@@ -469,6 +508,7 @@ function Field({
     case 'text':
       control = (
         <input
+          {...answerAccessibility}
           disabled={disabled}
           onChange={(event) => updateValue(event.currentTarget.value)}
           type="text"
@@ -479,20 +519,38 @@ function Field({
   }
 
   return (
-    <div className="inspection-field">
-      {control}
-      <label className="inspection-comment">
-        Comment
-        <textarea
-          disabled={disabled || normalizedInspectionAnswer(item, entry.value) === undefined}
-          onChange={(event) =>
-            onChange({ ...entry, comment: event.currentTarget.value })
-          }
-          rows={2}
-          value={entry.comment}
-        />
-      </label>
-    </div>
+    <>
+      {item.type === 'multiselect' ? null : (
+        <label className="inspection-item-label" htmlFor={fieldId}>
+          {questionTitle}
+        </label>
+      )}
+      <div className="inspection-field">
+        {control}
+        <label className="inspection-comment">
+          Comment for {item.label}
+          <textarea
+            disabled={
+              disabled ||
+              normalizedInspectionAnswer(item, entry.value) === undefined
+            }
+            onChange={(event) =>
+              onChange({ ...entry, comment: event.currentTarget.value })
+            }
+            rows={2}
+            value={entry.comment}
+          />
+        </label>
+      </div>
+      {requiredMissing ? (
+        <small
+          className="inspection-required-message"
+          id={requiredMessageId}
+        >
+          Required response missing
+        </small>
+      ) : null}
+    </>
   );
 }
 
@@ -1462,8 +1520,11 @@ export function UnitInspections({
                     )}
                   </div>
                   <span
+                    aria-atomic="true"
+                    aria-live="polite"
                     className="inspection-field-save-status"
                     data-inspection-field-save-status
+                    role="status"
                   >
                     {autosaveStatus}
                   </span>
@@ -1527,31 +1588,19 @@ export function UnitInspections({
                       }`}
                       key={item.id}
                     >
-                      <label className="inspection-item-label">
-                        <span>
-                          {item.label}
-                          {required ? (
-                            <strong
-                              aria-label="Required"
-                              className="inspection-required"
-                            >
-                              {' '}*
-                            </strong>
-                          ) : null}
-                        </span>
-                        <small>{formatDetailKey(item.type)}</small>
-                      </label>
-                      <Field
+                      <InspectionQuestionField
                         disabled={!editable || saving || inspectionWritePending || conflict}
                         entry={entry}
+                        fieldId={
+                          'inspection-answer-' +
+                          routeBundle.inspection.id + '-' +
+                          selectedSectionInstance.id + '-' + item.id
+                        }
                         item={item}
                         onChange={(next) => changeItem(item.id, next)}
+                        required={required}
+                        requiredMissing={requiredMissing}
                       />
-                      {requiredMissing ? (
-                        <small className="inspection-required-message">
-                          Required response missing
-                        </small>
-                      ) : null}
                     </div>
                   );
                 })}
@@ -1574,6 +1623,7 @@ export function UnitInspections({
 
                 <div className="inspection-save-bar">
                   <span
+                    aria-hidden="true"
                     className="muted"
                     data-inspection-autosave-status
                   >
