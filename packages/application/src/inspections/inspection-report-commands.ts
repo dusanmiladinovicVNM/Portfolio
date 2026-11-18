@@ -10,10 +10,10 @@ import type { ClockPort } from '../shared/clock.js';
 import type { IdGenerator } from '../shared/id-generator.js';
 import {
   assertDocumentVersionStorageIntegrity,
-  createDocumentCommand,
-  finalizeDocumentVersionCommand,
-  uploadDocumentVersionCommand,
-} from '../documents/document-commands.js';
+  createDocumentRecord,
+  finalizeDocumentVersionRecord,
+  uploadDocumentVersionRecord,
+} from '../documents/document-write-service.js';
 import type { DocumentRepository } from '../documents/document-repository.js';
 import type { FileStoragePort } from '../documents/file-storage-port.js';
 import { DEFAULT_BUFFERED_DOCUMENT_BINARY_POLICY } from '../documents/document-binary-policy.js';
@@ -70,12 +70,11 @@ export async function generateInspectionFinalReportCommand(
   let document = await findReportDocument();
   if (!document) {
     try {
-      document = await createDocumentCommand(
+      document = await createDocumentRecord(
         {
           documentRepository: deps.documentRepository,
           idGenerator: deps.idGenerator,
         },
-        actor,
         {
           code: reportCode,
           title: `${inspection.code} final inspection report`,
@@ -121,13 +120,12 @@ export async function generateInspectionFinalReportCommand(
     }
 
     try {
-      return await finalizeDocumentVersionCommand(
+      return await finalizeDocumentVersionRecord(
         {
           documentRepository: deps.documentRepository,
           fileStorage: deps.fileStorage,
           clock: deps.clock,
         },
-        actor,
         candidate.id,
       );
     } catch (error) {
@@ -210,13 +208,12 @@ export async function generateInspectionFinalReportCommand(
     }
 
     try {
-      canonicalVersion = await uploadDocumentVersionCommand(
+      canonicalVersion = await uploadDocumentVersionRecord(
         {
           documentRepository: deps.documentRepository,
           fileStorage: deps.fileStorage,
           idGenerator: deps.idGenerator,
         },
-        actor,
         {
           documentId: document.id,
           fileName: rendered.fileName,
