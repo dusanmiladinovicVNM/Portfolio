@@ -68,6 +68,49 @@ type TouchedByItem = Readonly<Record<string, boolean>>;
 
 export const INSPECTION_AUTOSAVE_DELAY_MS = 1500;
 
+export interface InspectionSaveStatusState {
+  readonly conflict: boolean;
+  readonly saveError: string | null;
+  readonly autosaveBlockedChangeRevision: number | null;
+  readonly draftChangeRevision: number;
+  readonly saving: boolean;
+  readonly hasUnsavedChanges: boolean;
+}
+
+/** Presentation only: no save or server authority is derived from this label. */
+export function inspectionAutosaveMessage(state: InspectionSaveStatusState): string {
+  if (state.conflict) {
+    return 'Autosave paused · resolve the server conflict';
+  }
+  if (
+    state.saveError &&
+    state.autosaveBlockedChangeRevision === state.draftChangeRevision
+  ) {
+    return 'Autosave paused after save failure · use Save now to retry';
+  }
+  if (state.saving) return 'Saving section…';
+  if (state.hasUnsavedChanges) return 'Unsaved changes · autosave pending';
+  return 'All section changes saved';
+}
+
+export function InspectionSaveStatus({
+  message,
+}: {
+  readonly message: string;
+}) {
+  return (
+    <span
+      aria-atomic="true"
+      aria-live="polite"
+      className="inspection-field-save-status"
+      data-inspection-field-save-status
+      role="status"
+    >
+      {message}
+    </span>
+  );
+}
+
 interface UnitInspectionsProps {
   readonly api: PortfolioApi;
   readonly canGenerateFinalReport: boolean;
@@ -878,16 +921,14 @@ export function UnitInspections({
     );
   const hasUnsavedChanges = patch !== null;
   const sectionWritePending = inFlightSectionSaves.size > 0;
-  const autosaveStatus = conflict
-    ? 'Autosave paused · resolve the server conflict'
-    : saveError &&
-        autosaveBlockedChangeRevision === draftChangeRevision
-      ? 'Autosave paused after save failure · use Save now to retry'
-      : saving
-        ? 'Saving section…'
-        : patch
-          ? 'Unsaved changes · autosave pending'
-          : 'All section changes saved';
+  const autosaveStatus = inspectionAutosaveMessage({
+    conflict,
+    saveError,
+    autosaveBlockedChangeRevision,
+    draftChangeRevision,
+    saving,
+    hasUnsavedChanges,
+  });
 
   const inspectionWriteGate: InspectionWriteGate = {
     pending: inspectionWritePending,
@@ -1455,7 +1496,7 @@ export function UnitInspections({
             </nav>
 
             <div className="inspection-active-section-column">
-            {selectedSection ? (
+            {selectedSection && selectedSectionInstance ? (
               <form className="inspection-section-form" onSubmit={saveSection}>
                 <div
                   className="inspection-field-toolbar"
@@ -1519,15 +1560,7 @@ export function UnitInspections({
                       </span>
                     )}
                   </div>
-                  <span
-                    aria-atomic="true"
-                    aria-live="polite"
-                    className="inspection-field-save-status"
-                    data-inspection-field-save-status
-                    role="status"
-                  >
-                    {autosaveStatus}
-                  </span>
+                  <InspectionSaveStatus message={autosaveStatus} />
                 </div>
 
                 <div className="section-heading">
