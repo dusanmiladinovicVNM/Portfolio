@@ -2893,6 +2893,131 @@ describe('Portfolio HTTP boundary', () => {
   });
 
 
+  it('rejects generic Admin and Manager preclaims and mutations of Inspection-owned Documents', async () => {
+    const documents = new InMemoryDocumentRepository();
+    const fileStorage = new MemoryFileStorage();
+    const inspectionId = 'c1270000-0000-4000-8000-000000000001';
+    const documentId = asDocumentId('c1270000-0000-4000-8000-000000000002');
+    const versionId = asDocumentVersionId('c1270000-0000-4000-8000-000000000003');
+    const bytes = new Uint8Array([37, 80, 68, 70, 45]);
+    const hash = await testSha256.digest(bytes);
+    documents.documents.set(documentId, {
+      id: documentId,
+      code: `INSPECTION-FINAL-${inspectionId}`,
+      title: 'Canonical Inspection final report',
+      category: 'inspection',
+      status: 'active',
+      latestVersionNumber: 1,
+      revision: 2,
+    });
+    documents.versions.set(versionId, {
+      id: versionId,
+      documentId,
+      versionNumber: 1,
+      fileName: 'report.pdf',
+      mimeType: 'application/pdf',
+      byteSize: bytes.byteLength,
+      sha256: hash,
+      status: 'stored',
+      finalizedAt: null,
+    });
+    const storageKey = `document-version:${versionId}`;
+    const storageRef = {
+      provider: 'memory',
+      objectId: storageKey,
+      objectKey: storageKey,
+    };
+    documents.storage.set(versionId, storageRef);
+    fileStorage.objects.set(storageKey, {
+      ...storageRef, byteSize: bytes.byteLength, sha256: hash, disposition: 'created',
+    });
+    fileStorage.contents.set(storageKey, bytes);
+    const handler = buildHandler(undefined, new FixedClock(), {
+      documentRepository: documents, fileStorage,
+    });
+
+    for (const actor of [adminIdentity, managerIdentity]) {
+      for (const code of [
+        `INSPECTION-FINAL-${inspectionId}`,
+        ` inspection-${inspectionId}-signature-${versionId} `,
+        `INSPECTION-${inspectionId}-photo-${versionId}`,
+        `INSPECTION-${inspectionId}-attachment-${versionId}`,
+      ]) {
+        const response = await handler(
+          new Request('https://portfolio.test/documents', {
+            method: 'POST',
+            body: JSON.stringify({ code, title: 'Attempted canonical spoof', category: 'inspection' }),
+          }),
+          actor,
+        );
+        expect(response.status, code).toBe(422);
+        await expect(response.json()).resolves.toMatchObject({
+          error: { code: 'DOCUMENT_CODE_RESERVED' },
+        });
+      }
+
+      const binaryUpload = await handler(
+        new Request(
+          `https://portfolio.test/documents/${documentId}/versions?fileName=forged.pdf&expectedDocumentRevision=2`,
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/pdf' },
+            body: bytes,
+          },
+        ),
+        actor,
+      );
+      expect(binaryUpload.status).toBe(422);
+      await expect(binaryUpload.json()).resolves.toMatchObject({
+        error: { code: 'DOCUMENT_SYSTEM_OWNED' },
+      });
+
+      const finalize = await handler(
+        new Request(
+          `https://portfolio.test/document-versions/${versionId}/finalize`,
+          { method: 'POST' },
+        ),
+        actor,
+      );
+      expect(finalize.status).toBe(422);
+      await expect(finalize.json()).resolves.toMatchObject({
+        error: { code: 'DOCUMENT_SYSTEM_OWNED' },
+      });
+
+      const link = await handler(
+        new Request(`https://portfolio.test/documents/${documentId}/links`, {
+          method: 'POST',
+          body: JSON.stringify({
+            documentVersionId: versionId,
+            relation: 'supporting',
+            targetType: 'property',
+            targetId: 'c1270000-0000-4000-8000-000000000004',
+          }),
+        }),
+        actor,
+      );
+      expect(link.status).toBe(422);
+      await expect(link.json()).resolves.toMatchObject({
+        error: { code: 'DOCUMENT_SYSTEM_OWNED' },
+      });
+    }
+    expect(fileStorage.putCallCount).toBe(0);
+    expect(documents.versions).toHaveProperty('size', 1);
+    expect(documents.versions.get(versionId)?.status).toBe('stored');
+    expect(documents.links).toHaveLength(0);
+
+    const ordinary = await handler(
+      new Request('https://portfolio.test/documents', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: 'BUSINESS-DOC-UNRESTRICTED', title: 'Normal dossier document', category: 'legal',
+        }),
+      }),
+      adminIdentity,
+    );
+    expect(ordinary.status).toBe(201);
+  });
+
   it('denies unassigned Inspection PDFs and signatures through every generic Document read while retaining assigned and business access', async () => {
     const documents = new InMemoryDocumentRepository();
     const inspections = new InMemoryInspectionRepository();
