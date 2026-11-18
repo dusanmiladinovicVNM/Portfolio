@@ -1850,6 +1850,16 @@ describe('Inspection HTTP backbone', () => {
       status: 'final',
       mimeType: 'application/pdf',
     });
+    // The trusted final-report command must still own this namespace while
+    // the generic Documents API rejects preclaiming and mutation of it.
+    const canonicalReports = [...documentRepository.documents.values()].filter(
+      (document) => document.code === `INSPECTION-FINAL-${inspection.id}`,
+    );
+    expect(canonicalReports).toHaveLength(1);
+    expect(canonicalReports[0]?.category).toBe('inspection');
+    expect(
+      documentRepository.versions.get(asDocumentVersionId(firstReportVersion.id))?.documentId,
+    ).toBe(canonicalReports[0]?.id);
 
     const inspectorReadReport = await handler(
       new Request(
