@@ -2962,6 +2962,11 @@ describe('Portfolio HTTP boundary', () => {
       'e2600000-0000-4000-8000-000000000019',
       'BUSINESS-PHOTO-001', 'photo',
     );
+    const sharedBusinessPhoto = addDocument(
+      'e2600000-0000-4000-8000-000000000020',
+      'e2600000-0000-4000-8000-000000000021',
+      'BUSINESS-PHOTO-UNLINKED', 'photo',
+    );
     // A generic document linked through canonical evidence FKs is Inspection-scoped too.
     documents.inspectionIdsByDocument.set(borrowedEvidence.id, [unassignedId]);
 
@@ -3013,6 +3018,33 @@ describe('Portfolio HTTP boundary', () => {
       managerIdentity,
     );
     expect(managerBinary.status).toBe(200);
+
+    // Explicit current policy: an unlinked business photo is globally
+    // readable by Inspectors, but linking it as Inspection Evidence causes
+    // the provenance-based read policy to require the linked assignment.
+    const sharedBinaryUrl = 'https://portfolio.test/document-versions/' +
+      sharedBusinessPhoto.versionId + '/content';
+    expect((await handler(new Request(sharedBinaryUrl), inspectorIdentity)).status).toBe(200);
+    documents.inspectionIdsByDocument.set(sharedBusinessPhoto.id, [assignedId]);
+    expect((await handler(new Request(sharedBinaryUrl), inspectorIdentity)).status).toBe(200);
+
+    // A reassignment of the evidence link changes allowed readers; an
+    // ambiguous/legacy multi-owner document must fail closed unless the
+    // Inspector is assigned to *every* owning Inspection.
+    documents.inspectionIdsByDocument.set(sharedBusinessPhoto.id, [unassignedId]);
+    expect((await handler(new Request(sharedBinaryUrl), inspectorIdentity)).status).toBe(403);
+    documents.inspectionIdsByDocument.set(sharedBusinessPhoto.id, [assignedId, unassignedId]);
+    expect((await handler(new Request(sharedBinaryUrl), inspectorIdentity)).status).toBe(403);
+    const ambiguousList = await handler(
+      new Request('https://portfolio.test/documents'), inspectorIdentity,
+    );
+    expect(ambiguousList.status).toBe(200);
+    const ambiguousIds = ((await ambiguousList.json()) as {
+      data: { items: { id: string }[] }
+    }).data.items.map((x) => x.id);
+    expect(ambiguousIds).not.toContain(sharedBusinessPhoto.id);
+    documents.inspectionIdsByDocument.set(sharedBusinessPhoto.id, [assignedId]);
+    expect((await handler(new Request(sharedBinaryUrl), inspectorIdentity)).status).toBe(200);
 
     const createdProperty = await handler(
       new Request('https://portfolio.test/properties', {
