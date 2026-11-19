@@ -7615,7 +7615,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//ul[contains(@class,'inspection-content-list')]//span[normalize-space()='Scoped field evidence']",
+    "//div[contains(@class,'inspection-content-workspace')]//ul[contains(@class,'inspection-content-list')]//span[normalize-space()='Scoped field evidence']",
   );
   assertEqual(
     await executeScript(
@@ -7782,7 +7782,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//ul[contains(@class,'inspection-content-list')]//span[normalize-space()='Recovered unconfirmed field photo']",
+    "//div[contains(@class,'inspection-content-workspace')]//ul[contains(@class,'inspection-content-list')]//span[normalize-space()='Recovered unconfirmed field photo']",
   );
   assertEqual(
     await executeScript(
@@ -7905,7 +7905,7 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//ul[contains(@class,'inspection-content-list')]//span[normalize-space()='Window scratch photo']",
+    "//div[contains(@class,'inspection-content-workspace')]//ul[contains(@class,'inspection-content-list')]//span[normalize-space()='Window scratch photo']",
   );
 
   const uploadsAfterFirstEvidence = await executeScript(
