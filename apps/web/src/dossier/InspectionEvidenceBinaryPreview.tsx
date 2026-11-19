@@ -53,6 +53,7 @@ export function InspectionEvidenceBinaryPreview({
   const [blob, setBlob] = useState<Blob | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retryRevision, setRetryRevision] = useState(0);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -91,7 +92,7 @@ export function InspectionEvidenceBinaryPreview({
       controller.abort();
       if (url) URL.revokeObjectURL(url);
     };
-  }, [api, documentVersionId]);
+  }, [api, documentVersionId, retryRevision]);
 
   function downloadLoadedBinary() {
     if (!blob) return;
@@ -137,9 +138,19 @@ export function InspectionEvidenceBinaryPreview({
         </button>
       </div>
       {error ? (
-        <p className="form-error" role="alert" data-inspection-evidence-preview-error>
-          {error}
-        </p>
+        <div className="inspection-evidence-preview-retry">
+          <p className="form-error" role="alert" data-inspection-evidence-preview-error>
+            {error}
+          </p>
+          <button
+            className="button-secondary"
+            data-inspection-evidence-preview-retry
+            onClick={() => setRetryRevision((current) => current + 1)}
+            type="button"
+          >
+            Erneut versuchen
+          </button>
+        </div>
       ) : blob === null ? (
         <p role="status">Nachweis wird sicher geladen…</p>
       ) : imageUrl ? (
