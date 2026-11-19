@@ -57,17 +57,18 @@ export function InspectionWorkflowStepper({
   }
 
   return (
-    <nav
-      aria-label="Inspektionsablauf"
-      className="inspection-workflow-stepper"
-      data-inspection-stage-navigation
-      ref={viewportRef}
-    >
+    <>
       {currentStep ? (
         <p className="inspection-workflow-current-summary" aria-live="polite" aria-atomic="true">
           Schritt {currentIndex + 1} von {steps.length} · {currentStep.label}
         </p>
       ) : null}
+      <nav
+        aria-label="Inspektionsablauf"
+        className="inspection-workflow-stepper"
+        data-inspection-stage-navigation
+        ref={viewportRef}
+      >
       <ol>
         {steps.map((step, index) => (
           <li
@@ -94,6 +95,7 @@ export function InspectionWorkflowStepper({
           Aktuelle Änderungen zuerst speichern oder den Konflikt beheben.
         </p>
       ) : null}
-    </nav>
+      </nav>
+    </>
   );
 }
