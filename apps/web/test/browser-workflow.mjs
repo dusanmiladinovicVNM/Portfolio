@@ -8078,6 +8078,125 @@ try {
     `return (()=>{const root=document.querySelector('[data-inspection-evidence-overview]');const a=root?.querySelector('[data-inspection-evidence-overview-room="${inspectionSectionInstanceId}"]');const b=root?.querySelector('[data-inspection-evidence-overview-room="${inspectionBathroomInstanceId}"]');const general=root?.querySelector('[data-inspection-evidence-overview-room="inspection"]');return Boolean(root&&a?.textContent?.includes('Scoped field evidence')&&b?.textContent?.includes('Bathroom moisture evidence')&&general?.textContent?.includes('Lost acknowledgement relation'));})()`,
     'All-room overview groups canonical General, Bathroom and Inspection-level Evidence',
   );
+
+  // UX-4C: no background binary fetches for the gallery. A denied exact
+  // DocumentVersion read must show an error and never leak an image.
+  const evidenceReadsBeforePreview = await executeScript(
+    sessionId,
+    'return window.__portfolioBinaryReads || 0;',
+  );
+  const evidenceAttemptsBeforePreview = await executeScript(
+    sessionId,
+    'return window.__portfolioEvidenceBinaryGetAttempts || 0;',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assertEqual(
+    await executeScript(sessionId, 'return window.__portfolioBinaryReads || 0;'),
+    evidenceReadsBeforePreview,
+    'Central Evidence index does not preload protected binary files',
+  );
+  assertEqual(
+    await executeScript(sessionId, 'return window.__portfolioEvidenceBinaryGetAttempts || 0;'),
+    evidenceAttemptsBeforePreview,
+    'Central Evidence index does not attempt any binary GET without an operator click',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioDenyNextEvidenceBinaryRead = true; return true;',
+  );
+  const bathroomPreviewButton =
+    `//*[@data-inspection-evidence-overview-room='${inspectionBathroomInstanceId}']//*[@data-inspection-evidence-preview-open]`;
+  await clickXpath(sessionId, bathroomPreviewButton);
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-evidence-preview-error][contains(normalize-space(),'Intentional Inspection Evidence read denied.')]",
+  );
+  assertEqual(
+    await elementExistsXpath(sessionId, "//*[@data-inspection-evidence-preview-image]"),
+    false,
+    'Denied Evidence binary read cannot render protected photo',
+  );
+  assertEqual(
+    await executeScript(sessionId, 'return window.__portfolioEvidenceBinaryGetAttempts || 0;'),
+    evidenceAttemptsBeforePreview + 1,
+    'One click produces exactly one denied binary GET even under React StrictMode',
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-evidence-preview-retry]");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-evidence-preview-image][starts-with(@src,'blob:')]",
+  );
+  assertEqual(
+    await executeScript(sessionId, 'return window.__portfolioBinaryReads || 0;'),
+    evidenceReadsBeforePreview + 1,
+    'Explicit retry reads the same attached DocumentVersion after a 403',
+  );
+  assertEqual(
+    await executeScript(sessionId, 'return window.__portfolioEvidenceBinaryGetAttempts || 0;'),
+    evidenceAttemptsBeforePreview + 2,
+    'One retry produces exactly one additional binary GET',
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-evidence-preview-close]");
+  await waitForScriptTruthy(
+    sessionId,
+    "return document.activeElement?.hasAttribute('data-inspection-evidence-preview-open')===true;",
+    'Closing protected preview restores keyboard focus to the invoking item',
+  );
+  assertEqual(
+    await elementExistsXpath(sessionId, "//*[@data-inspection-evidence-binary-preview]"),
+    false,
+    'Denied viewer closes without retained binary preview',
+  );
+
+  await clickXpath(sessionId, bathroomPreviewButton);
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-evidence-preview-image][starts-with(@src,'blob:')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-evidence-preview-download]",
+  );
+  assertEqual(
+    await executeScript(sessionId, 'return window.__portfolioBinaryReads || 0;'),
+    evidenceReadsBeforePreview + 2,
+    'Only explicitly requested attached versions are fetched after denial and retry',
+  );
+  assertEqual(
+    await executeScript(sessionId, 'return window.__portfolioEvidenceBinaryGetAttempts || 0;'),
+    evidenceAttemptsBeforePreview + 3,
+    'Reopening selected Evidence produces exactly one third binary GET',
+  );
+  for (const width of [320, 375, 390, 768]) {
+    await setWindowRect(sessionId, width, 900);
+    assertEqual(
+      await executeScript(
+        sessionId,
+        "const root=document.querySelector('[data-inspection-evidence-binary-preview]');const close=root?.querySelector('[data-inspection-evidence-preview-close]');const download=root?.querySelector('[data-inspection-evidence-preview-download]');if(!root||!close||!download)return false;const r=root.getBoundingClientRect();return r.left>=-1&&r.right<=window.innerWidth+1&&close.getBoundingClientRect().height>=44&&download.getBoundingClientRect().height>=44&&document.documentElement.scrollWidth<=document.documentElement.clientWidth;",
+      ),
+      true,
+      `Authorized Evidence preview and controls fit viewport ${width}px`,
+    );
+  }
+  await setWindowRect(sessionId, 1440, 1200);
+  await clickXpath(sessionId, "//*[@data-inspection-evidence-preview-close]");
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
+  assertEqual(
+    await elementExistsXpath(sessionId, "//*[@data-inspection-evidence-binary-preview]"),
+    false,
+    'Hiding Evidence phase discards the in-memory photo preview',
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
+  assertEqual(
+    await executeScript(sessionId, 'return window.__portfolioBinaryReads || 0;'),
+    evidenceReadsBeforePreview + 2,
+    'Returning to Evidence phase does not refetch photo without a user action',
+  );
+
   for (const width of [320, 375, 390, 768]) {
     await setWindowRect(sessionId, width, 900);
     assertEqual(
