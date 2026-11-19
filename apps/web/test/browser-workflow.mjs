@@ -5944,6 +5944,47 @@ try {
     'Empty Unit Overview date does not create an invalid route',
   );
 
+  await clickXpath(
+    sessionId,
+    "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Inspections']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-yepp-list]//tr[@data-inspection-yepp-row='" + inspectionId + "'][.//strong[normalize-space()='INS-BRW-001']][.//span[normalize-space()='Draft']]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "const row = document.querySelector('[data-inspection-yepp-row=\"" + inspectionId + "\"]'); return Boolean(row && row.querySelector('a')?.getAttribute('aria-label')?.includes('INS-BRW-001'));",
+    ),
+    true,
+    'YEPP Inspection row action names the exact canonical Inspection code',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[@data-inspection-form='create']//input[@name='code' and @required]",
+  );
+  for (const width of [320, 375, 390, 768]) {
+    await setWindowRect(sessionId, width, 900);
+    assertEqual(
+      await executeScript(sessionId, "const wrap = document.querySelector('[data-inspection-yepp-list] .inspection-yepp-table-scroll'); if (!wrap) return 'table region not found'; const r=wrap.getBoundingClientRect(); const doc=document.documentElement; if (r.width>0 && r.left>=-1 && r.right<=window.innerWidth+1 && doc.scrollWidth<=doc.clientWidth) return 'OK'; const offenders=[...document.querySelectorAll('body *')].map(e=>({e,r:e.getBoundingClientRect()})).filter(x=>x.r.right>window.innerWidth+1 || x.r.left<-1).slice(0,8).map(x=>x.e.tagName.toLowerCase()+'.'+String(x.e.className).slice(0,80)+'('+Math.round(x.r.left)+','+Math.round(x.r.right)+')'); return JSON.stringify({width:window.innerWidth,docWidth:doc.clientWidth,docScroll:doc.scrollWidth,tableLeft:r.left,tableRight:r.right,tableWidth:r.width,tableClient:wrap.clientWidth,tableScroll:wrap.scrollWidth,offenders});"),
+      'OK',
+      'YEPP Inspection table scroll stays inside viewport ' + width + 'px',
+    );
+  }
+  await setWindowRect(sessionId, 1440, 1200);
+  await clickXpath(
+    sessionId,
+    "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Overview']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-yepp-overview]",
+  );
+
   await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Contracts']]");
   await waitForElement(
     sessionId,
@@ -8330,11 +8371,11 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//a[contains(@class,'inspection-card')][.//strong[normalize-space()='INS-BRW-001']]",
+    "//*[@data-inspection-yepp-list]//tr[@data-inspection-yepp-row='" + inspectionId + "'][.//strong[normalize-space()='INS-BRW-001']]//a[normalize-space()='View']",
   );
   await clickXpath(
     sessionId,
-    "//a[contains(@class,'inspection-card')][.//strong[normalize-space()='INS-BRW-001']]",
+    "//*[@data-inspection-yepp-list]//tr[@data-inspection-yepp-row='" + inspectionId + "'][.//strong[normalize-space()='INS-BRW-001']]//a[normalize-space()='View']",
   );
   await waitForElement(
     sessionId,

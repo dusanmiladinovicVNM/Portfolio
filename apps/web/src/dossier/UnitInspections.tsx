@@ -653,6 +653,22 @@ export function InspectionQuestionField({
   );
 }
 
+function inspectionListActionLabel(
+  inspection: InspectionResponseDto,
+): string {
+  switch (inspection.status) {
+    case 'draft':
+      return 'Prepare';
+    case 'in_progress':
+      return 'Continue';
+    case 'locked':
+      return 'Review';
+    case 'finalized':
+    case 'cancelled':
+      return 'View';
+  }
+}
+
 export function UnitInspections({
   api,
   canGenerateFinalReport,
@@ -1447,7 +1463,7 @@ export function UnitInspections({
   }
 
   return (
-    <div className="inspection-workspace">
+    <div className={'inspection-workspace' + (!inspectionId ? ' inspection-workspace-list' : '')}>
       {inspectionId ? (
         <div className="inspection-detail-navigation">
           <WorkspaceLink
@@ -1459,6 +1475,84 @@ export function UnitInspections({
           </WorkspaceLink>
           <span>Focused Inspection workspace</span>
         </div>
+      ) : null}
+
+      {!inspectionId ? (
+        <section className="panel inspection-yepp-list" data-inspection-yepp-list>
+          <div className="inspection-yepp-list-heading">
+            <div>
+              <h2>Inspections</h2>
+              <p className="muted">
+                Current Inspection lifecycle · not rewound by the reporting date.
+              </p>
+            </div>
+            <strong aria-label="Inspection count" className="inspection-yepp-count">
+              {routeInspections === null ? '—' : routeInspections.length}
+            </strong>
+          </div>
+          {listError ? <p className="form-error" role="alert">{listError}</p> : null}
+          {!listError && routeInspections === null ? (
+            <p className="muted" aria-live="polite">Loading Inspections…</p>
+          ) : null}
+          {routeInspections?.length === 0 ? (
+            <p className="muted">No Inspections are assigned to this Unit.</p>
+          ) : null}
+          {routeInspections && routeInspections.length > 0 ? (
+            <div
+              aria-label="Current Unit Inspections — scroll sideways for more columns on mobile"
+              className="inspection-yepp-table-scroll"
+              role="region"
+              tabIndex={0}
+            >
+              <table className="inspection-yepp-table">
+                <caption>Current Unit Inspection list</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Inspection</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Scheduled</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {routeInspections.map((inspection) => (
+                    <tr data-inspection-yepp-row={inspection.id} key={inspection.id}>
+                      <td>
+                        <strong>{inspection.code}</strong>
+                      </td>
+                      <td>{formatDetailKey(inspection.inspectionType)}</td>
+                      <td>
+                        {inspection.scheduledFor
+                          ? formatSwissDate(inspection.scheduledFor)
+                          : 'Unscheduled'}
+                      </td>
+                      <td>
+                        <span className="status-chip">{formatDetailKey(inspection.status)}</span>
+                      </td>
+                      <td>
+                        <WorkspaceLink
+                          ariaLabel={inspectionListActionLabel(inspection) + ' Inspection ' + inspection.code}
+                          className="button-secondary inspection-yepp-row-action"
+                          navigate={navigate}
+                          route={unitRoute(
+                            propertyId,
+                            unitId,
+                            asOf,
+                            'inspections',
+                            { inspectionId: inspection.id },
+                          )}
+                        >
+                          {inspectionListActionLabel(inspection)}
+                        </WorkspaceLink>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </section>
       ) : null}
 
       {routeInspections ? (
@@ -1506,56 +1600,6 @@ export function UnitInspections({
           writeGate={inspectionWriteGate}
           key={unitId}
         />
-      ) : null}
-
-      {!inspectionId ? (
-        <section className="panel">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Field workflow</p>
-              <h2>Inspections</h2>
-            </div>
-            <span className="section-note">
-              Select one Inspection to enter its focused workspace
-            </span>
-          </div>
-
-          {listError ? <p className="form-error" role="alert">{listError}</p> : null}
-          {!listError && routeInspections === null ? (
-            <p className="muted" aria-live="polite">Loading Inspections…</p>
-          ) : null}
-          {routeInspections?.length === 0 ? (
-            <p className="muted">No Inspections are assigned to this Unit.</p>
-          ) : null}
-
-          {routeInspections && routeInspections.length > 0 ? (
-            <div className="inspection-list">
-              {routeInspections.map((inspection) => (
-                <WorkspaceLink
-                  className="inspection-card"
-                  key={inspection.id}
-                  navigate={navigate}
-                  route={unitRoute(
-                    propertyId,
-                    unitId,
-                    asOf,
-                    'inspections',
-                    { inspectionId: inspection.id },
-                  )}
-                >
-                  <div>
-                    <strong>{inspection.code}</strong>
-                    <span>{formatDetailKey(inspection.inspectionType)}</span>
-                  </div>
-                  <div>
-                    <span className="status-chip">{inspection.status}</span>
-                    <small>{inspection.scheduledFor ? formatSwissDate(inspection.scheduledFor) : 'Unscheduled'}</small>
-                  </div>
-                </WorkspaceLink>
-              ))}
-            </div>
-          ) : null}
-        </section>
       ) : null}
 
       {bundleError ? (
