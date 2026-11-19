@@ -6877,12 +6877,28 @@ try {
     true,
     'In-progress UI phases are navigable but do not falsely claim completion',
   );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "const stage=document.querySelector('[data-inspection-stage-panel=\"inspect\"]');const evidence=document.querySelector('[data-inspection-stage-panel=\"evidence\"]');const review=document.querySelector('[data-inspection-stage-panel=\"review_sign\"]');const layout=document.querySelector('.inspection-layout');return stage&&!stage.hidden&&evidence?.hidden===true&&review?.hidden===true&&!layout?.hidden;",
+    ),
+    true,
+    'Inspect is the only visible task surface after starting',
+  );
   const beforeStageFocusUrl = await currentUrl(sessionId);
   await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
   await waitForScriptTruthy(
     sessionId,
     "return document.activeElement?.getAttribute('data-inspection-stage-target') === 'evidence';",
     'Evidence phase focuses the mounted contextual Evidence heading',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "const field=document.querySelector('[data-inspection-stage-panel=\"inspect\"]');const evidence=document.querySelector('[data-inspection-stage-panel=\"evidence\"]');const nav=document.querySelector('.inspection-sections');return field?.hidden===true&&evidence?.hidden===false&&nav?.hidden===true;",
+    ),
+    true,
+    'Evidence is visible without showing its sibling answer form or room sidebar',
   );
   assertEqual(
     await currentUrl(sessionId),
@@ -6894,6 +6910,14 @@ try {
     sessionId,
     "return document.activeElement?.getAttribute('data-inspection-stage-target') === 'review_sign';",
     'Review phase focuses existing canonical Review controls',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "const layout=document.querySelector('.inspection-layout');const review=document.querySelector('[data-inspection-stage-panel=\"review_sign\"]');const evidence=document.querySelector('[data-inspection-stage-panel=\"evidence\"]');return layout?.hidden===true&&review?.hidden===false&&evidence?.hidden===true&&Boolean(document.querySelector('[data-inspection-content-form=\"evidence-attach\"]'));",
+    ),
+    true,
+    'Review stage hides field work but preserves mounted Evidence forms',
   );
   await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
   await waitForScriptTruthy(
@@ -7512,6 +7536,20 @@ try {
     ),
     uploadsBeforeEvidence + 1,
     'Inspection Evidence binary uploaded exactly once',
+  );
+  // Retain the exact uploaded DocumentVersion across task phase switches.
+  // Returning must never implicitly trigger another binary upload.
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
+  await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Version v1 stored. Attach this exact immutable binary')]",
+  );
+  assertEqual(
+    await executeScript(sessionId, 'return window.__portfolioDocumentUploadCount || 0;'),
+    uploadsBeforeEvidence + 1,
+    'Evidence phase switching preserves uploaded-version recovery without re-upload',
   );
 
   await waitForElement(
