@@ -726,6 +726,10 @@ export function UnitInspections({
     readonly sectionInstanceId: string | undefined;
     readonly stage: InspectionWorkflowStepId;
   } | null>(null);
+  const presentedLifecycleRef = useRef<{
+    readonly inspectionId: string;
+    readonly status: InspectionResponseDto['status'];
+  } | null>(null);
   const inspectionWritePendingRef = useRef(false);
   const activeInspectionIdRef = useRef(inspectionId);
   activeInspectionIdRef.current = inspectionId;
@@ -1148,6 +1152,36 @@ export function UnitInspections({
     target?.focus({ preventScroll: true });
     target?.scrollIntoView({ block: 'start' });
   }, [activeStage, routeBundle?.inspection.id, inspectionSectionInstanceId]);
+
+  useEffect(() => {
+    const current = routeBundle?.inspection;
+    if (!current) {
+      presentedLifecycleRef.current = null;
+      return;
+    }
+    const previous = presentedLifecycleRef.current;
+    presentedLifecycleRef.current = {
+      inspectionId: current.id,
+      status: current.status,
+    };
+    if (
+      !previous ||
+      previous.inspectionId !== current.id ||
+      previous.status === current.status ||
+      pendingStageFocusRef.current !== null ||
+      activeStage === null
+    ) return;
+
+    // On a real canonical lifecycle transition the previously focused
+    // command can disappear (Start, Lock, Unlock, Finalize). Restore focus
+    // to the visible task heading, never on ordinary PATCH/review rerenders.
+    const target = document.querySelector<HTMLElement>(
+      '[data-inspection-stage-panel="' + activeStage + '"]:not([hidden]) ' +
+        '[data-inspection-stage-target="' + activeStage + '"]',
+    );
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: 'start' });
+  }, [routeBundle?.inspection.id, routeBundle?.inspection.status, activeStage]);
 
   const inspectionWriteGate: InspectionWriteGate = {
     pending: inspectionWritePending,
