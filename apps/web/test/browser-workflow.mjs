@@ -8585,7 +8585,7 @@ try {
 
   await executeScript(
     sessionId,
-    'window.__portfolioHoldInspectionLifecycle = true; return true;',
+    'window.__portfolioHoldInspectionLifecycle = true; window.__portfolioSimulateInspectorInspectionActions = true; return true;',
   );
   await clickXpath(
     sessionId,
@@ -8631,6 +8631,41 @@ try {
     'Locked signature task does not create page-wide horizontal overflow',
   );
   await setWindowRect(sessionId, 1440, 1200);
+  // UX-5A: server-projected Inspector can sign a locked Inspection but
+  // never sees Manager/Admin-only Unlock or Finalize CTAs.
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[@data-inspection-finalization-form='signature']",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//form[@data-inspection-finalization-form='unlock']",
+    ),
+    false,
+    'Inspector capability projection hides forbidden Unlock form',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//button[normalize-space()='Finalize Inspection']",
+    ),
+    false,
+    'Inspector capability projection hides forbidden Finalize button',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-finalization-handoff]",
+  );
+  // The signature command is also permitted to a real assigned Inspector.
+  // Switch the harness projection back to Manager before the signature
+  // canonical reread, so existing manager unlock/finalize UAT remains intact.
+  await executeScript(
+    sessionId,
+    'window.__portfolioSimulateInspectorInspectionActions = false; return true;',
+  );
 
   const signatureForm =
     "//form[@data-inspection-finalization-form='signature']";
@@ -8714,6 +8749,16 @@ try {
     ),
     uploadsBeforeSignature + 1,
     'One drawn-signature action reuses one Inspection-scoped binary through ambiguous upload recovery',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[@data-inspection-finalization-form='unlock']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//button[normalize-space()='Finalize Inspection']",
   );
   assertEqual(
     await elementDisabledXpath(

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { asUserId } from '@portfolio/domain';
 import {
   CAPABILITIES,
+  actorHasCapability,
+  canControlInspectionLifecycle,
   requireCapability,
   type Actor,
   type Capability,
@@ -59,6 +61,17 @@ describe('Portfolio authorization capability matrix', () => {
     );
 
     expect(actual).toEqual(expected);
+  });
+
+  it('projects controlled Inspection lifecycle policy from verified actor roles', () => {
+    expect(canControlInspectionLifecycle(actor('inspector'))).toBe(false);
+    expect(canControlInspectionLifecycle(actor('manager'))).toBe(true);
+    expect(canControlInspectionLifecycle(actor('admin'))).toBe(true);
+
+    expect(actorHasCapability(actor('inspector'), 'inspections:write')).toBe(true);
+    expect(actorHasCapability(actor('inspector'), 'documents:write')).toBe(false);
+    expect(actorHasCapability(actor('manager'), 'documents:write')).toBe(true);
+    expect(actorHasCapability(actor('admin'), 'documents:write')).toBe(true);
   });
 
   it('fails closed for every inspector business-write capability outside the explicit field set', () => {

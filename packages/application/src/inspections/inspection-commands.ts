@@ -60,7 +60,7 @@ import {
   type UnitId,
   type UserId,
 } from '@portfolio/domain';
-import { requireCapability, type Actor } from '../security/access.js';
+import { canControlInspectionLifecycle, requireCapability, type Actor } from '../security/access.js';
 import type { ClockPort } from '../shared/clock.js';
 import type { IdGenerator } from '../shared/id-generator.js';
 import type { PortfolioRepository } from '../portfolio/portfolio-repository.js';
@@ -877,7 +877,7 @@ export async function unlockInspectionCommand(
   reason: string,
 ): Promise<Inspection> {
   requireCapability(actor, 'inspections:write');
-  if (actor.role === 'inspector') {
+  if (!canControlInspectionLifecycle(actor)) {
     throw new DomainError(
       'INSPECTION_UNLOCK_FORBIDDEN',
       'Only an admin or manager may unlock an inspection.',
@@ -915,7 +915,7 @@ export async function finalizeInspectionCommand(
   readonly snapshot: InspectionFinalSnapshot;
 }> {
   requireCapability(actor, 'inspections:write');
-  if (actor.role === 'inspector') {
+  if (!canControlInspectionLifecycle(actor)) {
     throw new DomainError(
       'INSPECTION_FINALIZE_FORBIDDEN',
       'Only an admin or manager may finalize an inspection.',

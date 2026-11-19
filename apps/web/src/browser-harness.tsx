@@ -1178,8 +1178,14 @@ function setupMaintenanceInspectionBundle() {
 }
 
 function inspectionBundle() {
+  const managerActions = !browserHarnessWindow.__portfolioSimulateInspectorInspectionActions;
   return {
     inspection: inspectionRecord(),
+    actionCapabilities: {
+      canUnlock: managerActions && inspectionStatus === 'locked',
+      canFinalize: managerActions && inspectionStatus === 'locked',
+      canGenerateFinalReport: managerActions && inspectionStatus === 'finalized',
+    },
     schema: inspectionSchema,
     sectionInstances: [
       {
@@ -1542,6 +1548,7 @@ function apiPath(input: RequestInfo | URL): URL {
 type BrowserHarnessWindow = Window & {
   __portfolioBinaryReads?: number;
   __portfolioDenyNextEvidenceBinaryRead?: boolean;
+  __portfolioSimulateInspectorInspectionActions?: boolean;
   __portfolioEvidenceBinaryGetAttempts?: number;
   __portfolioDocumentUploadCount?: number;
   __portfolioHoldUnitCreate?: boolean;

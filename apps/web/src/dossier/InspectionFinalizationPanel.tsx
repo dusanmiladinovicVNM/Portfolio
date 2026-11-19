@@ -58,7 +58,6 @@ import {
 interface InspectionFinalizationPanelProps {
   readonly api: PortfolioApi;
   readonly bundle: InspectionBundleResponse;
-  readonly canGenerateFinalReport: boolean;
   readonly blockedByDirtySection: boolean;
   readonly writeGate: InspectionWriteGate;
   readonly onEditSectionInstance: (sectionInstanceId: string) => void;
@@ -154,7 +153,6 @@ export function InspectionFinalizationPanel({
   api,
   bundle,
   blockedByDirtySection,
-  canGenerateFinalReport,
   writeGate,
   onEditSectionInstance,
   onCanonicalBundle,
@@ -193,6 +191,13 @@ export function InspectionFinalizationPanel({
   const [success, setSuccess] = useState<string | null>(null);
 
   const inspection = bundle.inspection;
+  // These are verified actor-scoped presentation permissions from the
+  // canonical Inspection GET, never derived from a JWT claim or client role.
+  // Missing permissions on a mixed-version deployment fail closed.
+  const canUnlock = bundle.actionCapabilities?.canUnlock === true;
+  const canFinalize = bundle.actionCapabilities?.canFinalize === true;
+  const canGenerateFinalReport =
+    bundle.actionCapabilities?.canGenerateFinalReport === true;
   const missingRoles = missingRequiredSignatureRoles(bundle);
   const active = useMemo(
     () => activeSignatures(bundle.signatures),
@@ -716,7 +721,7 @@ export function InspectionFinalizationPanel({
 
   async function unlockInspection(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (inspection.status !== 'locked') return;
+    if (inspection.status !== 'locked' || !canUnlock) return;
     const formElement = event.currentTarget;
     const parsed = unlockInspectionRequestSchema.safeParse({
       expectedVersion: inspection.version,
@@ -777,6 +782,7 @@ export function InspectionFinalizationPanel({
   async function finalizeInspection() {
     if (
       inspection.status !== 'locked' ||
+      !canFinalize ||
       missingRoles.length > 0 ||
       !begin('finalize', { allowDirty: true })
     ) {
@@ -1257,6 +1263,7 @@ export function InspectionFinalizationPanel({
             ) : null}
           </form>
 
+          {canUnlock ? (
           <form
             className="inspection-finalization-card setup-form"
             data-inspection-finalization-form="unlock"
@@ -1274,6 +1281,7 @@ export function InspectionFinalizationPanel({
               {pendingAction === 'unlock' ? 'Unlocking…' : 'Unlock Inspection'}
             </button>
           </form>
+          ) : null}
 
           <div className="inspection-finalization-card">
             <strong>Finalize immutable snapshot</strong>
@@ -1290,14 +1298,21 @@ export function InspectionFinalizationPanel({
                 All required signatures are present.
               </p>
             )}
-            <button
-              className="button-primary"
-              disabled={blocked || missingRoles.length > 0}
-              onClick={finalizeInspection}
-              type="button"
-            >
-              {pendingAction === 'finalize' ? 'Finalizing…' : 'Finalize Inspection'}
-            </button>
+            {canFinalize ? (
+              <button
+                className="button-primary"
+                disabled={blocked || missingRoles.length > 0}
+                onClick={finalizeInspection}
+                type="button"
+              >
+                {pendingAction === 'finalize' ? 'Finalizing…' : 'Finalize Inspection'}
+              </button>
+            ) : (
+              <p className="setup-hint" data-inspection-finalization-handoff>
+                A manager or administrator finalizes the Inspection after the
+                required signatures are collected.
+              </p>
+            )}
           </div>
         </div>
       ) : null}
