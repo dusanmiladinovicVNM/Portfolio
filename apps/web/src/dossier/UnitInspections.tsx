@@ -2138,7 +2138,7 @@ export function UnitInspections({
             </div>
           </div>
             </>
-          )}
+          ) : null}
 
           <div
             className="inspection-stage-panel"
