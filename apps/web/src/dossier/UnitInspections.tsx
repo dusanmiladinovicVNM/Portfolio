@@ -44,6 +44,7 @@ import { InspectionCompletedOverview } from './InspectionCompletedOverview.js';
 import { InspectionFinalizationPanel } from './InspectionFinalizationPanel.js';
 import {
   InspectionFindingsEvidence,
+  type StableUpload,
   type StoredOnlyEvidenceVersion,
 } from './InspectionFindingsEvidence.js';
 import { InspectionOrchestrationPanel } from './InspectionOrchestrationPanel.js';
@@ -704,6 +705,10 @@ export function UnitInspections({
   // never turns an uploaded binary into an Inspection Evidence relation.
   const [storedOnlyBySection, setStoredOnlyBySection] =
     useState<Readonly<Record<string, StoredOnlyEvidenceVersion>>>({});
+  // A room remount must not mint a new idempotency key for a binary whose
+  // outcome is still ambiguous. File bytes stay only in this mounted session.
+  const unresolvedEvidenceUploadsRef =
+    useRef<Record<string, StableUpload>>({});
   const [draft, setDraft] = useState<DraftByItem>({});
   const [touched, setTouched] = useState<TouchedByItem>({});
   const [inFlightSectionSaves, setInFlightSectionSaves] =
@@ -748,6 +753,7 @@ export function UnitInspections({
     // Reuse is allowed only inside this mounted Inspection workspace.
     // Never pass an unlinked version from one Inspection to a different owner.
     setStoredOnlyBySection({});
+    unresolvedEvidenceUploadsRef.current = {};
   }, [inspectionId, unitId]);
 
   useEffect(() => {
@@ -2173,6 +2179,21 @@ export function UnitInspections({
                 blockedByDirtySection={hasUnsavedChanges}
                 bundle={routeBundle}
                 key={`${routeBundle.inspection.id}:${selectedSectionInstance.id}`}
+                unresolvedUpload={
+                  unresolvedEvidenceUploadsRef.current[
+                    `${routeBundle.inspection.id}:${selectedSectionInstance.id}`
+                  ] ?? null
+                }
+                onUnresolvedUpload={(upload) => {
+                  if (activeInspectionIdRef.current !== routeBundle.inspection.id) return;
+                  const ownerKey =
+                    `${routeBundle.inspection.id}:${selectedSectionInstance.id}`;
+                  if (upload) {
+                    unresolvedEvidenceUploadsRef.current[ownerKey] = upload;
+                  } else {
+                    delete unresolvedEvidenceUploadsRef.current[ownerKey];
+                  }
+                }}
                 storedOnlyVersion={
                   storedOnlyBySection[
                     `${routeBundle.inspection.id}:${selectedSectionInstance.id}`
