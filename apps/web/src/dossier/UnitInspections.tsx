@@ -1084,6 +1084,30 @@ export function UnitInspections({
     hasUnsavedChanges,
   });
 
+  // Phase changes only move focus; mounted forms and write state stay intact.
+  const stageNavigationBlocked =
+    hasUnsavedChanges ||
+    sectionWritePending ||
+    inspectionWritePending ||
+    continueIntent !== null ||
+    conflict ||
+    saveError !== null;
+
+  function selectInspectionStage(stage: InspectionWorkflowStepId) {
+    if (
+      !routeBundle ||
+      !inspectionWorkflowStageAvailable(routeBundle.inspection.status, stage) ||
+      (stageNavigationBlocked && stage !== activeStage)
+    ) return;
+    const target = document.querySelector<HTMLElement>(
+      '[data-inspection-stage-target="' + stage + '"]',
+    );
+    if (!target) return;
+    setStageSelection({ inspectionId: routeBundle.inspection.id, stage });
+    // Explicit clicks only: never steal focus on autosave or async rerender.
+    target.focus({ preventScroll: true });
+    target.scrollIntoView({ block: 'start' });
+  }
   const inspectionWriteGate: InspectionWriteGate = {
     pending: inspectionWritePending,
     tryStart: () => {
@@ -1644,16 +1668,23 @@ export function UnitInspections({
               <p className="eyebrow">
                 {formatDetailKey(routeBundle.inspection.inspectionType)}
               </p>
-              <h2>{routeBundle.inspection.code}</h2>
+              <h2
+                data-inspection-stage-target={
+                  routeBundle.inspection.status === 'draft' ? 'setup' : undefined
+                }
+                tabIndex={-1}
+              >
+                {routeBundle.inspection.code}
+              </h2>
               <p className="muted">{routeBundle.schema.title}</p>
             </div>
             <span className="status-chip">{routeBundle.inspection.status}</span>
           </div>
 
           <InspectionWorkflowStepper
-            requiredResponsesComplete={Boolean(
-              requiredProgress?.complete && !hasUnsavedChanges,
-            )}
+            navigationBlocked={stageNavigationBlocked}
+            onSelectStage={selectInspectionStage}
+            selectedStage={activeStage}
             status={routeBundle.inspection.status}
           />
 
@@ -1866,6 +1897,7 @@ export function UnitInspections({
                     <h3
                       className="inspection-active-section-heading"
                       data-inspection-active-section-heading
+                      data-inspection-stage-target="inspect"
                       ref={activeSectionHeadingRef}
                       tabIndex={-1}
                     >
