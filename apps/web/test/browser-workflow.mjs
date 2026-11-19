@@ -7605,6 +7605,7 @@ try {
     'Lost Evidence-link acknowledgement never re-uploads the stored binary',
   );
 
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
   await clickXpath(
     sessionId,
     "//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='Kitchen']",
@@ -7619,6 +7620,7 @@ try {
     `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${inspectionKitchenInstanceId}&asOf=2025-06-30`,
     'Kitchen Inspection section-instance owner',
   );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
   await selectOptionXpath(
     sessionId,
     findingForm + "//select[@name='itemId']",
@@ -7649,6 +7651,7 @@ try {
     "//div[contains(@class,'inspection-content-card')][.//strong[normalize-space()='Findings in Kitchen']]//li[.//strong[contains(normalize-space(),'Kitchen ventilation staining')]]//small[normalize-space()='Room note']",
   );
 
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
   await clickXpath(
     sessionId,
     "//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='Bathroom']",
@@ -7663,6 +7666,7 @@ try {
     `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${inspectionBathroomInstanceId}&asOf=2025-06-30`,
     'Bathroom Inspection section-instance owner',
   );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
 
   const bathroomScopedEvidenceForm =
     "//form[@data-inspection-content-form='evidence-scoped-upload']";
@@ -7710,6 +7714,7 @@ try {
     "//ul[contains(@class,'inspection-content-list')]//li[.//span[normalize-space()='Bathroom moisture evidence']]//small[normalize-space()='Bathroom']",
   );
 
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
   await clickXpath(
     sessionId,
     "//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='General condition']",
@@ -7724,6 +7729,7 @@ try {
     inspectionUrl,
     'Room-specific content returns to canonical General Inspection owner',
   );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
   assertEqual(
     await elementExistsXpath(
       sessionId,
@@ -7738,6 +7744,7 @@ try {
     "//*[@data-inspection-content-context-summary][contains(normalize-space(),'evidence item(s) belong to other sections')]",
   );
 
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
   // Lost acknowledgement after a real canonical commit must not cause
   // optimistic room navigation, repeated POST/PATCH or loss of local answers.
   await executeScript(
