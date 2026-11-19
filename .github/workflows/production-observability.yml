@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   issues: write
 
 concurrency:
@@ -45,6 +46,15 @@ jobs:
         with:
           node-version: 24
 
+      - name: Audit previous scheduled-run cadence
+        id: cadence
+        if: github.event_name == 'schedule'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OBSERVABILITY_CADENCE_THRESHOLD_MINUTES: '45'
+        run: node scripts/operations/check-monitor-schedule.mjs
+
       - name: Check production availability and signals
         id: check
         continue-on-error: true
@@ -55,6 +65,10 @@ jobs:
       - name: Publish observability summary
         if: always()
         run: |
+          if [ -f .artifacts/observability/cadence-summary.md ]; then
+            cat .artifacts/observability/cadence-summary.md >> "$GITHUB_STEP_SUMMARY"
+            echo '' >> "$GITHUB_STEP_SUMMARY"
+          fi
           if [ -f .artifacts/observability/summary.md ]; then
             cat .artifacts/observability/summary.md >> "$GITHUB_STEP_SUMMARY"
           else
@@ -92,6 +106,41 @@ jobs:
             gh issue close "$issue" --reason completed
           fi
 
+      - name: Open or update delayed-monitoring incident
+        if: steps.cadence.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COVERAGE_INCIDENT_TITLE: '[Production Alert] Portfolio scheduled monitoring gap'
+        run: |
+          summary='.artifacts/observability/cadence-summary.md'
+          if [ ! -f "$summary" ]; then
+            mkdir -p .artifacts/observability
+            printf 'Portfolio monitoring cadence could not be verified. Run: %s\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > "$summary"
+          fi
+          printf '\nWorkflow run: %s\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> "$summary"
+          issue="$(gh issue list --state open --json number,title --jq ".[] | select(.title == env.COVERAGE_INCIDENT_TITLE) | .number" | head -n 1)"
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body-file "$summary"
+          else
+            gh issue create --title "$COVERAGE_INCIDENT_TITLE" --body-file "$summary"
+          fi
+
+      - name: Close recovered delayed-monitoring incident
+        if: steps.cadence.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COVERAGE_INCIDENT_TITLE: '[Production Alert] Portfolio scheduled monitoring gap'
+        run: |
+          issue="$(gh issue list --state open --json number,title --jq ".[] | select(.title == env.COVERAGE_INCIDENT_TITLE) | .number" | head -n 1)"
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body "Scheduled monitoring interval has returned within the configured bound in $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. Historical blind spots remain unverified."
+            gh issue close "$issue" --reason completed
+          fi
+
       - name: Fail workflow on production alert
         if: steps.check.outcome == 'failure'
+        run: exit 1
+
+      - name: Fail workflow on delayed monitoring
+        if: steps.cadence.outcome == 'failure'
         run: exit 1
