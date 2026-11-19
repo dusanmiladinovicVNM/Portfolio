@@ -3,6 +3,7 @@ import type {
   InspectionEvidenceResponse,
 } from '@portfolio/contracts';
 import { useEffect, useRef, useState } from 'react';
+import { documentVersionContentPath } from '../api/paths.js';
 import type { PortfolioApi } from '../api/portfolio-api.js';
 import { formatDetailKey } from '../presentation/format.js';
 import { InspectionEvidenceBinaryPreview } from './InspectionEvidenceBinaryPreview.js';
@@ -88,26 +89,56 @@ export function InspectionEvidenceOverview({
     readonly inspectionId: string;
     readonly evidenceId: string;
     readonly versionId: string;
+    readonly request: Promise<Blob>;
   } | null>(null);
   const lastPreviewTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const previewControllerRef = useRef<AbortController | null>(null);
+
+  function cancelPreviewRead() {
+    previewControllerRef.current?.abort();
+    previewControllerRef.current = null;
+  }
+
+  function startPreviewRead(versionId: string): Promise<Blob> {
+    cancelPreviewRead();
+    const controller = new AbortController();
+    previewControllerRef.current = controller;
+    // Only a real click/retry invokes this function. React StrictMode effect
+    // replay can never produce a duplicate authenticated binary GET.
+    const request = api.getBinary(documentVersionContentPath(versionId), {
+      signal: controller.signal,
+    });
+    // Attach immediately; the mounted viewer separately renders rejections.
+    void request.catch(() => undefined);
+    return request;
+  }
+
+  useEffect(() => () => {
+    previewControllerRef.current?.abort();
+  }, []);
 
   // A presentation selection never survives a change of Inspection owner.
   // In particular, returning to an earlier Inspection must not resurrect
   // its previous binary preview.
   useEffect(() => {
+    cancelPreviewRead();
     setPreviewSelection(null);
     lastPreviewTriggerRef.current = null;
   }, [bundle.inspection.id]);
 
   // The selected image must also disappear when its phase becomes hidden.
   useEffect(() => {
-    if (!active) setPreviewSelection(null);
+    if (!active) {
+      cancelPreviewRead();
+      setPreviewSelection(null);
+    }
   }, [active]);
 
   // Changing the exact editor room closes any previously selected binary;
   // the all-room cards stay visible but the viewer must not hold an old
   // room's image in memory after contextual navigation.
   useEffect(() => {
+    cancelPreviewRead();
     setPreviewSelection(null);
   }, [selectedSectionInstanceId]);
 
@@ -132,10 +163,18 @@ export function InspectionEvidenceOverview({
       inspectionId: evidence.inspectionId,
       evidenceId: evidence.id,
       versionId: evidence.documentVersionId,
+      request: startPreviewRead(evidence.documentVersionId),
     });
   }
 
+  function retryEvidencePreview() {
+    if (!previewSelection || !selectedRelation) return;
+    const request = startPreviewRead(selectedRelation.documentVersionId);
+    setPreviewSelection({ ...previewSelection, request });
+  }
+
   function closeEvidencePreview() {
+    cancelPreviewRead();
     setPreviewSelection(null);
     const trigger = lastPreviewTriggerRef.current;
     // Restore focus only for an explicit operator close, not on canonical
@@ -246,11 +285,11 @@ export function InspectionEvidenceOverview({
       </div>
       {selectedRelation ? (
         <InspectionEvidenceBinaryPreview
-          api={api}
           caption={selectedRelation.caption}
-          documentVersionId={selectedRelation.documentVersionId}
           key={selectedRelation.id}
           onClose={closeEvidencePreview}
+          onRetry={retryEvidencePreview}
+          request={previewSelection!.request}
         />
       ) : null}
     </section>
