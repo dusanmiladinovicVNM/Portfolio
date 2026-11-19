@@ -344,6 +344,8 @@ export function UnitOverviewCommandCenter({
         </div>
       ) : null}
 
+      <details className="unit-yepp-command-more">
+        <summary>More Unit operations and shortcuts</summary>
       <div className="unit-command-center-shortcuts">
         <WorkspaceLink
           className="unit-command-center-shortcut"
@@ -384,6 +386,7 @@ export function UnitOverviewCommandCenter({
           <strong>Open Unit documents</strong>
         </WorkspaceLink>
       </div>
+      </details>
     </section>
   );
 }

@@ -188,6 +188,14 @@ export function UnitSetupReadiness({
         </div>
       ) : null}
 
+      <div aria-label="Current Unit setup inventory" className="unit-yepp-setup-counts">
+        <span>Spaces <strong>{spaceCount ?? '—'}</strong></span>
+        <span>Assets <strong>{overview.currentOperations.locatedAssetCount}</strong></span>
+        <span>Meters <strong>{overview.currentOperations.activeMeterCount}</strong></span>
+        <span>Keys <strong>{activeAccessItemCount ?? '—'}</strong></span>
+      </div>
+      <details className="unit-yepp-setup-details">
+        <summary>All setup steps and recommendations</summary>
       <div
         aria-label="Recommended Unit setup sequence"
         className="unit-setup-readiness-grid"
@@ -207,6 +215,7 @@ export function UnitSetupReadiness({
           </WorkspaceLink>
         ))}
       </div>
+      </details>
     </section>
   );
 }

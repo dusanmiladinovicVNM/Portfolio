@@ -5780,7 +5780,28 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
+    "//*[@data-unit-yepp-quick-metrics][.//span[normalize-space()='Open issues']][.//span[normalize-space()='Work orders']][.//span[normalize-space()='Assets']][.//span[normalize-space()='Attributed costs']]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-unit-yepp-history]')?.open === false;",
+    ),
+    true,
+    'YEPP Unit snapshot shows compact cards before optional historical details',
+  );
+  await clickXpath(
+    sessionId,
+    "//*[@data-unit-yepp-history]/summary",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
     "//article[contains(@class,'metric-card-primary')]//small[normalize-space()='as of 30.06.2025']",
+  );
+  await clickXpath(
+    sessionId,
+    "//*[@data-unit-yepp-history]/summary",
   );
   await waitForElement(
     sessionId,
@@ -5817,6 +5838,19 @@ try {
       '?tab=keys&asOf=2025-06-30',
     'Setup readiness preserves exact Unit owner and reporting context',
   );
+
+  for (const width of [320, 375, 390, 768]) {
+    await setWindowRect(sessionId, width, 900);
+    assertEqual(
+      await executeScript(
+        sessionId,
+        "const root = document.querySelector('[data-unit-yepp-overview]'); const cards = root?.querySelectorAll('.dossier-grid > article, .unit-yepp-quick-metrics > article'); return Boolean(cards && cards.length === 6 && [...cards].every(x => { const r=x.getBoundingClientRect(); return r.width > 0 && r.left >= -1 && r.right <= window.innerWidth + 1; }) && document.documentElement.scrollWidth <= document.documentElement.clientWidth);",
+      ),
+      true,
+      'YEPP Unit snapshot cards fit viewport ' + width + 'px',
+    );
+  }
+  await setWindowRect(sessionId, 1440, 1200);
   await clickXpath(
     sessionId,
     "//*[@data-unit-setup-readiness]//a[normalize-space()='Open Spaces']",
