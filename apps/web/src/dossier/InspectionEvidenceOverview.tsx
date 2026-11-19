@@ -2,11 +2,16 @@ import type {
   InspectionBundleResponse,
   InspectionEvidenceResponse,
 } from '@portfolio/contracts';
+import { useEffect, useRef, useState } from 'react';
+import type { PortfolioApi } from '../api/portfolio-api.js';
 import { formatDetailKey } from '../presentation/format.js';
+import { InspectionEvidenceBinaryPreview } from './InspectionEvidenceBinaryPreview.js';
 
 type SectionInstance = InspectionBundleResponse['sectionInstances'][number];
 
 interface InspectionEvidenceOverviewProps {
+  readonly api: PortfolioApi;
+  readonly active: boolean;
   readonly bundle: InspectionBundleResponse;
   readonly orderedSectionInstances: readonly SectionInstance[];
   readonly selectedSectionInstanceId: string | null;
@@ -24,10 +29,12 @@ function EvidenceItems({
   items,
   bundle,
   sectionId,
+  onPreview,
 }: {
   readonly items: readonly InspectionEvidenceResponse[];
   readonly bundle: InspectionBundleResponse;
   readonly sectionId: string | null;
+  readonly onPreview: (evidence: InspectionEvidenceResponse, trigger: HTMLButtonElement) => void;
 }) {
   if (items.length === 0) {
     return <p className="muted">Noch keine verknüpften Nachweise.</p>;
@@ -48,6 +55,14 @@ function EvidenceItems({
             <span>{item.caption ?? 'Ohne Beschriftung'}</span>
             {itemLabel ? <small>{itemLabel}</small> : null}
             <small>Exakte Dokumentversion verknüpft</small>
+            <button
+              className="button-secondary"
+              data-inspection-evidence-preview-open={item.id}
+              onClick={(event) => onPreview(item, event.currentTarget)}
+              type="button"
+            >
+              Foto ansehen / Datei öffnen
+            </button>
           </li>
         );
       })}
@@ -61,12 +76,60 @@ function EvidenceItems({
  * uploaded-but-unlinked binary is an Inspection relation.
  */
 export function InspectionEvidenceOverview({
+  api,
+  active,
   bundle,
   orderedSectionInstances,
   selectedSectionInstanceId,
   navigationBlocked,
   onOpenRoom,
 }: InspectionEvidenceOverviewProps) {
+  const [previewSelection, setPreviewSelection] = useState<{
+    readonly inspectionId: string;
+    readonly evidenceId: string;
+    readonly versionId: string;
+  } | null>(null);
+  const lastPreviewTriggerRef = useRef<HTMLButtonElement | null>(null);
+
+  // Do not retain private decoded bytes while the phase is hidden.
+  useEffect(() => {
+    if (!active) setPreviewSelection(null);
+  }, [active, bundle.inspection.id]);
+
+  const selectedRelation =
+    active && previewSelection?.inspectionId === bundle.inspection.id
+      ? bundle.evidence.find(
+          (item) =>
+            item.id === previewSelection.evidenceId &&
+            item.documentVersionId === previewSelection.versionId &&
+            item.inspectionId === bundle.inspection.id &&
+            item.kind !== 'final_report',
+        ) ?? null
+      : null;
+
+  function openEvidencePreview(
+    evidence: InspectionEvidenceResponse,
+    trigger: HTMLButtonElement,
+  ) {
+    if (!active || evidence.inspectionId !== bundle.inspection.id) return;
+    lastPreviewTriggerRef.current = trigger;
+    setPreviewSelection({
+      inspectionId: evidence.inspectionId,
+      evidenceId: evidence.id,
+      versionId: evidence.documentVersionId,
+    });
+  }
+
+  function closeEvidencePreview() {
+    setPreviewSelection(null);
+    const trigger = lastPreviewTriggerRef.current;
+    // Restore focus only for an explicit operator close, not on canonical
+    // refresh, phase changes, or the next Inspection becoming active.
+    window.requestAnimationFrame(() => {
+      if (trigger?.isConnected && active) trigger.focus();
+    });
+  }
+
   const attached = bundle.evidence.filter((item) => item.kind !== 'final_report');
   const inspectionLevel = attached.filter((item) => item.sectionInstanceId === null);
   const roomIds = new Set(orderedSectionInstances.map((item) => item.id));
@@ -111,7 +174,12 @@ export function InspectionEvidenceOverview({
             <strong>Gesamte Inspektion</strong>
             <span>{inspectionLevel.length} Nachweis(e)</span>
           </div>
-          <EvidenceItems bundle={bundle} items={inspectionLevel} sectionId={null} />
+          <EvidenceItems
+            bundle={bundle}
+            items={inspectionLevel}
+            onPreview={openEvidencePreview}
+            sectionId={null}
+          />
         </div>
         {orderedSectionInstances.map((instance) => {
           const section = bundle.schema.sections.find(
@@ -145,6 +213,7 @@ export function InspectionEvidenceOverview({
               <EvidenceItems
                 bundle={bundle}
                 items={roomEvidence}
+                onPreview={openEvidencePreview}
                 sectionId={instance.sectionId}
               />
               <button
@@ -160,6 +229,15 @@ export function InspectionEvidenceOverview({
           );
         })}
       </div>
+      {selectedRelation ? (
+        <InspectionEvidenceBinaryPreview
+          api={api}
+          caption={selectedRelation.caption}
+          documentVersionId={selectedRelation.documentVersionId}
+          key={selectedRelation.id}
+          onClose={closeEvidencePreview}
+        />
+      ) : null}
     </section>
   );
 }
