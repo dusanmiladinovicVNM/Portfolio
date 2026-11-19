@@ -5969,11 +5969,8 @@ try {
   for (const width of [320, 375, 390, 768]) {
     await setWindowRect(sessionId, width, 900);
     assertEqual(
-      await executeScript(
-        sessionId,
-        "const wrap = document.querySelector('[data-inspection-yepp-list] .inspection-yepp-table-scroll'); if (!wrap) return false; const r=wrap.getBoundingClientRect(); return r.width>0 && r.left>=-1 && r.right<=window.innerWidth+1 && document.documentElement.scrollWidth<=document.documentElement.clientWidth;",
-      ),
-      true,
+      await executeScript(sessionId, "const wrap = document.querySelector('[data-inspection-yepp-list] .inspection-yepp-table-scroll'); if (!wrap) return 'table region not found'; const r=wrap.getBoundingClientRect(); const doc=document.documentElement; if (r.width>0 && r.left>=-1 && r.right<=window.innerWidth+1 && doc.scrollWidth<=doc.clientWidth) return 'OK'; const offenders=[...document.querySelectorAll('body *')].map(e=>({e,r:e.getBoundingClientRect()})).filter(x=>x.r.right>window.innerWidth+1 || x.r.left<-1).slice(0,8).map(x=>x.e.tagName.toLowerCase()+'.'+String(x.e.className).slice(0,80)+'('+Math.round(x.r.left)+','+Math.round(x.r.right)+')'); return JSON.stringify({width:window.innerWidth,docWidth:doc.clientWidth,docScroll:doc.scrollWidth,tableLeft:r.left,tableRight:r.right,tableWidth:r.width,tableClient:wrap.clientWidth,tableScroll:wrap.scrollWidth,offenders});"),
+      'OK',
       'YEPP Inspection table scroll stays inside viewport ' + width + 'px',
     );
   }
