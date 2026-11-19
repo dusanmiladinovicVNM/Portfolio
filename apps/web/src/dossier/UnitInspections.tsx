@@ -2218,6 +2218,8 @@ export function UnitInspections({
                 Nachweise im ausgewählten Raum hinzufügen oder bearbeiten.
               </p>
               <InspectionEvidenceOverview
+                active={activeStage === 'evidence'}
+                api={api}
                 bundle={routeBundle}
                 navigationBlocked={stageNavigationBlocked}
                 onOpenRoom={openEvidenceRoom}
