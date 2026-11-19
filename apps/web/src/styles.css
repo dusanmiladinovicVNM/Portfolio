@@ -1229,6 +1229,14 @@ input:focus-visible {
   border-radius: 11px;
   background: #fff;
 }
+.inspection-active-section-heading {
+  scroll-margin-top: 120px;
+}
+.inspection-active-section-heading:focus {
+  outline: 3px solid #365f3d;
+  outline-offset: 4px;
+  border-radius: 3px;
+}
 .inspection-item-label {
   display: flex;
   justify-content: space-between;
