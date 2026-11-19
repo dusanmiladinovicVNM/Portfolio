@@ -59,9 +59,14 @@ export function InspectionWorkflowStepper({
   return (
     <>
       {currentStep ? (
-        <p className="inspection-workflow-current-summary" aria-live="polite" aria-atomic="true">
-          Schritt {currentIndex + 1} von {steps.length} · {currentStep.label}
-        </p>
+        <div className="inspection-workflow-stage-meta">
+          <p className="inspection-workflow-current-summary" aria-live="polite" aria-atomic="true">
+            Schritt {currentIndex + 1} von {steps.length} · {currentStep.label}
+          </p>
+          <small className="inspection-workflow-scroll-hint">
+            Weitere Schritte seitlich scrollen
+          </small>
+        </div>
       ) : null}
       <nav
         aria-label="Inspektionsablauf"
