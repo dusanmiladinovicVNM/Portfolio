@@ -719,6 +719,12 @@ export function UnitInspections({
     readonly stage: InspectionWorkflowStepId;
   } | null>(null);
   const continueIntentRef = useRef<InspectionContinueIntent | null>(null);
+  // Only explicit phase clicks request focus. Browser/section route changes
+  // continue to use their own established focus handling.
+  const pendingStageFocusRef = useRef<{
+    readonly inspectionId: string;
+    readonly stage: InspectionWorkflowStepId;
+  } | null>(null);
   const inspectionWritePendingRef = useRef(false);
   const activeInspectionIdRef = useRef(inspectionId);
   activeInspectionIdRef.current = inspectionId;
@@ -1105,15 +1111,41 @@ export function UnitInspections({
       '[data-inspection-stage-target="' + stage + '"]',
     );
     if (!target) return;
+    if (activeStage === stage) {
+      target.focus({ preventScroll: true });
+      target.scrollIntoView({ block: 'start' });
+      return;
+    }
+    pendingStageFocusRef.current = {
+      inspectionId: routeBundle.inspection.id,
+      stage,
+    };
     setStageSelection({
       inspectionId: routeBundle.inspection.id,
       sectionInstanceId: inspectionSectionInstanceId,
       stage,
     });
-    // Explicit clicks only: never steal focus on autosave or async rerender.
-    target.focus({ preventScroll: true });
-    target.scrollIntoView({ block: 'start' });
   }
+
+  useEffect(() => {
+    const request = pendingStageFocusRef.current;
+    if (
+      !request ||
+      routeBundle?.inspection.id !== request.inspectionId ||
+      activeStage !== request.stage
+    ) return;
+
+    // Wait until React has exposed the selected phase. Focusing a still
+    // hidden heading synchronously would silently lose keyboard focus.
+    pendingStageFocusRef.current = null;
+    const target = document.querySelector<HTMLElement>(
+      '[data-inspection-stage-panel="' + request.stage + '"]:not([hidden]) ' +
+        '[data-inspection-stage-target="' + request.stage + '"]',
+    );
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: 'start' });
+  }, [activeStage, routeBundle?.inspection.id, inspectionSectionInstanceId]);
+
   const inspectionWriteGate: InspectionWriteGate = {
     pending: inspectionWritePending,
     tryStart: () => {
