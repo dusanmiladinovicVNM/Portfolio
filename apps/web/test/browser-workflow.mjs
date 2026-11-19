@@ -8108,6 +8108,17 @@ try {
     false,
     'Denied Evidence binary read cannot render protected photo',
   );
+  await clickXpath(sessionId, "//*[@data-inspection-evidence-preview-retry]");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-evidence-preview-image][starts-with(@src,'blob:')]",
+  );
+  assertEqual(
+    await executeScript(sessionId, 'return window.__portfolioBinaryReads || 0;'),
+    evidenceReadsBeforePreview + 1,
+    'Explicit retry reads the same attached DocumentVersion after a 403',
+  );
   await clickXpath(sessionId, "//*[@data-inspection-evidence-preview-close]");
   await waitForScriptTruthy(
     sessionId,
@@ -8133,8 +8144,8 @@ try {
   );
   assertEqual(
     await executeScript(sessionId, 'return window.__portfolioBinaryReads || 0;'),
-    evidenceReadsBeforePreview + 1,
-    'Only the explicitly requested attached version is fetched after a denied read',
+    evidenceReadsBeforePreview + 2,
+    'Only explicitly requested attached versions are fetched after denial and retry',
   );
   await clickXpath(sessionId, "//*[@data-inspection-evidence-preview-close]");
   await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
@@ -8146,7 +8157,7 @@ try {
   await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
   assertEqual(
     await executeScript(sessionId, 'return window.__portfolioBinaryReads || 0;'),
-    evidenceReadsBeforePreview + 1,
+    evidenceReadsBeforePreview + 2,
     'Returning to Evidence phase does not refetch photo without a user action',
   );
 
