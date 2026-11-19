@@ -6800,6 +6800,14 @@ try {
     'Dirty Inspection blocks Previous/Next field-work navigation during the autosave debounce window',
   );
   assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.activeElement?.hasAttribute('data-inspection-active-section-heading') === true;",
+    ),
+    false,
+    'Blocked dirty navigation never forces focus into a different Inspection section',
+  );
+  assertEqual(
     await elementValueXpath(sessionId, notesInput),
     'Window scratch',
     'Dirty Inspection answer survives cancelled field-work navigation before autosave',
@@ -6934,6 +6942,14 @@ try {
     sessionId,
     'xpath',
     "//*[@data-inspection-autosave-status][contains(normalize-space(),'All section changes saved')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.activeElement?.closest('[data-unit-dossier-navigation]') !== null;",
+    ),
+    true,
+    'Autosave acknowledgement does not steal keyboard focus from the current navigation link',
   );
   await waitForElement(
     sessionId,
