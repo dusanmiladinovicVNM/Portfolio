@@ -3253,12 +3253,66 @@ input:focus-visible {
   justify-self: start;
   min-height: 44px;
 }
+.inspection-evidence-overview-room .inspection-content-list li > button {
+  justify-self: start;
+  min-height: 44px;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+}
+.inspection-evidence-binary-preview {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #a8b99c;
+  border-radius: 12px;
+  background: #fff;
+}
+.inspection-evidence-binary-preview-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.inspection-evidence-binary-preview-heading > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+.inspection-evidence-binary-preview-heading small {
+  color: #62665d;
+}
+.inspection-evidence-binary-preview-heading button {
+  min-height: 44px;
+}
+.inspection-evidence-binary-image {
+  display: block;
+  max-width: 100%;
+  max-height: min(70vh, 680px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  justify-self: center;
+}
+.inspection-evidence-binary-preview > button {
+  min-height: 44px;
+  justify-self: start;
+}
 @media (max-width: 680px) {
   .inspection-evidence-overview {
     padding: 10px;
   }
-  .inspection-evidence-overview-room > button {
+  .inspection-evidence-overview-room > button,
+  .inspection-evidence-overview-room .inspection-content-list li > button,
+  .inspection-evidence-binary-preview > button,
+  .inspection-evidence-binary-preview-heading button {
     width: 100%;
+  }
+  .inspection-evidence-binary-preview {
+    padding: 10px;
   }
 }
 [data-inspection-stage-target]:focus-visible {
