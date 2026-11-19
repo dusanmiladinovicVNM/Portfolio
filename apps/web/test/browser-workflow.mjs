@@ -6822,6 +6822,14 @@ try {
       true,
       `Inspection phase navigation stays inside viewport ${width}px`,
     );
+    assertEqual(
+      await executeScript(
+        sessionId,
+        "const nav=document.querySelector('[data-inspection-stage-navigation]');const active=nav?.querySelector('[aria-current=\"step\"]');const status=document.querySelector('.inspection-workflow-current-summary');if(!nav||!active||!status)return false;const n=nav.getBoundingClientRect(),r=active.getBoundingClientRect();return r.height>=44&&r.left>=n.left-1&&r.right<=n.right+1&&status.textContent.includes('Schritt 2 von 5')&&(window.innerWidth>680||getComputedStyle(document.querySelector('.inspection-workflow-scroll-hint')).display!=='none');",
+      ),
+      true,
+      `Current Inspection stage and swipe guidance are accessible at ${width}px`,
+    );
   }
   await setWindowRect(sessionId, 1440, 1200);
 
@@ -6886,7 +6894,19 @@ try {
     'Inspect is the only visible task surface after starting',
   );
   const beforeStageFocusUrl = await currentUrl(sessionId);
-  await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
+  const evidenceStageButton = await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-stage='evidence']",
+  );
+  await executeScript(
+    sessionId,
+    "document.querySelector('[data-inspection-stage=\"evidence\"]').focus();return true;",
+  );
+  await webdriver(`/session/${sessionId}/element/${evidenceStageButton}/value`, {
+    method: 'POST',
+    body: { text: '\\uE007', value: ['\\uE007'] },
+  });
   await waitForScriptTruthy(
     sessionId,
     "return document.activeElement?.getAttribute('data-inspection-stage-target') === 'evidence';",
