@@ -7900,6 +7900,7 @@ try {
     'Inspection cannot be locked before canonical pre-lock review is opened',
   );
 
+  await clickXpath(sessionId, "//*[@data-inspection-stage='review_sign']");
   await clickXpath(
     sessionId,
     "//button[normalize-space()='Review before lock']",
@@ -7938,12 +7939,14 @@ try {
     'Current complete canonical review enables lock confirmation',
   );
 
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
   await typeXpath(sessionId, notesInput, 'Window scratch after review');
   await waitForElement(
     sessionId,
     'xpath',
     "//*[@data-inspection-autosave-status][contains(normalize-space(),'All section changes saved')]",
   );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='review_sign']");
   await waitForElement(
     sessionId,
     'xpath',
