@@ -4386,7 +4386,15 @@ summary:focus-visible {
 
 
 /* YEPP Unit Inspection listing: only the list entry surface is restyled. */
-.inspection-workspace-list { gap: 12px; }
+.inspection-workspace-list {
+  gap: 12px;
+  /* Prevent the new table's intrinsic min-content width from expanding its grid track. */
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+.inspection-workspace-list > * {
+  min-width: 0;
+}
 .inspection-yepp-list {
   padding: 15px 17px;
   border-radius: 6px;
@@ -4419,6 +4427,8 @@ summary:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 .inspection-yepp-table-scroll {
+  width: 100%;
+  min-width: 0;
   max-width: 100%;
   overflow-x: auto;
   border: 1px solid #dde1d7;
