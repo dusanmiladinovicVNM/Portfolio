@@ -7519,6 +7519,90 @@ try {
     evidenceAttachForm +
       "//button[normalize-space()='Attach exact version' and not(@disabled)]",
   );
+
+  // Stored-only DocumentVersion is a recoverable, canonical binary, NOT yet
+  // an Inspection Evidence relation. A room-keyed React remount must not
+  // lose its exact selection or let Room B attach Room A's staged binary.
+  const storedOnlyVersionId = await executeScript(
+    sessionId,
+    "return document.querySelector('select[aria-label=\"Inspection evidence Document version\"]')?.value || null;",
+  );
+  const storedOnlyDocumentId = await executeScript(
+    sessionId,
+    "return document.querySelector('select[aria-label=\"Inspection evidence Document\"]')?.value || null;",
+  );
+  assertEqual(
+    Boolean(storedOnlyVersionId && storedOnlyDocumentId),
+    true,
+    'Scoped upload provides an exact stored-only Document and version for recovery',
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
+  await clickXpath(
+    sessionId,
+    "//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='Kitchen']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[contains(@class,'inspection-section-form')]//h3[normalize-space()='Kitchen']",
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-inspection-stored-only-recovery]')===null;",
+    ),
+    true,
+    'Room B does not inherit Room A stored-only Evidence selection',
+  );
+  assertEqual(
+    await elementDisabledXpath(
+      sessionId,
+      evidenceAttachForm + "//button[normalize-space()='Attach exact version']",
+    ),
+    true,
+    'Room B cannot accidentally link Room A staged DocumentVersion',
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
+  await clickXpath(
+    sessionId,
+    "//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='General condition']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[contains(@class,'inspection-section-form')]//h3[normalize-space()='General condition']",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'Return from Room B restores exact Room A SectionInstance deep-link',
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
+  await waitForScriptTruthy(
+    sessionId,
+    `return document.querySelector('select[aria-label="Inspection evidence Document version"]')?.value === ${JSON.stringify(storedOnlyVersionId)} && document.querySelector('select[aria-label="Inspection evidence Document"]')?.value === ${JSON.stringify(storedOnlyDocumentId)};`,
+    'Room A recovers the exact stored-only DocumentVersion after remount',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-stored-only-recovery][contains(normalize-space(),'Stored-only Evidence restored for this exact room')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    evidenceAttachForm +
+      "//button[normalize-space()='Attach exact version' and not(@disabled)]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    scopedUploadsBefore + 1,
+    'Stored-only Room A recovery does not upload the binary again',
+  );
   await setInputValueXpath(
     sessionId,
     evidenceAttachForm + "//textarea[@name='caption']",
@@ -7532,6 +7616,14 @@ try {
     sessionId,
     'xpath',
     "//ul[contains(@class,'inspection-content-list')]//span[normalize-space()='Scoped field evidence']",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-inspection-stored-only-recovery]')===null;",
+    ),
+    true,
+    'Verified canonical Evidence relation clears the stored-only recovery marker',
   );
 
   await clickXpath(
