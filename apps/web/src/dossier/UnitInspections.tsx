@@ -42,7 +42,10 @@ import {
 } from '../presentation/format.js';
 import { InspectionCompletedOverview } from './InspectionCompletedOverview.js';
 import { InspectionFinalizationPanel } from './InspectionFinalizationPanel.js';
-import { InspectionFindingsEvidence } from './InspectionFindingsEvidence.js';
+import {
+  InspectionFindingsEvidence,
+  type StoredOnlyEvidenceVersion,
+} from './InspectionFindingsEvidence.js';
 import { InspectionOrchestrationPanel } from './InspectionOrchestrationPanel.js';
 import { InspectionWorkflowStepper } from './InspectionWorkflowStepper.js';
 import {
@@ -696,6 +699,11 @@ export function UnitInspections({
   const [bundleRevision, setBundleRevision] = useState(0);
   const [bundle, setBundle] = useState<InspectionBundleResponse | null>(null);
   const [bundleError, setBundleError] = useState<string | null>(null);
+  // Only verified stored-only version IDs live above the room-keyed editor.
+  // This cache is ephemeral, private to the open Inspection workspace, and
+  // never turns an uploaded binary into an Inspection Evidence relation.
+  const [storedOnlyBySection, setStoredOnlyBySection] =
+    useState<Readonly<Record<string, StoredOnlyEvidenceVersion>>>({});
   const [draft, setDraft] = useState<DraftByItem>({});
   const [touched, setTouched] = useState<TouchedByItem>({});
   const [inFlightSectionSaves, setInFlightSectionSaves] =
@@ -735,6 +743,12 @@ export function UnitInspections({
   const inspectionWritePendingRef = useRef(false);
   const activeInspectionIdRef = useRef(inspectionId);
   activeInspectionIdRef.current = inspectionId;
+
+  useEffect(() => {
+    // Reuse is allowed only inside this mounted Inspection workspace.
+    // Never pass an unlinked version from one Inspection to a different owner.
+    setStoredOnlyBySection({});
+  }, [inspectionId, unitId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -2159,6 +2173,31 @@ export function UnitInspections({
                 blockedByDirtySection={hasUnsavedChanges}
                 bundle={routeBundle}
                 key={`${routeBundle.inspection.id}:${selectedSectionInstance.id}`}
+                storedOnlyVersion={
+                  storedOnlyBySection[
+                    `${routeBundle.inspection.id}:${selectedSectionInstance.id}`
+                  ] ?? null
+                }
+                onStoredOnlyVersion={(version) => {
+                  if (activeInspectionIdRef.current !== routeBundle.inspection.id) return;
+                  const ownerKey =
+                    `${routeBundle.inspection.id}:${selectedSectionInstance.id}`;
+                  setStoredOnlyBySection((current) => ({
+                    ...current,
+                    [ownerKey]: version,
+                  }));
+                }}
+                onStoredOnlyAttached={(versionId) => {
+                  if (activeInspectionIdRef.current !== routeBundle.inspection.id) return;
+                  const ownerKey =
+                    `${routeBundle.inspection.id}:${selectedSectionInstance.id}`;
+                  setStoredOnlyBySection((current) => {
+                    if (current[ownerKey]?.versionId !== versionId) return current;
+                    const next = { ...current };
+                    delete next[ownerKey];
+                    return next;
+                  });
+                }}
                 onCanonicalBundle={(targetInspectionId, canonical) => {
                   if (activeInspectionIdRef.current !== targetInspectionId) return;
                   assertInspectionBundleOwner(targetInspectionId, unitId, canonical);
