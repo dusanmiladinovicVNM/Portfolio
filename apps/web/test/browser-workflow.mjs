@@ -7522,6 +7522,86 @@ try {
     "//*[@data-inspection-content-context-summary][contains(normalize-space(),'evidence item(s) belong to other sections')]",
   );
 
+  // Lost acknowledgement after a real canonical commit must not cause
+  // optimistic room navigation, repeated POST/PATCH or loss of local answers.
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextInspectionSectionSaveAfterCommit = true; return true;',
+  );
+  const sectionPatchCountBeforeLostAck = await executeScript(
+    sessionId,
+    'return window.__portfolioInspectionSectionPatchCount || 0;',
+  );
+  await typeXpath(sessionId, notesInput, 'Window scratch lost ack');
+  await clickXpath(sessionId, "//*[@data-inspection-save-continue]");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Intentional section-save acknowledgement loss.')]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'Save & continue never advances on a lost PATCH acknowledgement after commit',
+  );
+  assertEqual(
+    await elementValueXpath(sessionId, notesInput),
+    'Window scratch lost ack',
+    'Lost-ack Save & continue retains the local Inspection answer',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioInspectionSectionPatchCount || 0;',
+    ),
+    sectionPatchCountBeforeLostAck + 1,
+    'Lost-ack Save & continue attempts the section PATCH once',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 1650));
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioInspectionSectionPatchCount || 0;',
+    ),
+    sectionPatchCountBeforeLostAck + 1,
+    'Lost-ack Save & continue never blindly retries in the background',
+  );
+  // Explicit Save now against the canonical committed revision correctly
+  // returns 409, then existing destructive reload reconciles known server data.
+  await clickXpath(sessionId, "//button[normalize-space()='Save now']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'This section changed on the server. Your local answers are still visible.')]",
+  );
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Reload server version and discard local edits']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-autosave-status][contains(normalize-space(),'All section changes saved')]",
+  );
+  assertEqual(
+    await elementValueXpath(sessionId, notesInput),
+    'Window scratch lost ack',
+    'Lost acknowledgement recovery discovers canonical committed answer',
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'Reconciled lost acknowledgement does not resume an abandoned Continue intent',
+  );
+  // Restore established fixture value for subsequent lifecycle regression.
+  await typeXpath(sessionId, notesInput, 'Window scratch after held review');
+  await clickXpath(sessionId, "//button[normalize-space()='Save now']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-autosave-status][contains(normalize-space(),'All section changes saved')]",
+  );
+
   const sectionPatchCountBeforeConflict = await executeScript(
     sessionId,
     'return window.__portfolioInspectionSectionPatchCount || 0;',
