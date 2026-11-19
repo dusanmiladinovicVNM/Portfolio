@@ -6905,7 +6905,7 @@ try {
   );
   await webdriver(`/session/${sessionId}/element/${evidenceStageButton}/value`, {
     method: 'POST',
-    body: { text: '\\uE007', value: ['\\uE007'] },
+    body: { text: '\uE007', value: ['\uE007'] },
   });
   await waitForScriptTruthy(
     sessionId,
