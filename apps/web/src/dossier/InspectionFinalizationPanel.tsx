@@ -954,7 +954,18 @@ export function InspectionFinalizationPanel({
       <div className="section-heading">
         <div>
           <p className="eyebrow">{lifecycleHeading.eyebrow}</p>
-          <h3>{lifecycleHeading.title}</h3>
+          <h3
+            data-inspection-stage-target={
+              inspection.status === 'finalized'
+                ? 'report'
+                : inspection.status === 'in_progress' || inspection.status === 'locked'
+                  ? 'review_sign'
+                  : undefined
+            }
+            tabIndex={-1}
+          >
+            {lifecycleHeading.title}
+          </h3>
         </div>
         <span className="section-note">
           lifecycle v{inspection.version} · content r{inspection.contentRevision}

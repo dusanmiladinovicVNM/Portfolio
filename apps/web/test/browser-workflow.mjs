@@ -6730,6 +6730,19 @@ try {
     inspectionUrl,
     'Global Work queue navigates with canonical cross-Unit Property owner',
   );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-stage-navigation]//button[@data-inspection-stage='setup'][@aria-current='step']",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "const buttons=[...document.querySelectorAll('[data-inspection-stage-navigation] button[data-inspection-stage]')]; const crumb=document.querySelector('[aria-label=\"Inspection context\"]'); return buttons.length===5 && buttons.filter(b=>!b.disabled).length===1 && buttons[0].dataset.inspectionStage==='setup' && crumb?.textContent?.includes('UNIT-BRW') && crumb?.textContent?.includes('INS-BRW-001');",
+    ),
+    true,
+    'Five task phases and exact Unit/Inspection identity are visible in draft',
+  );
 
   for (const [label, instanceId] of [
     ['Hallway', inspectionHallwayInstanceId],
@@ -6784,6 +6797,14 @@ try {
       true,
       `Inspection Save & continue fits viewport ${width}px with accessible touch height`,
     );
+    assertEqual(
+      await executeScript(
+        sessionId,
+        "const nav=document.querySelector('[data-inspection-stage-navigation]');if(!nav)return false;const r=nav.getBoundingClientRect();const doc=document.documentElement;return r.width>0&&r.left>=-1&&r.right<=window.innerWidth+1&&doc.scrollWidth<=doc.clientWidth;",
+      ),
+      true,
+      `Inspection phase navigation stays inside viewport ${width}px`,
+    );
   }
   await setWindowRect(sessionId, 1440, 1200);
 
@@ -6834,6 +6855,48 @@ try {
     sessionId,
     'xpath',
     "//span[contains(@class,'status-chip')][normalize-space()='in_progress']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-stage-navigation]//button[@data-inspection-stage='inspect'][@aria-current='step']",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "const b=[...document.querySelectorAll('[data-inspection-stage-navigation] button')];return b.length===5 && b.filter(x=>!x.disabled).map(x=>x.dataset.inspectionStage).join(',')==='inspect,evidence,review_sign' && !b.some(x=>x.textContent.includes('✓'));",
+    ),
+    true,
+    'In-progress UI phases are navigable but do not falsely claim completion',
+  );
+  const beforeStageFocusUrl = await currentUrl(sessionId);
+  await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
+  await waitForScriptTruthy(
+    sessionId,
+    "return document.activeElement?.getAttribute('data-inspection-stage-target') === 'evidence';",
+    'Evidence phase focuses the mounted contextual Evidence heading',
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    beforeStageFocusUrl,
+    'Selecting Evidence does not change the canonical Inspection/room URL',
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='review_sign']");
+  await waitForScriptTruthy(
+    sessionId,
+    "return document.activeElement?.getAttribute('data-inspection-stage-target') === 'review_sign';",
+    'Review phase focuses existing canonical Review controls',
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
+  await waitForScriptTruthy(
+    sessionId,
+    "return document.activeElement?.getAttribute('data-inspection-stage-target') === 'inspect';",
+    'Inspect phase restores focus to the active room heading',
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    beforeStageFocusUrl,
+    'Phase navigation does not replace route-owned section identity',
   );
   await waitForElement(
     sessionId,
@@ -7001,6 +7064,16 @@ try {
     await elementDisabledXpath(sessionId, "//*[@data-inspection-save-continue]"),
     true,
     'Save & continue disables reentry until canonical acknowledgement',
+  );
+  assertEqual(
+    await elementDisabledXpath(sessionId, "//*[@data-inspection-stage='evidence']"),
+    true,
+    'Pending SectionInstance PATCH blocks switching to Evidence phase',
+  );
+  assertEqual(
+    await elementDisabledXpath(sessionId, "//*[@data-inspection-stage='review_sign']"),
+    true,
+    'Pending SectionInstance PATCH blocks switching to Review phase',
   );
   assertEqual(
     await executeScript(

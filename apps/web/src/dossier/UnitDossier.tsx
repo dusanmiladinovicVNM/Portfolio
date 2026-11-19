@@ -210,6 +210,7 @@ export function UnitDossier({
               propertyId={propertyId}
               setNavigationBlocker={setNavigationBlocker}
               unitId={unitId}
+              unitLabel={`Unit ${unit.unitNumber} · ${unit.code}`}
             />
           ) : null}
           {tab === 'timeline' ? <UnitTimeline api={api} unitId={unitId} /> : null}

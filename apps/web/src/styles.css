@@ -3028,10 +3028,26 @@ input:focus-visible {
   align-items: center;
   padding: 0 2px;
 }
-.inspection-detail-navigation > span {
-  color: #62665d;
+.inspection-context-trail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
   font-size: .78rem;
-  font-weight: 700;
+  line-height: 1.4;
+}
+.inspection-context-trail a {
+  color: #455944;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.inspection-context-trail strong {
+  overflow-wrap: anywhere;
+}
+.inspection-detail-navigation > .back-link {
+  margin: 0;
+  flex: 0 0 auto;
 }
 .inspection-workflow-stepper {
   overflow-x: auto;
@@ -3039,32 +3055,70 @@ input:focus-visible {
 }
 .inspection-workflow-stepper ol {
   display: grid;
-  grid-template-columns: repeat(5, minmax(105px, 1fr));
+  grid-template-columns: repeat(5, minmax(116px, 1fr));
   gap: 8px;
-  min-width: 585px;
+  min-width: 640px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .inspection-workflow-step {
   display: flex;
-  gap: 9px;
-  align-items: center;
-  padding: 10px 11px;
+  min-width: 0;
   border: 1px solid #ded8cd;
-  border-radius: 10px;
+  border-radius: 8px;
   background: #faf8f3;
   color: #6a6e65;
+}
+.inspection-workflow-step > button {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 64px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: .74rem;
+  line-height: 1.3;
+  text-align: left;
+}
+.inspection-workflow-step > button strong {
+  overflow-wrap: anywhere;
+}
+.inspection-workflow-step > button:disabled {
+  cursor: default;
+  opacity: .7;
+}
+.inspection-workflow-step > button:focus-visible,
+.inspection-context-trail a:focus-visible {
+  outline: 3px solid #547126;
+  outline-offset: 2px;
 }
 .inspection-workflow-step-current {
   border-color: #899180;
   background: #f0f3eb;
   color: #263126;
 }
-.inspection-workflow-step-complete {
-  border-color: #b9c9b5;
-  background: #f4f7f1;
-  color: #365f3d;
+.inspection-workflow-step-previous {
+  border-color: #d3d9cc;
+  background: #f5f6f2;
+  color: #4b5549;
+}
+.inspection-workflow-navigation-hint {
+  margin: 8px 2px 0;
+  color: #85533b;
+  font-size: .75rem;
+}
+[data-inspection-stage-target] {
+  scroll-margin-top: 20px;
+}
+[data-inspection-stage-target]:focus-visible {
+  outline: 3px solid #547126;
+  outline-offset: 4px;
 }
 .inspection-workflow-step-number {
   display: inline-grid;

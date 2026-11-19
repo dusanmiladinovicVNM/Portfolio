@@ -31,7 +31,7 @@ import {
   type PortfolioApi,
 } from '../api/portfolio-api.js';
 import { WorkspaceLink } from '../navigation/WorkspaceLink.js';
-import { unitRoute } from '../navigation/workspace-route.js';
+import { propertyRoute, unitRoute } from '../navigation/workspace-route.js';
 import type {
   NavigateWorkspace,
   SetNavigationBlocker,
@@ -45,6 +45,11 @@ import { InspectionFinalizationPanel } from './InspectionFinalizationPanel.js';
 import { InspectionFindingsEvidence } from './InspectionFindingsEvidence.js';
 import { InspectionOrchestrationPanel } from './InspectionOrchestrationPanel.js';
 import { InspectionWorkflowStepper } from './InspectionWorkflowStepper.js';
+import {
+  inspectionWorkflowCurrentStep,
+  inspectionWorkflowStageAvailable,
+  type InspectionWorkflowStepId,
+} from './inspection-workflow.js';
 import { assertInspectionBundleOwner } from './inspection-content-owner.js';
 import {
   buildInspectionRequiredProgress,
@@ -165,6 +170,7 @@ interface UnitInspectionsProps {
   readonly canGenerateFinalReport: boolean;
   readonly propertyId: string;
   readonly unitId: string;
+  readonly unitLabel: string;
   readonly asOf: string;
   readonly inspectionId?: string | undefined;
   readonly inspectionSectionInstanceId?: string | undefined;
@@ -674,6 +680,7 @@ export function UnitInspections({
   canGenerateFinalReport,
   propertyId,
   unitId,
+  unitLabel,
   asOf,
   inspectionId,
   inspectionSectionInstanceId,
@@ -706,6 +713,11 @@ export function UnitInspections({
   ] = useState<number | null>(null);
   const [inspectionWritePending, setInspectionWritePending] = useState(false);
   const [continueIntent, setContinueIntent] = useState<InspectionContinueIntent | null>(null);
+  const [stageSelection, setStageSelection] = useState<{
+    readonly inspectionId: string;
+    readonly sectionInstanceId: string | undefined;
+    readonly stage: InspectionWorkflowStepId;
+  } | null>(null);
   const continueIntentRef = useRef<InspectionContinueIntent | null>(null);
   const inspectionWritePendingRef = useRef(false);
   const activeInspectionIdRef = useRef(inspectionId);
@@ -783,6 +795,18 @@ export function UnitInspections({
     bundle.inspection.id === inspectionId
       ? bundle
       : null;
+
+  const activeStage =
+    routeBundle === null
+      ? null
+      : stageSelection?.inspectionId === routeBundle.inspection.id &&
+          stageSelection.sectionInstanceId === inspectionSectionInstanceId &&
+          inspectionWorkflowStageAvailable(
+            routeBundle.inspection.status,
+            stageSelection.stage,
+          )
+        ? stageSelection.stage
+        : inspectionWorkflowCurrentStep(routeBundle.inspection.status);
 
   const selectedListInspection = useMemo(
     () =>
@@ -1062,6 +1086,34 @@ export function UnitInspections({
     hasUnsavedChanges,
   });
 
+  // Phase changes only move focus; mounted forms and write state stay intact.
+  const stageNavigationBlocked =
+    hasUnsavedChanges ||
+    sectionWritePending ||
+    inspectionWritePending ||
+    continueIntent !== null ||
+    conflict ||
+    saveError !== null;
+
+  function selectInspectionStage(stage: InspectionWorkflowStepId) {
+    if (
+      !routeBundle ||
+      !inspectionWorkflowStageAvailable(routeBundle.inspection.status, stage) ||
+      (stageNavigationBlocked && stage !== activeStage)
+    ) return;
+    const target = document.querySelector<HTMLElement>(
+      '[data-inspection-stage-target="' + stage + '"]',
+    );
+    if (!target) return;
+    setStageSelection({
+      inspectionId: routeBundle.inspection.id,
+      sectionInstanceId: inspectionSectionInstanceId,
+      stage,
+    });
+    // Explicit clicks only: never steal focus on autosave or async rerender.
+    target.focus({ preventScroll: true });
+    target.scrollIntoView({ block: 'start' });
+  }
   const inspectionWriteGate: InspectionWriteGate = {
     pending: inspectionWritePending,
     tryStart: () => {
@@ -1466,6 +1518,27 @@ export function UnitInspections({
     <div className={'inspection-workspace' + (!inspectionId ? ' inspection-workspace-list' : '')}>
       {inspectionId ? (
         <div className="inspection-detail-navigation">
+          <nav aria-label="Inspection context" className="inspection-context-trail">
+            <WorkspaceLink
+              className="inspection-context-link"
+              navigate={navigate}
+              route={propertyRoute(propertyId, asOf)}
+            >
+              Property
+            </WorkspaceLink>
+            <span aria-hidden="true">›</span>
+            <WorkspaceLink
+              className="inspection-context-link"
+              navigate={navigate}
+              route={unitRoute(propertyId, unitId, asOf, 'overview')}
+            >
+              {unitLabel}
+            </WorkspaceLink>
+            <span aria-hidden="true">›</span>
+            <strong aria-current="page">
+              {routeBundle?.inspection.code ?? selectedListInspection?.code ?? 'Inspection'}
+            </strong>
+          </nav>
           <WorkspaceLink
             className="back-link"
             navigate={navigate}
@@ -1473,7 +1546,6 @@ export function UnitInspections({
           >
             ← All Inspections
           </WorkspaceLink>
-          <span>Focused Inspection workspace</span>
         </div>
       ) : null}
 
@@ -1622,16 +1694,23 @@ export function UnitInspections({
               <p className="eyebrow">
                 {formatDetailKey(routeBundle.inspection.inspectionType)}
               </p>
-              <h2>{routeBundle.inspection.code}</h2>
+              <h2
+                data-inspection-stage-target={
+                  routeBundle.inspection.status === 'draft' ? 'setup' : undefined
+                }
+                tabIndex={-1}
+              >
+                {routeBundle.inspection.code}
+              </h2>
               <p className="muted">{routeBundle.schema.title}</p>
             </div>
             <span className="status-chip">{routeBundle.inspection.status}</span>
           </div>
 
           <InspectionWorkflowStepper
-            requiredResponsesComplete={Boolean(
-              requiredProgress?.complete && !hasUnsavedChanges,
-            )}
+            navigationBlocked={stageNavigationBlocked}
+            onSelectStage={selectInspectionStage}
+            selectedStage={activeStage}
             status={routeBundle.inspection.status}
           />
 
@@ -1844,6 +1923,7 @@ export function UnitInspections({
                     <h3
                       className="inspection-active-section-heading"
                       data-inspection-active-section-heading
+                      data-inspection-stage-target="inspect"
                       ref={activeSectionHeadingRef}
                       tabIndex={-1}
                     >
