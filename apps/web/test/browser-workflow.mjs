@@ -6306,6 +6306,55 @@ try {
     'xpath',
     "//*[contains(normalize-space(),'The item set is current canonical state')][contains(normalize-space(),'does not rewind the Work set')]",
   );
+
+  await clickXpath(
+    sessionId,
+    "//*[@data-operational-work-queue]//button[@data-work-filter='urgent']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    "return document.querySelector('[data-work-filter=\"urgent\"]')?.getAttribute('aria-pressed') === 'true';",
+    'YEPP quick-filter urgency has explicit selected state',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-operational-work-queue]//article[@data-work-attention='overdue']",
+    ),
+    false,
+    'Urgent quick filter excludes overdue items but does not recode attention',
+  );
+  await clickXpath(
+    sessionId,
+    "//*[@data-operational-work-queue]//button[@data-work-filter='all']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-operational-work-queue]//article[@data-work-domain='inspection'][.//strong[normalize-space()='INS-BRW-001']]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "const link = [...document.querySelectorAll('[data-operational-work-queue] .work-queue-open')].find(x => x.textContent.trim() === 'Open Inspection'); return Boolean(link?.getAttribute('aria-label')?.includes('INS-BRW-001'));",
+    ),
+    true,
+    'Compact Work action retains exact Inspection ID in accessible name',
+  );
+
+  for (const width of [320, 375, 390, 768]) {
+    await setWindowRect(sessionId, width, 900);
+    assertEqual(
+      await executeScript(
+        sessionId,
+        "const root = document.querySelector('[data-operational-work-queue]'); const btn = root?.querySelector('.work-queue-open'); const rect = btn?.getBoundingClientRect(); return Boolean(rect && rect.width > 0 && rect.left >= -1 && rect.right <= window.innerWidth + 1 && document.documentElement.scrollWidth <= document.documentElement.clientWidth);",
+      ),
+      true,
+      'YEPP Work stays within viewport ' + width + 'px, including task action',
+    );
+  }
+  await setWindowRect(sessionId, 1440, 1200);
+
   await selectOptionXpath(
     sessionId,
     "//*[@data-operational-work-queue]//select[ancestor::label[contains(normalize-space(),'Domain')]]",
