@@ -716,6 +716,7 @@ export function UnitInspections({
   const [stageSelection, setStageSelection] = useState<{
     readonly inspectionId: string;
     readonly sectionInstanceId: string | undefined;
+    readonly status: InspectionResponseDto['status'];
     readonly stage: InspectionWorkflowStepId;
   } | null>(null);
   const continueIntentRef = useRef<InspectionContinueIntent | null>(null);
@@ -812,6 +813,7 @@ export function UnitInspections({
       ? null
       : stageSelection?.inspectionId === routeBundle.inspection.id &&
           stageSelection.sectionInstanceId === inspectionSectionInstanceId &&
+          stageSelection.status === routeBundle.inspection.status &&
           inspectionWorkflowStageAvailable(
             routeBundle.inspection.status,
             stageSelection.stage,
@@ -1129,6 +1131,7 @@ export function UnitInspections({
     setStageSelection({
       inspectionId: routeBundle.inspection.id,
       sectionInstanceId: inspectionSectionInstanceId,
+      status: routeBundle.inspection.status,
       stage,
     });
   }
@@ -2206,6 +2209,7 @@ export function UnitInspections({
               setStageSelection({
                 inspectionId: routeBundle.inspection.id,
                 sectionInstanceId,
+                status: routeBundle.inspection.status,
                 stage: 'inspect',
               });
               pendingStageFocusRef.current = {
