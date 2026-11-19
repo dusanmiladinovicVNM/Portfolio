@@ -1,11 +1,30 @@
 # Portfolio — UX-0 audit, task map and target information architecture
 
-**Status:** Proposed design, not implementation approval  
+**Status:** Product direction approved by owner 2026-11-19; implementation acceptance and hosted UAT remain separate  
 **Epic:** [#124](https://github.com/dusanmiladinovicVNM/Portfolio/issues/124)  
 **Audited base:** main at 316544ec0f76baee94efbeed7d344939f4b81f0e (2026-11-18)  
 **Evidence:** repository source + [hosted UAT baseline](../uat/hosted-acceptance-baseline-2026-10-30.md) + [risk-based production acceptance](../uat/risk-based-production-acceptance-2026-11-18.md) + [domain invariants](../INVARIANTS.md). No new direct user-observation study was performed.
 
 ## 1. Decision record
+
+### Approved product decisions — 2026-11-19
+
+The product owner explicitly approved the following direction for Epic #124. These are **product/presentation decisions**, not proof of successful UAT, new permission grants, changes to API/domain state, or authorization to bypass release gates.
+
+| ID | Approved decision | Non-negotiable implementation interpretation |
+| --- | --- | --- |
+| UX-D01 | **Task-first navigation** | Work/assigned next action takes priority; Property/Unit dossier remains accessible with exact object identity and deep links. No second router or unconditional global directory for restricted Inspector actors. |
+| UX-D02 | **Five guided Inspection stages** | Setup → Inspect rooms/sections → Evidence summary → Review & Sign → Report. These are UX stages; canonical lifecycle remains draft → in_progress → locked → finalized, with cancelled terminal. Review occurs before lock; Sign only after lock. Navigation among legally available stages is permitted. |
+| UX-D03 | **Photo and Finding in active room + central Evidence review** | Capture directly at the exact room/item, then aggregate linked evidence for review. A stored binary is never treated as attached until its exact canonical DocumentVersion relation is confirmed. |
+| UX-D04 | **Assigned Inspector may lock** | Preserve existing server capability for assigned Inspector to create/self-assign where permitted, start, edit, review, lock and sign. Unlock and finalize remain manager/admin-only (when otherwise authorized), and final PDF generation requires authorized manager/admin. No permission may be inferred from a UI role flag alone. |
+| UX-D05 | **Next only after confirmed save** | For an edited section, `Save & continue` or equivalent awaits canonical, matching PATCH acknowledgement before changing room/stage. Pending/failed/conflicted/ambiguous writes must block advancing without discarding edits. Plain Previous/Next are navigation, not implicit save; existing dirty guard remains until replacement task flow is proven and reviewed. |
+| UX-D06 | **Primary language: Swiss German (`de-CH`)** | Plan German labels and field messaging for new task surfaces; design translation keys for later languages. Do not translate API identifiers, persisted enum values, machine status codes, exact contracts, or browser locators casually. English remains in existing production screens until a focused localization PR is tested. |
+| UX-D07 | **Staged PR merge + UAT** | Documentation/design approval precedes reviewed runtime merges. Keep UX-2A (#132) independent of UX-2B (#133) until verified integrated diff and CI. Real assistive-technology and mobile UAT remain tracked acceptance gates; a passing browser mock is not equivalent. |
+
+**Separate operational choice (Issue #129):** GitHub Actions alone, e-mail for alerts. This is **an explicitly accepted tooling restriction**, not acceptance of an actual 15-minute monitoring guarantee. Github's scheduled runs have observed multi-hour gaps. Retrospective gap detection/catch-up and GitHub notification configuration belong to a separate operational PR; absent an independent scheduler, the system cannot guarantee timely dead-man notification while no Actions job starts.
+
+**Change control:** Any proposal to alter UX-D01–D07 requires a new owner decision and review of impact. Until UX-3 implements the approved safe Continue action and `de-CH` UI, #132/#133 remain targeted accessibility/focus corrections, not a claim that these product workflows are already live.
+
 
 **Recommendation:** Retain React/TypeScript, existing typed application API, canonical PostgreSQL, URL-owned navigation, Unit route identities, section autosave/CAS, binary ownership, finalized snapshots, and existing domain commands. Redesign the presentation hierarchy and task transitions, beginning with Inspection, and introduce only a small number of shared UX primitives.
 
@@ -149,7 +168,7 @@ No branch should combine a redesign with a silent API/domain migration. If a sin
 
 ## 9. Acceptance rubric — proposed targets, not measured facts
 
-Before implementing UX-2, measure baseline with 3 role personas, 5 representative tasks, task duration, number of transitions, success without technical help and recovery after interruption. Record failures and time-on-task by device.
+Prior to broad UI rollout, collect a reproducible baseline with 3 role personas, 5 representative tasks, task duration, number of transitions, success without technical help and recovery after interruption. Record failures and time-on-task by device. Narrow UX-2A/UX-2B safety fixes were allowed before the full baseline; do not retroactively claim that baseline was measured.
 
 Suggested design gates:
 - All target tasks show a single **primary** next action and a readable current object and state; rare actions are secondary/Advanced.
