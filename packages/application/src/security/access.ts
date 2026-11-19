@@ -88,8 +88,21 @@ export async function resolveActor(
   return actor;
 }
 
+export function actorHasCapability(actor: Actor, capability: Capability): boolean {
+  return ROLE_CAPABILITIES[actor.role].has(capability);
+}
+
+/**
+ * Mirrors the existing server-side Inspection lifecycle guard.
+ * An Inspector can lock an assigned Inspection and register signatures, but
+ * only Manager/Admin may unlock or finalize it.
+ */
+export function canControlInspectionLifecycle(actor: Actor): boolean {
+  return actorHasCapability(actor, 'inspections:write') && actor.role !== 'inspector';
+}
+
 export function requireCapability(actor: Actor, capability: Capability): void {
-  if (!ROLE_CAPABILITIES[actor.role].has(capability)) {
+  if (!actorHasCapability(actor, capability)) {
     throw new ApplicationError('FORBIDDEN', 'The current user is not allowed to perform this operation.');
   }
 }
