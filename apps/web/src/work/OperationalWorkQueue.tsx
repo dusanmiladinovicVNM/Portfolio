@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { operationalWorkPath } from '../api/paths.js';
 import type { PortfolioApi } from '../api/portfolio-api.js';
 import { WorkspaceLink } from '../navigation/WorkspaceLink.js';
+import { isWorkspaceAsOf, workRoute } from '../navigation/workspace-route.js';
 import type { NavigateWorkspace } from '../navigation/use-workspace-navigation.js';
 import {
   formatDetailKey,
@@ -19,7 +20,9 @@ import {
   workItemActionLabel,
   workItemCode,
   workItemKey,
+  workItemHeadline,
   workItemRoute,
+  workItemSummary,
   workOccupancyReasonLabel,
 } from './work-presentation.js';
 
@@ -133,57 +136,63 @@ export function OperationalWorkQueue({
         ? 'Current operational work across Inspections, Maintenance, Service and occupancy/contracts.'
         : 'Current operational work across the Portfolio.';
 
+  const quickFilters = [
+    { value: 'all', label: 'All', count: counts.all },
+    { value: 'overdue', label: 'Overdue', count: counts.overdue },
+    { value: 'urgent', label: 'Urgent', count: counts.urgent },
+    { value: 'today', label: 'Today', count: counts.today },
+  ] as const;
+
   return (
     <>
-      <header className="workspace-header">
+      <header className="workspace-header work-queue-header">
         <div>
           <p className="eyebrow">Operations</p>
           <h1>Work</h1>
-          <p className="header-note">
+          <p className="header-note work-queue-intro">
             {queueScope} The item set is current canonical state. Queue date only
             derives dated attention for scheduled Inspection, Service and
             occupancy work; it does not rewind the Work set.
           </p>
         </div>
-        <div className="work-queue-date">
-          <span>Queue date</span>
-          <strong>{formatSwissDate(asOf)}</strong>
-        </div>
+        <label className="work-queue-date">
+          As of · attention date
+          <input
+            aria-label="Work queue attention date"
+            onChange={(event) => {
+              const nextAsOf = event.currentTarget.value;
+              if (!isWorkspaceAsOf(nextAsOf)) return;
+              navigate(workRoute(nextAsOf), { replace: true });
+            }}
+            type="date"
+            value={asOf}
+          />
+        </label>
       </header>
 
-      <div className="work-queue-stack" data-operational-work-queue>
-        <section className="work-queue-metrics" aria-label="Operational Work summary">
-          <div>
-            <span>Active work</span>
-            <strong>{counts.all}</strong>
-          </div>
-          <div>
-            <span>Urgent</span>
-            <strong>{counts.urgent}</strong>
-          </div>
-          <div>
-            <span>Overdue</span>
-            <strong>{counts.overdue}</strong>
-          </div>
-          <div>
-            <span>Today</span>
-            <strong>{counts.today}</strong>
-          </div>
-        </section>
-
-        <section className="panel work-queue-panel">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Canonical operational read model</p>
-              <h2>Active work</h2>
-              <p className="muted">
-                Attention is derived for presentation only. Lifecycle, priority,
-                assignment and contract state remain owned by their source domains.
-              </p>
-            </div>
-            <span className="section-note">
-              current work · queue date {formatSwissDate(asOf)}
-            </span>
+      <section className="work-queue-stack" data-operational-work-queue>
+        <div className="work-queue-toolbar">
+          <div
+            aria-label="Work attention quick filters"
+            className="work-queue-quick-filters"
+            role="group"
+          >
+            {quickFilters.map((filter) => (
+              <button
+                aria-pressed={attentionFilter === filter.value}
+                className={
+                  'work-queue-filter-pill' +
+                  (attentionFilter === filter.value ? ' work-queue-filter-pill-active' : '')
+                }
+                data-work-filter={filter.value}
+                key={filter.value}
+                onClick={() => setAttentionFilter(filter.value)}
+                type="button"
+              >
+                {filter.label}
+                <span>{items === null ? '—' : filter.count}</span>
+              </button>
+            ))}
           </div>
 
           <div className="work-queue-filters">
@@ -195,20 +204,18 @@ export function OperationalWorkQueue({
                 }
                 value={domainFilter}
               >
-                <option value="all">All work</option>
+                <option value="all">All work types</option>
                 <option value="inspection">Inspections</option>
                 <option value="maintenance">Maintenance</option>
                 <option value="service">Service</option>
-                <option value="occupancy">Occupancy & contracts</option>
+                <option value="occupancy">Occupancy &amp; contracts</option>
               </select>
             </label>
             <label>
               Attention
               <select
                 onChange={(event) =>
-                  setAttentionFilter(
-                    event.currentTarget.value as WorkAttentionFilter,
-                  )
+                  setAttentionFilter(event.currentTarget.value as WorkAttentionFilter)
                 }
                 value={attentionFilter}
               >
@@ -220,6 +227,23 @@ export function OperationalWorkQueue({
                 ))}
               </select>
             </label>
+          </div>
+        </div>
+
+        <div className="work-queue-panel">
+          <div className="work-queue-panel-heading">
+            <div>
+              <h2>Active work</h2>
+              <p className="muted">
+                {items === null
+                  ? 'Loading canonical work items…'
+                  : visibleItems.length === items.length
+                    ? String(items.length) + ' current tasks'
+                    : String(visibleItems.length) + ' of ' + String(items.length) + ' current tasks'}
+                {' · '}Attention reflects {formatSwissDate(asOf)}.
+              </p>
+            </div>
+            <small>Only authorized current items are listed.</small>
           </div>
 
           {error ? <p className="form-error" role="alert">{error}</p> : null}
@@ -245,17 +269,54 @@ export function OperationalWorkQueue({
                   key={workItemKey(item)}
                 >
                   <div className="work-queue-card-primary">
-                    <span
-                      className={`work-attention work-attention-${item.attention}`}
-                    >
+                    <span className={'work-attention work-attention-' + item.attention}>
                       {workAttentionLabel(item.attention)}
                     </span>
-                    <div>
-                      <strong>{workItemCode(item)}</strong>
-                      <small>{workDomainLabel(item.kind)}</small>
+                    <div className="work-queue-card-copy">
+                      <strong className="work-queue-card-title">
+                        {workItemHeadline(item)}
+                      </strong>
+                      <small className="work-queue-card-context">
+                        {locationLabel(item)}
+                      </small>
+                      <div className="work-queue-card-summary">
+                        <strong>{workItemCode(item)}</strong>
+                        <span>{workItemSummary(item)}</span>
+                        {item.kind === 'inspection' ? (
+                          <span>{assignedLabel(item)}</span>
+                        ) : null}
+                        {item.kind === 'service' ? (
+                          <span>{item.assetName}</span>
+                        ) : null}
+                        {item.kind === 'occupancy' && item.agreementCode === null ? (
+                          <span>No covering agreement</span>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
 
+                  <div className="work-queue-card-action">
+                    <span className="status-chip">
+                      {item.kind === 'inspection'
+                        ? formatDetailKey(item.inspectionStatus)
+                        : item.kind === 'maintenance'
+                          ? formatDetailKey(item.priority)
+                          : item.kind === 'service'
+                            ? formatSwissDate(item.dueOn)
+                            : workOccupancyReasonLabel(item.reason)}
+                    </span>
+                    <WorkspaceLink
+                      ariaLabel={workItemActionLabel(item) + ' ' + workItemCode(item)}
+                      className="button-secondary work-queue-open"
+                      navigate={navigate}
+                      route={workItemRoute(item, asOf)}
+                    >
+                      {workItemActionLabel(item)}
+                    </WorkspaceLink>
+                  </div>
+
+                  <details className="work-queue-card-extra">
+                    <summary>Task details</summary>
                   <dl>
                     <div>
                       <dt>Context</dt>
@@ -356,32 +417,13 @@ export function OperationalWorkQueue({
                       </>
                     ) : null}
                   </dl>
-
-                  <div className="work-queue-card-action">
-                    <span className="status-chip">
-                      {item.kind === 'inspection'
-                        ? formatDetailKey(item.inspectionStatus)
-                        : item.kind === 'maintenance'
-                          ? formatDetailKey(item.priority)
-                          : item.kind === 'service'
-                            ? formatSwissDate(item.dueOn)
-                            : workOccupancyReasonLabel(item.reason)}
-                    </span>
-
-                    <WorkspaceLink
-                      className="button-secondary work-queue-open"
-                      navigate={navigate}
-                      route={workItemRoute(item, asOf)}
-                    >
-                      {workItemActionLabel(item)}
-                    </WorkspaceLink>
-                  </div>
+                  </details>
                 </article>
               ))}
             </div>
           ) : null}
-        </section>
-      </div>
+        </div>
+      </section>
     </>
   );
 }
