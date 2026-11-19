@@ -800,6 +800,64 @@ export function UnitInspections({
   );
   activeSectionIdRef.current = selectedSectionInstance?.id;
 
+  const activeSectionHeadingRef = useRef<HTMLHeadingElement>(null);
+  const firstInspectionIdRef = useRef(inspectionId);
+  const lastPresentedSectionKeyRef = useRef<string | null>(null);
+  const hasPresentedFirstSectionRef = useRef(false);
+  const activeSectionFocusKey =
+    routeBundle && selectedSection && selectedSectionInstance
+      ? inspectionSectionOperationKey(
+          routeBundle.inspection.id,
+          selectedSectionInstance.id,
+        )
+      : null;
+
+  useEffect(() => {
+    if (
+      activeSectionFocusKey &&
+      inspectionSectionInstanceId !== selectedSectionInstance?.id
+    ) {
+      // Wait for the existing route canonicalizer before focusing a
+      // missing/stale SectionInstance fallback.
+      return;
+    }
+    if (!activeSectionFocusKey) {
+      // Returning to the list must allow a later selection of the same
+      // Inspection/room to receive focus again.
+      if (!inspectionId) lastPresentedSectionKeyRef.current = null;
+      return;
+    }
+
+    const previousKey = lastPresentedSectionKeyRef.current;
+    lastPresentedSectionKeyRef.current = activeSectionFocusKey;
+    if (previousKey === activeSectionFocusKey) return;
+
+    // The outer application shell already focuses its h1 for an initial
+    // direct-link load. Do not steal it after the bundle fetch resolves.
+    if (!hasPresentedFirstSectionRef.current) {
+      hasPresentedFirstSectionRef.current = true;
+      if (inspectionId === firstInspectionIdRef.current) return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      if (
+        activeInspectionIdRef.current !== inspectionId ||
+        activeSectionIdRef.current !== selectedSectionInstance?.id
+      ) {
+        return;
+      }
+      // A route change is the only trigger: PATCH responses, autosave,
+      // ordinary keystrokes and a blocked navigation keep focus unchanged.
+      activeSectionHeadingRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    activeSectionFocusKey,
+    inspectionId,
+    inspectionSectionInstanceId,
+    selectedSectionInstance?.id,
+  ]);
+
   const selectedSectionRevision =
     routeBundle && selectedSectionInstance
       ? sectionRevision(routeBundle, selectedSectionInstance.id)
@@ -1575,7 +1633,12 @@ export function UnitInspections({
                     <p className="eyebrow">
                       Section revision {currentRevision}
                     </p>
-                    <h3>
+                    <h3
+                      className="inspection-active-section-heading"
+                      data-inspection-active-section-heading
+                      ref={activeSectionHeadingRef}
+                      tabIndex={-1}
+                    >
                       {selectedSectionInstance
                         ? sectionInstanceTitle(
                             selectedSection,

@@ -6628,6 +6628,11 @@ try {
       `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${instanceId}&asOf=2025-06-30`,
       `Inspection ${label} section-instance deep-link`,
     );
+    await waitForScriptTruthy(
+      sessionId,
+      `return document.activeElement?.matches('[data-inspection-active-section-heading]') && document.activeElement?.textContent?.trim() === ${JSON.stringify(label)};`,
+      `Inspection ${label} section navigation focuses the active heading`,
+    );
   }
 
   await clickXpath(
@@ -6659,6 +6664,11 @@ try {
     `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${inspectionHallwayInstanceId}&asOf=2025-06-30`,
     'Next field-work navigation preserves exact SectionInstance deep-link',
   );
+  await waitForScriptTruthy(
+    sessionId,
+    "return document.activeElement?.matches('[data-inspection-active-section-heading]') && document.activeElement.textContent.trim() === 'Hallway';",
+    'Next Inspection section navigates focus to Hallway heading',
+  );
   await clickXpath(
     sessionId,
     "//*[@data-inspection-field-toolbar]//a[normalize-space()='← Previous']",
@@ -6672,6 +6682,11 @@ try {
     await currentUrl(sessionId),
     inspectionUrl,
     'Previous field-work navigation returns to the exact prior SectionInstance',
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    "return document.activeElement?.matches('[data-inspection-active-section-heading]') && document.activeElement.textContent.trim() === 'General condition';",
+    'Previous Inspection section navigates focus to General condition heading',
   );
 
   await clickXpath(
@@ -6799,6 +6814,14 @@ try {
     await currentUrl(sessionId),
     inspectionUrl,
     'Dirty Inspection blocks Previous/Next field-work navigation during the autosave debounce window',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.activeElement?.hasAttribute('data-inspection-active-section-heading') === true;",
+    ),
+    false,
+    'Blocked dirty navigation never forces focus into a different Inspection section',
   );
   assertEqual(
     await elementValueXpath(sessionId, notesInput),
@@ -6935,6 +6958,14 @@ try {
     sessionId,
     'xpath',
     "//*[@data-inspection-autosave-status][contains(normalize-space(),'All section changes saved')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.activeElement?.closest('[data-unit-dossier-navigation]') !== null;",
+    ),
+    true,
+    'Autosave acknowledgement does not steal keyboard focus from the current navigation link',
   );
   await waitForElement(
     sessionId,
