@@ -6743,6 +6743,23 @@ try {
     true,
     'Five task phases and exact Unit/Inspection identity are visible in draft',
   );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "const panel=document.querySelector('[data-inspection-stage-panel=\"setup\"]');const form=document.querySelector('[data-inspection-stage-panel=\"inspect\"]');return panel&&!panel.hidden&&form?.hidden===true&&document.querySelector('.inspection-layout')?.hidden===true;",
+    ),
+    true,
+    'Draft Setup is visible; inactive room and Evidence forms stay mounted but hidden',
+  );
+
+  // Guided workflow starts before accessing room sections. Draft-only
+  // navigation belonged to the old all-at-once editor.
+  await clickXpath(sessionId, "//button[normalize-space()='Start Inspection']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//span[contains(@class,'status-chip')][normalize-space()='in_progress']",
+  );
 
   for (const [label, instanceId] of [
     ['Hallway', inspectionHallwayInstanceId],
@@ -6847,15 +6864,6 @@ try {
     'Previous Inspection section navigates focus to General condition heading',
   );
 
-  await clickXpath(
-    sessionId,
-    "//button[normalize-space()='Start Inspection']",
-  );
-  await waitForElement(
-    sessionId,
-    'xpath',
-    "//span[contains(@class,'status-chip')][normalize-space()='in_progress']",
-  );
   await waitForElement(
     sessionId,
     'xpath',
