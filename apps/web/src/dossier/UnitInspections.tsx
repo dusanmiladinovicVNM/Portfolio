@@ -1754,6 +1754,11 @@ export function UnitInspections({
             </span>
           </details>
 
+          <div
+            className="inspection-stage-panel"
+            data-inspection-stage-panel="setup"
+            hidden={activeStage !== 'setup'}
+          >
           {routeBundle.inspection.status === 'draft' ? (
             <div className="inspection-start-callout">
               <div>
@@ -1770,13 +1775,16 @@ export function UnitInspections({
               </button>
             </div>
           ) : null}
+          </div>
 
-          {routeBundle.inspection.status === 'finalized' ? (
-            <InspectionCompletedOverview bundle={routeBundle} />
-          ) : (
+          {routeBundle.inspection.status !== 'finalized' ? (
             <>
           {requiredProgress ? (
             <div
+              className="inspection-stage-progress"
+              hidden={activeStage !== 'inspect' && routeBundle.inspection.status !== 'cancelled'}
+            >
+              <div
               className={`inspection-progress-card ${
                 requiredProgress.complete
                   ? 'inspection-progress-card-complete'
@@ -1813,13 +1821,22 @@ export function UnitInspections({
                         : 'responses are'
                     } still missing from canonical saved state.`}
               </small>
+              </div>
             </div>
           ) : null}
 
-          <div className="inspection-layout">
+          <div
+            className={`inspection-layout ${activeStage === 'evidence' ? 'inspection-layout-evidence' : ''}`}
+            hidden={
+              activeStage !== 'inspect' &&
+              activeStage !== 'evidence' &&
+              routeBundle.inspection.status !== 'cancelled'
+            }
+          >
             <nav
               aria-label="Inspection sections"
               className="inspection-sections"
+              hidden={activeStage !== 'inspect' && routeBundle.inspection.status !== 'cancelled'}
             >
               {orderedSectionInstances.map((instance) => {
                 const section = routeBundle.schema.sections.find(
@@ -1882,6 +1899,11 @@ export function UnitInspections({
             </nav>
 
             <div className="inspection-active-section-column">
+            <div
+              className="inspection-stage-panel"
+              data-inspection-stage-panel="inspect"
+              hidden={activeStage !== 'inspect' && routeBundle.inspection.status !== 'cancelled'}
+            >
             {selectedSection && selectedSectionInstance ? (
               <form className="inspection-section-form" onSubmit={saveSection}>
                 <div
@@ -2070,7 +2092,24 @@ export function UnitInspections({
             ) : (
               <p className="muted">This Inspection schema has no sections.</p>
             )}
+            </div>
 
+            <div
+              className="inspection-stage-panel inspection-stage-panel-evidence"
+              data-inspection-stage-panel="evidence"
+              hidden={activeStage !== 'evidence' && routeBundle.inspection.status !== 'cancelled'}
+            >
+              <h3
+                className="inspection-stage-evidence-heading"
+                data-inspection-stage-target="evidence"
+                tabIndex={-1}
+              >
+                Fotos und Nachweise
+              </h3>
+              <p className="muted">
+                Nachweise für den aktuell ausgewählten Raum. Einen anderen Raum
+                unter «Räume prüfen» auswählen.
+              </p>
             {selectedSection && selectedSectionInstance ? (
               <InspectionFindingsEvidence
                 api={api}
@@ -2092,12 +2131,30 @@ export function UnitInspections({
                 selectedSectionInstanceId={selectedSectionInstance.id}
                 writeGate={inspectionWriteGate}
               />
-            ) : null}
+            ) : (
+              <p className="muted">No SectionInstance available for evidence.</p>
+            )}
+            </div>
             </div>
           </div>
             </>
           )}
 
+          <div
+            className="inspection-stage-panel"
+            data-inspection-stage-panel={
+              routeBundle.inspection.status === 'finalized' ? 'report' : 'review_sign'
+            }
+            hidden={
+              routeBundle.inspection.status !== 'cancelled' &&
+              activeStage !== (
+                routeBundle.inspection.status === 'finalized' ? 'report' : 'review_sign'
+              )
+            }
+          >
+            {routeBundle.inspection.status === 'finalized' ? (
+              <InspectionCompletedOverview bundle={routeBundle} />
+            ) : null}
           <InspectionFinalizationPanel
             api={api}
             blockedByDirtySection={hasUnsavedChanges}
@@ -2132,6 +2189,7 @@ export function UnitInspections({
             }}
             writeGate={inspectionWriteGate}
           />
+          </div>
         </section>
       ) : null}
     </div>
