@@ -1541,6 +1541,7 @@ function apiPath(input: RequestInfo | URL): URL {
 
 type BrowserHarnessWindow = Window & {
   __portfolioBinaryReads?: number;
+  __portfolioDenyNextEvidenceBinaryRead?: boolean;
   __portfolioDocumentUploadCount?: number;
   __portfolioHoldUnitCreate?: boolean;
   __portfolioHoldSpaceCreate?: boolean;
@@ -2271,6 +2272,14 @@ globalThis.fetch = async (
     );
     if (version) {
       requirePortfolioAuth(init);
+      if (browserHarnessWindow.__portfolioDenyNextEvidenceBinaryRead) {
+        browserHarnessWindow.__portfolioDenyNextEvidenceBinaryRead = false;
+        return apiError(
+          403,
+          'DOCUMENT_ACCESS_DENIED',
+          'Intentional Inspection Evidence read denied.',
+        );
+      }
       browserHarnessWindow.__portfolioBinaryReads =
         (browserHarnessWindow.__portfolioBinaryReads ?? 0) + 1;
       return new Response(new Uint8Array([7, 8, 9]), {
