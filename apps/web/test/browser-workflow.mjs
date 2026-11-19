@@ -7626,6 +7626,173 @@ try {
     'Verified canonical Evidence relation clears the stored-only recovery marker',
   );
 
+  // Issue #144: two consecutive lost acknowledgements leave the first
+  // binary committed but the client without a verified DocumentVersion.
+  // Room A's exact prepared bytes + idempotency key must survive remount.
+  const uploadsBeforeUnconfirmed = await executeScript(
+    sessionId,
+    'return window.__portfolioDocumentUploadCount || 0;',
+  );
+  await setFileXpath(
+    sessionId,
+    scopedEvidenceForm + "//input[@name='file']",
+    inspectionEvidencePhotoPath,
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailInspectionBinaryResponsesRemaining = 2; return true;',
+  );
+  await clickXpath(
+    sessionId,
+    scopedEvidenceForm + "//button[normalize-space()='Upload Inspection evidence']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Evidence upload outcome is still ambiguous')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-upload-retry-recovery]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    uploadsBeforeUnconfirmed + 1,
+    'Two lost binary responses commit a single stored DocumentVersion',
+  );
+
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
+  await clickXpath(
+    sessionId,
+    "//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='Kitchen']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[contains(@class,'inspection-section-form')]//h3[normalize-space()='Kitchen']",
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-inspection-upload-retry-recovery]",
+    ),
+    false,
+    'Room B never inherits the unresolved upload bytes or key from Room A',
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
+  await clickXpath(
+    sessionId,
+    "//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='General condition']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[contains(@class,'inspection-section-form')]//h3[normalize-space()='General condition']",
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-upload-retry-recovery][contains(normalize-space(),'same original file')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    uploadsBeforeUnconfirmed + 1,
+    'Returning to Room A never starts a new binary POST',
+  );
+
+  // A different file must not replace an unresolved upload key.
+  await setFileXpath(
+    sessionId,
+    scopedEvidenceForm + "//input[@name='file']",
+    inspectionSignaturePngPath,
+  );
+  await clickXpath(
+    sessionId,
+    scopedEvidenceForm + "//button[normalize-space()='Upload Inspection evidence']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Re-select the exact original file and kind')]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    uploadsBeforeUnconfirmed + 1,
+    'Different file is rejected locally without a second binary upload',
+  );
+
+  await clearXpath(sessionId, scopedEvidenceForm + "//input[@name='file']");
+  await setFileXpath(
+    sessionId,
+    scopedEvidenceForm + "//input[@name='file']",
+    inspectionEvidencePhotoPath,
+  );
+  await clickXpath(
+    sessionId,
+    scopedEvidenceForm + "//button[normalize-space()='Upload Inspection evidence']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Inspection photo stored without unnecessary recompression.')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    evidenceAttachForm +
+      "//button[normalize-space()='Attach exact version' and not(@disabled)]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    uploadsBeforeUnconfirmed + 1,
+    'Retry after Room A remount reuses stored bytes and idempotent upload key',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-inspection-upload-retry-recovery]",
+    ),
+    false,
+    'Verified recovery clears the unresolved prepared-file cache',
+  );
+  await setInputValueXpath(
+    sessionId,
+    evidenceAttachForm + "//textarea[@name='caption']",
+    'Recovered unconfirmed field photo',
+  );
+  await clickXpath(
+    sessionId,
+    evidenceAttachForm + "//button[normalize-space()='Attach exact version']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//ul[contains(@class,'inspection-content-list')]//span[normalize-space()='Recovered unconfirmed field photo']",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    uploadsBeforeUnconfirmed + 1,
+    'Canonical Evidence attach after retry never uploads binary again',
+  );
+
   await clickXpath(
     sessionId,
     "//details[contains(@class,'inspection-evidence-advanced')]/summary",
