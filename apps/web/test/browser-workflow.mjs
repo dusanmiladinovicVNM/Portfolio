@@ -6650,6 +6650,19 @@ try {
     'Inspection returns to General section-instance deep-link',
   );
 
+  for (const width of [320, 375, 390, 768]) {
+    await setWindowRect(sessionId, width, 900);
+    assertEqual(
+      await executeScript(
+        sessionId,
+        "const btn = document.querySelector('[data-inspection-save-continue]'); if (!btn) return false; const rect = btn.getBoundingClientRect(); return rect.height >= 44 && rect.width > 0 && rect.left >= -1 && rect.right <= window.innerWidth + 1 && getComputedStyle(btn).visibility !== 'hidden';",
+      ),
+      true,
+      `Inspection Save & continue fits viewport ${width}px with accessible touch height`,
+    );
+  }
+  await setWindowRect(sessionId, 1440, 1200);
+
   await clickXpath(
     sessionId,
     "//*[@data-inspection-save-continue]",
