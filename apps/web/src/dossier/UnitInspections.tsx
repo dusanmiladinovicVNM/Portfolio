@@ -719,6 +719,12 @@ export function UnitInspections({
     readonly stage: InspectionWorkflowStepId;
   } | null>(null);
   const continueIntentRef = useRef<InspectionContinueIntent | null>(null);
+  // Only explicit phase clicks request focus. Browser/section route changes
+  // continue to use their own established focus handling.
+  const pendingStageFocusRef = useRef<{
+    readonly inspectionId: string;
+    readonly stage: InspectionWorkflowStepId;
+  } | null>(null);
   const inspectionWritePendingRef = useRef(false);
   const activeInspectionIdRef = useRef(inspectionId);
   activeInspectionIdRef.current = inspectionId;
@@ -1105,15 +1111,41 @@ export function UnitInspections({
       '[data-inspection-stage-target="' + stage + '"]',
     );
     if (!target) return;
+    if (activeStage === stage) {
+      target.focus({ preventScroll: true });
+      target.scrollIntoView({ block: 'start' });
+      return;
+    }
+    pendingStageFocusRef.current = {
+      inspectionId: routeBundle.inspection.id,
+      stage,
+    };
     setStageSelection({
       inspectionId: routeBundle.inspection.id,
       sectionInstanceId: inspectionSectionInstanceId,
       stage,
     });
-    // Explicit clicks only: never steal focus on autosave or async rerender.
-    target.focus({ preventScroll: true });
-    target.scrollIntoView({ block: 'start' });
   }
+
+  useEffect(() => {
+    const request = pendingStageFocusRef.current;
+    if (
+      !request ||
+      routeBundle?.inspection.id !== request.inspectionId ||
+      activeStage !== request.stage
+    ) return;
+
+    // Wait until React has exposed the selected phase. Focusing a still
+    // hidden heading synchronously would silently lose keyboard focus.
+    pendingStageFocusRef.current = null;
+    const target = document.querySelector<HTMLElement>(
+      '[data-inspection-stage-panel="' + request.stage + '"]:not([hidden]) ' +
+        '[data-inspection-stage-target="' + request.stage + '"]',
+    );
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: 'start' });
+  }, [activeStage, routeBundle?.inspection.id, inspectionSectionInstanceId]);
+
   const inspectionWriteGate: InspectionWriteGate = {
     pending: inspectionWritePending,
     tryStart: () => {
@@ -1722,6 +1754,11 @@ export function UnitInspections({
             </span>
           </details>
 
+          <div
+            className="inspection-stage-panel"
+            data-inspection-stage-panel="setup"
+            hidden={activeStage !== 'setup'}
+          >
           {routeBundle.inspection.status === 'draft' ? (
             <div className="inspection-start-callout">
               <div>
@@ -1738,13 +1775,16 @@ export function UnitInspections({
               </button>
             </div>
           ) : null}
+          </div>
 
-          {routeBundle.inspection.status === 'finalized' ? (
-            <InspectionCompletedOverview bundle={routeBundle} />
-          ) : (
+          {routeBundle.inspection.status !== 'finalized' ? (
             <>
           {requiredProgress ? (
             <div
+              className="inspection-stage-progress"
+              hidden={activeStage !== 'inspect' && routeBundle.inspection.status !== 'cancelled'}
+            >
+              <div
               className={`inspection-progress-card ${
                 requiredProgress.complete
                   ? 'inspection-progress-card-complete'
@@ -1781,13 +1821,22 @@ export function UnitInspections({
                         : 'responses are'
                     } still missing from canonical saved state.`}
               </small>
+              </div>
             </div>
           ) : null}
 
-          <div className="inspection-layout">
+          <div
+            className={`inspection-layout ${activeStage === 'evidence' ? 'inspection-layout-evidence' : ''}`}
+            hidden={
+              activeStage !== 'inspect' &&
+              activeStage !== 'evidence' &&
+              routeBundle.inspection.status !== 'cancelled'
+            }
+          >
             <nav
               aria-label="Inspection sections"
               className="inspection-sections"
+              hidden={activeStage !== 'inspect' && routeBundle.inspection.status !== 'cancelled'}
             >
               {orderedSectionInstances.map((instance) => {
                 const section = routeBundle.schema.sections.find(
@@ -1850,6 +1899,11 @@ export function UnitInspections({
             </nav>
 
             <div className="inspection-active-section-column">
+            <div
+              className="inspection-stage-panel"
+              data-inspection-stage-panel="inspect"
+              hidden={activeStage !== 'inspect' && routeBundle.inspection.status !== 'cancelled'}
+            >
             {selectedSection && selectedSectionInstance ? (
               <form className="inspection-section-form" onSubmit={saveSection}>
                 <div
@@ -2038,7 +2092,24 @@ export function UnitInspections({
             ) : (
               <p className="muted">This Inspection schema has no sections.</p>
             )}
+            </div>
 
+            <div
+              className="inspection-stage-panel inspection-stage-panel-evidence"
+              data-inspection-stage-panel="evidence"
+              hidden={activeStage !== 'evidence' && routeBundle.inspection.status !== 'cancelled'}
+            >
+              <h3
+                className="inspection-stage-evidence-heading"
+                data-inspection-stage-target="evidence"
+                tabIndex={-1}
+              >
+                Fotos und Nachweise
+              </h3>
+              <p className="muted">
+                Nachweise für den aktuell ausgewählten Raum. Einen anderen Raum
+                unter «Räume prüfen» auswählen.
+              </p>
             {selectedSection && selectedSectionInstance ? (
               <InspectionFindingsEvidence
                 api={api}
@@ -2060,12 +2131,30 @@ export function UnitInspections({
                 selectedSectionInstanceId={selectedSectionInstance.id}
                 writeGate={inspectionWriteGate}
               />
-            ) : null}
+            ) : (
+              <p className="muted">No SectionInstance available for evidence.</p>
+            )}
+            </div>
             </div>
           </div>
             </>
-          )}
+          ) : null}
 
+          <div
+            className="inspection-stage-panel"
+            data-inspection-stage-panel={
+              routeBundle.inspection.status === 'finalized' ? 'report' : 'review_sign'
+            }
+            hidden={
+              routeBundle.inspection.status !== 'cancelled' &&
+              activeStage !== (
+                routeBundle.inspection.status === 'finalized' ? 'report' : 'review_sign'
+              )
+            }
+          >
+            {routeBundle.inspection.status === 'finalized' ? (
+              <InspectionCompletedOverview bundle={routeBundle} />
+            ) : null}
           <InspectionFinalizationPanel
             api={api}
             blockedByDirtySection={hasUnsavedChanges}
@@ -2100,6 +2189,7 @@ export function UnitInspections({
             }}
             writeGate={inspectionWriteGate}
           />
+          </div>
         </section>
       ) : null}
     </div>

@@ -6743,6 +6743,23 @@ try {
     true,
     'Five task phases and exact Unit/Inspection identity are visible in draft',
   );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "const panel=document.querySelector('[data-inspection-stage-panel=\"setup\"]');const form=document.querySelector('[data-inspection-stage-panel=\"inspect\"]');return panel&&!panel.hidden&&form?.hidden===true&&document.querySelector('.inspection-layout')?.hidden===true;",
+    ),
+    true,
+    'Draft Setup is visible; inactive room and Evidence forms stay mounted but hidden',
+  );
+
+  // Guided workflow starts before accessing room sections. Draft-only
+  // navigation belonged to the old all-at-once editor.
+  await clickXpath(sessionId, "//button[normalize-space()='Start Inspection']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//span[contains(@class,'status-chip')][normalize-space()='in_progress']",
+  );
 
   for (const [label, instanceId] of [
     ['Hallway', inspectionHallwayInstanceId],
@@ -6847,15 +6864,6 @@ try {
     'Previous Inspection section navigates focus to General condition heading',
   );
 
-  await clickXpath(
-    sessionId,
-    "//button[normalize-space()='Start Inspection']",
-  );
-  await waitForElement(
-    sessionId,
-    'xpath',
-    "//span[contains(@class,'status-chip')][normalize-space()='in_progress']",
-  );
   await waitForElement(
     sessionId,
     'xpath',
@@ -6869,12 +6877,28 @@ try {
     true,
     'In-progress UI phases are navigable but do not falsely claim completion',
   );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "const stage=document.querySelector('[data-inspection-stage-panel=\"inspect\"]');const evidence=document.querySelector('[data-inspection-stage-panel=\"evidence\"]');const review=document.querySelector('[data-inspection-stage-panel=\"review_sign\"]');const layout=document.querySelector('.inspection-layout');return stage&&!stage.hidden&&evidence?.hidden===true&&review?.hidden===true&&!layout?.hidden;",
+    ),
+    true,
+    'Inspect is the only visible task surface after starting',
+  );
   const beforeStageFocusUrl = await currentUrl(sessionId);
   await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
   await waitForScriptTruthy(
     sessionId,
     "return document.activeElement?.getAttribute('data-inspection-stage-target') === 'evidence';",
     'Evidence phase focuses the mounted contextual Evidence heading',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "const field=document.querySelector('[data-inspection-stage-panel=\"inspect\"]');const evidence=document.querySelector('[data-inspection-stage-panel=\"evidence\"]');const nav=document.querySelector('.inspection-sections');return field?.hidden===true&&evidence?.hidden===false&&nav?.hidden===true;",
+    ),
+    true,
+    'Evidence is visible without showing its sibling answer form or room sidebar',
   );
   assertEqual(
     await currentUrl(sessionId),
@@ -6886,6 +6910,14 @@ try {
     sessionId,
     "return document.activeElement?.getAttribute('data-inspection-stage-target') === 'review_sign';",
     'Review phase focuses existing canonical Review controls',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "const layout=document.querySelector('.inspection-layout');const review=document.querySelector('[data-inspection-stage-panel=\"review_sign\"]');const evidence=document.querySelector('[data-inspection-stage-panel=\"evidence\"]');return layout?.hidden===true&&review?.hidden===false&&evidence?.hidden===true&&Boolean(document.querySelector('[data-inspection-content-form=\"evidence-attach\"]'));",
+    ),
+    true,
+    'Review stage hides field work but preserves mounted Evidence forms',
   );
   await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
   await waitForScriptTruthy(
@@ -6933,6 +6965,7 @@ try {
     `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${inspectionKitchenInstanceId}&asOf=2025-06-30`,
     'Incomplete Review can start away from the missing SectionInstance',
   );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='review_sign']");
   await clickXpath(
     sessionId,
     "//button[normalize-space()='Review before lock']",
@@ -7226,6 +7259,7 @@ try {
     sessionId,
     'window.__portfolioHoldInspectionReviewRead = true; return true;',
   );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='review_sign']");
   await clickXpath(
     sessionId,
     "//button[normalize-space()='Review before lock']",
@@ -7236,6 +7270,7 @@ try {
     'held stale Inspection review read',
   );
 
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
   await typeXpath(
     sessionId,
     notesInput,
@@ -7251,6 +7286,8 @@ try {
     'Window scratch after held review',
     'Newer autosave is visible while older review GET remains held',
   );
+  // This return must not remount the pending canonical Review operation.
+  await clickXpath(sessionId, "//*[@data-inspection-stage='review_sign']");
 
   assertEqual(
     await executeScript(
@@ -7287,6 +7324,7 @@ try {
     'Late stale review response cannot regress newer canonical section content',
   );
 
+  await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
   await selectOptionXpath(
     sessionId,
     findingForm + "//select[@name='itemId']",
@@ -7499,6 +7537,20 @@ try {
     uploadsBeforeEvidence + 1,
     'Inspection Evidence binary uploaded exactly once',
   );
+  // Retain the exact uploaded DocumentVersion across task phase switches.
+  // Returning must never implicitly trigger another binary upload.
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
+  await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Version v1 stored. Attach this exact immutable binary')]",
+  );
+  assertEqual(
+    await executeScript(sessionId, 'return window.__portfolioDocumentUploadCount || 0;'),
+    uploadsBeforeEvidence + 1,
+    'Evidence phase switching preserves uploaded-version recovery without re-upload',
+  );
 
   await waitForElement(
     sessionId,
@@ -7599,6 +7651,7 @@ try {
     'Lost Evidence-link acknowledgement never re-uploads the stored binary',
   );
 
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
   await clickXpath(
     sessionId,
     "//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='Kitchen']",
@@ -7613,6 +7666,7 @@ try {
     `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${inspectionKitchenInstanceId}&asOf=2025-06-30`,
     'Kitchen Inspection section-instance owner',
   );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
   await selectOptionXpath(
     sessionId,
     findingForm + "//select[@name='itemId']",
@@ -7643,6 +7697,7 @@ try {
     "//div[contains(@class,'inspection-content-card')][.//strong[normalize-space()='Findings in Kitchen']]//li[.//strong[contains(normalize-space(),'Kitchen ventilation staining')]]//small[normalize-space()='Room note']",
   );
 
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
   await clickXpath(
     sessionId,
     "//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='Bathroom']",
@@ -7657,6 +7712,7 @@ try {
     `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${inspectionBathroomInstanceId}&asOf=2025-06-30`,
     'Bathroom Inspection section-instance owner',
   );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
 
   const bathroomScopedEvidenceForm =
     "//form[@data-inspection-content-form='evidence-scoped-upload']";
@@ -7704,6 +7760,7 @@ try {
     "//ul[contains(@class,'inspection-content-list')]//li[.//span[normalize-space()='Bathroom moisture evidence']]//small[normalize-space()='Bathroom']",
   );
 
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
   await clickXpath(
     sessionId,
     "//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='General condition']",
@@ -7718,6 +7775,7 @@ try {
     inspectionUrl,
     'Room-specific content returns to canonical General Inspection owner',
   );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
   assertEqual(
     await elementExistsXpath(
       sessionId,
@@ -7732,6 +7790,7 @@ try {
     "//*[@data-inspection-content-context-summary][contains(normalize-space(),'evidence item(s) belong to other sections')]",
   );
 
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
   // Lost acknowledgement after a real canonical commit must not cause
   // optimistic room navigation, repeated POST/PATCH or loss of local answers.
   await executeScript(
@@ -7887,6 +7946,7 @@ try {
     'Inspection cannot be locked before canonical pre-lock review is opened',
   );
 
+  await clickXpath(sessionId, "//*[@data-inspection-stage='review_sign']");
   await clickXpath(
     sessionId,
     "//button[normalize-space()='Review before lock']",
@@ -7925,12 +7985,14 @@ try {
     'Current complete canonical review enables lock confirmation',
   );
 
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
   await typeXpath(sessionId, notesInput, 'Window scratch after review');
   await waitForElement(
     sessionId,
     'xpath',
     "//*[@data-inspection-autosave-status][contains(normalize-space(),'All section changes saved')]",
   );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='review_sign']");
   await waitForElement(
     sessionId,
     'xpath',

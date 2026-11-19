@@ -3116,6 +3116,36 @@ input:focus-visible {
 [data-inspection-stage-target] {
   scroll-margin-top: 20px;
 }
+/* Keep every task surface mounted while making inactive phases inaccessible
+   to pointer, keyboard and accessibility-tree navigation. The explicit
+   hidden override wins over existing .inspection-layout display:grid. */
+.inspection-stage-panel[hidden],
+.inspection-stage-progress[hidden],
+.inspection-layout[hidden],
+.inspection-layout .inspection-sections[hidden] {
+  display: none !important;
+}
+.inspection-stage-panel {
+  display: grid;
+  min-width: 0;
+  gap: 14px;
+}
+.inspection-stage-progress {
+  min-width: 0;
+}
+.inspection-layout.inspection-layout-evidence {
+  grid-template-columns: minmax(0, 1fr);
+}
+.inspection-stage-panel-evidence {
+  min-width: 0;
+}
+.inspection-stage-evidence-heading {
+  margin: 0;
+  scroll-margin-top: 20px;
+}
+.inspection-stage-panel-evidence > .muted {
+  margin: 0;
+}
 [data-inspection-stage-target]:focus-visible {
   outline: 3px solid #547126;
   outline-offset: 4px;
