@@ -8322,10 +8322,15 @@ try {
     'xpath',
     "//*[contains(normalize-space(),'prior signatures were invalidated')]",
   );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-stage-navigation]//button[@data-inspection-stage='inspect'][@aria-current='step']",
+  );
   await waitForScriptTruthy(
     sessionId,
-    "return document.activeElement?.getAttribute('data-inspection-stage-target')==='inspect' && document.querySelector('[data-inspection-stage-navigation] [aria-current=\"step\"]')?.dataset.inspectionStage==='inspect';",
-    'Canonical unlock restores Inspect and focuses room task rather than stale locked Review',
+    "return document.activeElement?.getAttribute('data-inspection-stage-target')==='inspect';",
+    'Canonical unlock focuses visible Inspect heading',
   );
   await clickXpath(sessionId, "//*[@data-inspection-stage='review_sign']");
   await clickXpath(
