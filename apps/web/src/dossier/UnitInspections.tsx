@@ -106,11 +106,11 @@ export function inspectionContinueDecision(
     return 'abort';
   }
   if (state.sectionWritePending || state.inspectionWritePending) return 'wait';
-  if (
-    intent.requiresAcknowledgedSave &&
-    state.sectionRevision <= intent.sourceRevision
-  ) {
-    return 'wait';
+  if (intent.requiresAcknowledgedSave) {
+    if (state.sectionRevision <= intent.sourceRevision) return 'wait';
+    // A PATCH was acknowledged but its response could not reconcile the
+    // local draft. Keep the section visible, never leave pending forever.
+    if (state.hasUnsavedChanges) return 'abort';
   }
   return state.hasUnsavedChanges ? 'wait' : 'advance';
 }
@@ -1314,7 +1314,21 @@ export function UnitInspections({
     if (decision === 'wait') return;
     continueIntentRef.current = null;
     setContinueIntent(null);
-    if (decision === 'abort') return;
+    if (decision === 'abort') {
+      if (
+        !saveError &&
+        !conflict &&
+        continueIntent.requiresAcknowledgedSave &&
+        currentRevision > continueIntent.sourceRevision &&
+        hasUnsavedChanges
+      ) {
+        setSaveError(
+          'The server save could not be reconciled with your local answers. ' +
+            'Your answers remain here; refresh the canonical section before continuing.',
+        );
+      }
+      return;
+    }
 
     // The only navigation path for dirty Save & continue: a matching
     // acknowledged section revision, no pending request and a clean draft.
