@@ -19,7 +19,7 @@
     "supabase:function:deploy": "bash scripts/deployment/deploy-supabase-function.sh",
     "web:deployment:check": "node scripts/deployment/check-public-web-deployment.mjs",
     "backup:rehearse": "bash scripts/recovery/test-production-backup.sh",
-    "observability:self-test": "node scripts/operations/check-production-observability.mjs --self-test",
+    "observability:self-test": "node scripts/operations/check-production-observability.mjs --self-test && node scripts/operations/check-monitor-schedule.mjs --self-test",
     "binary-backup:self-test": "node scripts/recovery/backup-google-drive-binaries.mjs --self-test",
     "binary-backup:restore": "bash scripts/recovery/restore-production-binaries.sh",
     "binary-backup:restore:typecheck": "pnpm --filter @portfolio/recovery typecheck",
