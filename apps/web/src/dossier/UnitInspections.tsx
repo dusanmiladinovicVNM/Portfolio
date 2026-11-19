@@ -505,7 +505,6 @@ export function InspectionQuestionField({
       control = (
         <fieldset
           aria-describedby={requiredMissing ? requiredMessageId : undefined}
-          aria-invalid={requiredMissing || undefined}
           className="inspection-multiselect"
         >
           <legend className="inspection-item-label">{questionTitle}</legend>
