@@ -18,14 +18,6 @@ export function InspectionWorkflowStepper({
   navigationBlocked,
   onSelectStage,
 }: InspectionWorkflowStepperProps) {
-  if (status === 'cancelled') {
-    return (
-      <div className="inspection-workflow-cancelled" role="status">
-        Inspection cancelled
-      </div>
-    );
-  }
-
   const steps = inspectionWorkflowSteps(status, selectedStage);
   const viewportRef = useRef<HTMLElement>(null);
   const currentIndex = steps.findIndex((step) => step.state === 'current');
@@ -55,6 +47,14 @@ export function InspectionWorkflowStepper({
     window.addEventListener('resize', keepCurrentStepVisible);
     return () => window.removeEventListener('resize', keepCurrentStepVisible);
   }, [status, selectedStage]);
+
+  if (status === 'cancelled') {
+    return (
+      <div className="inspection-workflow-cancelled" role="status">
+        Inspection cancelled
+      </div>
+    );
+  }
 
   return (
     <nav
