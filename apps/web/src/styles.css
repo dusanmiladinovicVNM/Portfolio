@@ -1037,9 +1037,11 @@ input:focus-visible {
 .inspection-workspace,
 .inspection-editor {
   display: grid;
+  gap: 18px;
+}
+.inspection-editor {
   grid-template-columns: minmax(0, 1fr);
   min-width: 0;
-  gap: 18px;
 }
 .inspection-list {
   display: grid;
