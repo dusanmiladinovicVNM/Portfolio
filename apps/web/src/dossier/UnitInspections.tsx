@@ -717,6 +717,7 @@ export function UnitInspections({
     readonly inspectionId: string;
     readonly sectionInstanceId: string | undefined;
     readonly status: InspectionResponseDto['status'];
+    readonly lifecycleVersion: number;
     readonly stage: InspectionWorkflowStepId;
   } | null>(null);
   const continueIntentRef = useRef<InspectionContinueIntent | null>(null);
@@ -814,6 +815,7 @@ export function UnitInspections({
       : stageSelection?.inspectionId === routeBundle.inspection.id &&
           stageSelection.sectionInstanceId === inspectionSectionInstanceId &&
           stageSelection.status === routeBundle.inspection.status &&
+          stageSelection.lifecycleVersion === routeBundle.inspection.version &&
           inspectionWorkflowStageAvailable(
             routeBundle.inspection.status,
             stageSelection.stage,
@@ -1132,6 +1134,7 @@ export function UnitInspections({
       inspectionId: routeBundle.inspection.id,
       sectionInstanceId: inspectionSectionInstanceId,
       status: routeBundle.inspection.status,
+      lifecycleVersion: routeBundle.inspection.version,
       stage,
     });
   }
@@ -2210,6 +2213,7 @@ export function UnitInspections({
                 inspectionId: routeBundle.inspection.id,
                 sectionInstanceId,
                 status: routeBundle.inspection.status,
+                lifecycleVersion: routeBundle.inspection.version,
                 stage: 'inspect',
               });
               pendingStageFocusRef.current = {
