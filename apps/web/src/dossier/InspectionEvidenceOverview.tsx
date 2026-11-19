@@ -91,10 +91,18 @@ export function InspectionEvidenceOverview({
   } | null>(null);
   const lastPreviewTriggerRef = useRef<HTMLButtonElement | null>(null);
 
-  // Do not retain private decoded bytes while the phase is hidden.
+  // A presentation selection never survives a change of Inspection owner.
+  // In particular, returning to an earlier Inspection must not resurrect
+  // its previous binary preview.
+  useEffect(() => {
+    setPreviewSelection(null);
+    lastPreviewTriggerRef.current = null;
+  }, [bundle.inspection.id]);
+
+  // The selected image must also disappear when its phase becomes hidden.
   useEffect(() => {
     if (!active) setPreviewSelection(null);
-  }, [active, bundle.inspection.id]);
+  }, [active]);
 
   const selectedRelation =
     active && previewSelection?.inspectionId === bundle.inspection.id
