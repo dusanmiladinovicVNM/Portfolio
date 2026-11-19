@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { documentVersionContentPath } from '../api/paths.js';
-import type { PortfolioApi } from '../api/portfolio-api.js';
 
 interface InspectionEvidenceBinaryPreviewProps {
-  readonly api: PortfolioApi;
-  readonly documentVersionId: string;
+  /** Single request created only by explicit operator action in the parent. */
+  readonly request: Promise<Blob>;
   readonly caption: string | null;
   readonly onClose: () => void;
+  readonly onRetry: () => void;
 }
 
 /**
@@ -45,15 +44,14 @@ export function inspectionEvidenceDownloadFileName(
  * storage links or blob URL persistence.
  */
 export function InspectionEvidenceBinaryPreview({
-  api,
-  documentVersionId,
+  request,
   caption,
   onClose,
+  onRetry,
 }: InspectionEvidenceBinaryPreviewProps) {
   const [blob, setBlob] = useState<Blob | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [retryRevision, setRetryRevision] = useState(0);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -61,18 +59,17 @@ export function InspectionEvidenceBinaryPreview({
   }, []);
 
   useEffect(() => {
-    const controller = new AbortController();
+    let current = true;
     let url: string | null = null;
     setBlob(null);
     setImageUrl(null);
     setError(null);
 
-    void api
-      .getBinary(documentVersionContentPath(documentVersionId), {
-        signal: controller.signal,
-      })
+    // StrictMode may replay this effect, but both subscriptions observe the
+    // same promise: never send another authorized GET from an effect.
+    void request
       .then((result) => {
-        if (controller.signal.aborted) return;
+        if (!current) return;
         setBlob(result);
         if (canPreviewInspectionEvidenceMime(result.type)) {
           url = URL.createObjectURL(result);
@@ -80,7 +77,7 @@ export function InspectionEvidenceBinaryPreview({
         }
       })
       .catch((cause: unknown) => {
-        if (controller.signal.aborted) return;
+        if (!current) return;
         setError(
           cause instanceof Error
             ? cause.message
@@ -89,10 +86,10 @@ export function InspectionEvidenceBinaryPreview({
       });
 
     return () => {
-      controller.abort();
+      current = false;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [api, documentVersionId, retryRevision]);
+  }, [request]);
 
   function downloadLoadedBinary() {
     if (!blob) return;
@@ -145,7 +142,7 @@ export function InspectionEvidenceBinaryPreview({
           <button
             className="button-secondary"
             data-inspection-evidence-preview-retry
-            onClick={() => setRetryRevision((current) => current + 1)}
+            onClick={onRetry}
             type="button"
           >
             Erneut versuchen
