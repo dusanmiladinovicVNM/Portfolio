@@ -1514,6 +1514,7 @@ export function UnitInspections({
         <div className="inspection-detail-navigation">
           <nav aria-label="Inspection context" className="inspection-context-trail">
             <WorkspaceLink
+              className="inspection-context-link"
               navigate={navigate}
               route={propertyRoute(propertyId, asOf)}
             >
@@ -1521,6 +1522,7 @@ export function UnitInspections({
             </WorkspaceLink>
             <span aria-hidden="true">›</span>
             <WorkspaceLink
+              className="inspection-context-link"
               navigate={navigate}
               route={unitRoute(propertyId, unitId, asOf, 'overview')}
             >
