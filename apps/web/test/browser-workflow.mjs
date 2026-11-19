@@ -5944,6 +5944,50 @@ try {
     'Empty Unit Overview date does not create an invalid route',
   );
 
+  await clickXpath(
+    sessionId,
+    "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Inspections']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-yepp-list]//tr[@data-inspection-yepp-row='" + inspectionId + "'][.//strong[normalize-space()='INS-BRW-001']][.//span[normalize-space()='Draft']]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "const row = document.querySelector('[data-inspection-yepp-row=\"" + inspectionId + "\"]'); return Boolean(row && row.querySelector('a')?.getAttribute('aria-label')?.includes('INS-BRW-001'));",
+    ),
+    true,
+    'YEPP Inspection row action names the exact canonical Inspection code',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[@data-inspection-form='create']//input[@name='code' and @required]",
+  );
+  for (const width of [320, 375, 390, 768]) {
+    await setWindowRect(sessionId, width, 900);
+    assertEqual(
+      await executeScript(
+        sessionId,
+        "const wrap = document.querySelector('[data-inspection-yepp-list] .inspection-yepp-table-scroll'); if (!wrap) return false; const r=wrap.getBoundingClientRect(); return r.width>0 && r.left>=-1 && r.right<=window.innerWidth+1 && document.documentElement.scrollWidth<=document.documentElement.clientWidth;",
+      ),
+      true,
+      'YEPP Inspection table scroll stays inside viewport ' + width + 'px',
+    );
+  }
+  await setWindowRect(sessionId, 1440, 1200);
+  await clickXpath(
+    sessionId,
+    "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Overview']]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-unit-yepp-overview]",
+  );
+
   await clickXpath(sessionId, "//*[@data-unit-dossier-navigation]//a[.//span[normalize-space()='Contracts']]");
   await waitForElement(
     sessionId,
