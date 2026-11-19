@@ -1560,6 +1560,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioFailNextInspectionFindingAfterCommit?: boolean;
   __portfolioFailNextInspectionEvidenceAfterCommit?: boolean;
   __portfolioFailNextInspectionBinaryAfterCommit?: boolean;
+  __portfolioFailInspectionBinaryResponsesRemaining?: number;
   __portfolioFailNextInspectionSignatureAfterCommit?: boolean;
   __portfolioFailNextInspectionFinalizeAfterCommit?: boolean;
   __portfolioFailNextInspectionReportAfterCommit?: boolean;
@@ -5898,6 +5899,15 @@ globalThis.fetch = async (
           'Inspection upload key already represents another binary.',
         );
       }
+      if ((browserHarnessWindow.__portfolioFailInspectionBinaryResponsesRemaining ?? 0) > 0) {
+        browserHarnessWindow.__portfolioFailInspectionBinaryResponsesRemaining =
+          (browserHarnessWindow.__portfolioFailInspectionBinaryResponsesRemaining ?? 1) - 1;
+        return apiError(
+          503,
+          'INSPECTION_BINARY_TEST_ACK_LOST',
+          'Intentional repeated Inspection binary acknowledgement loss.',
+        );
+      }
       return json(existing, 201);
     }
 
@@ -5938,6 +5948,15 @@ globalThis.fetch = async (
         503,
         'INSPECTION_BINARY_TEST_ACK_LOST',
         'Intentional Inspection binary acknowledgement loss.',
+      );
+    }
+    if ((browserHarnessWindow.__portfolioFailInspectionBinaryResponsesRemaining ?? 0) > 0) {
+      browserHarnessWindow.__portfolioFailInspectionBinaryResponsesRemaining =
+        (browserHarnessWindow.__portfolioFailInspectionBinaryResponsesRemaining ?? 1) - 1;
+      return apiError(
+        503,
+        'INSPECTION_BINARY_TEST_ACK_LOST',
+        'Intentional repeated Inspection binary acknowledgement loss.',
       );
     }
     return json(version, 201);
