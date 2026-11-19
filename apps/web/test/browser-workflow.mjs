@@ -7010,6 +7010,38 @@ try {
     false,
     'Fix action closes Review and returns to field work',
   );
+
+  // The missing field is now the active room: fixing that exact same room
+  // must switch to Inspect even though navigating to its URL is a no-op.
+  await clickXpath(sessionId, "//*[@data-inspection-stage='review_sign']");
+  await clickXpath(sessionId, "//button[normalize-space()='Review before lock']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-review-missing-summary][contains(normalize-space(),'1 required response needs attention')]",
+  );
+  await clickXpath(
+    sessionId,
+    `//*[@data-inspection-review-fix-section='${inspectionSectionInstanceId}']`,
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-stage-navigation]//button[@data-inspection-stage='inspect'][@aria-current='step']",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "const panel=document.querySelector('[data-inspection-stage-panel=\"inspect\"]');const target=document.querySelector('[data-inspection-active-section-heading]');return panel?.hidden===false&&document.activeElement===target;",
+    ),
+    true,
+    'Review Fix on the already selected room reveals the field form and focuses its heading',
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'Same-room Review Fix preserves exact canonical SectionInstance URL',
+  );
   await waitForElement(
     sessionId,
     'xpath',
