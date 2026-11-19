@@ -849,7 +849,9 @@ export function InspectionFindingsEvidence({
       <div className="section-heading inspection-content-heading">
         <div>
           <p className="eyebrow">Active section</p>
-          <h3>{activeSectionLabel} · Findings + Evidence</h3>
+          <h3 data-inspection-stage-target="evidence" tabIndex={-1}>
+            {activeSectionLabel} · Findings + Evidence
+          </h3>
           <p className="muted">
             Field content stays owned by this exact SectionInstance.
           </p>
