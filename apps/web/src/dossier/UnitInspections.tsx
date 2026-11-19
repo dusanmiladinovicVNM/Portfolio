@@ -715,6 +715,7 @@ export function UnitInspections({
   const [continueIntent, setContinueIntent] = useState<InspectionContinueIntent | null>(null);
   const [stageSelection, setStageSelection] = useState<{
     readonly inspectionId: string;
+    readonly sectionInstanceId: string | undefined;
     readonly stage: InspectionWorkflowStepId;
   } | null>(null);
   const continueIntentRef = useRef<InspectionContinueIntent | null>(null);
@@ -799,6 +800,7 @@ export function UnitInspections({
     routeBundle === null
       ? null
       : stageSelection?.inspectionId === routeBundle.inspection.id &&
+          stageSelection.sectionInstanceId === inspectionSectionInstanceId &&
           inspectionWorkflowStageAvailable(
             routeBundle.inspection.status,
             stageSelection.stage,
@@ -1103,7 +1105,11 @@ export function UnitInspections({
       '[data-inspection-stage-target="' + stage + '"]',
     );
     if (!target) return;
-    setStageSelection({ inspectionId: routeBundle.inspection.id, stage });
+    setStageSelection({
+      inspectionId: routeBundle.inspection.id,
+      sectionInstanceId: inspectionSectionInstanceId,
+      stage,
+    });
     // Explicit clicks only: never steal focus on autosave or async rerender.
     target.focus({ preventScroll: true });
     target.scrollIntoView({ block: 'start' });
