@@ -7943,7 +7943,7 @@ try {
   assertEqual(
     await elementExistsXpath(
       sessionId,
-      "//ul[contains(@class,'inspection-content-list')]//span[normalize-space()='Lost acknowledgement relation']",
+      "//div[contains(@class,'inspection-content-workspace')]//ul[contains(@class,'inspection-content-list')]//span[normalize-space()='Lost acknowledgement relation']",
     ),
     false,
     'Inspection-level Evidence is not misrepresented as active-section Evidence',
@@ -8068,7 +8068,56 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//ul[contains(@class,'inspection-content-list')]//li[.//span[normalize-space()='Bathroom moisture evidence']]//small[normalize-space()='Bathroom']",
+    "//div[contains(@class,'inspection-content-workspace')]//ul[contains(@class,'inspection-content-list')]//li[.//span[normalize-space()='Bathroom moisture evidence']]//small[normalize-space()='Bathroom']",
+  );
+
+  // UX-4B: One canonical all-room overview, not the active room's document
+  // catalog. General, Bathroom and Inspection-level Evidence remain distinct.
+  await waitForScriptTruthy(
+    sessionId,
+    `return (()=>{const root=document.querySelector('[data-inspection-evidence-overview]');const a=root?.querySelector('[data-inspection-evidence-overview-room="${inspectionSectionInstanceId}"]');const b=root?.querySelector('[data-inspection-evidence-overview-room="${inspectionBathroomInstanceId}"]');const general=root?.querySelector('[data-inspection-evidence-overview-room="inspection"]');return Boolean(root&&a?.textContent?.includes('Scoped field evidence')&&b?.textContent?.includes('Bathroom moisture evidence')&&general?.textContent?.includes('Lost acknowledgement relation'));})()`,
+    'All-room overview groups canonical General, Bathroom and Inspection-level Evidence',
+  );
+  for (const width of [320, 375, 390, 768]) {
+    await setWindowRect(sessionId, width, 900);
+    assertEqual(
+      await executeScript(
+        sessionId,
+        `const root=document.querySelector('[data-inspection-evidence-overview]');const b=root?.querySelector('[data-inspection-evidence-open-room="${inspectionSectionInstanceId}"]');if(!root||!b)return false;const r=root.getBoundingClientRect(),c=b.getBoundingClientRect();return r.left>=-1&&r.right<=window.innerWidth+1&&c.height>=44&&document.documentElement.scrollWidth<=document.documentElement.clientWidth;`,
+      ),
+      true,
+      `Canonical Evidence overview remains usable without page overflow at ${width}px`,
+    );
+  }
+  await setWindowRect(sessionId, 1440, 1200);
+
+  await clickXpath(
+    sessionId,
+    `//*[@data-inspection-evidence-open-room='${inspectionSectionInstanceId}']`,
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    "return document.querySelector('[data-inspection-stage-navigation] [aria-current=\"step\"]')?.dataset.inspectionStage==='evidence' && document.querySelector('.inspection-content-heading h3')?.textContent?.includes('General condition');",
+    'All-room Evidence navigation selects exact General context without reverting to Inspect',
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'All-room Evidence navigator uses canonical General SectionInstance deep link',
+  );
+  await clickXpath(
+    sessionId,
+    `//*[@data-inspection-evidence-open-room='${inspectionBathroomInstanceId}']`,
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    "return document.querySelector('[data-inspection-stage-navigation] [aria-current=\"step\"]')?.dataset.inspectionStage==='evidence' && document.querySelector('.inspection-content-heading h3')?.textContent?.includes('Bathroom');",
+    'All-room Evidence navigator restores Bathroom and stays in Evidence stage',
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${inspectionBathroomInstanceId}&asOf=2025-06-30`,
+    'All-room Evidence navigator preserves exact Bathroom owner and route',
   );
 
   await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
@@ -8090,10 +8139,10 @@ try {
   assertEqual(
     await elementExistsXpath(
       sessionId,
-      "//ul[contains(@class,'inspection-content-list')]//li[.//span[normalize-space()='Bathroom moisture evidence']]",
+      "//div[contains(@class,'inspection-content-workspace')]//ul[contains(@class,'inspection-content-list')]//li[.//span[normalize-space()='Bathroom moisture evidence']]",
     ),
     false,
-    'Bathroom Evidence is hidden after returning to a different active SectionInstance',
+    'Bathroom Evidence is hidden from the contextual editor after returning to a different SectionInstance',
   );
   await waitForElement(
     sessionId,
