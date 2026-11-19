@@ -430,9 +430,16 @@ export function InspectionQuestionField({
       <span>
         {item.label}
         {required ? (
-          <strong aria-label="Required" className="inspection-required">
-            {' '}*
-          </strong>
+          <>
+            <strong aria-hidden="true" className="inspection-required">
+              {' '}*
+            </strong>
+            {item.type === 'multiselect' ? (
+              <span className="inspection-required-screen-reader">
+                {' '}(required)
+              </span>
+            ) : null}
+          </>
         ) : null}
       </span>
       <small>{formatDetailKey(item.type)}</small>
@@ -498,6 +505,7 @@ export function InspectionQuestionField({
       control = (
         <fieldset
           aria-describedby={requiredMissing ? requiredMessageId : undefined}
+          aria-invalid={requiredMissing || undefined}
           className="inspection-multiselect"
         >
           <legend className="inspection-item-label">{questionTitle}</legend>
