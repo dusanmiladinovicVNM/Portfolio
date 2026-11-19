@@ -8189,6 +8189,21 @@ try {
     'xpath',
     "//span[contains(@class,'status-chip') and normalize-space()='locked']",
   );
+  await setWindowRect(sessionId, 320, 900);
+  await waitForScriptTruthy(
+    sessionId,
+    "return (()=>{const nav=document.querySelector('[data-inspection-stage-navigation]'), b=nav?.querySelector('[aria-current=\"step\"]'),summary=document.querySelector('.inspection-workflow-current-summary');if(!nav||!b)return false;const n=nav.getBoundingClientRect(),r=b.getBoundingClientRect();return b.dataset.inspectionStage==='review_sign'&&r.left>=n.left-1&&r.right<=n.right+1&&summary?.textContent.includes('Schritt 4 von 5');})()",
+    'Locked Review & Sign step remains horizontally visible at 320px',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.documentElement.scrollWidth<=document.documentElement.clientWidth;",
+    ),
+    true,
+    'Locked signature task does not create page-wide horizontal overflow',
+  );
+  await setWindowRect(sessionId, 1440, 1200);
 
   const signatureForm =
     "//form[@data-inspection-finalization-form='signature']";
@@ -8478,6 +8493,18 @@ try {
     'xpath',
     "//span[contains(@class,'status-chip') and normalize-space()='finalized']",
   );
+  await setWindowRect(sessionId, 320, 900);
+  await waitForScriptTruthy(
+    sessionId,
+    "return (()=>{const nav=document.querySelector('[data-inspection-stage-navigation]'), b=nav?.querySelector('[aria-current=\"step\"]'),summary=document.querySelector('.inspection-workflow-current-summary');if(!nav||!b)return false;const n=nav.getBoundingClientRect(),r=b.getBoundingClientRect();return b.dataset.inspectionStage==='report'&&r.left>=n.left-1&&r.right<=n.right+1&&summary?.textContent.includes('Schritt 5 von 5');})()",
+    'Finalized Report step remains horizontally visible at 320px',
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    "return document.activeElement?.getAttribute('data-inspection-stage-target')==='report';",
+    'Canonical finalization focuses the visible Report heading',
+  );
+  await setWindowRect(sessionId, 1440, 1200);
   await waitForElement(
     sessionId,
     'xpath',
