@@ -1,6 +1,6 @@
 # Portfolio — Inspection task-first wireflow and acceptance contract
 
-**Design proposal for Epic [#124](https://github.com/dusanmiladinovicVNM/Portfolio/issues/124)**  
+**Owner-approved direction for Epic [#124](https://github.com/dusanmiladinovicVNM/Portfolio/issues/124) (2026-11-19); technical and UAT acceptance outstanding**  
 **Source baseline:** main 316544ec0f76baee94efbeed7d344939f4b81f0e, 2026-11-18.  
 **Scope:** low-fidelity design only. No current lifecycle, API, auth or data contract is changed by this document.
 
@@ -8,7 +8,15 @@ See [UX audit, task map and target IA](portfolio-ux-architecture-2026-11-18.md).
 
 ## A. Critical semantic separation
 
-The user-facing steps are **Setup → Inspect rooms/sections → Findings & photos → Review & Sign → Complete & report**. These are task views, not new persisted states.
+The owner-approved user-facing journey contains **exactly five guided task stages**:
+
+1. **Setup** — identify Unit/Inspection, assignment and schedule; start permitted work.
+2. **Inspect rooms/sections** — answer questions in one exact room; add Findings/photos in that room as contextual actions.
+3. **Evidence overview** — aggregate linked evidence for review, scope correction and authorized Open/Download; routine capture still takes place in the room.
+4. **Review & Sign** — first perform **fresh canonical review and lock while in_progress**; only once the persisted Inspection is locked may required signatures be captured. A single UX stage may show different legally available panels, never a simultaneous or atomic review/lock/sign command.
+5. **Report** — Manager/Admin finalization after all required signatures, then separate authorized report generation or read-only report access. An Inspector sees the appropriate manager-handoff state, not a forbidden Finalize CTA.
+
+These are **presentation stages, not persisted business states**. The detailed D1–D6 sections below intentionally separate Review and Sign for independent lifecycle safety even though they share guided stage 4.
 
 Canonical lifecycle remains:
 
@@ -116,7 +124,9 @@ Keep existing canonical Unit deep link with tab=inspections, inspectionId and op
 
 **Gate:** legal in_progress status, current assigned actor, typed item/options and section expectedRevision. Required/conditional rules evaluated in local UI for guidance and again canonically on review. No promise of readiness from local form alone.
 
-**Back/Next:** route changes must honor dirty guard. While autosave is pending, either block navigation with a clear message or preserve drafts until confirmed. Never label “Next” as save; never silently drop touched entries.
+**Owner decision UX-D05 — Save & continue:** a primary “Save & continue” action on a dirty section must await an acknowledged matching canonical PATCH and fresh/merged local state before changing SectionInstance or guided stage. If the section is clean, “Continue” may navigate immediately after checking that no write is pending. If the write is pending, failed, in CAS conflict or has an ambiguous outcome, keep the user on the current section with their draft visible and show a recovery action; **never** show success or advance optimistically. A secondary “Previous room” remains navigation but is subject to the existing dirty blocker. No automatic discard of touched entries.
+
+**Migration guard:** UX-2B is only a focused-section *focus* fix; its existing Next/Previous links still obey the dirty guard, not the newly approved Save & continue workflow. Do not claim UX-D05 is implemented before a dedicated orchestration PR, a browser test for success/409/timeout, and manual acceptance.
 
 **Errors:** field-level validation (readable label, not technical code); conflict keeps local draft visibly intact; explicit compare/retry/discard choices must each specify risk and use a fresh expectedRevision. If comparison/merge is not implemented, do not claim it exists.
 
@@ -124,7 +134,7 @@ Keep existing canonical Unit deep link with tab=inspections, inspectionId and op
 
 **Goal:** capture observed condition and supporting evidence with unambiguous room/item ownership. Findings are *not* Maintenance Issues, and evidence is not automatically a WorkOrder.
 
-**Primary:** “Add finding” or “Add photo” as a contextual action chosen by the operator; do not present competing large create forms by default.
+**Primary:** “Add finding” or “Add photo” directly from the active room/item as a contextual action chosen by the operator; do not present competing large create forms by default. The separate guided **Evidence overview (stage 3)** summarizes **canonically linked** items across rooms, with scope/ownership badges, clear room navigation to repair evidence, authorized authenticated Open/Download, and explicit stored-only/incomplete states. Avoid creating a second competing upload flow.
 
 **Evidence task:**
 
@@ -178,6 +188,20 @@ Keep existing canonical Unit deep link with tab=inspections, inspectionId and op
 **View:** canonical completed summary, active/invalidated signature history, exact final report DocumentVersion, Open/Download and readable “report not yet generated”. History may collapse; main status must not.
 
 **Error:** if report generation fails after successful finalization, keep “Finalized; report pending” and a safe manager recovery action. Never offer to re-finalize and never imply a missing binary makes the snapshot disappear.
+
+## D7. Localisation contract (de-CH)
+
+The owner approved Swiss Standard German (`de-CH`) as the primary UI language. The business-stage vocabulary below is a **proposed UI copy contract**, not yet production localisation or a translation of the persisted domain enum:
+
+| Stage | German user-facing label | Action wording (illustrative) |
+| --- | --- | --- |
+| Setup | Vorbereitung | Inspektion starten |
+| Inspect | Räume prüfen | Speichern und weiter / Vorheriger Raum |
+| Evidence | Fotos und Nachweise | Foto hinzufügen / Nachweise prüfen |
+| Review & Sign | Prüfen und unterschreiben | Prüfung bestätigen und sperren / Unterschrift hinzufügen |
+| Report | Bericht | Bericht öffnen / Bericht erstellen (only authorized actor) |
+
+Use Swiss spelling (`ss`, not `ß`) in user-facing copy; choose terminology with a native de-CH reviewer before freezing all microcopy. Translate display strings via future i18n keys, **not** canonical API fields/status values. Real UAT must still verify wording, focus, mobile reading order and recovery instructions.
 
 ## E. Role / lifecycle action matrix
 
@@ -311,4 +335,4 @@ Before UX implementation collect a baseline from three role personas on desktop 
 
 Each runtime PR must include a screenshot/flow explanation, affected code, explicit invariants, browser regression cases, hosted role-specific acceptance plan, and rollback strategy. A PR touching API/domain/storage must be split out and justified separately.
 
-**Status:** awaiting design review. This documentation is intentionally not a live UI implementation or claim of completed mobile/security UAT.
+**Status:** owner approved the principal UX direction 2026-11-19. Implementation PRs, localisation rollout, physical device/screen-reader proof, and security/production acceptance remain independent and incomplete.
