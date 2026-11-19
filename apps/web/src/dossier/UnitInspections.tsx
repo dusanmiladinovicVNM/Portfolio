@@ -723,6 +723,7 @@ export function UnitInspections({
   // continue to use their own established focus handling.
   const pendingStageFocusRef = useRef<{
     readonly inspectionId: string;
+    readonly sectionInstanceId: string | undefined;
     readonly stage: InspectionWorkflowStepId;
   } | null>(null);
   const inspectionWritePendingRef = useRef(false);
@@ -1118,6 +1119,7 @@ export function UnitInspections({
     }
     pendingStageFocusRef.current = {
       inspectionId: routeBundle.inspection.id,
+      sectionInstanceId: inspectionSectionInstanceId,
       stage,
     };
     setStageSelection({
@@ -1132,6 +1134,7 @@ export function UnitInspections({
     if (
       !request ||
       routeBundle?.inspection.id !== request.inspectionId ||
+      inspectionSectionInstanceId !== request.sectionInstanceId ||
       activeStage !== request.stage
     ) return;
 
@@ -2161,7 +2164,21 @@ export function UnitInspections({
             canGenerateFinalReport={canGenerateFinalReport}
             bundle={routeBundle}
             key={`${routeBundle.inspection.id}:finalization`}
-            onEditSectionInstance={(sectionInstanceId) =>
+            onEditSectionInstance={(sectionInstanceId) => {
+              if (stageNavigationBlocked) return;
+              // Review may request a fix in the currently selected room.
+              // Navigating to that same URL is a no-op, so explicitly reveal
+              // the Inspect surface, without discarding the Review component.
+              setStageSelection({
+                inspectionId: routeBundle.inspection.id,
+                sectionInstanceId,
+                stage: 'inspect',
+              });
+              pendingStageFocusRef.current = {
+                inspectionId: routeBundle.inspection.id,
+                sectionInstanceId,
+                stage: 'inspect',
+              };
               navigate(
                 unitRoute(
                   propertyId,
@@ -2173,8 +2190,8 @@ export function UnitInspections({
                     inspectionSectionInstanceId: sectionInstanceId,
                   },
                 ),
-              )
-            }
+              );
+            }}
             onCanonicalBundle={(targetInspectionId, canonical) => {
               if (activeInspectionIdRef.current !== targetInspectionId) return;
               assertInspectionBundleOwner(targetInspectionId, unitId, canonical);
