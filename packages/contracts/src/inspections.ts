@@ -352,8 +352,19 @@ export const inspectionStaffListResponseSchema = z.object({
   items: z.array(inspectionStaffResponseSchema),
 });
 
+export const inspectionActionCapabilitiesSchema = z.object({
+  canUnlock: z.boolean(),
+  canFinalize: z.boolean(),
+  canGenerateFinalReport: z.boolean(),
+});
+
 export const inspectionBundleResponseSchema = z.object({
   inspection: inspectionResponseSchema,
+  /**
+   * Verified actor's server-projected presentation actions. Optional only
+   * for backwards-compatible rollout; the web UI must fail closed if absent.
+   */
+  actionCapabilities: inspectionActionCapabilitiesSchema.optional(),
   schema: inspectionSchemaVersionResponseSchema,
   sectionInstances: z.array(inspectionSectionInstanceResponseSchema),
   sectionStates: z.array(inspectionSectionStateResponseSchema),
@@ -385,6 +396,9 @@ export type InspectionStaffListResponse = z.infer<
 >;
 export type InspectionBundleResponse = z.infer<
   typeof inspectionBundleResponseSchema
+>;
+export type InspectionActionCapabilities = z.infer<
+  typeof inspectionActionCapabilitiesSchema
 >;
 export type SaveInspectionSectionResponse = z.infer<
   typeof saveInspectionSectionResponseSchema
