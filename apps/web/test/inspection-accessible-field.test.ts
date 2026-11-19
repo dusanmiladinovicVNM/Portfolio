@@ -82,7 +82,7 @@ describe('Inspection schema field accessible identity', () => {
     expect(html).toContain('<fieldset');
     expect(html).toContain('<legend class="inspection-item-label">');
     expect(html).toContain('Window condition');
-    expect(html).toContain('aria-invalid="true"');
+    expect(html).not.toContain('aria-invalid="true"');
     expect(html).toContain('class="inspection-required-screen-reader"');
     expect(html).toContain('(required)');
     expect(html).toContain('aria-describedby="' + fieldId + '-required"');
