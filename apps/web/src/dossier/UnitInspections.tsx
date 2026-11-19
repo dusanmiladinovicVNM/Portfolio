@@ -41,6 +41,7 @@ import {
   formatSwissDate,
 } from '../presentation/format.js';
 import { InspectionCompletedOverview } from './InspectionCompletedOverview.js';
+import { InspectionEvidenceOverview } from './InspectionEvidenceOverview.js';
 import { InspectionFinalizationPanel } from './InspectionFinalizationPanel.js';
 import {
   InspectionFindingsEvidence,
@@ -953,6 +954,9 @@ export function UnitInspections({
       if (!inspectionId) lastPresentedSectionKeyRef.current = null;
       return;
     }
+    // Evidence overview can select a different canonical room while staying
+    // in Evidence. Do not steal focus into the hidden Inspect form.
+    if (activeStage !== 'inspect') return;
 
     const previousKey = lastPresentedSectionKeyRef.current;
     lastPresentedSectionKeyRef.current = activeSectionFocusKey;
@@ -979,6 +983,7 @@ export function UnitInspections({
     return () => window.cancelAnimationFrame(frame);
   }, [
     activeSectionFocusKey,
+    activeStage,
     inspectionId,
     inspectionSectionInstanceId,
     selectedSectionInstance?.id,
@@ -1208,6 +1213,45 @@ export function UnitInspections({
     target?.focus({ preventScroll: true });
     target?.scrollIntoView({ block: 'start' });
   }, [routeBundle?.inspection.id, routeBundle?.inspection.status, activeStage]);
+
+  function openEvidenceRoom(sectionInstanceId: string) {
+    if (
+      !routeBundle ||
+      routeBundle.inspection.status !== 'in_progress' ||
+      stageNavigationBlocked ||
+      !orderedSectionInstances.some((instance) => instance.id === sectionInstanceId)
+    ) return;
+
+    if (selectedSectionInstance?.id === sectionInstanceId) {
+      const heading = document.querySelector<HTMLElement>(
+        '[data-inspection-stage-panel="evidence"] .inspection-content-heading h3',
+      );
+      heading?.focus({ preventScroll: true });
+      heading?.scrollIntoView({ block: 'start' });
+      return;
+    }
+    // This is presentation navigation, never an Evidence write. Preserve
+    // the canonical Inspection/SectionInstance route, then reveal its already
+    // mounted Evidence editor without resetting the task stage to Inspect.
+    setStageSelection({
+      inspectionId: routeBundle.inspection.id,
+      sectionInstanceId,
+      status: routeBundle.inspection.status,
+      lifecycleVersion: routeBundle.inspection.version,
+      stage: 'evidence',
+    });
+    pendingStageFocusRef.current = {
+      inspectionId: routeBundle.inspection.id,
+      sectionInstanceId,
+      stage: 'evidence',
+    };
+    navigate(
+      unitRoute(propertyId, unitId, asOf, 'inspections', {
+        inspectionId: routeBundle.inspection.id,
+        inspectionSectionInstanceId: sectionInstanceId,
+      }),
+    );
+  }
 
   const inspectionWriteGate: InspectionWriteGate = {
     pending: inspectionWritePending,
@@ -2170,9 +2214,16 @@ export function UnitInspections({
                 Fotos und Nachweise
               </h3>
               <p className="muted">
-                Nachweise für den aktuell ausgewählten Raum. Einen anderen Raum
-                unter «Räume prüfen» auswählen.
+                Verknüpfte Nachweise aller Räume oben prüfen, danach
+                Nachweise im ausgewählten Raum hinzufügen oder bearbeiten.
               </p>
+              <InspectionEvidenceOverview
+                bundle={routeBundle}
+                navigationBlocked={stageNavigationBlocked}
+                onOpenRoom={openEvidenceRoom}
+                orderedSectionInstances={orderedSectionInstances}
+                selectedSectionInstanceId={selectedSectionInstance?.id ?? null}
+              />
             {selectedSection && selectedSectionInstance ? (
               <InspectionFindingsEvidence
                 api={api}
