@@ -60,12 +60,21 @@ import {
   type PreparedInspectionPhoto,
 } from './inspection-photo.js';
 
+export interface StoredOnlyEvidenceVersion {
+  readonly documentId: string;
+  readonly versionId: string;
+}
+
 interface InspectionFindingsEvidenceProps {
   readonly api: PortfolioApi;
   readonly bundle: InspectionBundleResponse;
   readonly selectedSectionInstanceId: string;
   readonly blockedByDirtySection: boolean;
   readonly writeGate: InspectionWriteGate;
+  /** Exact, verified stored-only version scoped to this Inspection/SectionInstance. */
+  readonly storedOnlyVersion: StoredOnlyEvidenceVersion | null;
+  readonly onStoredOnlyVersion: (version: StoredOnlyEvidenceVersion) => void;
+  readonly onStoredOnlyAttached: (versionId: string) => void;
   readonly onCanonicalBundle: (
     targetInspectionId: string,
     canonical: InspectionBundleResponse,
@@ -122,6 +131,9 @@ export function InspectionFindingsEvidence({
   selectedSectionInstanceId,
   blockedByDirtySection,
   writeGate,
+  storedOnlyVersion,
+  onStoredOnlyVersion,
+  onStoredOnlyAttached,
   onCanonicalBundle,
 }: InspectionFindingsEvidenceProps) {
   const mountedRef = useRef(true);
@@ -130,12 +142,12 @@ export function InspectionFindingsEvidence({
     useState<readonly DocumentResponse[] | null>(null);
   const [documentsError, setDocumentsError] = useState<string | null>(null);
   const [selectedDocumentId, setSelectedDocumentId] =
-    useState<string | null>(null);
+    useState<string | null>(() => storedOnlyVersion?.documentId ?? null);
   const [versions, setVersions] =
     useState<readonly DocumentVersionResponse[] | null>(null);
   const [versionsError, setVersionsError] = useState<string | null>(null);
   const [selectedVersionId, setSelectedVersionId] =
-    useState<string | null>(null);
+    useState<string | null>(() => storedOnlyVersion?.versionId ?? null);
   const [catalogRevision, setCatalogRevision] = useState(0);
   const [versionRevision, setVersionRevision] = useState(0);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
@@ -208,12 +220,20 @@ export function InspectionFindingsEvidence({
       .then((response) => {
         if (controller.signal.aborted) return;
         assertDocumentVersionListOwner(selectedDocumentId, response.items);
+        const recoveredVersionMissing =
+          selectedDocumentId === storedOnlyVersion?.documentId &&
+          !response.items.some((item) => item.id === storedOnlyVersion.versionId);
         setVersions(response.items);
+        setVersionsError(
+          recoveredVersionMissing
+            ? 'The previously stored exact DocumentVersion is not present in the current canonical version list. Do not attach a different version; check document access and refresh.'
+            : null,
+        );
         setSelectedVersionId((current) => {
           if (current && response.items.some((item) => item.id === current)) {
             return current;
           }
-          return newestVersion(response.items)?.id ?? null;
+          return recoveredVersionMissing ? null : newestVersion(response.items)?.id ?? null;
         });
       })
       .catch((cause: unknown) => {
@@ -224,7 +244,7 @@ export function InspectionFindingsEvidence({
       });
 
     return () => controller.abort();
-  }, [api, selectedDocumentId, versionRevision]);
+  }, [api, selectedDocumentId, versionRevision, storedOnlyVersion?.documentId, storedOnlyVersion?.versionId]);
 
   const selectedDocument = useMemo(
     () =>
@@ -501,6 +521,7 @@ export function InspectionFindingsEvidence({
       if (mountedRef.current) {
         formElement.reset();
         setScopedUploadPurpose('photo');
+        onStoredOnlyVersion({ documentId: uploaded.documentId, versionId: uploaded.id });
         setSelectedDocumentId(uploaded.documentId);
         setSelectedVersionId(uploaded.id);
         setCatalogRevision((revision) => revision + 1);
@@ -688,6 +709,7 @@ export function InspectionFindingsEvidence({
       );
       if (mountedRef.current) {
         formElement.reset();
+        onStoredOnlyVersion({ documentId: uploaded.documentId, versionId: uploaded.id });
         setSelectedVersionId(uploaded.id);
         setCatalogRevision((revision) => revision + 1);
         setVersionRevision((revision) => revision + 1);
@@ -801,6 +823,7 @@ export function InspectionFindingsEvidence({
         }
         applyCanonical(canonical);
         if (mountedRef.current) {
+          onStoredOnlyAttached(expected.documentVersionId);
           formElement.reset();
           setEvidenceScope('section');
           setSuccess(
@@ -823,6 +846,7 @@ export function InspectionFindingsEvidence({
       assertAttachedInspectionEvidence(expected, persisted);
       applyCanonical(canonical);
       if (mountedRef.current) {
+        onStoredOnlyAttached(expected.documentVersionId);
         formElement.reset();
         setEvidenceScope('section');
         setSuccess(
@@ -877,6 +901,13 @@ export function InspectionFindingsEvidence({
       ) : null}
       {success ? (
         <p className="setup-form-success" aria-live="polite">{success}</p>
+      ) : null}
+      {storedOnlyVersion ? (
+        <p className="inspection-stored-only-recovery setup-hint" data-inspection-stored-only-recovery role="status">
+          {selectedVersion?.id === storedOnlyVersion.versionId
+            ? 'Stored-only Evidence restored for this exact room. Attach the selected existing version below; do not upload the file again.'
+            : 'Recovering the exact stored Evidence version for this room. Do not choose a different version or upload a duplicate.'}
+        </p>
       ) : null}
 
       <div className="inspection-content-grid">
