@@ -1512,6 +1512,25 @@ export function UnitInspections({
     <div className={'inspection-workspace' + (!inspectionId ? ' inspection-workspace-list' : '')}>
       {inspectionId ? (
         <div className="inspection-detail-navigation">
+          <nav aria-label="Inspection context" className="inspection-context-trail">
+            <WorkspaceLink
+              navigate={navigate}
+              route={propertyRoute(propertyId, asOf)}
+            >
+              Property
+            </WorkspaceLink>
+            <span aria-hidden="true">›</span>
+            <WorkspaceLink
+              navigate={navigate}
+              route={unitRoute(propertyId, unitId, asOf, 'overview')}
+            >
+              {unitLabel}
+            </WorkspaceLink>
+            <span aria-hidden="true">›</span>
+            <strong aria-current="page">
+              {routeBundle?.inspection.code ?? selectedListInspection?.code ?? 'Inspection'}
+            </strong>
+          </nav>
           <WorkspaceLink
             className="back-link"
             navigate={navigate}
@@ -1519,7 +1538,6 @@ export function UnitInspections({
           >
             ← All Inspections
           </WorkspaceLink>
-          <span>Focused Inspection workspace</span>
         </div>
       ) : null}
 
