@@ -114,7 +114,7 @@ export function UnitOverview({
       ) : null}
 
       {overview ? (
-        <div className="dashboard-stack">
+        <div className="dashboard-stack unit-overview-yepp" data-unit-yepp-overview>
           <UnitOverviewCommandCenter
             api={api}
             asOf={asOf}
@@ -123,40 +123,6 @@ export function UnitOverview({
             propertyId={propertyId}
             unitId={unitId}
           />
-
-          <UnitSetupReadiness
-            api={api}
-            asOf={asOf}
-            navigate={navigate}
-            overview={overview}
-            propertyId={propertyId}
-            unitId={unitId}
-          />
-
-          <section className="metric-grid">
-            <article className="metric-card metric-card-primary">
-              <span>Occupancy</span>
-              <strong className="text-metric">{overview.occupancyStatus}</strong>
-              <small>as of {formatSwissDate(overview.asOf)}</small>
-            </article>
-            <article className="metric-card">
-              <span>Contract coverage</span>
-              <strong className="text-metric">
-                {coverageLabel(overview.contract.coverageStatus)}
-              </strong>
-              <small>{overview.contract.agreementCode ?? 'No selected agreement'}</small>
-            </article>
-            <article className="metric-card">
-              <span>Area</span>
-              <strong>{overview.areaM2 === null ? '—' : overview.areaM2}</strong>
-              <small>{overview.areaM2 === null ? 'not recorded' : 'm²'}</small>
-            </article>
-            <article className="metric-card">
-              <span>Rooms</span>
-              <strong>{overview.rooms ?? '—'}</strong>
-              <small>floor {overview.floor ?? '—'}</small>
-            </article>
-          </section>
 
           <section className="dossier-grid">
             <article className="panel">
@@ -205,6 +171,72 @@ export function UnitOverview({
             </article>
           </section>
 
+          <UnitSetupReadiness
+            api={api}
+            asOf={asOf}
+            navigate={navigate}
+            overview={overview}
+            propertyId={propertyId}
+            unitId={unitId}
+          />
+
+
+          <section aria-label="Current operational Unit summary" className="unit-yepp-quick-metrics" data-unit-yepp-quick-metrics>
+            <article>
+              <span>Open issues</span>
+              <strong>{overview.currentOperations.openMaintenanceIssueCount}</strong>
+              <small>{overview.currentOperations.urgentMaintenanceIssueCount} urgent</small>
+            </article>
+            <article>
+              <span>Work orders</span>
+              <strong>{overview.currentOperations.openMaintenanceWorkOrderCount}</strong>
+              <small>Open now</small>
+            </article>
+            <article>
+              <span>Assets</span>
+              <strong>{overview.currentOperations.locatedAssetCount}</strong>
+              <small>{overview.currentOperations.activeServicePlanCount} service plans</small>
+            </article>
+            <article>
+              <span>Attributed costs</span>
+              <strong>
+                {overview.unitAttributedCostsByCurrency.length === 0
+                  ? '—'
+                  : overview.unitAttributedCostsByCurrency.length +
+                    (overview.unitAttributedCostsByCurrency.length === 1 ? ' currency' : ' currencies')}
+              </strong>
+              <small>Through {formatSwissDate(overview.asOf)} · no cross-currency sum</small>
+            </article>
+          </section>
+
+          <details className="unit-yepp-history" data-unit-yepp-history>
+            <summary>Historical projection, full operations and cost details</summary>
+            <div className="unit-yepp-history-body">
+          <section className="metric-grid">
+            <article className="metric-card metric-card-primary">
+              <span>Occupancy</span>
+              <strong className="text-metric">{overview.occupancyStatus}</strong>
+              <small>as of {formatSwissDate(overview.asOf)}</small>
+            </article>
+            <article className="metric-card">
+              <span>Contract coverage</span>
+              <strong className="text-metric">
+                {coverageLabel(overview.contract.coverageStatus)}
+              </strong>
+              <small>{overview.contract.agreementCode ?? 'No selected agreement'}</small>
+            </article>
+            <article className="metric-card">
+              <span>Area</span>
+              <strong>{overview.areaM2 === null ? '—' : overview.areaM2}</strong>
+              <small>{overview.areaM2 === null ? 'not recorded' : 'm²'}</small>
+            </article>
+            <article className="metric-card">
+              <span>Rooms</span>
+              <strong>{overview.rooms ?? '—'}</strong>
+              <small>floor {overview.floor ?? '—'}</small>
+            </article>
+          </section>
+
           <section className="panel">
             <div className="section-heading">
               <div><p className="eyebrow">Current operations</p><h2>Operational inventory</h2></div>
@@ -247,6 +279,8 @@ export function UnitOverview({
               </div>
             )}
           </section>
+            </div>
+          </details>
         </div>
       ) : null}
     </>
