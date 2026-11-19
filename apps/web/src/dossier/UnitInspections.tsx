@@ -716,6 +716,8 @@ export function UnitInspections({
   const [stageSelection, setStageSelection] = useState<{
     readonly inspectionId: string;
     readonly sectionInstanceId: string | undefined;
+    readonly status: InspectionResponseDto['status'];
+    readonly lifecycleVersion: number;
     readonly stage: InspectionWorkflowStepId;
   } | null>(null);
   const continueIntentRef = useRef<InspectionContinueIntent | null>(null);
@@ -723,7 +725,12 @@ export function UnitInspections({
   // continue to use their own established focus handling.
   const pendingStageFocusRef = useRef<{
     readonly inspectionId: string;
+    readonly sectionInstanceId: string | undefined;
     readonly stage: InspectionWorkflowStepId;
+  } | null>(null);
+  const presentedLifecycleRef = useRef<{
+    readonly inspectionId: string;
+    readonly status: InspectionResponseDto['status'];
   } | null>(null);
   const inspectionWritePendingRef = useRef(false);
   const activeInspectionIdRef = useRef(inspectionId);
@@ -807,6 +814,8 @@ export function UnitInspections({
       ? null
       : stageSelection?.inspectionId === routeBundle.inspection.id &&
           stageSelection.sectionInstanceId === inspectionSectionInstanceId &&
+          stageSelection.status === routeBundle.inspection.status &&
+          stageSelection.lifecycleVersion === routeBundle.inspection.version &&
           inspectionWorkflowStageAvailable(
             routeBundle.inspection.status,
             stageSelection.stage,
@@ -1118,11 +1127,14 @@ export function UnitInspections({
     }
     pendingStageFocusRef.current = {
       inspectionId: routeBundle.inspection.id,
+      sectionInstanceId: inspectionSectionInstanceId,
       stage,
     };
     setStageSelection({
       inspectionId: routeBundle.inspection.id,
       sectionInstanceId: inspectionSectionInstanceId,
+      status: routeBundle.inspection.status,
+      lifecycleVersion: routeBundle.inspection.version,
       stage,
     });
   }
@@ -1132,6 +1144,7 @@ export function UnitInspections({
     if (
       !request ||
       routeBundle?.inspection.id !== request.inspectionId ||
+      inspectionSectionInstanceId !== request.sectionInstanceId ||
       activeStage !== request.stage
     ) return;
 
@@ -1145,6 +1158,36 @@ export function UnitInspections({
     target?.focus({ preventScroll: true });
     target?.scrollIntoView({ block: 'start' });
   }, [activeStage, routeBundle?.inspection.id, inspectionSectionInstanceId]);
+
+  useEffect(() => {
+    const current = routeBundle?.inspection;
+    if (!current) {
+      presentedLifecycleRef.current = null;
+      return;
+    }
+    const previous = presentedLifecycleRef.current;
+    presentedLifecycleRef.current = {
+      inspectionId: current.id,
+      status: current.status,
+    };
+    if (
+      !previous ||
+      previous.inspectionId !== current.id ||
+      previous.status === current.status ||
+      pendingStageFocusRef.current !== null ||
+      activeStage === null
+    ) return;
+
+    // On a real canonical lifecycle transition the previously focused
+    // command can disappear (Start, Lock, Unlock, Finalize). Restore focus
+    // to the visible task heading, never on ordinary PATCH/review rerenders.
+    const target = document.querySelector<HTMLElement>(
+      '[data-inspection-stage-panel="' + activeStage + '"]:not([hidden]) ' +
+        '[data-inspection-stage-target="' + activeStage + '"]',
+    );
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: 'start' });
+  }, [routeBundle?.inspection.id, routeBundle?.inspection.status, activeStage]);
 
   const inspectionWriteGate: InspectionWriteGate = {
     pending: inspectionWritePending,
@@ -2161,7 +2204,23 @@ export function UnitInspections({
             canGenerateFinalReport={canGenerateFinalReport}
             bundle={routeBundle}
             key={`${routeBundle.inspection.id}:finalization`}
-            onEditSectionInstance={(sectionInstanceId) =>
+            onEditSectionInstance={(sectionInstanceId) => {
+              if (stageNavigationBlocked) return;
+              // Review may request a fix in the currently selected room.
+              // Navigating to that same URL is a no-op, so explicitly reveal
+              // the Inspect surface, without discarding the Review component.
+              setStageSelection({
+                inspectionId: routeBundle.inspection.id,
+                sectionInstanceId,
+                status: routeBundle.inspection.status,
+                lifecycleVersion: routeBundle.inspection.version,
+                stage: 'inspect',
+              });
+              pendingStageFocusRef.current = {
+                inspectionId: routeBundle.inspection.id,
+                sectionInstanceId,
+                stage: 'inspect',
+              };
               navigate(
                 unitRoute(
                   propertyId,
@@ -2173,8 +2232,8 @@ export function UnitInspections({
                     inspectionSectionInstanceId: sectionInstanceId,
                   },
                 ),
-              )
-            }
+              );
+            }}
             onCanonicalBundle={(targetInspectionId, canonical) => {
               if (activeInspectionIdRef.current !== targetInspectionId) return;
               assertInspectionBundleOwner(targetInspectionId, unitId, canonical);

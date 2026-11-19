@@ -6822,6 +6822,14 @@ try {
       true,
       `Inspection phase navigation stays inside viewport ${width}px`,
     );
+    assertEqual(
+      await executeScript(
+        sessionId,
+        "const nav=document.querySelector('[data-inspection-stage-navigation]');const active=nav?.querySelector('[aria-current=\"step\"]');const status=document.querySelector('.inspection-workflow-current-summary');if(!nav||!active||!status)return false;const n=nav.getBoundingClientRect(),r=active.getBoundingClientRect();return r.height>=44&&r.left>=n.left-1&&r.right<=n.right+1&&status.textContent.includes('Schritt 2 von 5')&&(window.innerWidth>680||getComputedStyle(document.querySelector('.inspection-workflow-scroll-hint')).display!=='none');",
+      ),
+      true,
+      `Current Inspection stage and swipe guidance are accessible at ${width}px`,
+    );
   }
   await setWindowRect(sessionId, 1440, 1200);
 
@@ -6886,7 +6894,19 @@ try {
     'Inspect is the only visible task surface after starting',
   );
   const beforeStageFocusUrl = await currentUrl(sessionId);
-  await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
+  const evidenceStageButton = await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-stage='evidence']",
+  );
+  await executeScript(
+    sessionId,
+    "document.querySelector('[data-inspection-stage=\"evidence\"]').focus();return true;",
+  );
+  await webdriver(`/session/${sessionId}/element/${evidenceStageButton}/value`, {
+    method: 'POST',
+    body: { text: '\uE007', value: ['\uE007'] },
+  });
   await waitForScriptTruthy(
     sessionId,
     "return document.activeElement?.getAttribute('data-inspection-stage-target') === 'evidence';",
@@ -7009,6 +7029,38 @@ try {
     ),
     false,
     'Fix action closes Review and returns to field work',
+  );
+
+  // The missing field is now the active room: fixing that exact same room
+  // must switch to Inspect even though navigating to its URL is a no-op.
+  await clickXpath(sessionId, "//*[@data-inspection-stage='review_sign']");
+  await clickXpath(sessionId, "//button[normalize-space()='Review before lock']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-review-missing-summary][contains(normalize-space(),'1 required response needs attention')]",
+  );
+  await clickXpath(
+    sessionId,
+    `//*[@data-inspection-review-fix-section='${inspectionSectionInstanceId}']`,
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-stage-navigation]//button[@data-inspection-stage='inspect'][@aria-current='step']",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "const panel=document.querySelector('[data-inspection-stage-panel=\"inspect\"]');const target=document.querySelector('[data-inspection-active-section-heading]');return panel?.hidden===false&&document.activeElement===target;",
+    ),
+    true,
+    'Review Fix on the already selected room reveals the field form and focuses its heading',
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'Same-room Review Fix preserves exact canonical SectionInstance URL',
   );
   await waitForElement(
     sessionId,
@@ -8137,6 +8189,21 @@ try {
     'xpath',
     "//span[contains(@class,'status-chip') and normalize-space()='locked']",
   );
+  await setWindowRect(sessionId, 320, 900);
+  await waitForScriptTruthy(
+    sessionId,
+    "return (()=>{const nav=document.querySelector('[data-inspection-stage-navigation]'), b=nav?.querySelector('[aria-current=\"step\"]'),summary=document.querySelector('.inspection-workflow-current-summary');if(!nav||!b)return false;const n=nav.getBoundingClientRect(),r=b.getBoundingClientRect();return b.dataset.inspectionStage==='review_sign'&&r.left>=n.left-1&&r.right<=n.right+1&&summary?.textContent.includes('Schritt 4 von 5');})()",
+    'Locked Review & Sign step remains horizontally visible at 320px',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.documentElement.scrollWidth<=document.documentElement.clientWidth;",
+    ),
+    true,
+    'Locked signature task does not create page-wide horizontal overflow',
+  );
+  await setWindowRect(sessionId, 1440, 1200);
 
   const signatureForm =
     "//form[@data-inspection-finalization-form='signature']";
@@ -8255,7 +8322,17 @@ try {
     'xpath',
     "//*[contains(normalize-space(),'prior signatures were invalidated')]",
   );
-
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-stage-navigation]//button[@data-inspection-stage='inspect'][@aria-current='step']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    "return document.activeElement?.getAttribute('data-inspection-stage-target')==='inspect';",
+    'Canonical unlock focuses visible Inspect heading',
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='review_sign']");
   await clickXpath(
     sessionId,
     "//button[normalize-space()='Review before lock']",
@@ -8426,6 +8503,18 @@ try {
     'xpath',
     "//span[contains(@class,'status-chip') and normalize-space()='finalized']",
   );
+  await setWindowRect(sessionId, 320, 900);
+  await waitForScriptTruthy(
+    sessionId,
+    "return (()=>{const nav=document.querySelector('[data-inspection-stage-navigation]'), b=nav?.querySelector('[aria-current=\"step\"]'),summary=document.querySelector('.inspection-workflow-current-summary');if(!nav||!b)return false;const n=nav.getBoundingClientRect(),r=b.getBoundingClientRect();return b.dataset.inspectionStage==='report'&&r.left>=n.left-1&&r.right<=n.right+1&&summary?.textContent.includes('Schritt 5 von 5');})()",
+    'Finalized Report step remains horizontally visible at 320px',
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    "return document.activeElement?.getAttribute('data-inspection-stage-target')==='report';",
+    'Canonical finalization focuses the visible Report heading',
+  );
+  await setWindowRect(sessionId, 1440, 1200);
   await waitForElement(
     sessionId,
     'xpath',
