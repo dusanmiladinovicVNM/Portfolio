@@ -8147,6 +8147,18 @@ try {
     evidenceReadsBeforePreview + 2,
     'Only explicitly requested attached versions are fetched after denial and retry',
   );
+  for (const width of [320, 375, 390, 768]) {
+    await setWindowRect(sessionId, width, 900);
+    assertEqual(
+      await executeScript(
+        sessionId,
+        "const root=document.querySelector('[data-inspection-evidence-binary-preview]');const close=root?.querySelector('[data-inspection-evidence-preview-close]');const download=root?.querySelector('[data-inspection-evidence-preview-download]');if(!root||!close||!download)return false;const r=root.getBoundingClientRect();return r.left>=-1&&r.right<=window.innerWidth+1&&close.getBoundingClientRect().height>=44&&download.getBoundingClientRect().height>=44&&document.documentElement.scrollWidth<=document.documentElement.clientWidth;",
+      ),
+      true,
+      `Authorized Evidence preview and controls fit viewport ${width}px`,
+    );
+  }
+  await setWindowRect(sessionId, 1440, 1200);
   await clickXpath(sessionId, "//*[@data-inspection-evidence-preview-close]");
   await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
   assertEqual(
