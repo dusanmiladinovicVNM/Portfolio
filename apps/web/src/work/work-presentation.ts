@@ -44,6 +44,23 @@ export function workNeedsActionNow(value: WorkAttention): boolean {
   );
 }
 
+/**
+ * User-facing task title, derived only from the existing canonical Work DTO.
+ * Attention and lifecycle are separate pieces of state.
+ */
+export function workItemHeadline(item: OperationalWorkItemResponse): string {
+  switch (item.kind) {
+    case 'inspection':
+      return formatDetailKey(item.inspectionType) + ' inspection';
+    case 'maintenance':
+      return item.title;
+    case 'service':
+      return item.planName;
+    case 'occupancy':
+      return workOccupancyReasonLabel(item.reason);
+  }
+}
+
 export function workItemSummary(
   item: OperationalWorkItemResponse,
 ): string {
