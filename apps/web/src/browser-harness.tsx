@@ -1542,6 +1542,7 @@ function apiPath(input: RequestInfo | URL): URL {
 type BrowserHarnessWindow = Window & {
   __portfolioBinaryReads?: number;
   __portfolioDenyNextEvidenceBinaryRead?: boolean;
+  __portfolioEvidenceBinaryGetAttempts?: number;
   __portfolioDocumentUploadCount?: number;
   __portfolioHoldUnitCreate?: boolean;
   __portfolioHoldSpaceCreate?: boolean;
@@ -2272,6 +2273,8 @@ globalThis.fetch = async (
     );
     if (version) {
       requirePortfolioAuth(init);
+      browserHarnessWindow.__portfolioEvidenceBinaryGetAttempts =
+        (browserHarnessWindow.__portfolioEvidenceBinaryGetAttempts ?? 0) + 1;
       if (browserHarnessWindow.__portfolioDenyNextEvidenceBinaryRead) {
         browserHarnessWindow.__portfolioDenyNextEvidenceBinaryRead = false;
         return apiError(
