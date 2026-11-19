@@ -8085,11 +8085,20 @@ try {
     sessionId,
     'return window.__portfolioBinaryReads || 0;',
   );
+  const evidenceAttemptsBeforePreview = await executeScript(
+    sessionId,
+    'return window.__portfolioEvidenceBinaryGetAttempts || 0;',
+  );
   await new Promise((resolve) => setTimeout(resolve, 100));
   assertEqual(
     await executeScript(sessionId, 'return window.__portfolioBinaryReads || 0;'),
     evidenceReadsBeforePreview,
     'Central Evidence index does not preload protected binary files',
+  );
+  assertEqual(
+    await executeScript(sessionId, 'return window.__portfolioEvidenceBinaryGetAttempts || 0;'),
+    evidenceAttemptsBeforePreview,
+    'Central Evidence index does not attempt any binary GET without an operator click',
   );
   await executeScript(
     sessionId,
@@ -8108,6 +8117,11 @@ try {
     false,
     'Denied Evidence binary read cannot render protected photo',
   );
+  assertEqual(
+    await executeScript(sessionId, 'return window.__portfolioEvidenceBinaryGetAttempts || 0;'),
+    evidenceAttemptsBeforePreview + 1,
+    'One click produces exactly one denied binary GET even under React StrictMode',
+  );
   await clickXpath(sessionId, "//*[@data-inspection-evidence-preview-retry]");
   await waitForElement(
     sessionId,
@@ -8118,6 +8132,11 @@ try {
     await executeScript(sessionId, 'return window.__portfolioBinaryReads || 0;'),
     evidenceReadsBeforePreview + 1,
     'Explicit retry reads the same attached DocumentVersion after a 403',
+  );
+  assertEqual(
+    await executeScript(sessionId, 'return window.__portfolioEvidenceBinaryGetAttempts || 0;'),
+    evidenceAttemptsBeforePreview + 2,
+    'One retry produces exactly one additional binary GET',
   );
   await clickXpath(sessionId, "//*[@data-inspection-evidence-preview-close]");
   await waitForScriptTruthy(
@@ -8146,6 +8165,11 @@ try {
     await executeScript(sessionId, 'return window.__portfolioBinaryReads || 0;'),
     evidenceReadsBeforePreview + 2,
     'Only explicitly requested attached versions are fetched after denial and retry',
+  );
+  assertEqual(
+    await executeScript(sessionId, 'return window.__portfolioEvidenceBinaryGetAttempts || 0;'),
+    evidenceAttemptsBeforePreview + 3,
+    'Reopening selected Evidence produces exactly one third binary GET',
   );
   for (const width of [320, 375, 390, 768]) {
     await setWindowRect(sessionId, width, 900);
