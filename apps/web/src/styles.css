@@ -4383,3 +4383,122 @@ summary:focus-visible {
   .unit-yepp-quick-metrics { grid-template-columns: 1fr; }
   .unit-overview-yepp .dossier-grid { grid-template-columns: 1fr; }
 }
+
+
+/* YEPP Unit Inspection listing: only the list entry surface is restyled. */
+.inspection-workspace-list { gap: 12px; }
+.inspection-yepp-list {
+  padding: 15px 17px;
+  border-radius: 6px;
+  background: #fff;
+}
+.inspection-yepp-list-heading {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+.inspection-yepp-list-heading h2 {
+  margin: 0;
+  font-size: 1.02rem;
+}
+.inspection-yepp-list-heading p {
+  margin: 4px 0 0;
+  color: #697066;
+  font-size: .73rem;
+}
+.inspection-yepp-count {
+  min-width: 26px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: #edf2d5;
+  color: #445326;
+  font-size: .74rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.inspection-yepp-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid #dde1d7;
+  border-radius: 5px;
+}
+.inspection-yepp-table-scroll:focus-visible {
+  outline: 3px solid #547126;
+  outline-offset: 3px;
+}
+.inspection-yepp-table {
+  width: 100%;
+  min-width: 580px;
+  border-collapse: collapse;
+  background: #fff;
+  font-size: .77rem;
+}
+.inspection-yepp-table caption {
+  padding: 8px 12px;
+  color: #686e62;
+  text-align: left;
+  font-size: .72rem;
+}
+.inspection-yepp-table thead { background: #f1f2ec; }
+.inspection-yepp-table th {
+  padding: 8px 10px;
+  color: #636a60;
+  font-size: .7rem;
+  font-weight: 750;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  text-align: left;
+}
+.inspection-yepp-table td {
+  display: table-cell;
+  padding: 9px 10px;
+  border-top: 1px solid #e6e9e0;
+  vertical-align: middle;
+  white-space: nowrap;
+  text-align: left;
+}
+.inspection-yepp-table tr:last-child td { border-bottom: 0; }
+.inspection-yepp-table td:first-child { display: table-cell; }
+.inspection-yepp-table td:first-child strong { color: #273029; }
+.inspection-yepp-table th:last-child,
+.inspection-yepp-table td:last-child { text-align: right; }
+.inspection-yepp-table .status-chip {
+  border-radius: 3px;
+  padding: 4px 8px;
+}
+.inspection-yepp-row-action {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  padding: 7px 12px;
+  border-radius: 5px;
+  font-size: .75rem;
+  text-decoration: none;
+}
+.inspection-yepp-row-action:focus-visible {
+  outline: 3px solid #547126;
+  outline-offset: 3px;
+}
+.inspection-workspace-list .inspection-orchestration-panel {
+  padding: 16px 18px;
+  border-radius: 6px;
+  background: #fff;
+}
+.inspection-workspace-list .inspection-orchestration-panel .section-heading {
+  margin-bottom: 13px;
+}
+.inspection-workspace-list .inspection-orchestration-panel h2 {
+  font-size: 1.05rem;
+}
+.inspection-workspace-list .inspection-orchestration-panel .eyebrow {
+  margin-bottom: 4px;
+  font-size: .66rem;
+}
+@media (max-width: 760px) {
+  .inspection-yepp-list { padding: 12px; }
+  .inspection-yepp-list-heading { align-items: start; }
+  .inspection-yepp-table-scroll { -webkit-overflow-scrolling: touch; }
+}
