@@ -8371,11 +8371,11 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//a[contains(@class,'inspection-card')][.//strong[normalize-space()='INS-BRW-001']]",
+    "//*[@data-inspection-yepp-list]//tr[@data-inspection-yepp-row='" + inspectionId + "'][.//strong[normalize-space()='INS-BRW-001']]//a[normalize-space()='View']",
   );
   await clickXpath(
     sessionId,
-    "//a[contains(@class,'inspection-card')][.//strong[normalize-space()='INS-BRW-001']]",
+    "//*[@data-inspection-yepp-list]//tr[@data-inspection-yepp-row='" + inspectionId + "'][.//strong[normalize-space()='INS-BRW-001']]//a[normalize-space()='View']",
   );
   await waitForElement(
     sessionId,
