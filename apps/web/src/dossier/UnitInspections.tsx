@@ -1463,7 +1463,7 @@ export function UnitInspections({
   }
 
   return (
-    <div className="inspection-workspace">
+    <div className={'inspection-workspace' + (!inspectionId ? ' inspection-workspace-list' : '')}>
       {inspectionId ? (
         <div className="inspection-detail-navigation">
           <WorkspaceLink
