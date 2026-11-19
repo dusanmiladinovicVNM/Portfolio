@@ -31,7 +31,7 @@ import {
   type PortfolioApi,
 } from '../api/portfolio-api.js';
 import { WorkspaceLink } from '../navigation/WorkspaceLink.js';
-import { unitRoute } from '../navigation/workspace-route.js';
+import { propertyRoute, unitRoute } from '../navigation/workspace-route.js';
 import type {
   NavigateWorkspace,
   SetNavigationBlocker,
@@ -45,6 +45,11 @@ import { InspectionFinalizationPanel } from './InspectionFinalizationPanel.js';
 import { InspectionFindingsEvidence } from './InspectionFindingsEvidence.js';
 import { InspectionOrchestrationPanel } from './InspectionOrchestrationPanel.js';
 import { InspectionWorkflowStepper } from './InspectionWorkflowStepper.js';
+import {
+  inspectionWorkflowCurrentStep,
+  inspectionWorkflowStageAvailable,
+  type InspectionWorkflowStepId,
+} from './inspection-workflow.js';
 import { assertInspectionBundleOwner } from './inspection-content-owner.js';
 import {
   buildInspectionRequiredProgress,
@@ -165,6 +170,7 @@ interface UnitInspectionsProps {
   readonly canGenerateFinalReport: boolean;
   readonly propertyId: string;
   readonly unitId: string;
+  readonly unitLabel: string;
   readonly asOf: string;
   readonly inspectionId?: string | undefined;
   readonly inspectionSectionInstanceId?: string | undefined;
@@ -674,6 +680,7 @@ export function UnitInspections({
   canGenerateFinalReport,
   propertyId,
   unitId,
+  unitLabel,
   asOf,
   inspectionId,
   inspectionSectionInstanceId,
@@ -706,6 +713,10 @@ export function UnitInspections({
   ] = useState<number | null>(null);
   const [inspectionWritePending, setInspectionWritePending] = useState(false);
   const [continueIntent, setContinueIntent] = useState<InspectionContinueIntent | null>(null);
+  const [stageSelection, setStageSelection] = useState<{
+    readonly inspectionId: string;
+    readonly stage: InspectionWorkflowStepId;
+  } | null>(null);
   const continueIntentRef = useRef<InspectionContinueIntent | null>(null);
   const inspectionWritePendingRef = useRef(false);
   const activeInspectionIdRef = useRef(inspectionId);
@@ -783,6 +794,17 @@ export function UnitInspections({
     bundle.inspection.id === inspectionId
       ? bundle
       : null;
+
+  const activeStage =
+    routeBundle === null
+      ? null
+      : stageSelection?.inspectionId === routeBundle.inspection.id &&
+          inspectionWorkflowStageAvailable(
+            routeBundle.inspection.status,
+            stageSelection.stage,
+          )
+        ? stageSelection.stage
+        : inspectionWorkflowCurrentStep(routeBundle.inspection.status);
 
   const selectedListInspection = useMemo(
     () =>
