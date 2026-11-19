@@ -1,41 +1,68 @@
 import {
   inspectionWorkflowCurrentStep,
+  inspectionWorkflowStageAvailable,
   inspectionWorkflowSteps,
 } from '../src/dossier/inspection-workflow.js';
 import { describe, expect, it } from 'vitest';
 
-describe('Inspection workflow presentation', () => {
-  it('maps canonical lifecycle states to the focused UX step', () => {
-    expect(inspectionWorkflowCurrentStep('draft', false)).toBe('setup');
-    expect(inspectionWorkflowCurrentStep('in_progress', false)).toBe('inspect');
-    expect(inspectionWorkflowCurrentStep('in_progress', true)).toBe('review');
-    expect(inspectionWorkflowCurrentStep('locked', true)).toBe('sign');
-    expect(inspectionWorkflowCurrentStep('finalized', true)).toBe('complete');
-    expect(inspectionWorkflowCurrentStep('cancelled', false)).toBeNull();
-  });
-
-  it('marks only presentation predecessors complete', () => {
-    expect(
-      inspectionWorkflowSteps('locked', true).map((step) => [
-        step.id,
-        step.state,
-      ]),
-    ).toEqual([
-      ['setup', 'complete'],
-      ['inspect', 'complete'],
-      ['review', 'complete'],
-      ['sign', 'current'],
-      ['complete', 'upcoming'],
+describe('Inspection task phase navigation (presentation only)', () => {
+  it('always exposes the owner-approved five phases in the intended order', () => {
+    expect(inspectionWorkflowSteps('in_progress').map((step) => step.id)).toEqual([
+      'setup',
+      'inspect',
+      'evidence',
+      'review_sign',
+      'report',
     ]);
   });
 
-  it('does not invent a persisted review lifecycle state', () => {
-    const incomplete = inspectionWorkflowSteps('in_progress', false);
-    const ready = inspectionWorkflowSteps('in_progress', true);
+  it('derives a safe default without inventing another lifecycle state', () => {
+    expect(inspectionWorkflowCurrentStep('draft')).toBe('setup');
+    expect(inspectionWorkflowCurrentStep('in_progress')).toBe('inspect');
+    expect(inspectionWorkflowCurrentStep('locked')).toBe('review_sign');
+    expect(inspectionWorkflowCurrentStep('finalized')).toBe('report');
+    expect(inspectionWorkflowCurrentStep('cancelled')).toBeNull();
+  });
 
-    expect(incomplete.find((step) => step.state === 'current')?.id).toBe(
-      'inspect',
-    );
-    expect(ready.find((step) => step.state === 'current')?.id).toBe('review');
+  it('does not assert that earlier stages were canonically completed', () => {
+    const selected = inspectionWorkflowSteps('in_progress', 'review_sign');
+    expect(selected.map(({ id, state }) => [id, state])).toEqual([
+      ['setup', 'previous'],
+      ['inspect', 'previous'],
+      ['evidence', 'previous'],
+      ['review_sign', 'current'],
+      ['report', 'upcoming'],
+    ]);
+    expect(selected.every((step) => step.state !== 'complete')).toBe(true);
+  });
+
+  it('allows only lifecycle-compatible surfaces, never illegal navigation', () => {
+    expect(
+      inspectionWorkflowSteps('draft').filter((step) => step.available).map((step) => step.id),
+    ).toEqual(['setup']);
+    expect(
+      inspectionWorkflowSteps('in_progress').filter((step) => step.available).map((step) => step.id),
+    ).toEqual(['inspect', 'evidence', 'review_sign']);
+    expect(
+      inspectionWorkflowSteps('locked').filter((step) => step.available).map((step) => step.id),
+    ).toEqual(['review_sign']);
+    expect(
+      inspectionWorkflowSteps('finalized').filter((step) => step.available).map((step) => step.id),
+    ).toEqual(['report']);
+    expect(inspectionWorkflowSteps('cancelled').every((step) => !step.available)).toBe(true);
+  });
+
+  it('ignores a stale or unavailable selection after lifecycle changes', () => {
+    expect(inspectionWorkflowSteps('locked', 'evidence')
+      .find((step) => step.state === 'current')?.id).toBe('review_sign');
+    expect(inspectionWorkflowSteps('finalized', 'review_sign')
+      .find((step) => step.state === 'current')?.id).toBe('report');
+    expect(inspectionWorkflowStageAvailable('draft', 'report')).toBe(false);
+  });
+
+  it('never interprets phase selection as authorization or completion', () => {
+    const selected = inspectionWorkflowSteps('in_progress', 'review_sign');
+    expect(selected.find((step) => step.id === 'review_sign')?.available).toBe(true);
+    expect(selected.find((step) => step.id === 'report')?.available).toBe(false);
   });
 });
