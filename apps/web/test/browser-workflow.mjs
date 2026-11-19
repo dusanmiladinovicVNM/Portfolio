@@ -6933,6 +6933,7 @@ try {
     `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${inspectionKitchenInstanceId}&asOf=2025-06-30`,
     'Incomplete Review can start away from the missing SectionInstance',
   );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='review_sign']");
   await clickXpath(
     sessionId,
     "//button[normalize-space()='Review before lock']",
@@ -7226,6 +7227,7 @@ try {
     sessionId,
     'window.__portfolioHoldInspectionReviewRead = true; return true;',
   );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='review_sign']");
   await clickXpath(
     sessionId,
     "//button[normalize-space()='Review before lock']",
@@ -7236,6 +7238,7 @@ try {
     'held stale Inspection review read',
   );
 
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
   await typeXpath(
     sessionId,
     notesInput,
@@ -7251,6 +7254,8 @@ try {
     'Window scratch after held review',
     'Newer autosave is visible while older review GET remains held',
   );
+  // This return must not remount the pending canonical Review operation.
+  await clickXpath(sessionId, "//*[@data-inspection-stage='review_sign']");
 
   assertEqual(
     await executeScript(
@@ -7287,6 +7292,7 @@ try {
     'Late stale review response cannot regress newer canonical section content',
   );
 
+  await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
   await selectOptionXpath(
     sessionId,
     findingForm + "//select[@name='itemId']",
