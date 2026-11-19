@@ -1037,6 +1037,8 @@ input:focus-visible {
 .inspection-workspace,
 .inspection-editor {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 18px;
 }
 .inspection-list {
@@ -3049,8 +3051,32 @@ input:focus-visible {
   margin: 0;
   flex: 0 0 auto;
 }
+.inspection-workflow-stage-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.inspection-workflow-current-summary {
+  margin: 0;
+  color: #485b46;
+  font-size: .79rem;
+  font-weight: 750;
+}
+.inspection-workflow-scroll-hint {
+  display: none;
+  color: #62665d;
+  font-size: .72rem;
+}
 .inspection-workflow-stepper {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scroll-padding-inline: 12px;
+  -webkit-overflow-scrolling: touch;
   padding: 2px 0;
 }
 .inspection-workflow-stepper ol {
@@ -3187,6 +3213,13 @@ input:focus-visible {
     align-items: flex-start;
     flex-direction: column;
     gap: 6px;
+  }
+  .inspection-workflow-scroll-hint {
+    display: inline;
+  }
+  .inspection-workflow-stage-meta {
+    flex-wrap: wrap;
+    row-gap: 3px;
   }
 }
 
