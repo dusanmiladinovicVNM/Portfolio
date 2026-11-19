@@ -8078,6 +8078,78 @@ try {
     `return (()=>{const root=document.querySelector('[data-inspection-evidence-overview]');const a=root?.querySelector('[data-inspection-evidence-overview-room="${inspectionSectionInstanceId}"]');const b=root?.querySelector('[data-inspection-evidence-overview-room="${inspectionBathroomInstanceId}"]');const general=root?.querySelector('[data-inspection-evidence-overview-room="inspection"]');return Boolean(root&&a?.textContent?.includes('Scoped field evidence')&&b?.textContent?.includes('Bathroom moisture evidence')&&general?.textContent?.includes('Lost acknowledgement relation'));})()`,
     'All-room overview groups canonical General, Bathroom and Inspection-level Evidence',
   );
+
+  // UX-4C: no background binary fetches for the gallery. A denied exact
+  // DocumentVersion read must show an error and never leak an image.
+  const evidenceReadsBeforePreview = await executeScript(
+    sessionId,
+    'return window.__portfolioBinaryReads || 0;',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assertEqual(
+    await executeScript(sessionId, 'return window.__portfolioBinaryReads || 0;'),
+    evidenceReadsBeforePreview,
+    'Central Evidence index does not preload protected binary files',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioDenyNextEvidenceBinaryRead = true; return true;',
+  );
+  const bathroomPreviewButton =
+    `//*[@data-inspection-evidence-overview-room='${inspectionBathroomInstanceId}']//*[@data-inspection-evidence-preview-open]`;
+  await clickXpath(sessionId, bathroomPreviewButton);
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-evidence-preview-error][contains(normalize-space(),'Intentional Inspection Evidence read denied.')]",
+  );
+  assertEqual(
+    await elementExistsXpath(sessionId, "//*[@data-inspection-evidence-preview-image]"),
+    false,
+    'Denied Evidence binary read cannot render protected photo',
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-evidence-preview-close]");
+  await waitForScriptTruthy(
+    sessionId,
+    "return document.activeElement?.hasAttribute('data-inspection-evidence-preview-open')===true;",
+    'Closing protected preview restores keyboard focus to the invoking item',
+  );
+  assertEqual(
+    await elementExistsXpath(sessionId, "//*[@data-inspection-evidence-binary-preview]"),
+    false,
+    'Denied viewer closes without retained binary preview',
+  );
+
+  await clickXpath(sessionId, bathroomPreviewButton);
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-evidence-preview-image][starts-with(@src,'blob:')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-evidence-preview-download]",
+  );
+  assertEqual(
+    await executeScript(sessionId, 'return window.__portfolioBinaryReads || 0;'),
+    evidenceReadsBeforePreview + 1,
+    'Only the explicitly requested attached version is fetched after a denied read',
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-evidence-preview-close]");
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
+  assertEqual(
+    await elementExistsXpath(sessionId, "//*[@data-inspection-evidence-binary-preview]"),
+    false,
+    'Hiding Evidence phase discards the in-memory photo preview',
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
+  assertEqual(
+    await executeScript(sessionId, 'return window.__portfolioBinaryReads || 0;'),
+    evidenceReadsBeforePreview + 1,
+    'Returning to Evidence phase does not refetch photo without a user action',
+  );
+
   for (const width of [320, 375, 390, 768]) {
     await setWindowRect(sessionId, width, 900);
     assertEqual(
