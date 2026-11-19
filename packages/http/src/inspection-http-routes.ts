@@ -1,5 +1,7 @@
 import {
   addInspectionSignatureCommand,
+  actorHasCapability,
+  canControlInspectionLifecycle,
   attachInspectionEvidenceCommand,
   authorizeInspectionBinaryUploadCommand,
   cancelInspectionCommand,
@@ -305,6 +307,18 @@ export async function handleInspectionHttp(
     return json({
       data: {
         inspection: toInspectionResponse(bundle.inspection),
+        actionCapabilities: {
+          canUnlock:
+            canControlInspectionLifecycle(actor) &&
+            bundle.inspection.status === 'locked',
+          canFinalize:
+            canControlInspectionLifecycle(actor) &&
+            bundle.inspection.status === 'locked',
+          canGenerateFinalReport:
+            actorHasCapability(actor, 'documents:write') &&
+            actorHasCapability(actor, 'inspections:read') &&
+            bundle.inspection.status === 'finalized',
+        },
         schema: toInspectionSchemaVersionResponse(bundle.schema),
         sectionInstances: bundle.sectionInstances.map(
           toInspectionSectionInstanceResponse,
