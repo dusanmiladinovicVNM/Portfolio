@@ -20,7 +20,10 @@ export function canPreviewInspectionEvidenceMime(mimeType: string): boolean {
   );
 }
 
-function downloadFileName(caption: string | null, mimeType: string): string {
+export function inspectionEvidenceDownloadFileName(
+  caption: string | null,
+  mimeType: string,
+): string {
   const safeBase = (caption ?? 'Inspektionsnachweis')
     .normalize('NFKC')
     .replace(/[^\p{L}\p{N}._-]+/gu, '-')
@@ -95,7 +98,7 @@ export function InspectionEvidenceBinaryPreview({
     const href = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = href;
-    anchor.download = downloadFileName(caption, blob.type.trim().toLowerCase());
+    anchor.download = inspectionEvidenceDownloadFileName(caption, blob.type.trim().toLowerCase());
     document.body.append(anchor);
     try {
       anchor.click();
