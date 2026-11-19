@@ -6797,6 +6797,14 @@ try {
       true,
       `Inspection Save & continue fits viewport ${width}px with accessible touch height`,
     );
+    assertEqual(
+      await executeScript(
+        sessionId,
+        "const nav=document.querySelector('[data-inspection-stage-navigation]');if(!nav)return false;const r=nav.getBoundingClientRect();const doc=document.documentElement;return r.width>0&&r.left>=-1&&r.right<=window.innerWidth+1&&doc.scrollWidth<=doc.clientWidth;",
+      ),
+      true,
+      `Inspection phase navigation stays inside viewport ${width}px`,
+    );
   }
   await setWindowRect(sessionId, 1440, 1200);
 
@@ -7056,6 +7064,16 @@ try {
     await elementDisabledXpath(sessionId, "//*[@data-inspection-save-continue]"),
     true,
     'Save & continue disables reentry until canonical acknowledgement',
+  );
+  assertEqual(
+    await elementDisabledXpath(sessionId, "//*[@data-inspection-stage='evidence']"),
+    true,
+    'Pending SectionInstance PATCH blocks switching to Evidence phase',
+  );
+  assertEqual(
+    await elementDisabledXpath(sessionId, "//*[@data-inspection-stage='review_sign']"),
+    true,
+    'Pending SectionInstance PATCH blocks switching to Review phase',
   );
   assertEqual(
     await executeScript(
