@@ -8322,7 +8322,12 @@ try {
     'xpath',
     "//*[contains(normalize-space(),'prior signatures were invalidated')]",
   );
-
+  await waitForScriptTruthy(
+    sessionId,
+    "return document.activeElement?.getAttribute('data-inspection-stage-target')==='inspect' && document.querySelector('[data-inspection-stage-navigation] [aria-current=\"step\"]')?.dataset.inspectionStage==='inspect';",
+    'Canonical unlock restores Inspect and focuses room task rather than stale locked Review',
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='review_sign']");
   await clickXpath(
     sessionId,
     "//button[normalize-space()='Review before lock']",
