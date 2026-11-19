@@ -61,7 +61,7 @@ function EvidenceItems({
               onClick={(event) => onPreview(item, event.currentTarget)}
               type="button"
             >
-              Foto ansehen / Datei öffnen
+              Foto ansehen / Datei herunterladen
             </button>
           </li>
         );
@@ -103,6 +103,13 @@ export function InspectionEvidenceOverview({
   useEffect(() => {
     if (!active) setPreviewSelection(null);
   }, [active]);
+
+  // Changing the exact editor room closes any previously selected binary;
+  // the all-room cards stay visible but the viewer must not hold an old
+  // room's image in memory after contextual navigation.
+  useEffect(() => {
+    setPreviewSelection(null);
+  }, [selectedSectionInstanceId]);
 
   const selectedRelation =
     active && previewSelection?.inspectionId === bundle.inspection.id
