@@ -82,12 +82,27 @@ describe('Inspection schema field accessible identity', () => {
     expect(html).toContain('<fieldset');
     expect(html).toContain('<legend class="inspection-item-label">');
     expect(html).toContain('Window condition');
+    expect(html).toContain('aria-invalid="true"');
+    expect(html).toContain('class="inspection-required-screen-reader"');
+    expect(html).toContain('(required)');
     expect(html).toContain('aria-describedby="' + fieldId + '-required"');
     expect(html).toContain('id="' + fieldId + '-required"');
     expect((html.match(/type="checkbox"/g) ?? []).length).toBe(2);
     expect(html).toContain('Good');
     expect(html).toContain('Damaged');
     expect(html).toContain('Comment for Window condition');
+  });
+
+  it('keeps optional multiselect groups free of invalid and required state', () => {
+    const html = renderQuestion('multiselect', {
+      required: false,
+      requiredMissing: false,
+      entry: { value: ['good'], comment: '' },
+    });
+    expect(html).not.toContain('aria-invalid="true"');
+    expect(html).not.toContain('inspection-required-screen-reader');
+    expect(html).not.toContain('Required response missing');
+    expect(html).toContain('checked=""');
   });
 
   it('does not misrepresent an optional answered item as required or invalid', () => {
