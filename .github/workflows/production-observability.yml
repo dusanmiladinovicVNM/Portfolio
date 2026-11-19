@@ -118,6 +118,7 @@ jobs:
             printf 'Portfolio monitoring cadence could not be verified. Run: %s\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > "$summary"
           fi
           printf '\nWorkflow run: %s\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> "$summary"
+          printf '\nNotify repository owner: @%s\n' "$GITHUB_REPOSITORY_OWNER" >> "$summary"
           issue="$(gh issue list --state open --json number,title --jq ".[] | select(.title == env.COVERAGE_INCIDENT_TITLE) | .number" | head -n 1)"
           if [ -n "$issue" ]; then
             gh issue comment "$issue" --body-file "$summary"
