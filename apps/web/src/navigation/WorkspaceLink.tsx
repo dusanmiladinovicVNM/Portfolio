@@ -11,6 +11,7 @@ interface WorkspaceLinkProps {
   readonly className: string;
   readonly children: ReactNode;
   readonly ariaCurrent?: 'page' | undefined;
+  readonly ariaLabel?: string | undefined;
 }
 
 export function WorkspaceLink({
@@ -19,6 +20,7 @@ export function WorkspaceLink({
   className,
   children,
   ariaCurrent,
+  ariaLabel,
 }: WorkspaceLinkProps) {
   function onClick(event: MouseEvent<HTMLAnchorElement>) {
     if (
@@ -39,6 +41,7 @@ export function WorkspaceLink({
   return (
     <a
       aria-current={ariaCurrent}
+      aria-label={ariaLabel}
       className={className}
       href={workspaceRouteHref(route)}
       onClick={onClick}
