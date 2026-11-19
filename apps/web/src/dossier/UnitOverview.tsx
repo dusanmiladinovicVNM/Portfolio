@@ -74,7 +74,7 @@ export function UnitOverview({
 
   return (
     <>
-      <div className="dossier-toolbar">
+      <div className="dossier-toolbar unit-yepp-date-toolbar">
         <div>
           <p className="eyebrow">Historical overview</p>
           <p className="muted">
