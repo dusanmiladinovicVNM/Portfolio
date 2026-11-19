@@ -1206,6 +1206,37 @@ input:focus-visible {
 .inspection-field-navigation-link:last-child {
   justify-self: end;
 }
+.inspection-continue-button {
+  justify-self: end;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: #263126;
+  color: #fff;
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 800;
+  line-height: 1.3;
+  cursor: pointer;
+}
+.inspection-continue-button:disabled {
+  opacity: .65;
+  cursor: progress;
+}
+.inspection-continue-button:focus-visible {
+  outline: 3px solid #365f3d;
+  outline-offset: 3px;
+}
+@media (max-width: 520px) {
+  .inspection-field-navigation {
+    grid-template-columns: minmax(52px, 1fr) auto minmax(128px, 1fr);
+    gap: 6px;
+  }
+  .inspection-continue-button {
+    padding-inline: 8px;
+  }
+}
 .inspection-field-navigation-link-disabled {
   color: #9a9d95;
   cursor: default;

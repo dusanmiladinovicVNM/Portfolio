@@ -66,6 +66,55 @@ interface DraftEntry {
 type DraftByItem = Readonly<Record<string, DraftEntry>>;
 type TouchedByItem = Readonly<Record<string, boolean>>;
 
+interface InspectionContinueIntent {
+  readonly inspectionId: string;
+  readonly sourceSectionId: string;
+  readonly destinationSectionId: string;
+  readonly sourceRevision: number;
+  readonly draftRevision: number;
+  readonly requiresAcknowledgedSave: boolean;
+}
+
+export interface InspectionContinueProgress {
+  readonly sourceInspectionId: string | undefined;
+  readonly sourceSectionId: string | undefined;
+  readonly sectionRevision: number;
+  readonly draftRevision: number;
+  readonly hasUnsavedChanges: boolean;
+  readonly sectionWritePending: boolean;
+  readonly inspectionWritePending: boolean;
+  readonly conflict: boolean;
+  readonly saveError: string | null;
+}
+
+/**
+ * A navigation decision is never a substitute for the canonical section
+ * PATCH acknowledgement. The server revision must advance after a dirty
+ * Save & continue request; current local draft must then match canonical data.
+ */
+export function inspectionContinueDecision(
+  intent: InspectionContinueIntent,
+  state: InspectionContinueProgress,
+): 'wait' | 'abort' | 'advance' {
+  if (
+    state.sourceInspectionId !== intent.inspectionId ||
+    state.sourceSectionId !== intent.sourceSectionId ||
+    state.draftRevision !== intent.draftRevision ||
+    state.conflict ||
+    state.saveError !== null
+  ) {
+    return 'abort';
+  }
+  if (state.sectionWritePending || state.inspectionWritePending) return 'wait';
+  if (intent.requiresAcknowledgedSave) {
+    if (state.sectionRevision <= intent.sourceRevision) return 'wait';
+    // A PATCH was acknowledged but its response could not reconcile the
+    // local draft. Keep the section visible, never leave pending forever.
+    if (state.hasUnsavedChanges) return 'abort';
+  }
+  return state.hasUnsavedChanges ? 'wait' : 'advance';
+}
+
 export const INSPECTION_AUTOSAVE_DELAY_MS = 1500;
 
 export interface InspectionSaveStatusState {
@@ -640,6 +689,8 @@ export function UnitInspections({
     setAutosaveBlockedChangeRevision,
   ] = useState<number | null>(null);
   const [inspectionWritePending, setInspectionWritePending] = useState(false);
+  const [continueIntent, setContinueIntent] = useState<InspectionContinueIntent | null>(null);
+  const continueIntentRef = useRef<InspectionContinueIntent | null>(null);
   const inspectionWritePendingRef = useRef(false);
   const activeInspectionIdRef = useRef(inspectionId);
   activeInspectionIdRef.current = inspectionId;
@@ -1032,7 +1083,7 @@ export function UnitInspections({
   }
 
   useEffect(() => {
-    if (inspectionWritePending || sectionWritePending) {
+    if (inspectionWritePending || sectionWritePending || continueIntent !== null) {
       setNavigationBlocker(() => false);
       return () => setNavigationBlocker(null);
     }
@@ -1053,10 +1104,12 @@ export function UnitInspections({
     hasUnsavedChanges,
     inspectionWritePending,
     sectionWritePending,
+    continueIntent,
     setNavigationBlocker,
   ]);
 
   function changeItem(itemId: string, entry: DraftEntry) {
+    if (continueIntentRef.current !== null) return;
     setDraft((current) => ({ ...current, [itemId]: entry }));
     setTouched((current) => ({ ...current, [itemId]: true }));
     setDraftChangeRevision((current) => current + 1);
@@ -1193,12 +1246,124 @@ export function UnitInspections({
     await persistSection(patch, draftChangeRevision);
   }
 
+  function saveAndContinueToNextSection() {
+    if (
+      !routeBundle ||
+      !selectedSectionInstance ||
+      !nextSectionInstance ||
+      continueIntentRef.current !== null ||
+      inspectionWritePendingRef.current ||
+      conflict ||
+      saveError !== null
+    ) {
+      return;
+    }
+
+    const sourceInspectionId = routeBundle.inspection.id;
+    const sourceSectionId = selectedSectionInstance.id;
+    const sourceKey = inspectionSectionOperationKey(
+      sourceInspectionId,
+      sourceSectionId,
+    );
+    const currentSavePending = inFlightSectionSavesRef.current.has(sourceKey);
+    if (inFlightSectionSavesRef.current.size > 0 && !currentSavePending) return;
+    if (patch !== null && !editable && !currentSavePending) return;
+
+    if (patch === null && !currentSavePending) {
+      // A clean section is already canonically saved, so no PATCH is needed.
+      navigate(
+        unitRoute(propertyId, unitId, asOf, 'inspections', {
+          inspectionId: sourceInspectionId,
+          inspectionSectionInstanceId: nextSectionInstance.id,
+        }),
+      );
+      return;
+    }
+
+    const intent: InspectionContinueIntent = {
+      inspectionId: sourceInspectionId,
+      sourceSectionId,
+      destinationSectionId: nextSectionInstance.id,
+      sourceRevision: currentRevision,
+      draftRevision: draftChangeRevision,
+      requiresAcknowledgedSave: true,
+    };
+    // Synchronous gate against double click and background navigation before
+    // React renders the disabled controls and the pending navigation blocker.
+    continueIntentRef.current = intent;
+    setNavigationBlocker(() => false);
+    setContinueIntent(intent);
+    if (!currentSavePending && patch) {
+      void persistSection(patch, draftChangeRevision);
+    }
+  }
+
+  useEffect(() => {
+    if (continueIntent === null) return;
+    const decision = inspectionContinueDecision(continueIntent, {
+      sourceInspectionId: currentInspectionId,
+      sourceSectionId: currentSectionId,
+      sectionRevision: currentRevision,
+      draftRevision: draftChangeRevision,
+      hasUnsavedChanges,
+      sectionWritePending,
+      inspectionWritePending,
+      conflict,
+      saveError,
+    });
+    if (decision === 'wait') return;
+    continueIntentRef.current = null;
+    setContinueIntent(null);
+    if (decision === 'abort') {
+      if (
+        !saveError &&
+        !conflict &&
+        continueIntent.requiresAcknowledgedSave &&
+        currentRevision > continueIntent.sourceRevision &&
+        hasUnsavedChanges
+      ) {
+        setSaveError(
+          'The server save could not be reconciled with your local answers. ' +
+            'Your answers remain here; refresh the canonical section before continuing.',
+        );
+      }
+      return;
+    }
+
+    // The only navigation path for dirty Save & continue: a matching
+    // acknowledged section revision, no pending request and a clean draft.
+    setNavigationBlocker(null);
+    navigate(
+      unitRoute(propertyId, unitId, asOf, 'inspections', {
+        inspectionId: continueIntent.inspectionId,
+        inspectionSectionInstanceId: continueIntent.destinationSectionId,
+      }),
+    );
+  }, [
+    continueIntent,
+    currentInspectionId,
+    currentSectionId,
+    currentRevision,
+    draftChangeRevision,
+    hasUnsavedChanges,
+    sectionWritePending,
+    inspectionWritePending,
+    conflict,
+    saveError,
+    navigate,
+    propertyId,
+    unitId,
+    asOf,
+    setNavigationBlocker,
+  ]);
+
   useEffect(() => {
     if (
       !patch ||
       !editable ||
       saving ||
       inspectionWritePending ||
+      continueIntent !== null ||
       conflict ||
       autosaveBlockedChangeRevision === draftChangeRevision
     ) {
@@ -1218,6 +1383,7 @@ export function UnitInspections({
     draftChangeRevision,
     editable,
     inspectionWritePending,
+    continueIntent,
     patch,
     saving,
   ]);
@@ -1599,23 +1765,21 @@ export function UnitInspections({
                       {orderedSectionInstances.length}
                     </strong>
                     {nextSectionInstance ? (
-                      <WorkspaceLink
-                        className="inspection-field-navigation-link"
-                        navigate={navigate}
-                        route={unitRoute(
-                          propertyId,
-                          unitId,
-                          asOf,
-                          'inspections',
-                          {
-                            inspectionId: routeBundle.inspection.id,
-                            inspectionSectionInstanceId:
-                              nextSectionInstance.id,
-                          },
-                        )}
+                      <button
+                        className="inspection-field-navigation-link inspection-continue-button"
+                        data-inspection-save-continue
+                        disabled={
+                          continueIntent !== null ||
+                          inspectionWritePending ||
+                          conflict ||
+                          saveError !== null ||
+                          (hasUnsavedChanges && !editable && !saving)
+                        }
+                        onClick={saveAndContinueToNextSection}
+                        type="button"
                       >
-                        Next →
-                      </WorkspaceLink>
+                        {continueIntent ? 'Speichern…' : 'Speichern und weiter →'}
+                      </button>
                     ) : (
                       <span
                         aria-disabled="true"
@@ -1692,7 +1856,7 @@ export function UnitInspections({
                       key={item.id}
                     >
                       <InspectionQuestionField
-                        disabled={!editable || saving || inspectionWritePending || conflict}
+                        disabled={!editable || saving || inspectionWritePending || conflict || continueIntent !== null}
                         entry={entry}
                         fieldId={
                           'inspection-answer-' +
@@ -1738,6 +1902,7 @@ export function UnitInspections({
                       !patch ||
                       saving ||
                       inspectionWritePending ||
+                      continueIntent !== null ||
                       conflict
                     }
                     type="submit"

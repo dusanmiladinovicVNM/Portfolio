@@ -6650,9 +6650,22 @@ try {
     'Inspection returns to General section-instance deep-link',
   );
 
+  for (const width of [320, 375, 390, 768]) {
+    await setWindowRect(sessionId, width, 900);
+    assertEqual(
+      await executeScript(
+        sessionId,
+        "const btn = document.querySelector('[data-inspection-save-continue]'); if (!btn) return false; const rect = btn.getBoundingClientRect(); return rect.height >= 44 && rect.width > 0 && rect.left >= -1 && rect.right <= window.innerWidth + 1 && getComputedStyle(btn).visibility !== 'hidden';",
+      ),
+      true,
+      `Inspection Save & continue fits viewport ${width}px with accessible touch height`,
+    );
+  }
+  await setWindowRect(sessionId, 1440, 1200);
+
   await clickXpath(
     sessionId,
-    "//*[@data-inspection-field-toolbar]//a[normalize-space()='Next →']",
+    "//*[@data-inspection-save-continue]",
   );
   await waitForElement(
     sessionId,
@@ -6807,13 +6820,13 @@ try {
   await typeXpath(sessionId, notesInput, 'Window scratch');
   await clickAndDismissConfirm(
     sessionId,
-    "//*[@data-inspection-field-toolbar]//a[normalize-space()='Next →']",
+    "//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='Hallway']",
     'This Inspection section has unsaved changes. Leave and discard them?',
   );
   assertEqual(
     await currentUrl(sessionId),
     inspectionUrl,
-    'Dirty Inspection blocks Previous/Next field-work navigation during the autosave debounce window',
+    'Dirty Inspection blocks direct room navigation during the autosave debounce window',
   );
   assertEqual(
     await executeScript(
@@ -6852,13 +6865,18 @@ try {
   );
   await clickXpath(
     sessionId,
-    "//*[@data-inspection-field-toolbar]//a[normalize-space()='Next →']",
+    "//*[@data-inspection-save-continue]",
   );
   await new Promise((resolve) => setTimeout(resolve, 150));
   assertEqual(
     await currentUrl(sessionId),
     inspectionUrl,
-    'In-flight section PATCH hard-blocks Next field-work navigation',
+    'Save & continue stays in current room while section PATCH is held',
+  );
+  assertEqual(
+    await elementDisabledXpath(sessionId, "//*[@data-inspection-save-continue]"),
+    true,
+    'Save & continue disables reentry until canonical acknowledgement',
   );
   assertEqual(
     await executeScript(
@@ -6957,15 +6975,31 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-inspection-autosave-status][contains(normalize-space(),'All section changes saved')]",
+    "//form[contains(@class,'inspection-section-form')]//h3[normalize-space()='Hallway']",
   );
   assertEqual(
-    await executeScript(
-      sessionId,
-      "return document.activeElement?.closest('[data-unit-dossier-navigation]') !== null;",
-    ),
-    true,
-    'Autosave acknowledgement does not steal keyboard focus from the current navigation link',
+    await currentUrl(sessionId),
+    `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${inspectionHallwayInstanceId}&asOf=2025-06-30`,
+    'Save & continue advances only after canonical section PATCH acknowledgement',
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    "return document.activeElement?.matches('[data-inspection-active-section-heading]') && document.activeElement.textContent.trim() === 'Hallway';",
+    'Save & continue focuses the new saved room',
+  );
+  await clickXpath(
+    sessionId,
+    "//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='General condition']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[contains(@class,'inspection-section-form')]//h3[normalize-space()='General condition']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-autosave-status][contains(normalize-space(),'All section changes saved')]",
   );
   await waitForElement(
     sessionId,
@@ -7501,11 +7535,92 @@ try {
     "//*[@data-inspection-content-context-summary][contains(normalize-space(),'evidence item(s) belong to other sections')]",
   );
 
+  // Lost acknowledgement after a real canonical commit must not cause
+  // optimistic room navigation, repeated POST/PATCH or loss of local answers.
+  await executeScript(
+    sessionId,
+    'window.__portfolioFailNextInspectionSectionSaveAfterCommit = true; return true;',
+  );
+  const sectionPatchCountBeforeLostAck = await executeScript(
+    sessionId,
+    'return window.__portfolioInspectionSectionPatchCount || 0;',
+  );
+  await typeXpath(sessionId, notesInput, 'Window scratch lost ack');
+  await clickXpath(sessionId, "//*[@data-inspection-save-continue]");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'Intentional section-save acknowledgement loss.')]",
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'Save & continue never advances on a lost PATCH acknowledgement after commit',
+  );
+  assertEqual(
+    await elementValueXpath(sessionId, notesInput),
+    'Window scratch lost ack',
+    'Lost-ack Save & continue retains the local Inspection answer',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioInspectionSectionPatchCount || 0;',
+    ),
+    sectionPatchCountBeforeLostAck + 1,
+    'Lost-ack Save & continue attempts the section PATCH once',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 1650));
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioInspectionSectionPatchCount || 0;',
+    ),
+    sectionPatchCountBeforeLostAck + 1,
+    'Lost-ack Save & continue never blindly retries in the background',
+  );
+  // Explicit Save now against the canonical committed revision correctly
+  // returns 409, then existing destructive reload reconciles known server data.
+  await clickXpath(sessionId, "//button[normalize-space()='Save now']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[contains(normalize-space(),'This section changed on the server. Your local answers are still visible.')]",
+  );
+  await clickXpath(
+    sessionId,
+    "//button[normalize-space()='Reload server version and discard local edits']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-autosave-status][contains(normalize-space(),'All section changes saved')]",
+  );
+  assertEqual(
+    await elementValueXpath(sessionId, notesInput),
+    'Window scratch lost ack',
+    'Lost acknowledgement recovery discovers canonical committed answer',
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    inspectionUrl,
+    'Reconciled lost acknowledgement does not resume an abandoned Continue intent',
+  );
+  // Restore established fixture value for subsequent lifecycle regression.
+  await typeXpath(sessionId, notesInput, 'Window scratch after held review');
+  await clickXpath(sessionId, "//button[normalize-space()='Save now']");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-autosave-status][contains(normalize-space(),'All section changes saved')]",
+  );
+
   const sectionPatchCountBeforeConflict = await executeScript(
     sessionId,
     'return window.__portfolioInspectionSectionPatchCount || 0;',
   );
   await typeXpath(sessionId, notesInput, 'conflict-edit');
+  await clickXpath(sessionId, "//*[@data-inspection-save-continue]");
   await waitForElement(
     sessionId,
     'xpath',
@@ -7517,7 +7632,7 @@ try {
       'return window.__portfolioInspectionSectionPatchCount || 0;',
     ),
     sectionPatchCountBeforeConflict + 1,
-    'Conflict edit is attempted exactly once by autosave',
+    'Save & continue attempts the conflict edit exactly once',
   );
   await new Promise((resolve) => setTimeout(resolve, 1800));
   assertEqual(
@@ -7537,6 +7652,16 @@ try {
     await currentUrl(sessionId),
     inspectionUrl,
     'Inspection conflict keeps working URL context',
+  );
+  assertEqual(
+    await elementValueXpath(sessionId, notesInput),
+    'conflict-edit',
+    'Failed Save & continue keeps the local answer for recovery',
+  );
+  assertEqual(
+    await elementDisabledXpath(sessionId, "//*[@data-inspection-save-continue]"),
+    true,
+    'Save & continue is unavailable while CAS conflict is unresolved',
   );
 
   // Resolve the intentional CAS conflict through the actual UX path.

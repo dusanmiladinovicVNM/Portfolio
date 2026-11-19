@@ -1551,6 +1551,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioHoldMaintenanceMutation?: boolean;
   __portfolioHoldInspectionOrchestration?: boolean;
   __portfolioHoldInspectionSectionSave?: boolean;
+  __portfolioFailNextInspectionSectionSaveAfterCommit?: boolean;
   __portfolioHoldInspectionEvidence?: boolean;
   __portfolioHoldInspectionLifecycle?: boolean;
   __portfolioHoldInspectionLockBeforeCommit?: boolean;
@@ -6371,6 +6372,16 @@ globalThis.fetch = async (
       return response;
     });
 
+    if (browserHarnessWindow.__portfolioFailNextInspectionSectionSaveAfterCommit) {
+      browserHarnessWindow.__portfolioFailNextInspectionSectionSaveAfterCommit = false;
+      // Canonical section write succeeded, but the caller lost its acknowledgement.
+      // An immediate retry with the old expectedRevision must produce a CAS 409.
+      return apiError(
+        503,
+        'INSPECTION_SECTION_TEST_ACK_LOST',
+        'Intentional section-save acknowledgement loss.',
+      );
+    }
     return maybeHoldInspectionSectionSave(
       json({
         revision: inspectionSectionRevision,
