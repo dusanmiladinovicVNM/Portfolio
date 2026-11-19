@@ -705,6 +705,14 @@ export function UnitInspections({
       : null;
 
   useEffect(() => {
+    if (
+      activeSectionFocusKey &&
+      inspectionSectionInstanceId !== selectedSectionInstance?.id
+    ) {
+      // Wait for the existing route canonicalizer before focusing a
+      // missing/stale SectionInstance fallback.
+      return;
+    }
     if (!activeSectionFocusKey) {
       // Returning to the list must allow a later selection of the same
       // Inspection/room to receive focus again.
@@ -735,7 +743,12 @@ export function UnitInspections({
       activeSectionHeadingRef.current?.focus();
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [activeSectionFocusKey, inspectionId, selectedSectionInstance?.id]);
+  }, [
+    activeSectionFocusKey,
+    inspectionId,
+    inspectionSectionInstanceId,
+    selectedSectionInstance?.id,
+  ]);
 
   const selectedSectionRevision =
     routeBundle && selectedSectionInstance
