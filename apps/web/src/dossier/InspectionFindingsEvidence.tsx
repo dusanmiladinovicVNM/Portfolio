@@ -144,6 +144,8 @@ export function InspectionFindingsEvidence({
 }: InspectionFindingsEvidenceProps) {
   const mountedRef = useRef(true);
   const scopedUploadRef = useRef<StableUpload | null>(unresolvedUpload);
+  const [retryRecoveryRequired, setRetryRecoveryRequired] =
+    useState(Boolean(unresolvedUpload));
   const [documents, setDocuments] =
     useState<readonly DocumentResponse[] | null>(null);
   const [documentsError, setDocumentsError] = useState<string | null>(null);
@@ -307,6 +309,14 @@ export function InspectionFindingsEvidence({
       return true;
     }
     return false;
+  }
+
+  function rejectUnconfirmedUploadForOtherAction(): boolean {
+    if (!scopedUploadRef.current) return false;
+    setError(
+      'Resolve the unconfirmed Inspection-scoped binary upload with the exact original file before creating or attaching other Evidence.',
+    );
+    return true;
   }
 
   function begin(action: Exclude<PendingAction, null>): boolean {
@@ -533,6 +543,7 @@ export function InspectionFindingsEvidence({
       scopedUploadRef.current = null;
       onUnresolvedUpload(null);
       if (mountedRef.current) {
+        setRetryRecoveryRequired(false);
         formElement.reset();
         setScopedUploadPurpose('photo');
         onStoredOnlyVersion({ documentId: uploaded.documentId, versionId: uploaded.id });
@@ -554,9 +565,11 @@ export function InspectionFindingsEvidence({
         const ambiguous = isAmbiguousWriteFailure(cause);
         if (ambiguous && scopedUploadRef.current) {
           onUnresolvedUpload(scopedUploadRef.current);
+          setRetryRecoveryRequired(true);
         } else if (!ambiguous) {
           scopedUploadRef.current = null;
           onUnresolvedUpload(null);
+          setRetryRecoveryRequired(false);
         }
         setError(
           ambiguous
@@ -571,7 +584,7 @@ export function InspectionFindingsEvidence({
 
   async function createEvidenceDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (rejectContentWriteBlocked()) return;
+    if (rejectContentWriteBlocked() || rejectUnconfirmedUploadForOtherAction()) return;
     if (documents === null) {
       setError(
         'Wait for the canonical Document catalog before creating Evidence.',
@@ -655,7 +668,7 @@ export function InspectionFindingsEvidence({
 
   async function uploadEvidenceVersion(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (rejectContentWriteBlocked()) return;
+    if (rejectContentWriteBlocked() || rejectUnconfirmedUploadForOtherAction()) return;
     if (!selectedDocument || versions === null) return;
 
     const formElement = event.currentTarget;
@@ -758,7 +771,7 @@ export function InspectionFindingsEvidence({
 
   async function attachEvidence(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (rejectContentWriteBlocked()) return;
+    if (rejectContentWriteBlocked() || rejectUnconfirmedUploadForOtherAction()) return;
     if (!selectedVersion) return;
 
     const formElement = event.currentTarget;
@@ -1084,7 +1097,7 @@ export function InspectionFindingsEvidence({
           </p>
 
           <div className="inspection-evidence-steps">
-            {scopedUploadRef.current ? (
+            {retryRecoveryRequired && scopedUploadRef.current ? (
               <p className="setup-hint" role="status" data-inspection-upload-retry-recovery>
                 This room has an unconfirmed Evidence upload. Re-select the same
                 original file and retry with its preserved binary identity.
@@ -1384,7 +1397,7 @@ export function InspectionFindingsEvidence({
               </label>
               <button
                 className="button-primary"
-                disabled={blocked || selectedVersion === null}
+                disabled={blocked || selectedVersion === null || retryRecoveryRequired}
                 type="submit"
               >
                 {pendingAction === 'attach'
