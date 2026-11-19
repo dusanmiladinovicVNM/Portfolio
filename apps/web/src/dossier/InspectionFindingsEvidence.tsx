@@ -73,6 +73,9 @@ interface InspectionFindingsEvidenceProps {
   readonly writeGate: InspectionWriteGate;
   /** Exact, verified stored-only version scoped to this Inspection/SectionInstance. */
   readonly storedOnlyVersion: StoredOnlyEvidenceVersion | null;
+  /** Unconfirmed retry identity; retained by the Inspection owner on room remount. */
+  readonly unresolvedUpload: StableUpload | null;
+  readonly onUnresolvedUpload: (upload: StableUpload | null) => void;
   readonly onStoredOnlyVersion: (version: StoredOnlyEvidenceVersion) => void;
   readonly onStoredOnlyAttached: (versionId: string) => void;
   readonly onCanonicalBundle: (
@@ -84,8 +87,9 @@ interface InspectionFindingsEvidenceProps {
 type PendingAction = 'finding' | 'scoped-upload' | 'document' | 'upload' | 'attach' | null;
 type EvidenceScope = 'inspection' | 'section' | 'item';
 
-interface StableUpload {
+export interface StableUpload {
   readonly key: string;
+  readonly purpose: 'photo' | 'attachment';
   readonly fingerprint: string;
   readonly file: File;
   readonly photoPreparation: PreparedInspectionPhoto | null;
@@ -132,12 +136,14 @@ export function InspectionFindingsEvidence({
   blockedByDirtySection,
   writeGate,
   storedOnlyVersion,
+  unresolvedUpload,
+  onUnresolvedUpload,
   onStoredOnlyVersion,
   onStoredOnlyAttached,
   onCanonicalBundle,
 }: InspectionFindingsEvidenceProps) {
   const mountedRef = useRef(true);
-  const scopedUploadRef = useRef<StableUpload | null>(null);
+  const scopedUploadRef = useRef<StableUpload | null>(unresolvedUpload);
   const [documents, setDocuments] =
     useState<readonly DocumentResponse[] | null>(null);
   const [documentsError, setDocumentsError] = useState<string | null>(null);
@@ -156,7 +162,7 @@ export function InspectionFindingsEvidence({
   const [evidenceScope, setEvidenceScope] =
     useState<EvidenceScope>('section');
   const [scopedUploadPurpose, setScopedUploadPurpose] =
-    useState<'photo' | 'attachment'>('photo');
+    useState<'photo' | 'attachment'>(unresolvedUpload?.purpose ?? 'photo');
 
   const inspection = bundle.inspection;
   const selectedSectionInstance = bundle.sectionInstances.find(
@@ -452,8 +458,13 @@ export function InspectionFindingsEvidence({
         await fileFingerprint(fileValue),
       ].join('|');
       const existing = scopedUploadRef.current;
-      let stable =
-        existing?.fingerprint === fingerprint ? existing : null;
+      if (existing && existing.fingerprint !== fingerprint) {
+        // An unconfirmed request must not be replaced with a fresh UUID.
+        // Re-selecting another file would orphan the previous retry identity.
+        setError('The prior upload outcome is unconfirmed. Re-select the exact original file and kind to retry; another file would use a different upload key.');
+        return;
+      }
+      let stable = existing;
 
       if (!stable) {
         const photoPreparation =
@@ -468,6 +479,7 @@ export function InspectionFindingsEvidence({
         }
         stable = {
           key: crypto.randomUUID(),
+          purpose,
           fingerprint,
           file: uploadFile,
           photoPreparation,
@@ -493,6 +505,7 @@ export function InspectionFindingsEvidence({
       } catch (cause) {
         if (!isAmbiguousWriteFailure(cause)) {
           scopedUploadRef.current = null;
+          onUnresolvedUpload(null);
           throw cause;
         }
         uploaded = await api.postBinary(
@@ -518,6 +531,7 @@ export function InspectionFindingsEvidence({
       }
 
       scopedUploadRef.current = null;
+      onUnresolvedUpload(null);
       if (mountedRef.current) {
         formElement.reset();
         setScopedUploadPurpose('photo');
@@ -538,10 +552,15 @@ export function InspectionFindingsEvidence({
     } catch (cause) {
       if (mountedRef.current) {
         const ambiguous = isAmbiguousWriteFailure(cause);
-        if (!ambiguous) scopedUploadRef.current = null;
+        if (ambiguous && scopedUploadRef.current) {
+          onUnresolvedUpload(scopedUploadRef.current);
+        } else if (!ambiguous) {
+          scopedUploadRef.current = null;
+          onUnresolvedUpload(null);
+        }
         setError(
           ambiguous
-            ? `Evidence upload outcome is still ambiguous: ${errorMessage(cause, 'request failed')}. Retry the same selected file; the exact prepared bytes and stable upload key will be reused while this editor remains open.`
+            ? `Evidence upload outcome is still ambiguous: ${errorMessage(cause, 'request failed')}. Re-select the exact same original file and kind to retry; the prepared bytes and stable upload key survive room changes in this open Inspection workspace.`
             : errorMessage(cause, 'Inspection-scoped evidence upload failed.'),
         );
       }
@@ -1065,6 +1084,15 @@ export function InspectionFindingsEvidence({
           </p>
 
           <div className="inspection-evidence-steps">
+            {scopedUploadRef.current ? (
+              <p className="setup-hint" role="status" data-inspection-upload-retry-recovery>
+                This room has an unconfirmed Evidence upload. Re-select the same
+                original file and retry with its preserved binary identity.
+                Switching rooms and returning is safe in this open Inspection;
+                closing or reloading this workspace cannot guarantee that retry
+                context will survive. Do not start another upload for this file.
+              </p>
+            ) : null}
             <form
               className="inspection-evidence-step setup-form"
               data-inspection-content-form="evidence-scoped-upload"
@@ -1080,11 +1108,14 @@ export function InspectionFindingsEvidence({
                   disabled={blocked}
                   name="purpose"
                   onChange={(event) => {
+                    if (scopedUploadRef.current) {
+                      setError('Resolve the unconfirmed upload with the same original file before changing Evidence kind. You may switch rooms and return to retry.');
+                      return;
+                    }
                     const next =
                       event.currentTarget.value === 'attachment'
                         ? 'attachment'
                         : 'photo';
-                    scopedUploadRef.current = null;
                     setScopedUploadPurpose(next);
                     setError(null);
                     setSuccess(null);
