@@ -2307,7 +2307,18 @@ export function UnitInspections({
             }
           >
             {routeBundle.inspection.status === 'finalized' ? (
-              <InspectionCompletedOverview bundle={routeBundle} />
+              <>
+                <InspectionCompletedOverview bundle={routeBundle} />
+                <InspectionEvidenceOverview
+                  active={activeStage === 'report'}
+                  api={api}
+                  bundle={routeBundle}
+                  navigationBlocked
+                  orderedSectionInstances={orderedSectionInstances}
+                  readOnly
+                  selectedSectionInstanceId={null}
+                />
+              </>
             ) : null}
           <InspectionFinalizationPanel
             api={api}
