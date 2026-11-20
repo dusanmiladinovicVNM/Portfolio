@@ -358,8 +358,19 @@ export const inspectionActionCapabilitiesSchema = z.object({
   canGenerateFinalReport: z.boolean(),
 });
 
+export const inspectionSignerPartyIdsSchema = z.object({
+  tenant: z.array(entityIdSchema),
+  landlord: z.array(entityIdSchema),
+});
+
 export const inspectionBundleResponseSchema = z.object({
   inspection: inspectionResponseSchema,
+  /**
+   * Role-eligible exact Party IDs derived from the current authorized
+   * Inspection's tenancy and ownership at the lock date. Optional during
+   * rolling deploys; the signer UI must fail closed if missing.
+   */
+  signerPartyIds: inspectionSignerPartyIdsSchema.optional(),
   /**
    * Verified actor's server-projected presentation actions. Optional only
    * for backwards-compatible rollout; the web UI must fail closed if absent.
@@ -399,6 +410,9 @@ export type InspectionBundleResponse = z.infer<
 >;
 export type InspectionActionCapabilities = z.infer<
   typeof inspectionActionCapabilitiesSchema
+>;
+export type InspectionSignerPartyIds = z.infer<
+  typeof inspectionSignerPartyIdsSchema
 >;
 export type SaveInspectionSectionResponse = z.infer<
   typeof saveInspectionSectionResponseSchema
