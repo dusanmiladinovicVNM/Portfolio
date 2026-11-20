@@ -131,6 +131,10 @@ const inspectionEvidencePhotoPath = join(
   tmpdir(),
   'portfolio-inspection-window-photo.jpg',
 );
+const inspectionEvidenceSecondPhotoPath = join(
+  tmpdir(),
+  'portfolio-inspection-door-photo.jpg',
+);
 const oversizedInspectionEvidencePhotoPath = join(
   tmpdir(),
   'portfolio-inspection-oversized-photo.jpg',
@@ -561,6 +565,10 @@ try {
     writeFile(
       inspectionEvidencePhotoPath,
       new Uint8Array([255, 216, 255, 224, 0, 16, 74, 70, 73, 70, 255, 217]),
+    ),
+    writeFile(
+      inspectionEvidenceSecondPhotoPath,
+      new Uint8Array([255, 216, 255, 224, 0, 16, 74, 70, 73, 71, 255, 217]),
     ),
     writeFile(
       oversizedInspectionEvidencePhotoPath,
@@ -7793,6 +7801,168 @@ try {
     'Canonical Evidence attach after retry never uploads binary again',
   );
 
+  // P2 multi-upload stored-only acceptance: two different photos are already
+  // on the server but not linked. Neither identity may be overwritten by the
+  // second upload, a room switch, or attaching the other one first.
+  const uploadsBeforeTwoQueuedPhotos = await executeScript(
+    sessionId,
+    'return window.__portfolioDocumentUploadCount || 0;',
+  );
+  await setFileXpath(
+    sessionId,
+    scopedEvidenceForm + "//input[@name='file']",
+    inspectionEvidencePhotoPath,
+  );
+  await clickXpath(
+    sessionId,
+    scopedEvidenceForm + "//button[normalize-space()='Upload Inspection evidence']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    "return document.querySelectorAll('[data-inspection-stored-only-queue] [data-inspection-stored-only-select]').length===1;",
+    'First photo remains in verified stored-only recovery queue',
+  );
+  const queuedPhotoA = await executeScript(
+    sessionId,
+    'return document.querySelector("[data-inspection-stored-only-select]")?.getAttribute("data-inspection-stored-only-select");',
+  );
+  await setFileXpath(
+    sessionId,
+    scopedEvidenceForm + "//input[@name='file']",
+    inspectionEvidenceSecondPhotoPath,
+  );
+  await clickXpath(
+    sessionId,
+    scopedEvidenceForm + "//button[normalize-space()='Upload Inspection evidence']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    "return document.querySelectorAll('[data-inspection-stored-only-queue] [data-inspection-stored-only-select]').length===2;",
+    'Both different stored-only DocumentVersions survive the second successful upload',
+  );
+  const queuedPhotoB = await executeScript(
+    sessionId,
+    'return Array.from(document.querySelectorAll("[data-inspection-stored-only-select]")).at(-1)?.getAttribute("data-inspection-stored-only-select");',
+  );
+  assertEqual(
+    Boolean(queuedPhotoA && queuedPhotoB && queuedPhotoA !== queuedPhotoB),
+    true,
+    'Two stored-only binaries retain distinct canonical version IDs',
+  );
+  assertEqual(
+    await executeScript(sessionId, 'return window.__portfolioDocumentUploadCount || 0;'),
+    uploadsBeforeTwoQueuedPhotos + 2,
+    'Exactly two new verified DocumentVersions are uploaded before linking',
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
+  await clickXpath(
+    sessionId,
+    "//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='Kitchen']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[contains(@class,'inspection-section-form')]//h3[normalize-space()='Kitchen']",
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
+  assertEqual(
+    await elementExistsXpath(sessionId, "//*[@data-inspection-stored-only-queue]"),
+    false,
+    'Room B never inherits either Room A stored-only DocumentVersion',
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='inspect']");
+  await clickXpath(
+    sessionId,
+    "//nav[contains(@class,'inspection-sections')]//strong[normalize-space()='General condition']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//form[contains(@class,'inspection-section-form')]//h3[normalize-space()='General condition']",
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-stage='evidence']");
+  await waitForScriptTruthy(
+    sessionId,
+    "return document.querySelectorAll('[data-inspection-stored-only-queue] [data-inspection-stored-only-select]').length===2;",
+    'Room A restores both exact pending DocumentVersions across remount',
+  );
+  assertEqual(
+    await executeScript(sessionId, 'return window.__portfolioDocumentUploadCount || 0;'),
+    uploadsBeforeTwoQueuedPhotos + 2,
+    'Room A recovery does not post a third binary',
+  );
+  await clickXpath(
+    sessionId,
+    `//*[@data-inspection-stored-only-select='${queuedPhotoA}']`,
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    `return document.querySelector('select[aria-label="Inspection evidence Document version"]')?.value===${JSON.stringify(queuedPhotoA)};`,
+    'Operator selects exact photo A after two stored-only uploads',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    evidenceAttachForm + "//button[normalize-space()='Attach exact version' and not(@disabled)]",
+  );
+  await setInputValueXpath(
+    sessionId,
+    evidenceAttachForm + "//textarea[@name='caption']",
+    'Queued field photo A',
+  );
+  await clickXpath(
+    sessionId,
+    evidenceAttachForm + "//button[normalize-space()='Attach exact version']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//div[contains(@class,'inspection-content-workspace')]//span[normalize-space()='Queued field photo A']",
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    `return document.querySelectorAll('[data-inspection-stored-only-queue] [data-inspection-stored-only-select]').length===1 && !!document.querySelector('[data-inspection-stored-only-select="${queuedPhotoB}"]');`,
+    'Linking photo A removes only its marker, leaving photo B selectable',
+  );
+  await clickXpath(
+    sessionId,
+    `//*[@data-inspection-stored-only-select='${queuedPhotoB}']`,
+  );
+  await waitForScriptTruthy(
+    sessionId,
+    `return document.querySelector('select[aria-label="Inspection evidence Document version"]')?.value===${JSON.stringify(queuedPhotoB)};`,
+    'Operator recovers exact remaining photo B without another upload',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    evidenceAttachForm + "//button[normalize-space()='Attach exact version' and not(@disabled)]",
+  );
+  await setInputValueXpath(
+    sessionId,
+    evidenceAttachForm + "//textarea[@name='caption']",
+    'Queued field photo B',
+  );
+  await clickXpath(
+    sessionId,
+    evidenceAttachForm + "//button[normalize-space()='Attach exact version']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//div[contains(@class,'inspection-content-workspace')]//span[normalize-space()='Queued field photo B']",
+  );
+  assertEqual(
+    await elementExistsXpath(sessionId, "//*[@data-inspection-stored-only-queue]"),
+    false,
+    'Both verified stored-only markers disappear only after their exact canonical Evidence attachments',
+  );
+  assertEqual(
+    await executeScript(sessionId, 'return window.__portfolioDocumentUploadCount || 0;'),
+    uploadsBeforeTwoQueuedPhotos + 2,
+    'Two queued photos produce two Evidence relations with zero duplicate binary uploads',
+  );
+
   await clickXpath(
     sessionId,
     "//details[contains(@class,'inspection-evidence-advanced')]/summary",
@@ -9238,6 +9408,7 @@ try {
     rm(agreementSignedFilePath, { force: true }),
     rm(inspectionSignaturePngPath, { force: true }),
     rm(inspectionEvidencePhotoPath, { force: true }),
+    rm(inspectionEvidenceSecondPhotoPath, { force: true }),
     rm(oversizedInspectionEvidencePhotoPath, { force: true }),
   ]);
   if (sessionId) {

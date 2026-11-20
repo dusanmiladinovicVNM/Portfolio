@@ -699,11 +699,11 @@ export function UnitInspections({
   const [bundleRevision, setBundleRevision] = useState(0);
   const [bundle, setBundle] = useState<InspectionBundleResponse | null>(null);
   const [bundleError, setBundleError] = useState<string | null>(null);
-  // Only verified stored-only version IDs live above the room-keyed editor.
-  // This cache is ephemeral, private to the open Inspection workspace, and
-  // never turns an uploaded binary into an Inspection Evidence relation.
+  // Multiple verified but unlinked exact versions may belong to one room.
+  // Preserve each version across room remounts; no persisted Evidence relation
+  // or binary content is created by this in-memory recovery ledger.
   const [storedOnlyBySection, setStoredOnlyBySection] =
-    useState<Readonly<Record<string, StoredOnlyEvidenceVersion>>>({});
+    useState<Readonly<Record<string, readonly StoredOnlyEvidenceVersion[]>>>({});
   // A room remount must not mint a new idempotency key for a binary whose
   // outcome is still ambiguous. File bytes stay only in this mounted session.
   const unresolvedEvidenceUploadsRef =
@@ -2245,28 +2245,42 @@ export function UnitInspections({
                     delete unresolvedEvidenceUploadsRef.current[ownerKey];
                   }
                 }}
-                storedOnlyVersion={
+                storedOnlyVersions={
                   storedOnlyBySection[
                     `${routeBundle.inspection.id}:${selectedSectionInstance.id}`
-                  ] ?? null
+                  ] ?? []
                 }
                 onStoredOnlyVersion={(version) => {
                   if (activeInspectionIdRef.current !== routeBundle.inspection.id) return;
                   const ownerKey =
                     `${routeBundle.inspection.id}:${selectedSectionInstance.id}`;
-                  setStoredOnlyBySection((current) => ({
-                    ...current,
-                    [ownerKey]: version,
-                  }));
+                  setStoredOnlyBySection((current) => {
+                    const versions = current[ownerKey] ?? [];
+                    if (versions.some((item) => item.versionId === version.versionId)) {
+                      return current;
+                    }
+                    return {
+                      ...current,
+                      [ownerKey]: [...versions, version],
+                    };
+                  });
                 }}
                 onStoredOnlyAttached={(versionId) => {
                   if (activeInspectionIdRef.current !== routeBundle.inspection.id) return;
                   const ownerKey =
                     `${routeBundle.inspection.id}:${selectedSectionInstance.id}`;
                   setStoredOnlyBySection((current) => {
-                    if (current[ownerKey]?.versionId !== versionId) return current;
+                    const previous = current[ownerKey] ?? [];
+                    if (!previous.some((item) => item.versionId === versionId)) {
+                      return current;
+                    }
+                    const remaining = previous.filter((item) => item.versionId !== versionId);
                     const next = { ...current };
-                    delete next[ownerKey];
+                    if (remaining.length > 0) {
+                      next[ownerKey] = remaining;
+                    } else {
+                      delete next[ownerKey];
+                    }
                     return next;
                   });
                 }}
