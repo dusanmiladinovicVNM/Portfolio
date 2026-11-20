@@ -9024,6 +9024,125 @@ try {
     "//*[contains(normalize-space(),'source lifecycle v')]",
   );
 
+  // UX-5 Report: finalized originals remain available through the existing
+  // exact-version authorized binary endpoint. No field/workflow write tools
+  // or room switching are resurrected after immutable finalization.
+  const reportEvidenceRoot =
+    "//*[@data-inspection-stage-panel='report']//*[@data-inspection-evidence-overview]";
+  await waitForElement(sessionId, 'xpath', reportEvidenceRoot);
+  await waitForElement(
+    sessionId,
+    'xpath',
+    reportEvidenceRoot +
+      "//*[@data-inspection-evidence-overview-room='inspection']//*[normalize-space()='Lost acknowledgement relation']",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    reportEvidenceRoot +
+      `//*[@data-inspection-evidence-overview-room='${inspectionBathroomInstanceId}']//*[normalize-space()='Bathroom moisture evidence']`,
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      reportEvidenceRoot + "//*[@data-inspection-evidence-open-room]",
+    ),
+    false,
+    'Finalized Evidence overview provides no room-edit navigation actions',
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-inspection-stage='evidence'][not(@disabled)]",
+    ),
+    false,
+    'Finalized lifecycle cannot reopen editable Evidence task',
+  );
+  const evidenceDownloadsBeforeReportPreview = await executeScript(
+    sessionId,
+    'return window.__portfolioEvidenceBinaryGetAttempts || 0;',
+  );
+  const reportEvidenceWritesBeforePreview = await executeScript(
+    sessionId,
+    'return window.__portfolioDocumentUploadCount || 0;',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioEvidenceBinaryGetAttempts || 0;',
+    ),
+    evidenceDownloadsBeforeReportPreview,
+    'Finalized Report loads no photo bytes before operator selection',
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioDenyNextEvidenceBinaryRead = true; return true;',
+  );
+  const reportPhotoAction =
+    reportEvidenceRoot +
+    `//*[@data-inspection-evidence-overview-room='${inspectionBathroomInstanceId}']//*[@data-inspection-evidence-preview-open]`;
+  await clickXpath(sessionId, reportPhotoAction);
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-evidence-preview-error][contains(normalize-space(),'Intentional Inspection Evidence read denied.')]",
+  );
+  assertEqual(
+    await elementExistsXpath(
+      sessionId,
+      "//*[@data-inspection-evidence-preview-image]",
+    ),
+    false,
+    'Forbidden finalized photo GET never renders protected original bytes',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioEvidenceBinaryGetAttempts || 0;',
+    ),
+    evidenceDownloadsBeforeReportPreview + 1,
+    'Report original photo click sends exactly one authorized GET attempt',
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-evidence-preview-retry]");
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-evidence-preview-image][starts-with(@src,'blob:')]",
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-evidence-preview-download]",
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioEvidenceBinaryGetAttempts || 0;',
+    ),
+    evidenceDownloadsBeforeReportPreview + 2,
+    'Explicit Report photo retry reuses exact immutable version with one GET',
+  );
+  await clickXpath(sessionId, "//*[@data-inspection-evidence-preview-close]");
+  await waitForScriptTruthy(
+    sessionId,
+    "return document.activeElement?.hasAttribute('data-inspection-evidence-preview-open')===true;",
+    'Report photo preview returns keyboard focus to exact original Evidence row',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      'return window.__portfolioDocumentUploadCount || 0;',
+    ),
+    reportEvidenceWritesBeforePreview,
+    'Read-only finalized Evidence browsing never uploads binary again',
+  );
+  assertEqual(
+    await currentUrl(sessionId),
+    `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${inspectionSectionInstanceId}&asOf=2025-06-30`,
+    'Read-only Report evidence preserves the canonical Inspection URL',
+  );
+
   await executeScript(
     sessionId,
     'window.__portfolioFailNextInspectionReportAfterCommit = true; return true;',
