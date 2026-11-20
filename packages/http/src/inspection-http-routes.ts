@@ -10,6 +10,8 @@ import {
   createInspectionFindingCommand,
   createInspectionSchemaVersionCommand,
   getInspectionBundleQuery,
+  inspectionTenantSignerPartyIds,
+  inspectionLandlordSignerPartyIds,
   finalizeInspectionCommand,
   generateInspectionFinalReportCommand,
   getInspectionFinalReportQuery,
@@ -304,9 +306,29 @@ export async function handleInspectionHttp(
       asInspectionId(parsedId.data),
     );
 
+    // Project candidates only after the verified Actor passes canonical
+    // Inspection ownership authorization. These IDs aid presentation, but
+    // registration rechecks tenancy/ownership and signer Party at POST time.
+    const signerPartyIds =
+      bundle.inspection.status === 'locked'
+        ? await (async () => {
+            const [tenancy, ownershipPeriods] = await Promise.all([
+              bundle.inspection.tenancyId === null
+                ? Promise.resolve(null)
+                : deps.tenancyRepository.getById(bundle.inspection.tenancyId),
+              deps.ownershipRepository.listByUnit(bundle.inspection.unitId),
+            ]);
+            return {
+              tenant: inspectionTenantSignerPartyIds(tenancy),
+              landlord: inspectionLandlordSignerPartyIds(bundle.inspection, ownershipPeriods),
+            };
+          })()
+        : { tenant: [], landlord: [] };
+
     return json({
       data: {
         inspection: toInspectionResponse(bundle.inspection),
+        signerPartyIds,
         actionCapabilities: {
           canUnlock:
             canControlInspectionLifecycle(actor) &&
