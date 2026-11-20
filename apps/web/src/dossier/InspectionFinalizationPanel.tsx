@@ -215,7 +215,13 @@ export function InspectionFinalizationPanel({
     () => activeSignatures(bundle.signatures),
     [bundle.signatures],
   );
-  const signatureFlowKey = `signature-flow:${active.length}:${missingRoles.join(',')}`;
+  // Signature selections belong to one canonical Lock generation, not only
+  // the active/missing role counts. Unlock + re-lock may reproduce the same
+  // counts while the signing context (and eligible owner Parties) has changed.
+  // Lifecycle version is incremented on every Lock/Unlock and protects even
+  // when a test clock supplies the same lockedAt timestamp twice.
+  const signatureFlowKey =
+    `signature-flow:${inspection.id}:${inspection.version}:${inspection.lockedAt ?? 'unlocked'}:${active.length}:${missingRoles.join(',')}`;
   const selectedSignerRole =
     signerRoleSelection?.formKey === signatureFlowKey
       ? signerRoleSelection.role
