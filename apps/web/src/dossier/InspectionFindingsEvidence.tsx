@@ -63,6 +63,8 @@ import {
 export interface StoredOnlyEvidenceVersion {
   readonly documentId: string;
   readonly versionId: string;
+  /** Operator-visible distinction when multiple binaries await linking. */
+  readonly fileName?: string;
 }
 
 interface InspectionFindingsEvidenceProps {
@@ -71,8 +73,8 @@ interface InspectionFindingsEvidenceProps {
   readonly selectedSectionInstanceId: string;
   readonly blockedByDirtySection: boolean;
   readonly writeGate: InspectionWriteGate;
-  /** Exact, verified stored-only version scoped to this Inspection/SectionInstance. */
-  readonly storedOnlyVersion: StoredOnlyEvidenceVersion | null;
+  /** Every verified, unlinked exact version owned by this Inspection/room. */
+  readonly storedOnlyVersions: readonly StoredOnlyEvidenceVersion[];
   /** Unconfirmed retry identity; retained by the Inspection owner on room remount. */
   readonly unresolvedUpload: StableUpload | null;
   readonly onUnresolvedUpload: (upload: StableUpload | null) => void;
@@ -135,7 +137,7 @@ export function InspectionFindingsEvidence({
   selectedSectionInstanceId,
   blockedByDirtySection,
   writeGate,
-  storedOnlyVersion,
+  storedOnlyVersions,
   unresolvedUpload,
   onUnresolvedUpload,
   onStoredOnlyVersion,
@@ -149,13 +151,22 @@ export function InspectionFindingsEvidence({
   const [documents, setDocuments] =
     useState<readonly DocumentResponse[] | null>(null);
   const [documentsError, setDocumentsError] = useState<string | null>(null);
+  const [recoveryVersionId, setRecoveryVersionId] = useState<string | null>(
+    () => storedOnlyVersions[storedOnlyVersions.length - 1]?.versionId ?? null,
+  );
+  const activeStoredOnlyVersion =
+    storedOnlyVersions.find((item) => item.versionId === recoveryVersionId) ?? null;
   const [selectedDocumentId, setSelectedDocumentId] =
-    useState<string | null>(() => storedOnlyVersion?.documentId ?? null);
+    useState<string | null>(() =>
+      storedOnlyVersions[storedOnlyVersions.length - 1]?.documentId ?? null,
+    );
   const [versions, setVersions] =
     useState<readonly DocumentVersionResponse[] | null>(null);
   const [versionsError, setVersionsError] = useState<string | null>(null);
   const [selectedVersionId, setSelectedVersionId] =
-    useState<string | null>(() => storedOnlyVersion?.versionId ?? null);
+    useState<string | null>(
+      () => storedOnlyVersions[storedOnlyVersions.length - 1]?.versionId ?? null,
+    );
   const [catalogRevision, setCatalogRevision] = useState(0);
   const [versionRevision, setVersionRevision] = useState(0);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
@@ -229,8 +240,10 @@ export function InspectionFindingsEvidence({
         if (controller.signal.aborted) return;
         assertDocumentVersionListOwner(selectedDocumentId, response.items);
         const recoveredVersionMissing =
-          selectedDocumentId === storedOnlyVersion?.documentId &&
-          !response.items.some((item) => item.id === storedOnlyVersion.versionId);
+          selectedDocumentId === activeStoredOnlyVersion?.documentId &&
+          !response.items.some(
+            (item) => item.id === activeStoredOnlyVersion.versionId,
+          );
         setVersions(response.items);
         setVersionsError(
           recoveredVersionMissing
@@ -252,7 +265,13 @@ export function InspectionFindingsEvidence({
       });
 
     return () => controller.abort();
-  }, [api, selectedDocumentId, versionRevision, storedOnlyVersion?.documentId, storedOnlyVersion?.versionId]);
+  }, [
+    api,
+    selectedDocumentId,
+    versionRevision,
+    activeStoredOnlyVersion?.documentId,
+    activeStoredOnlyVersion?.versionId,
+  ]);
 
   const selectedDocument = useMemo(
     () =>
@@ -546,7 +565,12 @@ export function InspectionFindingsEvidence({
         setRetryRecoveryRequired(false);
         formElement.reset();
         setScopedUploadPurpose('photo');
-        onStoredOnlyVersion({ documentId: uploaded.documentId, versionId: uploaded.id });
+        onStoredOnlyVersion({
+          documentId: uploaded.documentId,
+          versionId: uploaded.id,
+          fileName: uploaded.fileName,
+        });
+        setRecoveryVersionId(uploaded.id);
         setSelectedDocumentId(uploaded.documentId);
         setSelectedVersionId(uploaded.id);
         setCatalogRevision((revision) => revision + 1);
@@ -934,9 +958,9 @@ export function InspectionFindingsEvidence({
       {success ? (
         <p className="setup-form-success" aria-live="polite">{success}</p>
       ) : null}
-      {storedOnlyVersion ? (
+      {activeStoredOnlyVersion ? (
         <p className="inspection-stored-only-recovery setup-hint" data-inspection-stored-only-recovery role="status">
-          {selectedVersion?.id === storedOnlyVersion.versionId
+          {selectedVersion?.id === activeStoredOnlyVersion.versionId
             ? 'Stored-only Evidence restored for this exact room. Attach the selected existing version below; do not upload the file again.'
             : 'Recovering the exact stored Evidence version for this room. Do not choose a different version or upload a duplicate.'}
         </p>
@@ -1097,6 +1121,51 @@ export function InspectionFindingsEvidence({
           </p>
 
           <div className="inspection-evidence-steps">
+            {storedOnlyVersions.length > 0 ? (
+              <section
+                className="inspection-stored-only-queue setup-hint"
+                data-inspection-stored-only-queue
+                aria-label="Noch nicht verknüpfte Dokumentversionen"
+              >
+                <strong>
+                  {storedOnlyVersions.length} gespeicherte, noch nicht verknüpfte
+                  {storedOnlyVersions.length === 1 ? ' Dokumentversion' : ' Dokumentversionen'}
+                </strong>
+                <p>
+                  Jede Version ist bereits gespeichert. Wählen Sie die exakte
+                  Version für diesen Raum aus und verknüpfen Sie sie unten,
+                  ohne die Datei erneut hochzuladen.
+                </p>
+                <ul className="inspection-content-list">
+                  {storedOnlyVersions.map((version, index) => (
+                    <li key={version.versionId}>
+                      <span>{version.fileName ?? `Nachweis ${index + 1}`}</span>
+                      <button
+                        className="button-secondary"
+                        data-inspection-stored-only-select={version.versionId}
+                        disabled={blocked || (
+                          selectedDocumentId === version.documentId &&
+                          selectedVersionId === version.versionId
+                        )}
+                        onClick={() => {
+                          setRecoveryVersionId(version.versionId);
+                          setSelectedDocumentId(version.documentId);
+                          setSelectedVersionId(version.versionId);
+                          setError(null);
+                          setSuccess(null);
+                        }}
+                        type="button"
+                      >
+                        {selectedDocumentId === version.documentId &&
+                        selectedVersionId === version.versionId
+                          ? 'Exakte Version ausgewählt'
+                          : 'Exakte Version auswählen'}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
             {retryRecoveryRequired && scopedUploadRef.current ? (
               <p className="setup-hint" role="status" data-inspection-upload-retry-recovery>
                 This room has an unconfirmed Evidence upload. Re-select the same
