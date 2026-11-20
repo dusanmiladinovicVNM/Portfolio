@@ -8958,10 +8958,18 @@ try {
     signatureForm + "//*[@data-inspection-signature-pad]//canvas";
   await waitForElement(sessionId, 'xpath', signatureCanvas);
   assertEqual(
+    await executeScript(
+      sessionId,
+      "const pad=document.querySelector('[data-inspection-signature-pad]');const canvas=pad?.querySelector('canvas');const described=canvas?.getAttribute('aria-describedby');return pad?.lang==='de-CH' && canvas?.getAttribute('aria-label')==='Zeichenfläche für die Unterschrift' && !!document.getElementById(described)?.textContent?.includes('Die Zeichnung bleibt lokal');",
+    ),
+    true,
+    'UX-5C signature drawing has Swiss German labels and persistent screen-reader instructions',
+  );
+  assertEqual(
     await elementDisabledXpath(
       sessionId,
       signatureForm +
-        "//*[@data-inspection-signature-pad]//button[normalize-space()='Add drawn signature']",
+        "//*[@data-inspection-signature-pad]//button[normalize-space()='Gezeichnete Unterschrift hinzufügen']",
     ),
     true,
     'Blank signature pad cannot add a signature',
@@ -8971,7 +8979,7 @@ try {
     sessionId,
     'xpath',
     signatureForm +
-      "//*[@data-inspection-signature-pad]//button[normalize-space()='Add drawn signature' and not(@disabled)]",
+      "//*[@data-inspection-signature-pad]//button[normalize-space()='Gezeichnete Unterschrift hinzufügen' and not(@disabled)]",
   );
   await executeScript(
     sessionId,
@@ -8980,7 +8988,7 @@ try {
   await clickXpath(
     sessionId,
     signatureForm +
-      "//*[@data-inspection-signature-pad]//button[normalize-space()='Add drawn signature']",
+      "//*[@data-inspection-signature-pad]//button[normalize-space()='Gezeichnete Unterschrift hinzufügen']",
   );
   await waitForElement(
     sessionId,
@@ -9009,7 +9017,7 @@ try {
     await elementDisabledXpath(
       sessionId,
       signatureForm +
-        "//*[@data-inspection-signature-pad]//button[normalize-space()='Add drawn signature']",
+        "//*[@data-inspection-signature-pad]//button[normalize-space()='Gezeichnete Unterschrift hinzufügen']",
     ),
     true,
     'Signature pad resets only after the signer relation is canonically proven',
