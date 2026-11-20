@@ -1,6 +1,7 @@
 import {
   type PointerEvent as ReactPointerEvent,
   useEffect,
+  useId,
   useRef,
   useState,
 } from 'react';
@@ -59,6 +60,8 @@ export function InspectionSignaturePad({
   const [hasInk, setHasInk] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const instructionsId = useId();
+  const errorId = useId();
 
   function clearCanvas(): void {
     const canvas = canvasRef.current;
@@ -79,7 +82,7 @@ export function InspectionSignaturePad({
     const canvas = event.currentTarget;
     const context = canvas.getContext('2d');
     if (!context) {
-      setError('Signature drawing surface is unavailable.');
+      setError('Die Zeichenfläche für die Unterschrift ist nicht verfügbar.');
       return;
     }
 
@@ -152,7 +155,7 @@ export function InspectionSignaturePad({
           canvas.toBlob(resolve, 'image/png');
         });
         if (!blob || blob.size === 0) {
-          throw new Error('Signature drawing could not be exported as PNG.');
+          throw new Error('Die Unterschrift konnte nicht als PNG exportiert werden.');
         }
         file = new File([blob], signatureFileName(inspectionCode), {
           type: 'image/png',
@@ -164,7 +167,7 @@ export function InspectionSignaturePad({
       setError(
         cause instanceof Error
           ? cause.message
-          : 'Signature drawing could not be prepared.',
+          : 'Die gezeichnete Unterschrift konnte nicht vorbereitet werden.',
       );
     } finally {
       setExporting(false);
@@ -175,13 +178,15 @@ export function InspectionSignaturePad({
     <div
       className="inspection-signature-pad"
       data-inspection-signature-pad
+      lang="de-CH"
     >
       <div className="tenancy-form-heading">
-        <strong>Draw signature</strong>
-        <span>Finger, stylus or mouse · PNG</span>
+        <strong>Unterschrift zeichnen</strong>
+        <span>Mit Finger, Stift oder Maus · PNG</span>
       </div>
       <canvas
-        aria-label="Signature drawing area"
+        aria-describedby={error ? `${instructionsId} ${errorId}` : instructionsId}
+        aria-label="Zeichenfläche für die Unterschrift"
         className="inspection-signature-canvas"
         height={SIGNATURE_CANVAS_HEIGHT}
         onPointerCancel={endStroke}
@@ -198,7 +203,7 @@ export function InspectionSignaturePad({
           onClick={clearCanvas}
           type="button"
         >
-          Clear drawing
+          Zeichnung löschen
         </button>
         <button
           className="button-primary"
@@ -206,17 +211,18 @@ export function InspectionSignaturePad({
           onClick={() => void exportSignature()}
           type="button"
         >
-          {exporting ? 'Adding…' : 'Add drawn signature'}
+          {exporting ? 'Wird hinzugefügt…' : 'Gezeichnete Unterschrift hinzufügen'}
         </button>
       </div>
       {error ? (
-        <p className="setup-form-error" role="alert">{error}</p>
-      ) : (
-        <p className="setup-hint">
-          Drawing stays local until Add drawn signature stores it with this
-          Inspection and registers it for the selected signer.
-        </p>
-      )}
+        <p className="setup-form-error" id={errorId} role="alert">{error}</p>
+      ) : null}
+      <p className="setup-hint" id={instructionsId}>
+        Die Zeichnung bleibt lokal, bis Sie die Unterschrift hinzufügen.
+        Danach wird die Datei für diese Inspektion gespeichert und die
+        Zuordnung zur ausgewählten Person separat bestätigt.
+        Alternativ können Sie eine vorhandene PNG- oder JPEG-Datei verwenden.
+      </p>
     </div>
   );
 }
