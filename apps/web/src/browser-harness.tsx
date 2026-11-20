@@ -1183,6 +1183,10 @@ function inspectionBundle() {
   const managerActions = !browserHarnessWindow.__portfolioSimulateInspectorInspectionActions;
   return {
     inspection: inspectionRecord(),
+    signerPartyIds: {
+      tenant: inspectionStatus === 'locked' ? [tenantPartyId] : [],
+      landlord: inspectionStatus === 'locked' ? [landlordPartyId] : [],
+    },
     actionCapabilities: {
       canUnlock: managerActions && inspectionStatus === 'locked',
       canFinalize: managerActions && inspectionStatus === 'locked',
@@ -1573,6 +1577,7 @@ type BrowserHarnessWindow = Window & {
   __portfolioFailNextInspectionBinaryAfterCommit?: boolean;
   __portfolioFailInspectionBinaryResponsesRemaining?: number;
   __portfolioFailNextInspectionSignatureAfterCommit?: boolean;
+  __portfolioRejectNextInspectionSignatureBeforeCommit?: boolean;
   __portfolioFailNextInspectionFinalizeAfterCommit?: boolean;
   __portfolioFailNextInspectionReportAfterCommit?: boolean;
   __portfolioFailNextInspectionOrchestrationAfterCommit?: boolean;
@@ -6080,6 +6085,14 @@ globalThis.fetch = async (
         422,
         'INSPECTION_SIGNATURE_PARTY_MISMATCH',
         'Signer Party does not hold the requested Inspection role.',
+      );
+    }
+    if (browserHarnessWindow.__portfolioRejectNextInspectionSignatureBeforeCommit) {
+      browserHarnessWindow.__portfolioRejectNextInspectionSignatureBeforeCommit = false;
+      return apiError(
+        422,
+        'INSPECTION_SIGNATURE_TEST_PRECOMMIT_REJECTED',
+        'Intentional signature registration rejection before commit.',
       );
     }
     if (

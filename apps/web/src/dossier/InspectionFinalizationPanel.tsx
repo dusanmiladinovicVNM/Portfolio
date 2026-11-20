@@ -958,7 +958,18 @@ export function InspectionFinalizationPanel({
     }
   }
 
-  const partyOptions = parties ?? [];
+  const eligibleSignerIds =
+    selectedSignerRole === 'tenant'
+      ? bundle.signerPartyIds?.tenant ?? []
+      : selectedSignerRole === 'landlord'
+        ? bundle.signerPartyIds?.landlord ?? []
+        : null;
+  // Witness/agent can still optionally associate any active Party. Required
+  // tenant/landlord choices come ONLY from the owner-validated server bundle,
+  // never from a React reconstruction of tenancy or ownership policy.
+  const partyOptions = (parties ?? []).filter(
+    (party) => eligibleSignerIds === null || eligibleSignerIds.includes(party.id),
+  );
   const blocked = writeGate.pending;
   const finalReportRelation =
     inspection.status === 'finalized'
@@ -1233,7 +1244,23 @@ export function InspectionFinalizationPanel({
               {' '}The server verifies the actual Party relationship before
               registering a signature; the signer name is frozen in its snapshot.
             </p>
-            {partiesError ? <p className="form-error">{partiesError}</p> : null}
+            {partiesError ? <p className="form-error" role="alert">{partiesError}</p> : null}
+            {signaturePartyRequired && bundle.signerPartyIds === undefined ? (
+              <p className="form-error" role="alert" data-inspection-signer-policy-unavailable>
+                Der Server hat die zulässigen Unterzeichner noch nicht bestätigt.
+                Bitte die Inspektion nach dem API-Update neu laden.
+              </p>
+            ) : null}
+            {signaturePartyRequired &&
+            bundle.signerPartyIds !== undefined &&
+            parties !== null &&
+            partyOptions.length === 0 ? (
+              <p className="setup-hint" role="status" data-inspection-signer-policy-empty>
+                Für diese Rolle gibt es in der aktuellen, aktiven Party-Liste
+                keinen bestätigten Unterzeichner. Prüfen Sie den Mietvertrag
+                beziehungsweise die Eigentumsverhältnisse.
+              </p>
+            ) : null}
 
             <InspectionSignaturePad
               disabled={blocked || signatureVersion !== null}

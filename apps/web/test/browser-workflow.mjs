@@ -8847,10 +8847,18 @@ try {
     'xpath',
     "//*[@data-inspection-signature-party-guidance][contains(normalize-space(),'tenant or co-tenant Party')]",
   );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      `const p=document.querySelector('[data-inspection-finalization-form=signature] select[name=signerPartyId]');return !!p?.querySelector('option[value="${tenantPartyId}"]') && !p.querySelector('option[value="${landlordPartyId}"]');`,
+    ),
+    true,
+    'Server-projected tenant signer dropdown excludes landlord Party even if active globally',
+  );
   await selectOptionXpath(
     sessionId,
     handoffSignatureForm + "//select[@name='signerPartyId']",
-    landlordPartyId,
+    tenantPartyId,
   );
   await selectOptionXpath(
     sessionId,
@@ -8868,15 +8876,33 @@ try {
   await selectOptionXpath(
     sessionId,
     handoffSignatureForm + "//select[@name='signerRole']",
+    'landlord',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      `const p=document.querySelector('[data-inspection-finalization-form=signature] select[name=signerPartyId]');return p?.required===true&&!!p.querySelector('option[value="${landlordPartyId}"]')&&!p.querySelector('option[value="${tenantPartyId}"]');`,
+    ),
+    true,
+    'Server-projected landlord dropdown exposes only the owner Party at lock date',
+  );
+  await selectOptionXpath(
+    sessionId,
+    handoffSignatureForm + "//select[@name='signerPartyId']",
+    landlordPartyId,
+  );
+  await selectOptionXpath(
+    sessionId,
+    handoffSignatureForm + "//select[@name='signerRole']",
     'tenant',
   );
   assertEqual(
     await executeScript(
       sessionId,
-      "const f=document.querySelector('[data-inspection-finalization-form=signature]');return f?.querySelector('select[name=signerPartyId]')?.required===true&&f?.querySelector('select[name=signerPartyId]')?.value==='';",
+      `const p=document.querySelector('[data-inspection-finalization-form=signature] select[name=signerPartyId]');return p?.required===true&&p.value===''&&!p.querySelector('option[value="${landlordPartyId}"]');`,
     ),
     true,
-    'Returning to required tenant role cannot reuse prior landlord Party',
+    'Changing landlord to tenant clears the prior owner and enforces tenant eligibility',
   );
   // The signature command is also permitted to a real assigned Inspector.
   // Switch the harness projection back to Manager before the signature
@@ -9048,7 +9074,9 @@ try {
     "//*[contains(normalize-space(),'Correct field content after first signature')]",
   );
 
-  // Re-add the required tenant signature and prove relation recovery reuses one stored binary.
+  // A wrong-role Party is no longer offered by the server-projected
+  // picker. Simulate a *precommit* registration failure instead, proving
+  // that an already stored signature binary can be linked on explicit retry.
   const uploadsBeforeTenantRetry = await executeScript(
     sessionId,
     'return window.__portfolioDocumentUploadCount || 0;',
@@ -9061,7 +9089,7 @@ try {
   await selectOptionXpath(
     sessionId,
     signatureForm + "//select[@name='signerPartyId']",
-    landlordPartyId,
+    tenantPartyId,
   );
   await setInputValueXpath(
     sessionId,
@@ -9076,6 +9104,10 @@ try {
     sessionId,
     signatureForm + "//input[@name='file']",
     inspectionSignaturePngPath,
+  );
+  await executeScript(
+    sessionId,
+    'window.__portfolioRejectNextInspectionSignatureBeforeCommit = true; return true;',
   );
   await clickXpath(
     sessionId,
@@ -9099,10 +9131,13 @@ try {
     uploadsBeforeTenantRetry + 1,
     'Signer relation failure retains exactly one stored signature binary',
   );
-  await selectOptionXpath(
-    sessionId,
-    signatureForm + "//select[@name='signerPartyId']",
-    tenantPartyId,
+  assertEqual(
+    await executeScript(
+      sessionId,
+      `return document.querySelector('[data-inspection-finalization-form=signature] select[name=signerPartyId]')?.value === ${JSON.stringify(tenantPartyId)};`,
+    ),
+    true,
+    'Precommit rejection preserves exact verified tenant Party for safe retry',
   );
   await clickXpath(
     sessionId,

@@ -1,8 +1,11 @@
 import { assertSupportedInspectionSignatureMimeType } from './inspection-signature-format.js';
 import { assertInspectionVersionOwnership } from './inspection-document-ownership.js';
 import {
+  inspectionLandlordSignerPartyIds,
+  inspectionTenantSignerPartyIds,
+} from './inspection-signature-party-policy.js';
+import {
   DomainError,
-  asDateOnly,
   asDocumentVersionId,
   asInspectionEvidenceId,
   asInspectionFinalSnapshotId,
@@ -811,11 +814,7 @@ export async function addInspectionSignatureCommand(
     if (!tenancy) {
       throw new DomainError('TENANCY_NOT_FOUND', 'Inspection tenancy not found.');
     }
-    const isTenant = tenancy.parties.some(
-      (party) =>
-        party.partyId === signerPartyId &&
-        (party.role === 'tenant' || party.role === 'co_tenant'),
-    );
+    const isTenant = inspectionTenantSignerPartyIds(tenancy).includes(signerPartyId);
     if (!isTenant) {
       throw new DomainError(
         'INSPECTION_SIGNATURE_TENANT_PARTY_MISMATCH',
@@ -831,18 +830,12 @@ export async function addInspectionSignatureCommand(
         'Landlord signature requires an owner Party and a locked inspection.',
       );
     }
-    const lockedDate = asDateOnly(
-      new Date(inspection.lockedAt).toISOString().slice(0, 10),
-    );
     const ownershipPeriods = await deps.ownershipRepository.listByUnit(
       inspection.unitId,
     );
-    const isOwnerAtLock = ownershipPeriods.some(
-      (period) =>
-        period.validFrom <= lockedDate &&
-        (period.validTo === null || period.validTo >= lockedDate) &&
-        period.owners.some((owner) => owner.partyId === signerPartyId),
-    );
+    const isOwnerAtLock = inspectionLandlordSignerPartyIds(
+      inspection, ownershipPeriods,
+    ).includes(signerPartyId);
     if (!isOwnerAtLock) {
       throw new DomainError(
         'INSPECTION_SIGNATURE_LANDLORD_PARTY_MISMATCH',

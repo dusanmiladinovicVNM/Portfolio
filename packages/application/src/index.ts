@@ -37,6 +37,7 @@ export * from './inspections/inspection-repository.js';
 export * from './inspections/inspection-commands.js';
 export * from './inspections/inspection-binary-commands.js';
 export * from './inspections/inspection-queries.js';
+export * from './inspections/inspection-signature-party-policy.js';
 export * from './inspections/inspection-report-commands.js';
 export * from './inspections/inspection-report-queries.js';
 
