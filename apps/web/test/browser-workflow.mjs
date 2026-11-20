@@ -8827,7 +8827,56 @@ try {
   await waitForElement(
     sessionId,
     'xpath',
-    "//*[@data-inspection-finalization-handoff]",
+    "//*[@data-inspection-finalization-handoff][contains(normalize-space(),'Collect the missing required signatures')]",
+  );
+  // UX-5B: chosen Party belongs to the particular signing role and is not
+  // silently carried into another role. A landlord/tenant cannot proceed
+  // with the empty "No Party" fallback for a witness or agent.
+  const handoffSignatureForm =
+    "//form[@data-inspection-finalization-form='signature']";
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "return document.querySelector('[data-inspection-finalization-form=signature] select[name=signerPartyId]')?.required;",
+    ),
+    true,
+    'Tenant/landlord signer requires explicit Party before signature capture',
+  );
+  await waitForElement(
+    sessionId,
+    'xpath',
+    "//*[@data-inspection-signature-party-guidance][contains(normalize-space(),'tenant or co-tenant Party')]",
+  );
+  await selectOptionXpath(
+    sessionId,
+    handoffSignatureForm + "//select[@name='signerPartyId']",
+    landlordPartyId,
+  );
+  await selectOptionXpath(
+    sessionId,
+    handoffSignatureForm + "//select[@name='signerRole']",
+    'witness',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "const f=document.querySelector('[data-inspection-finalization-form=signature]');return f?.querySelector('select[name=signerPartyId]')?.required===false&&f?.querySelector('select[name=signerPartyId]')?.value==='';",
+    ),
+    true,
+    'Changing signer role clears the stale Party and makes witness Party optional',
+  );
+  await selectOptionXpath(
+    sessionId,
+    handoffSignatureForm + "//select[@name='signerRole']",
+    'tenant',
+  );
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "const f=document.querySelector('[data-inspection-finalization-form=signature]');return f?.querySelector('select[name=signerPartyId]')?.required===true&&f?.querySelector('select[name=signerPartyId]')?.value==='';",
+    ),
+    true,
+    'Returning to required tenant role cannot reuse prior landlord Party',
   );
   // The signature command is also permitted to a real assigned Inspector.
   // Switch the harness projection back to Manager before the signature

@@ -17,10 +17,17 @@ import {
   asDocumentVersionId,
   asInspectionId,
   asInspectionSchemaVersionId,
+  asPartyId,
+  asOwnershipPeriodId,
+  asTenancyId,
+  asTenancyPartyId,
   asPropertyId,
   asUnitId,
   asUserId,
   createInspection,
+  createParty,
+  createOwnershipPeriod,
+  createTenancy,
   type DateOnly,
   type LeaseAgreement,
   type LeaseAgreementId,
@@ -251,7 +258,13 @@ class EmptyLeaseRepository implements LeaseRepository {
   async getEffectiveTermsAt(_tenancyId: TenancyId, _at: DateOnly): Promise<TenancyTermVersion | null> { return null; }
 }
 
-function buildHandler() {
+function buildHandler(
+  repositories: {
+    readonly partyRepository?: PartyRepository;
+    readonly ownershipRepository?: OwnershipRepository;
+    readonly tenancyRepository?: TenancyRepository;
+  } = {},
+) {
   const portfolioRepository = new PortfolioMemory();
   const inspectionRepository = new InMemoryInspectionRepository();
   const documentRepository = new InMemoryDocumentRepository();
@@ -290,9 +303,9 @@ function buildHandler() {
     costRepository: new InMemoryCostRepository(),
     maintenanceRepository: new InMemoryMaintenanceRepository(),
     portfolioRepository,
-    partyRepository: new EmptyPartyRepository(),
-    ownershipRepository: new EmptyOwnershipRepository(),
-    tenancyRepository: new EmptyTenancyRepository(),
+    partyRepository: repositories.partyRepository ?? new EmptyPartyRepository(),
+    ownershipRepository: repositories.ownershipRepository ?? new EmptyOwnershipRepository(),
+    tenancyRepository: repositories.tenancyRepository ?? new EmptyTenancyRepository(),
     leaseRepository: new EmptyLeaseRepository(),
     documentRepository,
     inspectionRepository,
@@ -346,6 +359,42 @@ function buildHandler() {
     fileStorage,
     getPdfRenderCount: () => pdfRenderCount,
   };
+}
+
+class SignatoryPartyRepository extends EmptyPartyRepository {
+  constructor(private readonly entries: readonly Party[]) { super(); }
+
+  override async getById(id: PartyId): Promise<Party | null> {
+    return this.entries.find((party) => party.id === id) ?? null;
+  }
+
+  override async getByIds(ids: readonly PartyId[]): Promise<readonly Party[]> {
+    return this.entries.filter((party) => ids.includes(party.id));
+  }
+
+  override async list(): Promise<readonly Party[]> {
+    return this.entries;
+  }
+}
+
+class SignatoryOwnershipRepository extends EmptyOwnershipRepository {
+  constructor(private readonly periods: readonly OwnershipPeriod[]) { super(); }
+
+  override async listByUnit(unitId: UnitId): Promise<readonly OwnershipPeriod[]> {
+    return this.periods.filter((period) => period.unitId === unitId);
+  }
+}
+
+class SignatoryTenancyRepository extends EmptyTenancyRepository {
+  constructor(private readonly entries: readonly Tenancy[]) { super(); }
+
+  override async getById(id: TenancyId): Promise<Tenancy | null> {
+    return this.entries.find((tenancy) => tenancy.id === id) ?? null;
+  }
+
+  override async listByUnit(unitId: UnitId): Promise<readonly Tenancy[]> {
+    return this.entries.filter((tenancy) => tenancy.unitId === unitId);
+  }
 }
 
 describe('Inspection HTTP backbone', () => {
@@ -1242,6 +1291,170 @@ describe('Inspection HTTP backbone', () => {
     expect(inspectionRepository.signatures[0]?.inspectionId).toBe(targetId);
   });
 
+  it('binds landlord and tenant signatures to canonical Party roles across verified actors', async () => {
+    const inspectionId = asInspectionId('c1290000-0000-4000-8000-000000000001');
+    const unitId = asUnitId('c1290000-0000-4000-8000-000000000002');
+    const tenancyId = asTenancyId('c1290000-0000-4000-8000-000000000003');
+    const tenantId = asPartyId('c1290000-0000-4000-8000-000000000004');
+    const landlordId = asPartyId('c1290000-0000-4000-8000-000000000005');
+    const unrelatedId = asPartyId('c1290000-0000-4000-8000-000000000006');
+
+    const parties: readonly Party[] = [
+      createParty({
+        id: tenantId, code: 'P-REAL-TENANT', partyType: 'person',
+        firstName: 'Tenant', lastName: 'Actual',
+      }),
+      createParty({
+        id: landlordId, code: 'P-REAL-LANDLORD', partyType: 'company',
+        legalName: 'Actual Owner AG',
+      }),
+      createParty({
+        id: unrelatedId, code: 'P-UNRELATED', partyType: 'person',
+        firstName: 'Not', lastName: 'Signer',
+      }),
+    ];
+    const tenancy = createTenancy({
+      id: tenancyId, code: 'TENANCY-SIGNATURE', unitId,
+      parties: [{
+        id: asTenancyPartyId('c1290000-0000-4000-8000-000000000007'),
+        partyId: tenantId, role: 'tenant', isPrimary: true,
+      }],
+    });
+    const ownership = createOwnershipPeriod({
+      id: asOwnershipPeriodId('c1290000-0000-4000-8000-000000000008'),
+      unitId,
+      validFrom: '2026-01-01',
+      owners: [{ partyId: landlordId, shareBasisPoints: 10_000 }],
+    });
+    const {
+      handler, inspectionRepository, documentRepository, fileStorage,
+    } = buildHandler({
+      partyRepository: new SignatoryPartyRepository(parties),
+      ownershipRepository: new SignatoryOwnershipRepository([ownership]),
+      tenancyRepository: new SignatoryTenancyRepository([tenancy]),
+    });
+
+    const inspection = createInspection({
+      id: inspectionId,
+      code: 'INS-PARTY-AUTHORITY',
+      inspectionType: 'move_in',
+      unitId,
+      tenancyId,
+      schemaVersionId: asInspectionSchemaVersionId('c1290000-0000-4000-8000-000000000009'),
+      assignedToUserId: asUserId('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'),
+      createdByUserId: asUserId('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
+    });
+    inspectionRepository.inspections.set(inspection.id, {
+      ...inspection,
+      status: 'locked',
+      version: 3,
+      startedAt: '2026-09-18T19:00:00.000Z',
+      lockedAt: '2026-09-18T20:00:00.000Z',
+    });
+
+    const fileBytes = new Uint8Array([9, 8, 7, 6]);
+    const sha256 = await testSha256.digest(fileBytes);
+    const signatureIds = [
+      'c1290000-0000-4000-8000-000000000011',
+      'c1290000-0000-4000-8000-000000000012',
+    ] as const;
+    signatureIds.forEach((versionId, index) => {
+      const docId = asDocumentId(
+        index === 0
+          ? 'c1290000-0000-4000-8000-000000000021'
+          : 'c1290000-0000-4000-8000-000000000022',
+      );
+      const typedVersionId = asDocumentVersionId(versionId);
+      documentRepository.documents.set(docId, {
+        id: docId, code: `INSPECTION-${inspectionId}-signature-${versionId}`,
+        title: 'Exact signed artwork', category: 'signature',
+        status: 'active', latestVersionNumber: 1, revision: 2,
+      });
+      documentRepository.versions.set(typedVersionId, {
+        id: typedVersionId, documentId: docId,
+        versionNumber: 1, fileName: 'signer.png',
+        mimeType: 'image/png', byteSize: fileBytes.length, sha256,
+        status: 'final', finalizedAt: '2026-09-18T19:55:00.000Z',
+      });
+      const key = `storage:${versionId}`;
+      documentRepository.storage.set(typedVersionId, {
+        provider: 'memory', objectId: key, objectKey: key,
+      });
+      fileStorage.objects.set(key, {
+        provider: 'memory', objectId: key, objectKey: key,
+        byteSize: fileBytes.length, sha256, disposition: 'created',
+      });
+      fileStorage.contents.set(key, fileBytes);
+    });
+
+    async function addSignedRole(
+      role: 'tenant' | 'landlord',
+      partyId: string | null,
+      actor: VerifiedIdentity,
+    ) {
+      return handler(
+        new Request(`https://portfolio.test/inspections/${inspectionId}/signatures`, {
+          method: 'POST',
+          body: JSON.stringify({
+            signerRole: role,
+            signerPartyId: partyId,
+            signerName: role === 'tenant' ? 'Tenant Actual' : 'Actual Owner AG',
+            signatureDocumentVersionId:
+              role === 'tenant' ? signatureIds[0] : signatureIds[1],
+          }),
+        }),
+        actor,
+      );
+    }
+
+    const unassigned = await addSignedRole('tenant', tenantId, otherInspectorIdentity);
+    expect(unassigned.status).toBe(403);
+    expect(await unassigned.json()).toMatchObject({
+      error: { code: 'INSPECTION_ACCESS_DENIED' },
+    });
+    const tenantWithoutParty = await addSignedRole('tenant', null, inspectorIdentity);
+    expect(tenantWithoutParty.status).toBe(422);
+    expect(await tenantWithoutParty.json()).toMatchObject({
+      error: { code: 'INSPECTION_SIGNATURE_PARTY_REQUIRED' },
+    });
+    const wrongTenant = await addSignedRole('tenant', landlordId, inspectorIdentity);
+    expect(wrongTenant.status).toBe(422);
+    expect(await wrongTenant.json()).toMatchObject({
+      error: { code: 'INSPECTION_SIGNATURE_TENANT_PARTY_MISMATCH' },
+    });
+    const unrelatedTenant = await addSignedRole('tenant', unrelatedId, inspectorIdentity);
+    expect(unrelatedTenant.status).toBe(422);
+    expect(await unrelatedTenant.json()).toMatchObject({
+      error: { code: 'INSPECTION_SIGNATURE_TENANT_PARTY_MISMATCH' },
+    });
+    const wrongLandlord = await addSignedRole('landlord', tenantId, managerIdentity);
+    expect(wrongLandlord.status).toBe(422);
+    expect(await wrongLandlord.json()).toMatchObject({
+      error: { code: 'INSPECTION_SIGNATURE_LANDLORD_PARTY_MISMATCH' },
+    });
+    expect(inspectionRepository.signatures).toHaveLength(0);
+
+    const tenantSigned = await addSignedRole('tenant', tenantId, inspectorIdentity);
+    expect(tenantSigned.status).toBe(201);
+    expect(await tenantSigned.json()).toMatchObject({
+      data: {
+        inspectionId, signerRole: 'tenant', signerPartyId: tenantId,
+        signedByUserId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      },
+    });
+    const landlordSigned = await addSignedRole('landlord', landlordId, managerIdentity);
+    expect(landlordSigned.status).toBe(201);
+    expect(await landlordSigned.json()).toMatchObject({
+      data: {
+        inspectionId, signerRole: 'landlord', signerPartyId: landlordId,
+        signedByUserId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      },
+    });
+    expect(inspectionRepository.signatures).toHaveLength(2);
+    expect(inspectionRepository.signatures.map((signature) => signature.signerPartyId))
+      .toEqual([tenantId, landlordId]);
+  });
+
   it('enforces evidence/signature permissions and returns final snapshot over HTTP', async () => {
     const { handler, documentRepository, fileStorage, getPdfRenderCount } =
       buildHandler();
@@ -1639,6 +1852,50 @@ describe('Inspection HTTP backbone', () => {
     );
     expect(landlordSignature.status).toBe(201);
 
+    // UX-5B: independent verified identities must receive different,
+    // lifecycle-scoped actions from the very same canonical Inspection GET.
+    // These requests resolve real Actor records in the HTTP fixture; they do
+    // not toggle presentation booleans in the browser harness.
+    const inspectorLockedBundle = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      inspectorIdentity,
+    );
+    expect(inspectorLockedBundle.status).toBe(200);
+    expect(await inspectorLockedBundle.json()).toMatchObject({
+      data: {
+        inspection: { status: 'locked', assignedToUserId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' },
+        actionCapabilities: {
+          canUnlock: false,
+          canFinalize: false,
+          canGenerateFinalReport: false,
+        },
+        signatures: [{ signerRole: 'witness', invalidatedAt: null }],
+      },
+    });
+    const managerLockedBundle = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      managerIdentity,
+    );
+    expect(managerLockedBundle.status).toBe(200);
+    expect(await managerLockedBundle.json()).toMatchObject({
+      data: {
+        inspection: { status: 'locked' },
+        actionCapabilities: {
+          canUnlock: true,
+          canFinalize: true,
+          canGenerateFinalReport: false,
+        },
+      },
+    });
+    const otherInspectorLockedBundle = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      otherInspectorIdentity,
+    );
+    expect(otherInspectorLockedBundle.status).toBe(403);
+    expect(await otherInspectorLockedBundle.json()).toMatchObject({
+      error: { code: 'INSPECTION_ACCESS_DENIED' },
+    });
+
     const inspectorFinalize = await handler(
       new Request(
         `https://portfolio.test/inspections/${inspection.id}/finalize`,
@@ -1671,7 +1928,7 @@ describe('Inspection HTTP backbone', () => {
           reason: 'Correction',
         }),
       }),
-      adminIdentity,
+      managerIdentity,
     );
     expect(unlocked.status).toBe(200);
     expect(await unlocked.clone().json()).toMatchObject({
@@ -1680,14 +1937,35 @@ describe('Inspection HTTP backbone', () => {
 
     const afterUnlock = await handler(
       new Request(`https://portfolio.test/inspections/${inspection.id}`),
-      adminIdentity,
+      inspectorIdentity,
     );
+    expect(afterUnlock.status).toBe(200);
     expect(await afterUnlock.json()).toMatchObject({
       data: {
+        inspection: { status: 'in_progress', version: 4 },
+        actionCapabilities: {
+          canUnlock: false,
+          canFinalize: false,
+          canGenerateFinalReport: false,
+        },
         signatures: [{
           signerRole: 'witness',
           invalidationReason: 'Correction',
         }],
+      },
+    });
+    const managerAfterUnlock = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      managerIdentity,
+    );
+    expect(await managerAfterUnlock.json()).toMatchObject({
+      data: {
+        inspection: { status: 'in_progress' },
+        actionCapabilities: {
+          canUnlock: false,
+          canFinalize: false,
+          canGenerateFinalReport: false,
+        },
       },
     });
 
@@ -1778,6 +2056,21 @@ describe('Inspection HTTP backbone', () => {
       expect(signed.status).toBe(201);
     }
 
+    const managerRelockedBundle = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      managerIdentity,
+    );
+    expect(await managerRelockedBundle.json()).toMatchObject({
+      data: {
+        inspection: { status: 'locked', version: 5 },
+        actionCapabilities: { canUnlock: true, canFinalize: true },
+        signatures: [
+          { signerRole: 'witness', invalidationReason: 'Correction' },
+          { signerRole: 'witness', invalidatedAt: null },
+          { signerRole: 'agent', invalidatedAt: null },
+        ],
+      },
+    });
     const finalized = await handler(
       new Request(
         `https://portfolio.test/inspections/${inspection.id}/finalize`,
@@ -1786,7 +2079,7 @@ describe('Inspection HTTP backbone', () => {
           body: JSON.stringify({ expectedVersion: 5 }),
         },
       ),
-      adminIdentity,
+      managerIdentity,
     );
     expect(finalized.status).toBe(200);
     expect(await finalized.clone().json()).toMatchObject({
@@ -1813,6 +2106,37 @@ describe('Inspection HTTP backbone', () => {
       },
     });
 
+    const managerFinalizedBundle = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      managerIdentity,
+    );
+    expect(await managerFinalizedBundle.json()).toMatchObject({
+      data: {
+        inspection: { status: 'finalized' },
+        actionCapabilities: {
+          canUnlock: false,
+          canFinalize: false,
+          canGenerateFinalReport: true,
+        },
+        finalSnapshot: { snapshotVersion: 1 },
+      },
+    });
+    const inspectorFinalizedBundle = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      inspectorIdentity,
+    );
+    expect(await inspectorFinalizedBundle.json()).toMatchObject({
+      data: {
+        inspection: { status: 'finalized' },
+        actionCapabilities: {
+          canUnlock: false,
+          canFinalize: false,
+          canGenerateFinalReport: false,
+        },
+        finalSnapshot: { snapshotVersion: 1 },
+        evidence: [{ kind: 'photo' }],
+      },
+    });
     const inspectorMissingReport = await handler(
       new Request(
         `https://portfolio.test/inspections/${inspection.id}/final-report`,
@@ -1838,7 +2162,7 @@ describe('Inspection HTTP backbone', () => {
         `https://portfolio.test/inspections/${inspection.id}/final-report`,
         { method: 'POST' },
       ),
-      adminIdentity,
+      managerIdentity,
     );
     expect(firstReport.status).toBe(200);
     const firstReportVersion = (await firstReport.clone().json()).data as {
