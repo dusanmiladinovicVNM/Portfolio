@@ -1639,6 +1639,50 @@ describe('Inspection HTTP backbone', () => {
     );
     expect(landlordSignature.status).toBe(201);
 
+    // UX-5B: independent verified identities must receive different,
+    // lifecycle-scoped actions from the very same canonical Inspection GET.
+    // These requests resolve real Actor records in the HTTP fixture; they do
+    // not toggle presentation booleans in the browser harness.
+    const inspectorLockedBundle = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      inspectorIdentity,
+    );
+    expect(inspectorLockedBundle.status).toBe(200);
+    expect(await inspectorLockedBundle.json()).toMatchObject({
+      data: {
+        inspection: { status: 'locked', assignedToUserId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' },
+        actionCapabilities: {
+          canUnlock: false,
+          canFinalize: false,
+          canGenerateFinalReport: false,
+        },
+        signatures: [{ signerRole: 'witness', invalidatedAt: null }],
+      },
+    });
+    const managerLockedBundle = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      managerIdentity,
+    );
+    expect(managerLockedBundle.status).toBe(200);
+    expect(await managerLockedBundle.json()).toMatchObject({
+      data: {
+        inspection: { status: 'locked' },
+        actionCapabilities: {
+          canUnlock: true,
+          canFinalize: true,
+          canGenerateFinalReport: false,
+        },
+      },
+    });
+    const otherInspectorLockedBundle = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      otherInspectorIdentity,
+    );
+    expect(otherInspectorLockedBundle.status).toBe(403);
+    expect(await otherInspectorLockedBundle.json()).toMatchObject({
+      error: { code: 'INSPECTION_ACCESS_DENIED' },
+    });
+
     const inspectorFinalize = await handler(
       new Request(
         `https://portfolio.test/inspections/${inspection.id}/finalize`,
@@ -1671,7 +1715,7 @@ describe('Inspection HTTP backbone', () => {
           reason: 'Correction',
         }),
       }),
-      adminIdentity,
+      managerIdentity,
     );
     expect(unlocked.status).toBe(200);
     expect(await unlocked.clone().json()).toMatchObject({
@@ -1680,14 +1724,35 @@ describe('Inspection HTTP backbone', () => {
 
     const afterUnlock = await handler(
       new Request(`https://portfolio.test/inspections/${inspection.id}`),
-      adminIdentity,
+      inspectorIdentity,
     );
+    expect(afterUnlock.status).toBe(200);
     expect(await afterUnlock.json()).toMatchObject({
       data: {
+        inspection: { status: 'in_progress', version: 4 },
+        actionCapabilities: {
+          canUnlock: false,
+          canFinalize: false,
+          canGenerateFinalReport: false,
+        },
         signatures: [{
           signerRole: 'witness',
           invalidationReason: 'Correction',
         }],
+      },
+    });
+    const managerAfterUnlock = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      managerIdentity,
+    );
+    expect(await managerAfterUnlock.json()).toMatchObject({
+      data: {
+        inspection: { status: 'in_progress' },
+        actionCapabilities: {
+          canUnlock: false,
+          canFinalize: false,
+          canGenerateFinalReport: false,
+        },
       },
     });
 
@@ -1778,6 +1843,21 @@ describe('Inspection HTTP backbone', () => {
       expect(signed.status).toBe(201);
     }
 
+    const managerRelockedBundle = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      managerIdentity,
+    );
+    expect(await managerRelockedBundle.json()).toMatchObject({
+      data: {
+        inspection: { status: 'locked', version: 5 },
+        actionCapabilities: { canUnlock: true, canFinalize: true },
+        signatures: [
+          { signerRole: 'witness', invalidationReason: 'Correction' },
+          { signerRole: 'witness', invalidatedAt: null },
+          { signerRole: 'agent', invalidatedAt: null },
+        ],
+      },
+    });
     const finalized = await handler(
       new Request(
         `https://portfolio.test/inspections/${inspection.id}/finalize`,
@@ -1786,7 +1866,7 @@ describe('Inspection HTTP backbone', () => {
           body: JSON.stringify({ expectedVersion: 5 }),
         },
       ),
-      adminIdentity,
+      managerIdentity,
     );
     expect(finalized.status).toBe(200);
     expect(await finalized.clone().json()).toMatchObject({
@@ -1813,6 +1893,37 @@ describe('Inspection HTTP backbone', () => {
       },
     });
 
+    const managerFinalizedBundle = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      managerIdentity,
+    );
+    expect(await managerFinalizedBundle.json()).toMatchObject({
+      data: {
+        inspection: { status: 'finalized' },
+        actionCapabilities: {
+          canUnlock: false,
+          canFinalize: false,
+          canGenerateFinalReport: true,
+        },
+        finalSnapshot: { snapshotVersion: 1 },
+      },
+    });
+    const inspectorFinalizedBundle = await handler(
+      new Request(`https://portfolio.test/inspections/${inspection.id}`),
+      inspectorIdentity,
+    );
+    expect(await inspectorFinalizedBundle.json()).toMatchObject({
+      data: {
+        inspection: { status: 'finalized' },
+        actionCapabilities: {
+          canUnlock: false,
+          canFinalize: false,
+          canGenerateFinalReport: false,
+        },
+        finalSnapshot: { snapshotVersion: 1 },
+        evidence: [{ kind: 'photo' }],
+      },
+    });
     const inspectorMissingReport = await handler(
       new Request(
         `https://portfolio.test/inspections/${inspection.id}/final-report`,
@@ -1838,7 +1949,7 @@ describe('Inspection HTTP backbone', () => {
         `https://portfolio.test/inspections/${inspection.id}/final-report`,
         { method: 'POST' },
       ),
-      adminIdentity,
+      managerIdentity,
     );
     expect(firstReport.status).toBe(200);
     const firstReportVersion = (await firstReport.clone().json()).data as {
