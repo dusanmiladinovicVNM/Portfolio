@@ -1344,6 +1344,16 @@ describe('Inspection HTTP backbone', () => {
       assignedToUserId: asUserId('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'),
       createdByUserId: asUserId('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
     });
+    inspectionRepository.schemas.set(inspection.schemaVersionId, {
+      id: inspection.schemaVersionId,
+      schemaCode: 'SIGNATORY-AUTHORITY',
+      versionNumber: 1,
+      inspectionType: 'move_in',
+      title: 'Signer authority acceptance',
+      status: 'published',
+      requiredSignatureRoles: ['tenant', 'landlord'],
+      sections: [],
+    });
     inspectionRepository.inspections.set(inspection.id, {
       ...inspection,
       status: 'locked',
@@ -1351,6 +1361,29 @@ describe('Inspection HTTP backbone', () => {
       startedAt: '2026-09-18T19:00:00.000Z',
       lockedAt: '2026-09-18T20:00:00.000Z',
     });
+
+    // The actor-scoped canonical GET must derive the exact same Party IDs as
+    // the signature POST command. Neither unrelated Parties nor another
+    // Inspector may inspect or select a non-owned signer identity.
+    const eligible = await handler(
+      new Request(`https://portfolio.test/inspections/${inspectionId}`),
+      inspectorIdentity,
+    );
+    expect(eligible.status).toBe(200);
+    expect(await eligible.json()).toMatchObject({
+      data: {
+        signerPartyIds: {
+          tenant: [tenantId],
+          landlord: [landlordId],
+        },
+        actionCapabilities: { canUnlock: false, canFinalize: false },
+      },
+    });
+    const otherInspectorEligible = await handler(
+      new Request(`https://portfolio.test/inspections/${inspectionId}`),
+      otherInspectorIdentity,
+    );
+    expect(otherInspectorEligible.status).toBe(403);
 
     const fileBytes = new Uint8Array([9, 8, 7, 6]);
     const sha256 = await testSha256.digest(fileBytes);
