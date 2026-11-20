@@ -17,7 +17,9 @@ interface InspectionEvidenceOverviewProps {
   readonly orderedSectionInstances: readonly SectionInstance[];
   readonly selectedSectionInstanceId: string | null;
   readonly navigationBlocked: boolean;
-  readonly onOpenRoom: (sectionInstanceId: string) => void;
+  readonly onOpenRoom?: (sectionInstanceId: string) => void;
+  /** Completed Inspection may read exact canonical Evidence without editing. */
+  readonly readOnly?: boolean;
 }
 
 function evidenceKindLabel(kind: InspectionEvidenceResponse['kind']): string {
@@ -84,6 +86,7 @@ export function InspectionEvidenceOverview({
   selectedSectionInstanceId,
   navigationBlocked,
   onOpenRoom,
+  readOnly = false,
 }: InspectionEvidenceOverviewProps) {
   const [previewSelection, setPreviewSelection] = useState<{
     readonly inspectionId: string;
@@ -205,8 +208,9 @@ export function InspectionEvidenceOverview({
           <p className="eyebrow">Übersicht</p>
           <h4>Nachweise der gesamten Inspektion</h4>
           <p className="muted">
-            Nur kanonisch verknüpfte Nachweise. Hochgeladene, noch nicht
-            zugeordnete Dateien werden im jeweiligen Raum wiederhergestellt.
+            {readOnly
+              ? 'Abgeschlossene Inspektion: Originalnachweise sind schreibgeschützt. Nur exakt verknüpfte Dokumentversionen können autorisiert angezeigt oder heruntergeladen werden.'
+              : 'Nur kanonisch verknüpfte Nachweise. Hochgeladene, noch nicht zugeordnete Dateien werden im jeweiligen Raum wiederhergestellt.'}
           </p>
         </div>
         <strong data-inspection-evidence-overview-total>
@@ -270,15 +274,17 @@ export function InspectionEvidenceOverview({
                 onPreview={openEvidencePreview}
                 sectionId={instance.sectionId}
               />
-              <button
-                className="button-secondary"
-                data-inspection-evidence-open-room={instance.id}
-                disabled={navigationBlocked || bundle.inspection.status !== 'in_progress'}
-                onClick={() => onOpenRoom(instance.id)}
-                type="button"
-              >
-                {isSelected ? 'Nachweise in diesem Raum bearbeiten' : 'Zum Raum und Nachweisen'}
-              </button>
+              {!readOnly && onOpenRoom ? (
+                <button
+                  className="button-secondary"
+                  data-inspection-evidence-open-room={instance.id}
+                  disabled={navigationBlocked || bundle.inspection.status !== 'in_progress'}
+                  onClick={() => onOpenRoom(instance.id)}
+                  type="button"
+                >
+                  {isSelected ? 'Nachweise in diesem Raum bearbeiten' : 'Zum Raum und Nachweisen'}
+                </button>
+              ) : null}
             </div>
           );
         })}
