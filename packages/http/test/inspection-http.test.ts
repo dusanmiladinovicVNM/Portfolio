@@ -20,6 +20,7 @@ import {
   asPartyId,
   asOwnershipPeriodId,
   asTenancyId,
+  asTenancyPartyId,
   asPropertyId,
   asUnitId,
   asUserId,
@@ -1288,6 +1289,170 @@ describe('Inspection HTTP backbone', () => {
     expect(accepted.status).toBe(201);
     expect(inspectionRepository.signatures).toHaveLength(1);
     expect(inspectionRepository.signatures[0]?.inspectionId).toBe(targetId);
+  });
+
+  it('binds landlord and tenant signatures to canonical Party roles across verified actors', async () => {
+    const inspectionId = asInspectionId('c1290000-0000-4000-8000-000000000001');
+    const unitId = asUnitId('c1290000-0000-4000-8000-000000000002');
+    const tenancyId = asTenancyId('c1290000-0000-4000-8000-000000000003');
+    const tenantId = asPartyId('c1290000-0000-4000-8000-000000000004');
+    const landlordId = asPartyId('c1290000-0000-4000-8000-000000000005');
+    const unrelatedId = asPartyId('c1290000-0000-4000-8000-000000000006');
+
+    const parties: readonly Party[] = [
+      createParty({
+        id: tenantId, code: 'P-REAL-TENANT', partyType: 'person',
+        firstName: 'Tenant', lastName: 'Actual',
+      }),
+      createParty({
+        id: landlordId, code: 'P-REAL-LANDLORD', partyType: 'company',
+        legalName: 'Actual Owner AG',
+      }),
+      createParty({
+        id: unrelatedId, code: 'P-UNRELATED', partyType: 'person',
+        firstName: 'Not', lastName: 'Signer',
+      }),
+    ];
+    const tenancy = createTenancy({
+      id: tenancyId, code: 'TENANCY-SIGNATURE', unitId,
+      parties: [{
+        id: asTenancyPartyId('c1290000-0000-4000-8000-000000000007'),
+        partyId: tenantId, role: 'tenant', isPrimary: true,
+      }],
+    });
+    const ownership = createOwnershipPeriod({
+      id: asOwnershipPeriodId('c1290000-0000-4000-8000-000000000008'),
+      unitId,
+      validFrom: '2026-01-01',
+      owners: [{ partyId: landlordId, shareBasisPoints: 10_000 }],
+    });
+    const {
+      handler, inspectionRepository, documentRepository, fileStorage,
+    } = buildHandler({
+      partyRepository: new SignatoryPartyRepository(parties),
+      ownershipRepository: new SignatoryOwnershipRepository([ownership]),
+      tenancyRepository: new SignatoryTenancyRepository([tenancy]),
+    });
+
+    const inspection = createInspection({
+      id: inspectionId,
+      code: 'INS-PARTY-AUTHORITY',
+      inspectionType: 'move_in',
+      unitId,
+      tenancyId,
+      schemaVersionId: asInspectionSchemaVersionId('c1290000-0000-4000-8000-000000000009'),
+      assignedToUserId: asUserId('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'),
+      createdByUserId: asUserId('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'),
+    });
+    inspectionRepository.inspections.set(inspection.id, {
+      ...inspection,
+      status: 'locked',
+      version: 3,
+      startedAt: '2026-09-18T19:00:00.000Z',
+      lockedAt: '2026-09-18T20:00:00.000Z',
+    });
+
+    const fileBytes = new Uint8Array([9, 8, 7, 6]);
+    const sha256 = await testSha256.digest(fileBytes);
+    const signatureIds = [
+      'c1290000-0000-4000-8000-000000000011',
+      'c1290000-0000-4000-8000-000000000012',
+    ] as const;
+    signatureIds.forEach((versionId, index) => {
+      const docId = asDocumentId(
+        index === 0
+          ? 'c1290000-0000-4000-8000-000000000021'
+          : 'c1290000-0000-4000-8000-000000000022',
+      );
+      const typedVersionId = asDocumentVersionId(versionId);
+      documentRepository.documents.set(docId, {
+        id: docId, code: `INSPECTION-${inspectionId}-signature-${versionId}`,
+        title: 'Exact signed artwork', category: 'signature',
+        status: 'active', latestVersionNumber: 1, revision: 2,
+      });
+      documentRepository.versions.set(typedVersionId, {
+        id: typedVersionId, documentId: docId,
+        versionNumber: 1, fileName: 'signer.png',
+        mimeType: 'image/png', byteSize: fileBytes.length, sha256,
+        status: 'final', finalizedAt: '2026-09-18T19:55:00.000Z',
+      });
+      const key = `storage:${versionId}`;
+      documentRepository.storage.set(typedVersionId, {
+        provider: 'memory', objectId: key, objectKey: key,
+      });
+      fileStorage.objects.set(key, {
+        provider: 'memory', objectId: key, objectKey: key,
+        byteSize: fileBytes.length, sha256, disposition: 'created',
+      });
+      fileStorage.contents.set(key, fileBytes);
+    });
+
+    async function addSignedRole(
+      role: 'tenant' | 'landlord',
+      partyId: string | null,
+      actor: VerifiedIdentity,
+    ) {
+      return handler(
+        new Request(`https://portfolio.test/inspections/${inspectionId}/signatures`, {
+          method: 'POST',
+          body: JSON.stringify({
+            signerRole: role,
+            signerPartyId: partyId,
+            signerName: role === 'tenant' ? 'Tenant Actual' : 'Actual Owner AG',
+            signatureDocumentVersionId:
+              role === 'tenant' ? signatureIds[0] : signatureIds[1],
+          }),
+        }),
+        actor,
+      );
+    }
+
+    const unassigned = await addSignedRole('tenant', tenantId, otherInspectorIdentity);
+    expect(unassigned.status).toBe(403);
+    expect(await unassigned.json()).toMatchObject({
+      error: { code: 'INSPECTION_ACCESS_DENIED' },
+    });
+    const tenantWithoutParty = await addSignedRole('tenant', null, inspectorIdentity);
+    expect(tenantWithoutParty.status).toBe(422);
+    expect(await tenantWithoutParty.json()).toMatchObject({
+      error: { code: 'INSPECTION_SIGNATURE_PARTY_REQUIRED' },
+    });
+    const wrongTenant = await addSignedRole('tenant', landlordId, inspectorIdentity);
+    expect(wrongTenant.status).toBe(422);
+    expect(await wrongTenant.json()).toMatchObject({
+      error: { code: 'INSPECTION_SIGNATURE_TENANT_PARTY_MISMATCH' },
+    });
+    const unrelatedTenant = await addSignedRole('tenant', unrelatedId, inspectorIdentity);
+    expect(unrelatedTenant.status).toBe(422);
+    expect(await unrelatedTenant.json()).toMatchObject({
+      error: { code: 'INSPECTION_SIGNATURE_TENANT_PARTY_MISMATCH' },
+    });
+    const wrongLandlord = await addSignedRole('landlord', tenantId, managerIdentity);
+    expect(wrongLandlord.status).toBe(422);
+    expect(await wrongLandlord.json()).toMatchObject({
+      error: { code: 'INSPECTION_SIGNATURE_LANDLORD_PARTY_MISMATCH' },
+    });
+    expect(inspectionRepository.signatures).toHaveLength(0);
+
+    const tenantSigned = await addSignedRole('tenant', tenantId, inspectorIdentity);
+    expect(tenantSigned.status).toBe(201);
+    expect(await tenantSigned.json()).toMatchObject({
+      data: {
+        inspectionId, signerRole: 'tenant', signerPartyId: tenantId,
+        signedByUserId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      },
+    });
+    const landlordSigned = await addSignedRole('landlord', landlordId, managerIdentity);
+    expect(landlordSigned.status).toBe(201);
+    expect(await landlordSigned.json()).toMatchObject({
+      data: {
+        inspectionId, signerRole: 'landlord', signerPartyId: landlordId,
+        signedByUserId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      },
+    });
+    expect(inspectionRepository.signatures).toHaveLength(2);
+    expect(inspectionRepository.signatures.map((signature) => signature.signerPartyId))
+      .toEqual([tenantId, landlordId]);
   });
 
   it('enforces evidence/signature permissions and returns final snapshot over HTTP', async () => {
