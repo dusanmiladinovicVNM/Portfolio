@@ -1183,6 +1183,10 @@ function inspectionBundle() {
   const managerActions = !browserHarnessWindow.__portfolioSimulateInspectorInspectionActions;
   return {
     inspection: inspectionRecord(),
+    signerPartyIds: {
+      tenant: inspectionStatus === 'locked' ? [tenantPartyId] : [],
+      landlord: inspectionStatus === 'locked' ? [landlordPartyId] : [],
+    },
     actionCapabilities: {
       canUnlock: managerActions && inspectionStatus === 'locked',
       canFinalize: managerActions && inspectionStatus === 'locked',
