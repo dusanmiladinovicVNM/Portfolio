@@ -9081,6 +9081,18 @@ try {
     'xpath',
     "//*[contains(normalize-space(),'Correct field content after first signature')]",
   );
+  // UX-5B P2 regression: the previous lock cycle selected the Tenant Party,
+  // then registered the signature. Unlock invalidated that signature and a
+  // new lock returns to the *same* active/missing counts. Neither the former
+  // signer role selection nor the former Party may leak into the new cycle.
+  assertEqual(
+    await executeScript(
+      sessionId,
+      "const f=document.querySelector('[data-inspection-finalization-form=signature]'); return f?.querySelector('select[name=signerRole]')?.value==='tenant' && f?.querySelector('select[name=signerPartyId]')?.value==='';",
+    ),
+    true,
+    'Re-lock resets exact signer Party instead of reusing selection from old lock generation',
+  );
 
   // A wrong-role Party is no longer offered by the server-projected
   // picker. Simulate a *precommit* registration failure instead, proving
