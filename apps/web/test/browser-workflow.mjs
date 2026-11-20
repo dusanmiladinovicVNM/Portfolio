@@ -9139,7 +9139,7 @@ try {
   );
   assertEqual(
     await currentUrl(sessionId),
-    `${baseUrl}/properties/${propertyId}/units/${unitId}?tab=inspections&inspectionId=${inspectionId}&sectionInstanceId=${inspectionSectionInstanceId}&asOf=2025-06-30`,
+    inspectionUrl,
     'Read-only Report evidence preserves the canonical Inspection URL',
   );
 
