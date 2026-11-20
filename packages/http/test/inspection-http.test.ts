@@ -17,10 +17,16 @@ import {
   asDocumentVersionId,
   asInspectionId,
   asInspectionSchemaVersionId,
+  asPartyId,
+  asOwnershipPeriodId,
+  asTenancyId,
   asPropertyId,
   asUnitId,
   asUserId,
   createInspection,
+  createParty,
+  createOwnershipPeriod,
+  createTenancy,
   type DateOnly,
   type LeaseAgreement,
   type LeaseAgreementId,
@@ -251,7 +257,13 @@ class EmptyLeaseRepository implements LeaseRepository {
   async getEffectiveTermsAt(_tenancyId: TenancyId, _at: DateOnly): Promise<TenancyTermVersion | null> { return null; }
 }
 
-function buildHandler() {
+function buildHandler(
+  repositories: {
+    readonly partyRepository?: PartyRepository;
+    readonly ownershipRepository?: OwnershipRepository;
+    readonly tenancyRepository?: TenancyRepository;
+  } = {},
+) {
   const portfolioRepository = new PortfolioMemory();
   const inspectionRepository = new InMemoryInspectionRepository();
   const documentRepository = new InMemoryDocumentRepository();
@@ -290,9 +302,9 @@ function buildHandler() {
     costRepository: new InMemoryCostRepository(),
     maintenanceRepository: new InMemoryMaintenanceRepository(),
     portfolioRepository,
-    partyRepository: new EmptyPartyRepository(),
-    ownershipRepository: new EmptyOwnershipRepository(),
-    tenancyRepository: new EmptyTenancyRepository(),
+    partyRepository: repositories.partyRepository ?? new EmptyPartyRepository(),
+    ownershipRepository: repositories.ownershipRepository ?? new EmptyOwnershipRepository(),
+    tenancyRepository: repositories.tenancyRepository ?? new EmptyTenancyRepository(),
     leaseRepository: new EmptyLeaseRepository(),
     documentRepository,
     inspectionRepository,
@@ -346,6 +358,42 @@ function buildHandler() {
     fileStorage,
     getPdfRenderCount: () => pdfRenderCount,
   };
+}
+
+class SignatoryPartyRepository extends EmptyPartyRepository {
+  constructor(private readonly entries: readonly Party[]) { super(); }
+
+  override async getById(id: PartyId): Promise<Party | null> {
+    return this.entries.find((party) => party.id === id) ?? null;
+  }
+
+  override async getByIds(ids: readonly PartyId[]): Promise<readonly Party[]> {
+    return this.entries.filter((party) => ids.includes(party.id));
+  }
+
+  override async list(): Promise<readonly Party[]> {
+    return this.entries;
+  }
+}
+
+class SignatoryOwnershipRepository extends EmptyOwnershipRepository {
+  constructor(private readonly periods: readonly OwnershipPeriod[]) { super(); }
+
+  override async listByUnit(unitId: UnitId): Promise<readonly OwnershipPeriod[]> {
+    return this.periods.filter((period) => period.unitId === unitId);
+  }
+}
+
+class SignatoryTenancyRepository extends EmptyTenancyRepository {
+  constructor(private readonly entries: readonly Tenancy[]) { super(); }
+
+  override async getById(id: TenancyId): Promise<Tenancy | null> {
+    return this.entries.find((tenancy) => tenancy.id === id) ?? null;
+  }
+
+  override async listByUnit(unitId: UnitId): Promise<readonly Tenancy[]> {
+    return this.entries.filter((tenancy) => tenancy.unitId === unitId);
+  }
 }
 
 describe('Inspection HTTP backbone', () => {
