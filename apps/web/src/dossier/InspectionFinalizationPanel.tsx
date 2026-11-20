@@ -189,6 +189,18 @@ export function InspectionFinalizationPanel({
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  // The form's canonical signature role order can change after a successful
+  // registration. Keep local selections scoped to that exact form generation;
+  // never carry a Party into a new signer role or signature cycle.
+  const [signerRoleSelection, setSignerRoleSelection] = useState<{
+    readonly formKey: string;
+    readonly role: SignatureDraft['signerRole'];
+  } | null>(null);
+  const [signerPartySelection, setSignerPartySelection] = useState<{
+    readonly formKey: string;
+    readonly role: SignatureDraft['signerRole'];
+    readonly partyId: string;
+  } | null>(null);
 
   const inspection = bundle.inspection;
   // These are verified actor-scoped presentation permissions from the
@@ -203,6 +215,18 @@ export function InspectionFinalizationPanel({
     () => activeSignatures(bundle.signatures),
     [bundle.signatures],
   );
+  const signatureFlowKey = `signature-flow:${active.length}:${missingRoles.join(',')}`;
+  const selectedSignerRole =
+    signerRoleSelection?.formKey === signatureFlowKey
+      ? signerRoleSelection.role
+      : missingRoles[0] ?? 'tenant';
+  const signaturePartyRequired =
+    selectedSignerRole === 'landlord' || selectedSignerRole === 'tenant';
+  const selectedSignerPartyId =
+    signerPartySelection?.formKey === signatureFlowKey &&
+    signerPartySelection.role === selectedSignerRole
+      ? signerPartySelection.partyId
+      : '';
   const preLockReview = useMemo(
     () =>
       reviewBundle === null
@@ -1132,7 +1156,7 @@ export function InspectionFinalizationPanel({
           <form
             className="inspection-finalization-card setup-form inspection-signature-flow-card"
             data-inspection-finalization-form="signature"
-            key={`signature-flow:${active.length}:${missingRoles.join(',')}`}
+            key={signatureFlowKey}
             onSubmit={addUploadedSignature}
             ref={signatureFormRef}
           >
@@ -1150,8 +1174,13 @@ export function InspectionFinalizationPanel({
                 Signer role
                 <select
                   disabled={blocked}
-                  defaultValue={missingRoles[0] ?? 'tenant'}
                   name="signerRole"
+                  onChange={(event) => {
+                    const role = event.currentTarget.value as SignatureDraft['signerRole'];
+                    setSignerRoleSelection({ formKey: signatureFlowKey, role });
+                    setSignerPartySelection(null);
+                  }}
+                  value={selectedSignerRole}
                 >
                   <option value="landlord">Landlord</option>
                   <option value="tenant">Tenant</option>
@@ -1163,10 +1192,22 @@ export function InspectionFinalizationPanel({
                 Party
                 <select
                   disabled={blocked || parties === null}
-                  defaultValue=""
                   name="signerPartyId"
+                  onChange={(event) => {
+                    setSignerPartySelection({
+                      formKey: signatureFlowKey,
+                      role: selectedSignerRole,
+                      partyId: event.currentTarget.value,
+                    });
+                  }}
+                  required={signaturePartyRequired}
+                  value={selectedSignerPartyId}
                 >
-                  <option value="">No Party (witness/agent only)</option>
+                  <option value="">
+                    {signaturePartyRequired
+                      ? 'Select the exact signer Party…'
+                      : 'No Party (optional for witness/agent)'}
+                  </option>
                   {partyOptions.map((party) => (
                     <option key={party.id} value={party.id}>
                       {party.displayName} · {party.code}
@@ -1183,9 +1224,14 @@ export function InspectionFinalizationPanel({
                 />
               </label>
             </div>
-            <p className="setup-hint">
-              Landlord and tenant signatures require the exact Party. The signer
-              name is frozen as a snapshot on the signature relation.
+            <p className="setup-hint" data-inspection-signature-party-guidance>
+              {selectedSignerRole === 'tenant'
+                ? 'Required: select the tenant or co-tenant Party of this Inspection tenancy.'
+                : selectedSignerRole === 'landlord'
+                  ? 'Required: select a Party owning this Unit on the Inspection lock date.'
+                  : 'A Party is optional for witness and agent signatures.'}
+              {' '}The server verifies the actual Party relationship before
+              registering a signature; the signer name is frozen in its snapshot.
             </p>
             {partiesError ? <p className="form-error">{partiesError}</p> : null}
 
@@ -1309,8 +1355,9 @@ export function InspectionFinalizationPanel({
               </button>
             ) : (
               <p className="setup-hint" data-inspection-finalization-handoff>
-                A manager or administrator finalizes the Inspection after the
-                required signatures are collected.
+                {missingRoles.length === 0
+                  ? 'All required signatures are recorded. Hand the locked Inspection to a manager or administrator for finalization.'
+                  : 'Collect the missing required signatures, then hand the locked Inspection to a manager or administrator for finalization.'}
               </p>
             )}
           </div>
